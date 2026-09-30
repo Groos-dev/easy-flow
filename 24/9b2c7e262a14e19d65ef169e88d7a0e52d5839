@@ -1,0 +1,53 @@
+server/index.ts
+  s_c10cc2c855f004::t_15496fb2ef1cc8 399-407,412-415
+  s_c10cc2c855f004::t_0bf6606c4d9fa6 408-411
+  s_c10cc2c855f004::t_48b38f5e375212 20
+src/renderer/src/lib/api.ts
+  s_c10cc2c855f004::t_3c1344a432a86c 42-55
+  s_c10cc2c855f004::t_2741d7aae3013d 173-177
+test/core.test.ts
+  s_c10cc2c855f004::t_fc159a7386af85 1053-1066
+  s_c10cc2c855f004::t_d977389fc8ca30 869-881
+  s_c10cc2c855f004::t_25032f566e0a7e 919
+src/renderer/src/components/Settings.tsx
+  s_c10cc2c855f004::t_955965f460e472 50
+  s_c10cc2c855f004::t_e0e1a64d63b9e4 142-144,146-154,156-160
+  s_c10cc2c855f004::t_2ef82daec826b1 303-310,313-315,318-349
+  s_c10cc2c855f004::t_ae4eeefa3aaa8a 78
+  s_c10cc2c855f004::t_f73e9305fd5d9c 73-77,79-80
+  s_c10cc2c855f004::t_5fe564e6f7e407 311-312
+  s_c10cc2c855f004::t_a0e494a6fd78b0 316-317
+  s_c10cc2c855f004::t_6e8ead646be0e0 2,12,17
+  s_c10cc2c855f004::t_be5b3bf23f43e6 47-49,51
+  s_c10cc2c855f004::t_4b97c8690c2ccc 145,155
+server/mcp.ts
+  s_c10cc2c855f004::t_d89cc734f6ed03 30,32-33,37,40
+  s_c10cc2c855f004::t_73c24c9f3cabc1 74,96,163,223,231
+  s_c10cc2c855f004::t_90db468210b93c 31,34-36,38-39
+server/mcp-install.ts
+  s_c10cc2c855f004::t_d08cac47039bcb 127,137-151,164
+  s_c10cc2c855f004::t_c744a7667374cd 100
+  s_c10cc2c855f004::t_99525d7c76150b 52-55
+  s_c10cc2c855f004::t_e4df8e8a5ee165 61-64,68-70,72-74
+  s_c10cc2c855f004::t_e4a7770e7a4b09 110-116,118-119,152-153
+  s_c10cc2c855f004::t_f82afc464ab712 34-39
+  s_c10cc2c855f004::t_5a637e6223e39c 131,167
+  s_c10cc2c855f004::t_b3de886dd4b352 22-33,40-41
+  s_c10cc2c855f004::t_7497ae5af4de48 1-21,42-51,56-60,65-67,71,75-99,101-109,117,120-126,128-130,132-136,154-163,165-166,168-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "249b2c7e262a14e19d65ef169e88d7a0e52d5839",
+  "prompts": {},
+  "sessions": {
+    "s_c10cc2c855f004": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b1aeece-3f51-4fc1-9602-2159f577d4e8",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
