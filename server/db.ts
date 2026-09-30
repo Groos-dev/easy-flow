@@ -1,0 +1,705 @@
+/**
+ * SQLite 数据层：状态（阶段/优先级）的唯一权威 + 文档全文索引。
+ *
+ * 职责划分：
+ *   md   → 需求内容，agent 读写
+ *   sqlite → 机器状态与索引，agent 不关心，UI 消费
+ *
+ * 同步策略（关键）：md 是"需求是否存在"的事实源，DB 是状态的权威。
+ *   目录在、DB 无 → 新增（stage 默认澄清；若 md 还残留 frontmatter 则以此为初始值）
+ *   目录在、DB 有 → 只更新标题/摘要/仓库/文档索引，绝不动 stage/priority
+ *   DB 有、目录没了 → 标记为孤儿，保留在列表中可见
+ */
+import { DatabaseSync } from 'node:sqlite'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join, dirname, basename } from 'node:path'
+import {
+  listProjectDirs,
+  listRequirementsIn,
+  parseRequirement,
+  readProjectConvention,
+  type RepoRef,
+  type DocFile,
+} from './markdown.ts'
+
+export const COLUMNS = ['澄清', '执行中', 'Review', '已完成'] as const
+export type Column = (typeof COLUMNS)[number]
+
+export const STAGES = ['澄清', '方案', '开发', '联调', '发布', '验证验收', '关闭'] as const
+export type Stage = (typeof STAGES)[number]
+
+export const STAGE_TO_COLUMN: Record<Stage, Column> = {
+  澄清: '澄清',
+  方案: '执行中',
+  开发: '执行中',
+  联调: 'Review',
+  发布: 'Review',
+  验证验收: 'Review',
+  关闭: '已完成',
+}
+
+export const COLUMN_TO_STAGE: Record<Column, Stage> = {
+  澄清: '澄清',
+  执行中: '方案',
+  Review: '发布',
+  已完成: '关闭',
+}
+
+/**
+ * 优先级四档 = 艾森豪威尔四象限：
+ *   p0 重要且紧急（马上做） · p1 重要不紧急（计划做）
+ *   p2 紧急不重要（授权做） · p3 都不（有空再做）
+ */
+export const PRIORITIES = ['p0', 'p1', 'p2', 'p3'] as const
+export type Priority = (typeof PRIORITIES)[number]
+
+export interface Requirement {
+  slug: string
+  title: string
+  stage: Stage
+  column: Column
+  priority: Priority | ''
+  summary: string
+  repos: RepoRef[]
+  links: string
+  docs: Array<{ name: string; size: number }>
+  path: string
+  mtime: number
+  updated: string
+}
+
+interface Row {
+  slug: string
+  title: string
+  path: string
+  stage: string
+  priority: string | null
+  summary: string | null
+  repos: string | null
+  links: string | null
+  mtime: number
+  updated: string | null
+  orphan: number
+}
+
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS project (
+  slug         TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  root         TEXT NOT NULL,
+  has_convention INTEGER NOT NULL DEFAULT 0,
+  mtime        INTEGER NOT NULL DEFAULT 0,
+  updated      TEXT
+);
+
+CREATE TABLE IF NOT EXISTS requirement (
+  slug     TEXT NOT NULL,
+  project  TEXT NOT NULL DEFAULT '',
+  title    TEXT NOT NULL,
+  path     TEXT NOT NULL,
+  stage    TEXT NOT NULL,
+  priority TEXT,
+  summary  TEXT,
+  repos    TEXT,
+  links    TEXT,
+  feishu_task_links TEXT,
+  code_links     TEXT,
+  ext_links    TEXT,
+  mtime    INTEGER NOT NULL DEFAULT 0,
+  updated  TEXT,
+  orphan   INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (slug, project)
+);
+
+CREATE TABLE IF NOT EXISTS doc (
+  slug    TEXT NOT NULL,
+  project TEXT NOT NULL DEFAULT '',
+  name    TEXT NOT NULL,
+  content TEXT NOT NULL,
+  PRIMARY KEY (slug, project, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_doc_scope ON doc(project, slug);
+CREATE INDEX IF NOT EXISTS idx_req_project ON requirement(project);
+`
+
+/** 老库升级：补齐后加的列 */
+function migrate(db: DatabaseSync): void {
+  const addIfMissing = (table: string, column: string, ddl: string) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+    if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`)
+  }
+  addIfMissing('requirement', 'project', `project TEXT NOT NULL DEFAULT ''`)
+  addIfMissing('doc', 'project', `project TEXT NOT NULL DEFAULT ''`)
+  // 链接：写入入口留给 MCP，UI 只读展示
+  addIfMissing('requirement', 'feishu_task_links', 'feishu_task_links TEXT')
+  addIfMissing('requirement', 'code_links', 'code_links TEXT')
+  addIfMissing('requirement', 'ext_links', 'ext_links TEXT')
+}
+
+export const DEFAULT_PROJECT_SLUG = 'default'
+
+export interface Project {
+  slug: string
+  name: string
+  root: string
+  /** 项目根目录下是否有 AGENTS.md（项目总规范） */
+  hasConvention: boolean
+  /** 规范文件原文，没有则为 null */
+  convention: string | null
+  requirementCount: number
+  mtime: number
+  updated: string
+}
+
+export interface Requirement {
+  slug: string
+  /** 所属项目 */
+  project: string
+  title: string
+  stage: Stage
+  column: Column
+  priority: Priority | ''
+  summary: string
+  repos: RepoRef[]
+  links: string
+  /** 飞书任务（Meego story）链接。写入入口留给 MCP，UI 只读 */
+  feishuTaskLinks: string[]
+  /** 代码链接：GitLab MR / GitHub PR 等。写入入口留给 MCP，UI 只读 */
+  codeLinks: string[]
+  /** 扩展链接：{ detail 描述, url 链接 } */
+  extLinks: ExtLink[]
+  docs: Array<{ name: string; size: number }>
+  path: string
+  mtime: number
+  updated: string
+}
+
+/** 扩展链接：detail 是描述，url 是链接 */
+export interface ExtLink {
+  detail: string
+  url: string
+}
+
+interface Row {
+  slug: string
+  project: string
+  title: string
+  path: string
+  stage: string
+  priority: string | null
+  summary: string | null
+  repos: string | null
+  links: string | null
+  feishu_task_links: string | null
+  code_links: string | null
+  ext_links: string | null
+  mtime: number
+  updated: string | null
+  orphan: number
+}
+
+function asStage(value: string | null | undefined): Stage | null {
+  return value && (STAGES as readonly string[]).includes(value) ? (value as Stage) : null
+}
+
+function asPriority(value: string | null | undefined): Priority | null {
+  return value && (PRIORITIES as readonly string[]).includes(value) ? (value as Priority) : null
+}
+
+// ------------------------------------------------------------------ 链接
+
+/** 链接字段的规范化：写入方是 MCP / AI，这里做一次清洗 */
+export function normalizeLinkList(input: unknown): string[] {
+  if (!Array.isArray(input)) throw new Error('链接列表必须是数组')
+  const out: string[] = []
+  for (const item of input) {
+    const url = String(item ?? '').trim()
+    if (!url) continue
+    if (!/^https?:\/\//i.test(url)) throw new Error(`链接必须以 http(s):// 开头：${url}`)
+    if (!out.includes(url)) out.push(url)
+  }
+  return out
+}
+
+export function normalizeExtLinks(input: unknown): ExtLink[] {
+  if (!Array.isArray(input)) throw new Error('扩展链接必须是数组')
+  const out: ExtLink[] = []
+  for (const item of input) {
+    const obj = item as Partial<ExtLink> | null
+    const detail = String(obj?.detail ?? '').trim()
+    const url = String(obj?.url ?? '').trim()
+    if (!detail && !url) continue
+    if (!url) throw new Error(`扩展链接缺少 url（描述：${detail}）`)
+    if (!/^https?:\/\//i.test(url)) throw new Error(`链接必须以 http(s):// 开头：${url}`)
+    if (!detail) throw new Error(`扩展链接缺少描述：${url}`)
+    if (!out.some((l) => l.detail === detail && l.url === url)) out.push({ detail, url })
+  }
+  return out
+}
+
+/** 今天（YYYY-MM-DD）。多处写状态时间戳，集中一处避免格式漂移。 */
+function today(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+/** JSON 列解析。列可能存着 'null'，所以结果要允许 undefined，调用方用 ?? 兜底。 */
+function parseLinks<T>(raw: string | null, fallback: T): T | undefined {
+  if (!raw) return fallback
+  try {
+    return (JSON.parse(raw) as T | null) ?? undefined
+  } catch {
+    return fallback
+  }
+}
+
+
+export class BoardDatabase {
+  readonly dataDir: string
+  readonly file: string
+  private db: DatabaseSync
+  /** 当前看板展示的项目 */
+  private activeProject = DEFAULT_PROJECT_SLUG
+  /** 用户显式切过项目后，不再自动改选 */
+  private activePinned = false
+
+  /** 配置里记住的项目，pickProject() 用它做首选 */
+  private preferredProject: string | undefined
+
+  constructor(dataDir: string, preferredProject?: string) {
+    this.dataDir = dataDir
+    this.preferredProject = preferredProject
+    this.file = join(dataDir, 'easy-flow.db')
+    mkdirSync(dirname(this.file), { recursive: true })
+    this.db = new DatabaseSync(this.file)
+    this.db.exec(SCHEMA)
+    migrate(this.db)
+  }
+
+  /**
+   * 选定当前项目。必须在 syncProjects() 之后调用——
+   * 构造函数执行时 project 表还是空的，读不到任何项目。
+   * 优先用上次记住的项目；它没了就退回第一个真实项目。
+   */
+  pickProject(): void {
+    const projects = this.listProjects()
+    const wanted = this.preferredProject ?? DEFAULT_PROJECT_SLUG
+    if (projects.some((p) => p.slug === wanted)) {
+      this.activeProject = wanted
+    } else {
+      this.activeProject = projects[0]?.slug ?? ''
+    }
+  }
+
+  /**
+   * 同步后校正当前项目。只有两种情况会改选：
+   *   - 还没定过项目（首次启动）
+   *   - 当前项目已不存在（被删或被改名）
+   * 用户显式切换过的项目不会被这里覆盖。
+   */
+  private reconcileProject(): void {
+    if (this.activeProject && this.listProjects().some((p) => p.slug === this.activeProject)) return
+    this.pickProject()
+  }
+
+  close(): void {
+    this.db.close()
+  }
+
+  get project(): string {
+    return this.activeProject
+  }
+
+  /** 切到另一个项目；不存在则报错，避免静默落到空看板 */
+  setProject(slug: string): void {
+    const row = this.db.prepare('SELECT slug FROM project WHERE slug = ?').get(slug)
+    if (!row) throw new Error(`项目不存在: ${slug}`)
+    this.activeProject = slug
+    this.activePinned = true
+  }
+
+  get projectPinned(): boolean {
+    return this.activePinned
+  }
+
+  // ------------------------------------------------------------- 项目
+
+  listProjects(): Project[] {
+    const rows = this.db
+      .prepare('SELECT * FROM project ORDER BY mtime DESC')
+      .all() as unknown as Array<{
+      slug: string
+      name: string
+      root: string
+      has_convention: number
+      mtime: number
+      updated: string | null
+    }>
+
+    return rows.map((r) => ({
+      slug: r.slug,
+      name: r.name,
+      root: r.root,
+      hasConvention: !!r.has_convention,
+      convention: r.has_convention ? readProjectConvention(r.root) : null,
+      requirementCount: (
+        this.db
+          .prepare('SELECT COUNT(*) AS n FROM requirement WHERE project = ?')
+          .get(r.slug) as { n: number }
+      ).n,
+      mtime: r.mtime,
+      updated: r.updated ?? '',
+    }))
+  }
+
+  /** 侧边栏树：每个项目带上自己的需求列表（不切换当前项目） */
+  tree(): Array<Project & { requirements: Requirement[] }> {
+    const projects = this.listProjects()
+    const stmt = this.db.prepare('SELECT * FROM requirement WHERE project = ? ORDER BY mtime DESC')
+    return projects.map((p) => {
+      const rows = stmt.all(p.slug) as unknown as Row[]
+      return { ...p, requirements: rows.map((r) => this.toRequirement(r)) }
+    })
+  }
+
+  /** 写项目总规范（项目根目录的 AGENTS.md）。内容格式不限，由用户决定。 */
+  writeProjectConvention(slug: string, content: string): { path: string; bytes: number } {
+    const row = this.db.prepare('SELECT root FROM project WHERE slug = ?').get(slug) as
+      | { root: string }
+      | undefined
+    if (!row) throw new Error(`项目不存在: ${slug}`)
+    const file = join(row.root, 'AGENTS.md')
+    writeFileSync(file, content, 'utf8')
+    const bytes = Buffer.byteLength(content, 'utf8')
+    this.db
+      .prepare('UPDATE project SET has_convention = 1, mtime = ?, updated = ? WHERE slug = ?')
+      .run(bytes, today(), slug)
+    return { path: file, bytes }
+  }
+
+  /** 新建项目：建目录 + 注册。已存在则报错，不静默复用。 */
+  createProject(slug: string, name: string): Project {
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+      throw new Error('项目标识只能用英文小写、数字和连字符，且不能以连字符开头')
+    }
+    const exists = this.db.prepare('SELECT slug FROM project WHERE slug = ?').get(slug)
+    const root = join(this.dataDir, slug)
+    if (exists || existsSync(root)) throw new Error(`项目已存在: ${slug}`)
+    mkdirSync(root, { recursive: true })
+    this.syncProjects()
+    const created = this.listProjects().find((p) => p.slug === slug)
+    if (!created) throw new Error(`项目创建失败: ${slug}`)
+    if (name && name !== slug) {
+      this.db.prepare('UPDATE project SET name = ? WHERE slug = ?').run(name, slug)
+      created.name = name
+    }
+    return created
+  }
+
+  /** 删除项目记录。落盘文件由调用方决定是否一并删除。 */
+  deleteProject(slug: string): void {
+    const exists = this.db.prepare('SELECT slug FROM project WHERE slug = ?').get(slug)
+    if (!exists) throw new Error(`项目不存在: ${slug}`)
+    this.db.prepare('DELETE FROM doc WHERE project = ?').run(slug)
+    this.db.prepare('DELETE FROM requirement WHERE project = ?').run(slug)
+    this.db.prepare('DELETE FROM project WHERE slug = ?').run(slug)
+  }
+
+  // ------------------------------------------------------------- 同步
+
+  /**
+   * 把文件系统同步进数据库。目录结构：<dataDir>/<project>/<requirement>/
+   *
+   *   项目目录在、DB 无   → 新增项目
+   *   需求目录在、DB 无   → 新增需求（stage 默认澄清；若 md 还残留 frontmatter 则以此为初始值）
+   *   需求目录在、DB 有   → 只更新标题/摘要/仓库/文档索引，绝不动 stage/priority
+   *   目录消失            → 标记孤儿，保留可见（状态不丢）
+   */
+  syncProjects(): { added: string[]; updated: string[]; orphaned: string[]; restored: string[] } {
+    const dirs = listProjectDirs(this.dataDir)
+    const seenProjects = new Set<string>()
+    const seenReqs = new Set<string>()
+    const added: string[] = []
+    const updated: string[] = []
+    const restored: string[] = []
+
+    const selectProject = this.db.prepare('SELECT slug FROM project WHERE slug = ?')
+    const insertProject = this.db.prepare(
+      'INSERT INTO project (slug, name, root, has_convention, mtime, updated) VALUES (?, ?, ?, ?, ?, ?)',
+    )
+    const touchProject = this.db.prepare(
+      'UPDATE project SET root = ?, has_convention = ?, mtime = ? WHERE slug = ?',
+    )
+
+    const selectReq = this.db.prepare(
+      'SELECT slug, mtime, orphan FROM requirement WHERE slug = ? AND project = ?',
+    )
+    const insertReq = this.db.prepare(
+      `INSERT INTO requirement
+         (slug, project, title, path, stage, priority, summary, repos, links,
+          feishu_task_links, code_links, ext_links, mtime, updated, orphan)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '[]', '[]', ?, ?, 0)`,
+    )
+    const updateReq = this.db.prepare(
+      `UPDATE requirement SET title = ?, path = ?, summary = ?, repos = ?, links = ?, mtime = ?, orphan = 0
+       WHERE slug = ? AND project = ?`,
+    )
+    const clearDocs = this.db.prepare('DELETE FROM doc WHERE slug = ? AND project = ?')
+    const insertDoc = this.db.prepare(
+      'INSERT INTO doc (slug, project, name, content) VALUES (?, ?, ?, ?)',
+    )
+
+    for (const proj of dirs) {
+      seenProjects.add(proj.slug)
+      const convention = readProjectConvention(proj.root)
+      let projectMtime = Date.now()
+
+      if (!selectProject.get(proj.slug)) {
+        insertProject.run(
+          proj.slug,
+          proj.slug,
+          proj.root,
+          convention ? 1 : 0,
+          projectMtime,
+          today(),
+        )
+      } else {
+        touchProject.run(proj.root, convention ? 1 : 0, projectMtime, proj.slug)
+      }
+
+      for (const dir of listRequirementsIn(proj.root)) {
+        const parsed = parseRequirement(dir, basename(dir))
+        const key = `${proj.slug}/${parsed.slug}`
+        seenReqs.add(key)
+
+        clearDocs.run(parsed.slug, proj.slug)
+        for (const d of parsed.docs) insertDoc.run(parsed.slug, proj.slug, d.name, d.content)
+
+        const mtime = parsed.docs.reduce((n, d) => n + d.content.length, 0)
+        const existing = selectReq.get(parsed.slug, proj.slug) as
+          | { slug: string; mtime: number; orphan: number }
+          | undefined
+
+        if (!existing) {
+          const stage = asStage(parsed.legacyStage) ?? '澄清'
+          const priority = asPriority(parsed.legacyPriority) ?? null
+          insertReq.run(
+            parsed.slug,
+            proj.slug,
+            parsed.title,
+            dir,
+            stage,
+            priority,
+            parsed.summary,
+            JSON.stringify(parsed.repos),
+            parsed.links,
+            mtime,
+            today(),
+          )
+          added.push(key)
+        } else {
+          updateReq.run(
+            parsed.title,
+            dir,
+            parsed.summary,
+            JSON.stringify(parsed.repos),
+            parsed.links,
+            mtime,
+            parsed.slug,
+            proj.slug,
+          )
+          if (existing.orphan) restored.push(key)
+          else updated.push(key)
+        }
+      }
+    }
+
+    const orphaned: string[] = []
+    const all = this.db
+      .prepare('SELECT slug, project, orphan FROM requirement')
+      .all() as Array<{ slug: string; project: string; orphan: number }>
+    const markOrphan = this.db.prepare(
+      'UPDATE requirement SET orphan = 1 WHERE slug = ? AND project = ?',
+    )
+    for (const r of all) {
+      if (!seenReqs.has(`${r.project}/${r.slug}`) && !r.orphan) {
+        markOrphan.run(r.slug, r.project)
+        orphaned.push(`${r.project}/${r.slug}`)
+      }
+    }
+
+    this.reconcileProject()
+    return { added, updated, orphaned, restored }
+  }
+
+  // ------------------------------------------------------------- 读取
+
+  private toRequirement(row: Row): Requirement {
+    const stage = asStage(row.stage) ?? '澄清'
+    const docs = this.db
+      .prepare(
+        'SELECT name, length(content) AS size FROM doc WHERE slug = ? AND project = ? ORDER BY name',
+      )
+      .all(row.slug, row.project) as Array<{ name: string; size: number }>
+
+    return {
+      slug: row.slug,
+      project: row.project,
+      title: row.title,
+      stage,
+      column: STAGE_TO_COLUMN[stage],
+      priority: asPriority(row.priority) ?? '',
+      summary: row.summary ?? '',
+      repos: row.repos ? (JSON.parse(row.repos) as RepoRef[]) : [],
+      links: row.links ?? '',
+      feishuTaskLinks: parseLinks<string[]>(row.feishu_task_links, []) ?? [],
+      codeLinks: parseLinks<string[]>(row.code_links, []) ?? [],
+      extLinks: parseLinks<ExtLink[]>(row.ext_links, []) ?? [],
+      docs,
+      path: row.path,
+      mtime: row.mtime,
+      updated: row.updated ?? '',
+    }
+  }
+
+  /** 当前项目下的需求 */
+  list(): Requirement[] {
+    const rows = this.db
+      .prepare('SELECT * FROM requirement WHERE project = ? ORDER BY mtime DESC')
+      .all(this.activeProject) as unknown as Row[]
+    return rows.map((r) => this.toRequirement(r))
+  }
+
+  /** 在指定项目内按 slug 找需求 */
+  get(slug: string, project = this.activeProject): Requirement | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM requirement WHERE slug = ? AND project = ?')
+      .get(slug, project) as unknown as Row | undefined
+    return row ? this.toRequirement(row) : undefined
+  }
+
+  /** 全文检索：限定在当前项目内 */
+  search(query: string): Set<string> {
+    const q = query.trim().toLowerCase()
+    if (!q) return new Set()
+    const terms = q.split(/\s+/).filter(Boolean)
+    const p = this.activeProject
+    const haystack = new Map<string, string>()
+
+    for (const row of this.db
+      .prepare('SELECT * FROM requirement WHERE project = ?')
+      .all(p) as unknown as Row[]) {
+      haystack.set(
+        row.slug,
+        `${row.title}\n${row.slug}\n${row.summary ?? ''}\n${row.repos ?? ''}`.toLowerCase(),
+      )
+    }
+    for (const d of this.db
+      .prepare('SELECT slug, name, content FROM doc WHERE project = ?')
+      .all(p) as Array<{ slug: string; name: string; content: string }>) {
+      haystack.set(d.slug, `${haystack.get(d.slug) ?? ''}\n${d.name}\n${d.content}`.toLowerCase())
+    }
+
+    const hits = new Set<string>()
+    for (const [slug, text] of haystack) {
+      if (terms.every((t) => text.includes(t))) hits.add(slug)
+    }
+    return hits
+  }
+
+  /** 某个需求的完整上下文（含文档全文） */
+  context(slug: string, project = this.activeProject): { requirement: Requirement; docs: DocFile[] } | null {
+    const requirement = this.get(slug, project)
+    if (!requirement) return null
+    const docs = this.db
+      .prepare('SELECT name, content FROM doc WHERE slug = ? AND project = ? ORDER BY name')
+      .all(slug, project) as unknown as DocFile[]
+    return { requirement, docs }
+  }
+
+  /** 读需求目录下的原始 AGENTS.md（agent 的视角） */
+  readAgentsMd(slug: string, project = this.activeProject): string | null {
+    const req = this.get(slug, project)
+    if (!req) return null
+    try {
+      return readFileSync(join(req.path, 'AGENTS.md'), 'utf8')
+    } catch {
+      return null
+    }
+  }
+
+  // ------------------------------------------------------------- 写入
+
+  setStage(slug: string, stage: Stage, project = this.activeProject): Requirement {
+    if (!(STAGES as readonly string[]).includes(stage)) {
+      throw new Error(`未知阶段 ${stage}。合法取值：${STAGES.join(' / ')}`)
+    }
+    const info = this.db
+      .prepare('UPDATE requirement SET stage = ?, updated = ? WHERE slug = ? AND project = ?')
+      .run(stage, today(), slug, project)
+    if (info.changes === 0) throw new Error(`需求不存在: ${project}/${slug}`)
+    return this.get(slug, project)!
+  }
+
+  setPriority(slug: string, priority: Priority | '', project = this.activeProject): Requirement {
+    if (priority && !(PRIORITIES as readonly string[]).includes(priority)) {
+      throw new Error(`未知优先级 ${priority}。合法取值：${PRIORITIES.join(' / ')}`)
+    }
+    const info = this.db
+      .prepare('UPDATE requirement SET priority = ?, updated = ? WHERE slug = ? AND project = ?')
+      .run(priority || null, today(), slug, project)
+    if (info.changes === 0) throw new Error(`需求不存在: ${project}/${slug}`)
+    return this.get(slug, project)!
+  }
+
+  rename(slug: string, title: string, project = this.activeProject): Requirement {
+    const info = this.db
+      .prepare('UPDATE requirement SET title = ? WHERE slug = ? AND project = ?')
+      .run(title, slug, project)
+    if (info.changes === 0) throw new Error(`需求不存在: ${project}/${slug}`)
+    return this.get(slug, project)!
+  }
+
+  /**
+   * 更新需求的外部链接。写入入口留给 MCP（UI 不提供手动编辑）；
+   * 传 undefined 表示该字段不变，传数组表示整体替换。
+   */
+  setLinks(
+    slug: string,
+    links: { feishuTaskLinks?: unknown; codeLinks?: unknown; extLinks?: unknown },
+    project = this.activeProject,
+  ): Requirement {
+    if (!this.get(slug, project)) throw new Error(`需求不存在: ${project}/${slug}`)
+
+    const sets: string[] = []
+    const params: string[] = []
+    if (links.feishuTaskLinks !== undefined) {
+      sets.push('feishu_task_links = ?')
+      params.push(JSON.stringify(normalizeLinkList(links.feishuTaskLinks)))
+    }
+    if (links.codeLinks !== undefined) {
+      sets.push('code_links = ?')
+      params.push(JSON.stringify(normalizeLinkList(links.codeLinks)))
+    }
+    if (links.extLinks !== undefined) {
+      sets.push('ext_links = ?')
+      params.push(JSON.stringify(normalizeExtLinks(links.extLinks)))
+    }
+    if (!sets.length) throw new Error('没有需要更新的链接字段')
+
+    sets.push('updated = ?')
+    params.push(today())
+
+    this.db
+      .prepare(`UPDATE requirement SET ${sets.join(', ')} WHERE slug = ? AND project = ?`)
+      .run(...params, slug, project)
+
+    return this.get(slug, project)!
+  }
+
+  move(slug: string, column: Column, project = this.activeProject): Requirement {
+    const stage = COLUMN_TO_STAGE[column]
+    if (!stage) throw new Error(`未知列：${column}`)
+    return this.setStage(slug, stage, project)
+  }
+}

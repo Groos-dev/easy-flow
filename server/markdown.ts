@@ -1,0 +1,270 @@
+/**
+ * markdown 解析工具。被数据层（同步 md → sqlite）和 HTTP 层共用。
+ * 这里只负责"读懂文件"，不持有任何状态。
+ */
+import { existsSync, readdirSync, statSync, lstatSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+/** 单文件索引上限：超出只索引前 N 字节，避免大文档拖垮内存 */
+const MAX_DOC_BYTES = 64 * 1024
+/** 单需求索引总量上限 */
+const MAX_REQ_BYTES = 512 * 1024
+
+export interface Frontmatter {
+  data: Record<string, string>
+  body: string
+}
+
+export function parseFrontmatter(text: string): Frontmatter {
+  if (!text.startsWith('---')) return { data: {}, body: text }
+  const end = text.indexOf('\n---', 3)
+  if (end === -1) return { data: {}, body: text }
+  const raw = text.slice(3, end)
+  const body = text.slice(end + 4).replace(/^\s*\n/, '')
+  const data: Record<string, string> = {}
+  for (const line of raw.split('\n')) {
+    const m = /^(\w+):\s*(.*)$/.exec(line.trim())
+    if (!m) continue
+    let v = m[2].trim()
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+      v = v.slice(1, -1)
+    }
+    data[m[1]] = v
+  }
+  return { data, body }
+}
+
+
+/** 就地替换 frontmatter 块，正文一个字节都不动 */
+export function patchFrontmatter(text: string, patch: Record<string, string>): string {
+  const hasFm = text.startsWith('---')
+  const { data, body } = parseFrontmatter(text)
+  const merged = { ...data, ...patch }
+  const lines = Object.entries(merged)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => `${k}: ${v}`)
+  return `---\n${lines.join('\n')}\n---\n\n${hasFm ? body : text}`
+}
+
+// --------------------------------------------------------------------- 正文解析
+
+export function section(body: string, heading: string): string {
+  const lines = body.split('\n')
+  const start = lines.findIndex((l) => new RegExp(`^##\\s*${heading}\\s*$`).test(l))
+  if (start === -1) return ''
+  let end = lines.length
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^##\s/.test(lines[i])) {
+      end = i
+      break
+    }
+  }
+  return lines.slice(start + 1, end).join('\n').trim()
+}
+
+function sectionAny(body: string, headings: readonly string[]): string {
+  for (const h of headings) {
+    const text = section(body, h)
+    if (text) return text
+  }
+  return ''
+}
+
+/**
+ * 标题别名。历史需求的中英文标题不统一（「需求」/「需求摘要」/「Requirement summary」），
+ * 这里做归一化，避免解析漏项。
+ */
+const HEADINGS = {
+  summary: ['需求', '需求摘要', '需求概述', '任务范围', 'Requirement summary', 'Summary'],
+  repos: ['涉及仓库', '仓库与软链', '仓库映射', '仓库关系', '仓库', 'Repos and symlinks', 'Repos'],
+  links: ['链接', '相关链接', '参考链接', '文档索引', 'Doc index', 'Links'],
+} as const
+
+function firstParagraph(text: string): string {
+  const line = text
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l && !l.startsWith('-') && !l.startsWith('|') && !l.startsWith('#'))
+  return line ? line.replace(/\*\*/g, '').slice(0, 160) : ''
+}
+
+/** 摘要兜底：早期需求没有标准「需求」段，取 H1 之后的第一个非空段落 */
+function fallbackSummary(body: string): string {
+  const withoutH1 = body.replace(/^#\s.*$/m, '')
+  for (const block of withoutH1.split(/\n\s*\n/)) {
+    const text = block.trim()
+    if (!text || text.startsWith('#') || text.startsWith('|') || text.startsWith('-')) continue
+    return firstParagraph(text)
+  }
+  return ''
+}
+
+export interface RepoRef {
+  short: string
+  repo?: string
+}
+
+function parseRepos(body: string): RepoRef[] {
+  const block = sectionAny(body, HEADINGS.repos)
+  const repos: RepoRef[] = []
+  for (const line of block.split('\n')) {
+    if (!line.startsWith('|')) continue
+    const cells = line
+      .split('|')
+      .map((c) => c.trim())
+      .filter(Boolean)
+    if (!cells.length) continue
+    const [short, repo] = cells
+    if (!short || /^-+$/.test(short)) continue
+    if (/^(短名|short|short name|name)$/i.test(short)) continue
+    repos.push({ short, repo })
+  }
+  return repos
+}
+
+function entries(dir: string): string[] {
+  try {
+    return readdirSync(dir).filter((e) => !e.startsWith('.'))
+  } catch {
+    return []
+  }
+}
+
+export interface DocFile {
+  name: string
+  content: string
+  /** 文件真实修改时间（毫秒）。用于排序"最近动过的需求优先" */
+  mtime: number
+}
+
+/**
+ * 递归收集需求目录下所有 markdown。
+ *
+ * 两条排除规则：
+ *   不跟随符号链接 —— 需求目录里的仓库软链指向整个代码仓，跟进去会把无关文档全索引进来。
+ *                     这同时解决了 CLAUDE.md：按约定它是 AGENTS.md 的软链，会被跳过；
+ *                     而独立的 CLAUDE.md 是真实文档，会被正常索引。
+ *   AGENTS.md      —— 已单独解析，不再重复进索引。
+ */
+export function readDocs(dir: string): DocFile[] {
+  const out: DocFile[] = []
+  let total = 0
+  const walk = (d: string, prefix: string): void => {
+    for (const entry of entries(d)) {
+      if (total >= MAX_REQ_BYTES) return
+      const p = join(d, entry)
+      const rel = prefix ? `${prefix}/${entry}` : entry
+      try {
+        const lst = lstatSync(p)
+        if (lst.isSymbolicLink()) continue
+        if (lst.isDirectory()) {
+          walk(p, rel)
+          continue
+        }
+        if (!entry.endsWith('.md') || rel === 'AGENTS.md') continue
+
+        let content = readFileSync(p, 'utf8')
+        if (content.length > MAX_DOC_BYTES) content = content.slice(0, MAX_DOC_BYTES)
+        out.push({ name: rel, content, mtime: lst.mtimeMs })
+        total += content.length
+      } catch {
+        /* 忽略读不到的条目 */
+      }
+    }
+  }
+  walk(dir, '')
+  return out
+}
+
+export interface ParsedRequirement {
+  slug: string
+  title: string
+  /** 从正文推导的摘要，用于卡片展示 */
+  summary: string
+  repos: RepoRef[]
+  links: string
+  docs: DocFile[]
+  /** 迁移用：md 里可能还残留的旧 frontmatter 状态 */
+  legacyStage?: string
+  legacyPriority?: string
+}
+
+/** 解析一个需求目录。状态不在这里——状态归 sqlite 管。 */
+export function parseRequirement(dir: string, fallbackSlug: string): ParsedRequirement {
+  const file = join(dir, 'AGENTS.md')
+  const raw = readFileSync(file, 'utf8')
+  const { data, body } = parseFrontmatter(raw)
+
+  const docs = readDocs(dir)
+  const h1 = /^#\s+(.+)$/m.exec(body)?.[1]?.trim()
+
+  return {
+    slug: data.slug || fallbackSlug,
+    title: data.title || h1 || fallbackSlug,
+    summary: firstParagraph(sectionAny(body, HEADINGS.summary)) || fallbackSummary(body),
+    repos: parseRepos(body),
+    links: sectionAny(body, HEADINGS.links),
+    docs,
+    legacyStage: data.stage,
+    legacyPriority: data.priority,
+  }
+}
+
+/** 列出 root 下含 AGENTS.md 的直接子目录（用于需求目录与项目目录） */
+export function listRequirementDirs(root: string): string[] {
+  if (!existsSync(root)) return []
+  return entries(root)
+    .map((e) => join(root, e))
+    .filter((p) => {
+      try {
+        return statSync(p).isDirectory() && existsSync(join(p, 'AGENTS.md'))
+      } catch {
+        return false
+      }
+    })
+}
+
+/**
+ * 数据目录结构：<dataDir>/<project>/<requirement>/
+ *
+ * 项目是虚拟概念——不一定对应代码仓，可以在这里放该项目的总规范
+ * （约定为项目根目录下的 AGENTS.md，内容格式不限定）。
+ */
+export interface ProjectDir {
+  slug: string
+  root: string
+}
+
+/**
+ * 列出所有项目目录。
+ * 跳过下划线开头的目录（约定为存放非项目内容的收纳处，如 _inbox）；
+ * 其余不含 AGENTS.md 的子目录也算项目——项目可以只放规范文件。
+ */
+export function listProjectDirs(dataDir: string): ProjectDir[] {
+  if (!existsSync(dataDir)) return []
+  return entries(dataDir)
+    .filter((e) => !e.startsWith('_'))
+    .map((e) => ({ slug: e, root: join(dataDir, e) }))
+    .filter(({ root }) => {
+      try {
+        return statSync(root).isDirectory() && !lstatSync(root).isSymbolicLink()
+      } catch {
+        return false
+      }
+    })
+}
+
+/** 列出某个项目下的需求目录 */
+export function listRequirementsIn(projectRoot: string): string[] {
+  return listRequirementDirs(projectRoot)
+}
+
+/** 读取项目级规范文件（约定为项目根目录的 AGENTS.md），不存在则返回 null */
+export function readProjectConvention(projectRoot: string): string | null {
+  const file = join(projectRoot, 'AGENTS.md')
+  try {
+    return readFileSync(file, 'utf8')
+  } catch {
+    return null
+  }
+}
