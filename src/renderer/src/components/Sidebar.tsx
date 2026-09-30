@@ -3,8 +3,6 @@ import { api, type Project } from '../lib/api'
 import type { Requirement } from '../lib/types'
 
 interface Props {
-  /** 折叠侧边栏 */
-  onCollapse: () => void
   /** 当前选中的挂载点（用于高亮）；slug 为 null 表示选中了项目本身 */
   selected: { project: string; slug: string | null } | null
   /** 点了项目：切到该项目的看板 */
@@ -13,6 +11,8 @@ interface Props {
   onOpenProjectDetail: (slug: string) => void
   /** 点了需求：打开需求详情页 */
   onOpenRequirement: (project: string, slug: string) => void
+  /** 变一次就重拉一次树。agent 在文件系统里建完目录后靠它刷新 */
+  refreshKey: number
 }
 
 interface TreeProject extends Project {
@@ -20,11 +20,11 @@ interface TreeProject extends Project {
 }
 
 export default function Sidebar({
-  onCollapse,
   selected,
   onOpenProjectBoard,
   onOpenProjectDetail,
   onOpenRequirement,
+  refreshKey,
 }: Props) {
   const [tree, setTree] = useState<TreeProject[]>([])
   const [active, setActive] = useState('')
@@ -32,9 +32,6 @@ export default function Sidebar({
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [newSlug, setNewSlug] = useState('')
-  const [newName, setNewName] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -50,7 +47,7 @@ export default function Sidebar({
 
   useEffect(() => {
     void load()
-  }, [load])
+  }, [load, refreshKey])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -97,34 +94,10 @@ export default function Sidebar({
     setExpanded((prev) => new Set(prev).add(slug))
   }
 
-  async function createProject() {
-    setBusy(true)
-    setError('')
-    try {
-      await api.createProject(newSlug.trim(), newName.trim())
-      setNewSlug('')
-      setNewName('')
-      setCreating(false)
-      await load()
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
   return (
     <aside className="sidebar">
-      <div className="sidebar-head">
-        <span className="sidebar-title">easy-flow</span>
-        <span className="spacer" />
-        <button className="icon-btn" onClick={onCollapse} title="收起侧边栏">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <line x1="9" y1="3" x2="9" y2="21" />
-          </svg>
-        </button>
-      </div>
+      {/* 顶部占位：让开 macOS 红绿灯与固定在那里的侧边栏开关 */}
+      <div className="sidebar-head" />
 
       <div className="sidebar-search">
         <input
@@ -153,8 +126,18 @@ export default function Sidebar({
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </button>
-                <button className="tree-label" onClick={() => void switchProject(p.slug)} title={p.root}>
+                <button
+                  className="tree-label"
+                  onClick={() => void switchProject(p.slug)}
+                  disabled={busy}
+                  title={p.root}
+                >
                   <span className="tree-name">{p.name}</span>
+                  {p.issues.length > 0 && (
+                    <span className="tree-warn" title={p.issues.join('\n')}>
+                      !
+                    </span>
+                  )}
                   <span className="tree-count">{p.requirements.length}</span>
                 </button>
                 <button
@@ -195,36 +178,6 @@ export default function Sidebar({
             </div>
           )
         })}
-
-        {creating ? (
-          <div className="project-create">
-            <input
-              className="search wide"
-              placeholder="标识（英文小写）"
-              value={newSlug}
-              onChange={(e) => setNewSlug(e.target.value)}
-              spellCheck={false}
-            />
-            <input
-              className="search wide"
-              placeholder="显示名（可留空）"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-            />
-            <div className="row">
-              <button className="btn primary" disabled={busy || !newSlug.trim()} onClick={() => void createProject()}>
-                创建
-              </button>
-              <button className="btn" onClick={() => setCreating(false)}>
-                取消
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button className="project-new" onClick={() => setCreating(true)}>
-            + 新建项目
-          </button>
-        )}
       </div>
     </aside>
   )

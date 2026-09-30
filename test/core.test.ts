@@ -9,7 +9,7 @@
  */
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync, cpSync } from 'node:fs'
 import { join } from 'node:path'
 import { createServer } from 'node:http'
 
@@ -32,7 +32,9 @@ function makeReq(
   const fm = opts.frontmatter
     ? `---\n${Object.entries(opts.frontmatter).map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n\n`
     : ''
-  writeFileSync(join(dir, 'AGENTS.md'), `${fm}${body}\n`, 'utf8')
+  // 两份齐备才算需求：AGENTS.md 放 agent 指令，requirement.md 放需求描述
+  writeFileSync(join(dir, 'AGENTS.md'), '<!-- agent 指令 -->\n', 'utf8')
+  writeFileSync(join(dir, 'requirement.md'), `${fm}${body}\n`, 'utf8')
   for (const [name, content] of Object.entries(opts.docs ?? {})) {
     writeFileSync(join(dir, name), content, 'utf8')
   }
@@ -148,7 +150,7 @@ describe('数据层 · 项目与需求同步', () => {
     db.syncProjects()
     db.setPriority('alpha', 'p1')
 
-    writeFileSync(join(dir, 'onex', 'alpha', 'AGENTS.md'), '# 新标题\n\n## 需求\n\n新描述', 'utf8')
+    writeFileSync(join(dir, 'onex', 'alpha', 'requirement.md'), '# 新标题\n\n## 需求\n\n新描述', 'utf8')
     db.syncProjects()
 
     const req = db.get('alpha')
@@ -357,25 +359,154 @@ describe('数据层 · 链接字段', () => {
 
 // ------------------------------------------------------------ 数据层：项目
 
-describe('数据层 · 项目增删', () => {
-  test('createProject 建目录并注册', () => {
+describe('数据层 · 项目与规范', () => {
+  test('目录出现即项目出现，重复同步幂等', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    const p = db.createProject('demo', '演示')
-    assert.equal(p.slug, 'demo')
-    assert.equal(p.name, '演示')
-    assert.ok(existsSync(join(dir, 'demo')))
+
+    // 创建入口已移除：agent 直接建目录，扫描自然发现
+    mkdirSync(join(dir, 'demo', 'first'), { recursive: true })
+    writeFileSync(join(dir, 'demo', 'AGENTS.md'), '# 规范', 'utf8')
+    writeFileSync(join(dir, 'demo', 'first', 'AGENTS.md'), '<!-- agent 指令 -->\n', 'utf8')
+    writeFileSync(join(dir, 'demo', 'first', 'requirement.md'), '# 第一个需求\n', 'utf8')
+
+    db.syncProjects()
+    db.setProject('demo')
+    assert.equal(db.list().length, 1)
+    assert.equal(db.list()[0].title, '第一个需求')
+
+    const before = JSON.stringify(db.list())
+    db.syncProjects()
+    assert.equal(JSON.stringify(db.list()), before)
     db.close()
   })
 
-  test('createProject 校验标识格式并拒绝重名', () => {
+  test('显示名取项目根 AGENTS.md 的 frontmatter，缺省用目录名', () => {
+    const dir = fresh((d) => {
+      mkdirSync(join(d, 'onex'), { recursive: true })
+      mkdirSync(join(d, 'plain'), { recursive: true })
+      writeFileSync(join(d, 'onex', 'AGENTS.md'), '---\nname: 机票辅营对接\n---\n\n# 规范', 'utf8')
+    })
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+
+    assert.equal(db.listProjects().find((p) => p.slug === 'onex')!.name, '机票辅营对接')
+    assert.equal(db.listProjects().find((p) => p.slug === 'plain')!.name, 'plain')
+
+    // agent 改了 frontmatter，下一次同步就该生效
+    writeFileSync(join(dir, 'onex', 'AGENTS.md'), '---\nname: 改过了\n---\n\n# 规范', 'utf8')
+    db.syncProjects()
+    assert.equal(db.listProjects().find((p) => p.slug === 'onex')!.name, '改过了')
+    db.close()
+  })
+
+  test('目录不合规范只提示，不拦截任何操作', () => {
+    const dir = fresh((d) => {
+      mkdirSync(join(d, 'Demo_Project', 'scratch'), { recursive: true })
+      mkdirSync(join(d, 'Demo_Project', '_inbox'), { recursive: true })
+    })
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+
+    const p = db.listProjects()[0]
+    assert.equal(p.slug, 'Demo_Project')
+    assert.ok(
+      p.issues.some((i) => /目录名/.test(i)),
+      '大写/下划线应被提示',
+    )
+    assert.ok(p.issues.some((i) => /缺少项目规范/.test(i)))
+    assert.ok(p.issues.some((i) => /scratch/.test(i)))
+    assert.ok(
+      !p.issues.some((i) => /_inbox/.test(i)),
+      '_inbox 是约定的收纳处，不该报',
+    )
+
+    // 提示而已：仍能切换、仍在树里、scratch 也没变成需求
+    db.setProject('Demo_Project')
+    assert.equal(db.project, 'Demo_Project')
+    assert.equal(db.tree().length, 1)
+    assert.equal(db.list().length, 0)
+    db.close()
+  })
+
+  test('首次同步生成模板，且不覆盖已有内容', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    assert.throws(() => db.createProject('Bad Slug', 'x'), /英文小写/)
-    db.createProject('demo', '演示')
-    assert.throws(() => db.createProject('demo', '再来'), /已存在/)
+
+    const tpl = join(dir, '_templates')
+    assert.ok(existsSync(join(tpl, 'project', 'AGENTS.md')))
+    assert.ok(existsSync(join(tpl, 'requirement', 'AGENTS.md')))
+    assert.ok(existsSync(join(tpl, 'requirement', 'requirement.md')))
+    assert.ok(
+      !db.listProjects().some((p) => p.slug === '_templates'),
+      '模板目录不该被当成项目',
+    )
+
+    writeFileSync(join(tpl, 'requirement', 'AGENTS.md'), '# 自定义模板', 'utf8')
+    db.syncProjects()
+    assert.equal(readFileSync(join(tpl, 'requirement', 'AGENTS.md'), 'utf8'), '# 自定义模板')
+    db.close()
+  })
+
+  test('复制需求模板建出的需求可被正常解析', () => {
+    const dir = fresh((d) => {
+      makeReq(d, 'onex', 'alpha', '# alpha')
+      writeFileSync(join(d, 'onex', 'AGENTS.md'), '# 项目规范', 'utf8')
+    })
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+
+    cpSync(join(dir, '_templates', 'requirement'), join(dir, 'onex', 'from-template'), {
+      recursive: true,
+    })
+    const desc = join(dir, 'onex', 'from-template', 'requirement.md')
+    writeFileSync(desc, readFileSync(desc, 'utf8').replace('# 需求标题', '# 抄模板建的需求'), 'utf8')
+    db.syncProjects()
+
+    const r = db.list().find((x) => x.slug === 'from-template')!
+    assert.equal(r.title, '抄模板建的需求')
+    assert.equal(r.status, '澄清')
+    assert.ok(r.summary.length > 0, '「需求」段应能被取成摘要')
+    assert.deepEqual(r.repos, [], '空表格不该产生假仓库')
+    assert.deepEqual(db.listProjects().find((p) => p.slug === 'onex')!.issues, [])
+    db.close()
+  })
+
+  test('软链目录不算需求（worktree 里也会带需求文档）', () => {
+    const dir = fresh((d) => {
+      makeReq(d, 'onex', 'alpha', '# alpha')
+      // 工位里的软链指向代码仓 worktree，而 worktree 里同样有这两份文件
+      symlinkSync(join(d, 'onex', 'alpha'), join(d, 'onex', 'agg'), 'dir')
+    })
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+
+    assert.equal(db.list().length, 1, '软链不该被当成第二个需求')
+    assert.equal(db.list()[0].slug, 'alpha')
+    db.close()
+  })
+
+  test('复制项目模板建出的项目就合规', () => {
+    const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+
+    cpSync(join(dir, '_templates', 'project'), join(dir, 'demo'), { recursive: true })
+    db.syncProjects()
+
+    const p = db.listProjects().find((x) => x.slug === 'demo')!
+    assert.equal(p.name, 'demo', 'frontmatter 里 name 留空时退回目录名')
+    assert.deepEqual(p.issues, [], '照模板建出来就应合规')
+
+    writeFileSync(
+      join(dir, 'demo', 'AGENTS.md'),
+      '---\nname: 演示项目\n---\n\n# 项目规范\n',
+      'utf8',
+    )
+    db.syncProjects()
+    assert.equal(db.listProjects().find((x) => x.slug === 'demo')!.name, '演示项目')
     db.close()
   })
 
@@ -496,7 +627,7 @@ describe('HTTP 层', () => {
   test('GET /api/context 返回需求与原文', async () => {
     const r = await get('/api/context?slug=alpha')
     assert.equal(r.requirement.slug, 'alpha')
-    assert.match(r.agentsMd, /甲需求内容/)
+    assert.match(r.requirementMd, /甲需求内容/)
   })
 
   test('文档读写往返', async () => {
@@ -526,9 +657,11 @@ describe('HTTP 层', () => {
     assert.match(r.error, /不支持的文件类型/)
   })
 
-  test('项目接口：列表 / 建 / 切 / 删', async () => {
-    const created = await post('/api/projects', { slug: 'demo', name: '演示' })
-    assert.equal(created.slug, 'demo')
+  test('项目接口：列表 / 切 / 删', async () => {
+    // 创建入口已移除：目录是事实源，扫描发现（GET /api/tree 会触发一次同步）
+    mkdirSync(join(dir, 'demo'), { recursive: true })
+    writeFileSync(join(dir, 'demo', 'AGENTS.md'), '# 演示项目\n', 'utf8')
+    await get('/api/tree')
 
     const listed = await get('/api/projects')
     assert.ok(listed.projects.some((p: any) => p.slug === 'demo'))
@@ -544,6 +677,17 @@ describe('HTTP 层', () => {
 
     const del = await post('/api/projects/delete', { slug: 'demo', removeFiles: true })
     assert.equal(del.ok, true)
+  })
+
+  test('创建接口已移除', async () => {
+    const r = await post('/api/projects', { slug: 'x', name: 'y' })
+    assert.equal(r.error, 'not found')
+  })
+
+  test('/api/requirements 带上项目显示名', async () => {
+    const r = await get('/api/requirements')
+    assert.equal(r.project, 'onex')
+    assert.equal(r.projectName, 'onex', '项目没有带 name 的 frontmatter 时退回目录名')
   })
 
   test('不能删除当前项目', async () => {

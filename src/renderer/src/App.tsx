@@ -54,6 +54,8 @@ export default function App() {
   const [statuses, setStatuses] = useState<Status[]>([])
   /** 当前项目：看板数据按项目隔离 */
   const [project, setProject] = useState('')
+  /** 当前项目显示名，取自项目根 AGENTS.md 的 frontmatter；缺省是目录名 */
+  const [projectName, setProjectName] = useState('')
   /** 侧边栏展开状态 */
   const [sidebarOpen, setSidebarOpen] = useState(true)
   /** 详情页挂载点：需求或项目。slugs 用 'project:<slug>' 区分 */
@@ -73,6 +75,8 @@ export default function App() {
   /** 侧边栏可能点开非当前项目的需求，这里单独持有 */
   const [crossReq, setCrossReq] = useState<Requirement | null>(null)
   const [overStatus, setOverStatus] = useState<Status | null>(null)
+  /** 每加一就重拉侧边栏树。agent 在文件系统里建完目录后靠它刷新 */
+  const [refreshSeq, setRefreshSeq] = useState(0)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const searchSeq = useRef(0)
@@ -101,6 +105,7 @@ export default function App() {
       setStatuses(data.statuses)
       setPriorities(data.priorities)
       setProject(data.project)
+      setProjectName(data.projectName)
       setError('')
     } catch (err) {
       setError((err as Error).message)
@@ -119,6 +124,12 @@ export default function App() {
       /* 设置读不到时用默认字体，不阻断看板 */
     }
   }, [])
+
+  /** 看板与侧边栏一起重拉：agent 建完目录后不用重启应用就能看到 */
+  const refresh = useCallback(() => {
+    void load()
+    setRefreshSeq((n) => n + 1)
+  }, [load])
 
   useEffect(() => {
     void load()
@@ -191,7 +202,7 @@ export default function App() {
   // 详情页挂载点：需求（带 slug）或项目（slug 为 null）
   const detailTarget = detail
     ? detail.slug === null
-      ? { kind: 'project' as const, project: detail.project, title: detail.project }
+      ? { kind: 'project' as const, project: detail.project, title: (detail.project === project && projectName) || detail.project }
       : (() => {
           // 必须同时匹配项目：不同项目可能存在同名 slug。
           // 当前项目里找不到时用 crossReq（侧边栏可点开别的项目的需求）。
@@ -214,10 +225,22 @@ export default function App() {
 
   return (
     <div className={`shell${sidebarOpen ? '' : ' sidebar-collapsed'}`}>
+      {/* 侧边栏开关固定在窗口左上角：跟随窗口而不是布局，展开/折叠都在同一位置 */}
+      <button
+        className="icon-btn sidebar-toggle"
+        onClick={() => setSidebarOpen((v) => !v)}
+        title={sidebarOpen ? '收起侧边栏' : '展开侧边栏'}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <line x1="9" y1="3" x2="9" y2="21" />
+        </svg>
+      </button>
+
       {sidebarOpen && (
         <Sidebar
-          onCollapse={() => setSidebarOpen(false)}
           selected={detail}
+          refreshKey={refreshSeq}
           onOpenProjectBoard={() => {
             // Sidebar 内部已调 setActiveProject，这里只需重新拉数据
             setDetail(null)
@@ -244,7 +267,7 @@ export default function App() {
           <Settings
             onBack={() => setShowSettings(false)}
             onApplied={() => {
-              void load()
+              refresh()
               void loadAppearance()
             }}
           />
@@ -255,27 +278,17 @@ export default function App() {
             priorities={priorities}
             fontFamily={fontFamily}
             fontSize={fontSize}
-            sidebarOpen={sidebarOpen}
-            onToggleSidebar={() => setSidebarOpen((v) => !v)}
             onBack={() => {
               setDetail(null)
-              void load()
+              refresh()
             }}
             onOpenSettings={() => setShowSettings(true)}
-            onUpdated={() => void load()}
+            onUpdated={refresh}
           />
         ) : (
           <div className="app">
             <div className="topbar">
-              {!sidebarOpen && (
-                <button className="icon-btn" onClick={() => setSidebarOpen(true)} title="展开侧边栏">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <line x1="9" y1="3" x2="9" y2="21" />
-                  </svg>
-                </button>
-              )}
-              <span className="brand">{project || 'easy-flow'}</span>
+              <span className="brand">{projectName || project || 'easy-flow'}</span>
               <span className="count">
                 {filtered.length} / {items.length}
               </span>
@@ -286,17 +299,9 @@ export default function App() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
-              <button className="btn" onClick={() => void load()}>
+              <button className="btn" onClick={refresh}>
                 刷新
               </button>
-              {sidebarOpen && (
-                <button className="icon-btn" onClick={() => setSidebarOpen(false)} title="收起侧边栏">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <line x1="9" y1="3" x2="9" y2="21" />
-                  </svg>
-                </button>
-              )}
             </div>
 
             {error && <div className="notice">{error}</div>}

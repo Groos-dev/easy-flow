@@ -11,16 +11,18 @@
  *   DB 有、目录没了 → 标记为孤儿，保留在列表中可见
  */
 import { DatabaseSync } from 'node:sqlite'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
 import {
   listProjectDirs,
   listRequirementsIn,
+  parseFrontmatter,
   parseRequirement,
   readProjectConvention,
   type RepoRef,
   type DocFile,
 } from './markdown.ts'
+import { ensureTemplates, projectIssues } from './convention.ts'
 
 /**
  * 状态 = 看板的列。两者是同一个东西，所以只有这一套取值，顺序即列顺序。
@@ -112,6 +114,8 @@ export interface Project {
   hasConvention: boolean
   /** 规范文件原文，没有则为 null */
   convention: string | null
+  /** 目录不合规范之处（只读提示，空数组即合规）。不落库——它是文件系统的纯函数 */
+  issues: string[]
   requirementCount: number
   mtime: number
   updated: string
@@ -306,6 +310,7 @@ export class BoardDatabase {
       root: r.root,
       hasConvention: !!r.has_convention,
       convention: r.has_convention ? readProjectConvention(r.root) : null,
+      issues: projectIssues(r.slug, r.root),
       requirementCount: (
         this.db
           .prepare('SELECT COUNT(*) AS n FROM requirement WHERE project = ?')
@@ -341,25 +346,6 @@ export class BoardDatabase {
     return { path: file, bytes }
   }
 
-  /** 新建项目：建目录 + 注册。已存在则报错，不静默复用。 */
-  createProject(slug: string, name: string): Project {
-    if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
-      throw new Error('项目标识只能用英文小写、数字和连字符，且不能以连字符开头')
-    }
-    const exists = this.db.prepare('SELECT slug FROM project WHERE slug = ?').get(slug)
-    const root = join(this.dataDir, slug)
-    if (exists || existsSync(root)) throw new Error(`项目已存在: ${slug}`)
-    mkdirSync(root, { recursive: true })
-    this.syncProjects()
-    const created = this.listProjects().find((p) => p.slug === slug)
-    if (!created) throw new Error(`项目创建失败: ${slug}`)
-    if (name && name !== slug) {
-      this.db.prepare('UPDATE project SET name = ? WHERE slug = ?').run(name, slug)
-      created.name = name
-    }
-    return created
-  }
-
   /** 删除项目记录。落盘文件由调用方决定是否一并删除。 */
   deleteProject(slug: string): void {
     const exists = this.db.prepare('SELECT slug FROM project WHERE slug = ?').get(slug)
@@ -380,6 +366,8 @@ export class BoardDatabase {
    *   目录消失            → 标记孤儿，保留可见（状态不丢）
    */
   syncProjects(): { added: string[]; updated: string[]; orphaned: string[]; restored: string[] } {
+    // 模板随扫描补齐。这里是唯一扫 dataDir 的入口，看板/树/设置页/切换数据目录都会经过
+    ensureTemplates(this.dataDir)
     const dirs = listProjectDirs(this.dataDir)
     const seenProjects = new Set<string>()
     const seenReqs = new Set<string>()
@@ -392,7 +380,7 @@ export class BoardDatabase {
       'INSERT INTO project (slug, name, root, has_convention, mtime, updated) VALUES (?, ?, ?, ?, ?, ?)',
     )
     const touchProject = this.db.prepare(
-      'UPDATE project SET root = ?, has_convention = ?, mtime = ? WHERE slug = ?',
+      'UPDATE project SET root = ?, name = ?, has_convention = ?, mtime = ? WHERE slug = ?',
     )
 
     const selectReq = this.db.prepare(
@@ -416,19 +404,15 @@ export class BoardDatabase {
     for (const proj of dirs) {
       seenProjects.add(proj.slug)
       const convention = readProjectConvention(proj.root)
+      // 显示名归 md 管：项目根 AGENTS.md 的 frontmatter name，缺省用目录名。
+      // 这里读的是「内容」，与下面那条废弃说明（针对「状态」）不是一回事。
+      const name = (convention && parseFrontmatter(convention).data.name) || proj.slug
       let projectMtime = Date.now()
 
       if (!selectProject.get(proj.slug)) {
-        insertProject.run(
-          proj.slug,
-          proj.slug,
-          proj.root,
-          convention ? 1 : 0,
-          projectMtime,
-          today(),
-        )
+        insertProject.run(proj.slug, name, proj.root, convention ? 1 : 0, projectMtime, today())
       } else {
-        touchProject.run(proj.root, convention ? 1 : 0, projectMtime, proj.slug)
+        touchProject.run(proj.root, name, convention ? 1 : 0, projectMtime, proj.slug)
       }
 
       for (const dir of listRequirementsIn(proj.root)) {
@@ -447,8 +431,9 @@ export class BoardDatabase {
           | undefined
 
         if (!existing) {
-          // 新记录一律从「澄清」起步。曾经从 md 的 frontmatter 读初始值，
-          // 但那套约定已废弃、文件里的 frontmatter 也早已清掉，读取路径是死的。
+          // 新记录一律从「澄清」起步。曾经从 md 的 frontmatter 读初始状态，
+          // 但那套约定已废弃——状态（stage/priority）只归 sqlite；
+          // title/name 这类「内容」仍从文件读，两者不要混。
           insertReq.run(
             parsed.slug,
             proj.slug,
@@ -582,12 +567,12 @@ export class BoardDatabase {
     return { requirement, docs }
   }
 
-  /** 读需求目录下的原始 AGENTS.md（agent 的视角） */
-  readAgentsMd(slug: string, project = this.activeProject): string | null {
+  /** 读需求目录下的原始 requirement.md（需求描述的原文） */
+  readRequirementMd(slug: string, project = this.activeProject): string | null {
     const req = this.get(slug, project)
     if (!req) return null
     try {
-      return readFileSync(join(req.path, 'AGENTS.md'), 'utf8')
+      return readFileSync(join(req.path, 'requirement.md'), 'utf8')
     } catch {
       return null
     }

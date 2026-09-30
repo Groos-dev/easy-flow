@@ -31,9 +31,6 @@ interface Props {
   onOpenSettings: () => void
   /** 改了状态后通知看板刷新 */
   onUpdated: () => void
-  /** 侧边栏状态：决定是否显示展开/收起按钮 */
-  sidebarOpen: boolean
-  onToggleSidebar: () => void
 }
 
 const PRIORITY_DESC: Record<string, string> = {
@@ -193,16 +190,15 @@ export default function Detail({
   onBack,
   onOpenSettings,
   onUpdated,
-  sidebarOpen,
-  onToggleSidebar,
 }: Props) {
   const req = target.req
   const isProject = target.kind === 'project'
   const terminalTarget = isProject
     ? { project: target.project }
     : { project: target.project, slug: target.slug! }
-  const [docs, setDocs] = useState<string[]>(['AGENTS.md'])
-  const [activeDoc, setActiveDoc] = useState('AGENTS.md')
+  const [docs, setDocs] = useState<string[]>([])
+  /** 当前打开的文档；空串表示还没定（列表在异步加载）或这个挂载点没有文档 */
+  const [activeDoc, setActiveDoc] = useState('')
   /** draft 是唯一事实源：预览渲染它、源码编辑它、自动保存提交它 */
   const [draft, setDraft] = useState('')
   /** 上次成功保存的内容，用来判断是否真有改动 */
@@ -222,15 +218,23 @@ export default function Detail({
 
   useEffect(() => {
     let alive = true
-    const load =
-      isProject
-        ? api.projectConvention(target.project).then((r) => (r.content ? ['AGENTS.md'] : []))
-        : api
-            .context(target.slug!, target.project)
-            .then((c) => ['AGENTS.md', ...c.requirement.docs.map((d) => d.name)])
+    const load = isProject
+      ? api.projectConvention(target.project).then((r) => (r.content ? ['AGENTS.md'] : []))
+      : api
+          .context(target.slug!, target.project)
+          // AGENTS.md / CLAUDE.md 是给 agent 读的指令文件，不是需求文档，不进标签栏
+          .then((c) =>
+            c.requirement.docs
+              .map((d) => d.name)
+              .filter((n) => !/^(AGENTS|CLAUDE)\.md$/i.test(n.split('/').pop() ?? '')),
+          )
     void load
       .then((names) => {
-        if (alive) setDocs([...new Set(names as string[])])
+        if (!alive) return
+        const list = [...new Set(names as string[])]
+        setDocs(list)
+        // 换了挂载点、或原先打开的那篇不在了，就落到第一篇
+        setActiveDoc((cur) => (list.includes(cur) ? cur : (list[0] ?? '')))
       })
       .catch(() => {})
     return () => {
@@ -239,6 +243,14 @@ export default function Detail({
   }, [target.project, target.slug, isProject])
 
   const loadDoc = useCallback(async () => {
+    // 需求页在文档列表到位前（或这个需求没有文档）没有可打开的文档
+    if (!isProject && !activeDoc) {
+      setLoading(false)
+      setDraft('')
+      draftRef.current = ''
+      savedRef.current = ''
+      return
+    }
     const seq = ++docSeq.current
     setLoading(true)
     setError('')
@@ -307,11 +319,20 @@ export default function Detail({
     }
   }, [flushSave])
 
-  // ⌘E 在预览/源码间切换；⌘S 立即保存
+  // ⌘E 在预览/源码间切换；⌘S 立即保存；Esc 返回看板
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) {
-        if (e.key === 'Escape') onBack()
+        // 捕获阶段：终端的 xterm 会在自己身上吃掉按键并阻止冒泡，冒泡阶段轮不到这里。
+        // 但终端里的 Esc 归终端管（claude / vim 都要用），焦点在终端时不抢。
+        const inTerminal = e.target instanceof Element && e.target.closest('.terminal-pane')
+        if (e.key === 'Escape' && !inTerminal) onBack()
+        return
+      }
+      // ⌘[ 是 macOS 的「返回」：终端里 Esc 归 claude / vim，用这个随时退
+      if (e.key === '[') {
+        e.preventDefault()
+        onBack()
         return
       }
       if (e.key === 's') {
@@ -323,8 +344,8 @@ export default function Detail({
         setMode((m) => (m === 'source' ? 'preview' : 'source'))
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [flushSave, onBack])
 
   // 源码模式进入时聚焦；预览模式下双击进入编辑
@@ -354,8 +375,7 @@ export default function Detail({
   // 文档列表：只看需求根目录与 docs/ 下的文档。
   // tasks/ 之类的历史目录不进标签栏（同名文件多，且已不是主结构）。
   const docTabs = useMemo(() => {
-    const picked = docs.filter((n) => !n.includes('/') || n.startsWith('docs/'))
-    const list = ['AGENTS.md', ...picked.filter((n) => n !== 'AGENTS.md')]
+    const list = docs.filter((n) => !n.includes('/') || n.startsWith('docs/'))
 
     const baseOf = (n: string) => n.split('/').pop() ?? n
     const counts = new Map<string, number>()
@@ -372,16 +392,11 @@ export default function Detail({
   return (
     <div className="detail-page">
       <header className="detail-head">
-        {!sidebarOpen && (
-          <button className="icon-btn" onClick={onToggleSidebar} title="展开侧边栏">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <line x1="9" y1="3" x2="9" y2="21" />
-            </svg>
-          </button>
-        )}
-        <button className="btn" onClick={onBack} title="返回看板（Esc）">
-          ← 看板
+        <button className="icon-btn" onClick={onBack} title="返回看板（Esc / ⌘[）">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12" />
+            <polyline points="12 19 5 12 12 5" />
+          </svg>
         </button>
         <div className="detail-title">
           <h1>{target.title}</h1>
@@ -406,14 +421,6 @@ export default function Detail({
         <button className="btn" onClick={onOpenSettings}>
           设置
         </button>
-        {sidebarOpen && (
-          <button className="icon-btn" onClick={onToggleSidebar} title="收起侧边栏">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <line x1="9" y1="3" x2="9" y2="21" />
-            </svg>
-          </button>
-        )}
       </header>
 
       {!isProject && req && (
@@ -442,6 +449,7 @@ export default function Detail({
       <div className={`detail-body${showTerminal ? '' : ' no-terminal'}`}>
         <section className="doc-pane">
           <div className="doc-bar">
+            {docTabs.length === 0 && <span className="doc-empty">暂无文档</span>}
             {docTabs.map((tab) => (
               <button
                 key={tab.name}

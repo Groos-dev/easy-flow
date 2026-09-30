@@ -166,6 +166,8 @@ async function createWindow(): Promise<void> {
     minHeight: 600,
     title: 'easy-flow',
     titleBarStyle: 'hiddenInset',
+    // 显式固定交通灯位置：默认位置随系统浮动，侧边栏开关没法跟它精确对齐
+    trafficLightPosition: { x: 16, y: 15 },
     backgroundColor: '#0f1115',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

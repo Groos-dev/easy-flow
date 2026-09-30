@@ -179,6 +179,8 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         json(req, res, 200, {
           requirements: db.list(),
           project: db.project,
+          // 顶栏显示用。name 来自项目根 AGENTS.md 的 frontmatter，缺省是目录名
+          projectName: db.listProjects().find((p) => p.slug === db.project)?.name ?? db.project,
           statuses: STATUSES,
           priorities: PRIORITIES,
           sync,
@@ -197,13 +199,6 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
       if (url.pathname === '/api/tree' && req.method === 'GET') {
         const sync = db.syncProjects()
         json(req, res, 200, { tree: db.tree(), active: db.project, sync })
-        return
-      }
-
-      if (url.pathname === '/api/projects' && req.method === 'POST') {
-        const { slug, name } = await readBody(req)
-        const created = db.createProject(String(slug ?? '').trim(), String(name ?? '').trim())
-        json(req, res, 200, created)
         return
       }
 
@@ -297,14 +292,14 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         const project = resolveProject(db, url.searchParams.get('project'))
         const ctx = db.context(slug, project)
         if (!ctx) throw new Error(`需求不存在: ${slug}`)
-        json(req, res, 200, { ...ctx, agentsMd: db.readAgentsMd(slug, project) })
+        json(req, res, 200, { ...ctx, requirementMd: db.readRequirementMd(slug, project) })
         return
       }
 
-      // 读需求目录下的某个文档（默认 AGENTS.md）。路径做了越界校验。
+      // 读需求目录下的某个文档（默认 requirement.md）。路径做了越界校验。
       if (url.pathname === '/api/doc' && req.method === 'GET') {
         const slug = url.searchParams.get('slug') ?? ''
-        const name = url.searchParams.get('name') || 'AGENTS.md'
+        const name = url.searchParams.get('name') || 'requirement.md'
         const project = resolveProject(db, url.searchParams.get('project'))
         const target = db.get(slug, project)
         if (!target) throw new Error(`需求不存在: ${slug}`)

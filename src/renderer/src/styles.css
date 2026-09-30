@@ -33,23 +33,52 @@ body {
 
 /* ---------------------------------------------------------------- 顶栏 */
 
+/*
+ * 高度写死、内容垂直居中：折叠时顶栏内容要与 macOS 交通灯对齐（交通灯中心 y=21），
+ * 靠 padding 撑高会随最高元素（搜索框）变化而偏。
+ */
 .topbar {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
+  height: 42px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--border);
-  -webkit-app-region: drag;
 }
 
 .topbar > * {
   -webkit-app-region: no-drag;
 }
 
+/*
+ * 中部的弹性空白兼作窗口拖拽区。
+ * 不能整条 topbar 设 drag：折叠时它从窗口最左边开始，会盖住固定在左上角的侧边栏开关，
+ * 而 drag 区域会把落在其上的点击当作拖窗口吞掉，按钮就点不动了。
+ */
+.topbar > .spacer {
+  -webkit-app-region: drag;
+}
+
+/* 侧边栏折叠时顶栏顶到窗口左边，整条让开 macOS 红绿灯与开关按钮 */
+.shell.sidebar-collapsed .topbar {
+  padding-left: 112px;
+}
+
+/*
+ * 侧边栏开关。固定跟随窗口而不是布局——展开/折叠都在同一位置，
+ * 否则它会在「顶栏左侧」和「侧边栏头部」之间跳。
+ */
+.sidebar-toggle {
+  position: fixed;
+  top: 10px;
+  left: 80px;
+  z-index: 20;
+  -webkit-app-region: no-drag;
+}
+
 .brand {
   font-weight: 600;
   letter-spacing: 0.02em;
-  padding-left: 64px; /* 让开 macOS 红绿灯 */
 }
 
 .count {
@@ -188,7 +217,6 @@ body {
   padding: 46px 10px 12px; /* 顶部让开 macOS 红绿灯 */
   border-right: 1px solid var(--border);
   background: #12151b;
-  -webkit-app-region: drag;
 }
 
 .settings-nav-title {
@@ -197,6 +225,8 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   padding: 0 10px 8px;
+  /* 拖拽区只给标题这一行：整列设 drag 会在折叠时盖住左上角的侧边栏开关 */
+  -webkit-app-region: drag;
 }
 
 .settings-nav-item {
@@ -510,11 +540,15 @@ body {
   gap: 10px;
   padding: 46px 16px 10px; /* 顶部让开 macOS 红绿灯 */
   border-bottom: 1px solid var(--border);
-  -webkit-app-region: drag;
 }
 
 .detail-head > * {
   -webkit-app-region: no-drag;
+}
+
+/* 同 .topbar：拖拽区只给中部的弹性空白，整条设 drag 会在折叠时盖住左上角的侧边栏开关 */
+.detail-head > .spacer {
+  -webkit-app-region: drag;
 }
 
 .detail-title {
@@ -580,6 +614,12 @@ body {
   flex-wrap: wrap;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
+}
+
+/* 需求没有任何文档时标签栏占个位，免得整条只剩工具按钮 */
+.doc-empty {
+  color: var(--text-faint);
+  font-size: 11.5px;
 }
 
 .doc-tab {
@@ -984,33 +1024,6 @@ body {
 
 
 
-.project-create {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-}
-
-.project-new {
-  width: 100%;
-  padding: 7px;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-faint);
-  font-family: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-}
-
-.project-new:hover {
-  color: var(--text);
-  border-color: #38404c;
-}
-
-
 /* ------------------------------------------------------------ 应用外壳 */
 
 .shell {
@@ -1064,23 +1077,13 @@ body {
   border-right: 1px solid var(--border);
 }
 
+/* 纯占位：让开 macOS 红绿灯与固定在那个位置的侧边栏开关，这片区域兼作窗口拖拽区 */
 .sidebar-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 46px 10px 8px; /* 让开 macOS 红绿灯 */
+  flex: none;
+  height: 46px;
+  /* 从开关右侧开始：drag 区域会吞掉落在其上的点击，盖住按钮就点不动了 */
+  margin-left: 112px;
   -webkit-app-region: drag;
-}
-
-.sidebar-head > * {
-  -webkit-app-region: no-drag;
-}
-
-.sidebar-title {
-  color: var(--text-dim);
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0.01em;
 }
 
 .sidebar-search {
@@ -1170,6 +1173,16 @@ body {
   color: var(--text-faint);
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
+}
+
+/* 目录不合规范的角标；具体问题在 title 里 */
+.tree-warn {
+  flex: none;
+  margin-left: 5px;
+  color: #e0b062;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: help;
 }
 
 .tree-action {

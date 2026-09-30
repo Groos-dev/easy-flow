@@ -175,10 +175,14 @@ export interface ParsedRequirement {
   docs: DocFile[]
 }
 
-/** 解析一个需求目录。状态不在这里——状态归 sqlite 管。 */
+/**
+ * 解析一个需求目录。状态不在这里——状态归 sqlite 管。
+ *
+ * AGENTS.md 放 agent 指令，requirement.md 放需求描述；两者齐备才算需求
+ * （见 listRequirementDirs），所以这里可以放心直接读。
+ */
 export function parseRequirement(dir: string, fallbackSlug: string): ParsedRequirement {
-  const file = join(dir, 'AGENTS.md')
-  const raw = readFileSync(file, 'utf8')
+  const raw = readFileSync(join(dir, 'requirement.md'), 'utf8')
   const { data, body } = parseFrontmatter(raw)
 
   const docs = readDocs(dir)
@@ -194,14 +198,23 @@ export function parseRequirement(dir: string, fallbackSlug: string): ParsedRequi
   }
 }
 
-/** 列出 root 下含 AGENTS.md 的直接子目录（用于需求目录与项目目录） */
+/** 需求目录的判据：AGENTS.md（agent 指令）与 requirement.md（需求描述）都在 */
+function isRequirementDir(dir: string): boolean {
+  return existsSync(join(dir, 'AGENTS.md')) && existsSync(join(dir, 'requirement.md'))
+}
+
+/**
+ * 列出 root 下文件齐备的直接子目录（需求目录）。
+ * 软链不算：工位里的软链指向代码仓 worktree，而 worktree 里也会有需求文档，
+ * 跟随进去就会把同一个需求认成两个。
+ */
 export function listRequirementDirs(root: string): string[] {
   if (!existsSync(root)) return []
   return entries(root)
     .map((e) => join(root, e))
     .filter((p) => {
       try {
-        return statSync(p).isDirectory() && existsSync(join(p, 'AGENTS.md'))
+        return statSync(p).isDirectory() && !lstatSync(p).isSymbolicLink() && isRequirementDir(p)
       } catch {
         return false
       }
@@ -241,6 +254,25 @@ export function listProjectDirs(dataDir: string): ProjectDir[] {
 /** 列出某个项目下的需求目录 */
 export function listRequirementsIn(projectRoot: string): string[] {
   return listRequirementDirs(projectRoot)
+}
+
+/**
+ * 列出 root 下"看着像需求、文件却不齐"的直接子目录。
+ * 文件不齐就不会被识别成需求，只能在这里露面——仅供提示，不做任何过滤。
+ * 跳过下划线开头的目录：那是约定的收纳处（如 _inbox），不是漏建的需求。
+ */
+export function listStrayDirs(root: string): string[] {
+  if (!existsSync(root)) return []
+  return entries(root)
+    .filter((e) => !e.startsWith('_'))
+    .filter((e) => {
+      const p = join(root, e)
+      try {
+        return statSync(p).isDirectory() && !isRequirementDir(p)
+      } catch {
+        return false
+      }
+    })
 }
 
 /** 读取项目级规范文件（约定为项目根目录的 AGENTS.md），不存在则返回 null */

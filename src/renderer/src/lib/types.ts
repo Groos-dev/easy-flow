@@ -48,6 +48,8 @@ export interface BoardData {
   requirements: Requirement[]
   /** 当前项目 */
   project: string
+  /** 当前项目的显示名（取自项目根 AGENTS.md 的 frontmatter，缺省是目录名） */
+  projectName: string
   /** 看板列顺序，也就是状态取值顺序 */
   statuses: Status[]
   priorities: string[]

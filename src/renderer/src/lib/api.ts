@@ -45,6 +45,8 @@ export interface Project {
   root: string
   hasConvention: boolean
   convention: string | null
+  /** 目录不合规范之处，只读提示（空数组即合规） */
+  issues: string[]
   requirementCount: number
   mtime: number
   updated: string
@@ -61,7 +63,7 @@ export interface SwitchResult {
 export interface ContextPayload {
   requirement: Requirement
   docs: Array<{ name: string; content: string }>
-  agentsMd: string | null
+  requirementMd: string | null
 }
 
 export const api = {
@@ -90,7 +92,7 @@ export const api = {
         (project ? `&project=${encodeURIComponent(project)}` : ''),
     ),
 
-  /** 读需求目录下的文档（默认 AGENTS.md） */
+  /** 读需求目录下的文档（默认 requirement.md） */
   doc: (
     slug: string,
     name: string,
@@ -124,9 +126,6 @@ export const api = {
   tree: (): Promise<{ tree: Array<Project & { requirements: Requirement[] }>; active: string }> =>
     request('/api/tree'),
 
-  createProject: (slug: string, name: string): Promise<Project> =>
-    request('/api/projects', { method: 'POST', body: JSON.stringify({ slug, name }) }),
-
   openProject: (slug: string): Promise<{ ok: boolean; root: string }> =>
     request('/api/projects/open', { method: 'POST', body: JSON.stringify({ slug }) }),
 
@@ -145,15 +144,6 @@ export const api = {
     request('/api/projects/convention', {
       method: 'POST',
       body: JSON.stringify({ project, content }),
-    }),
-
-  deleteProject: (
-    slug: string,
-    removeFiles: boolean,
-  ): Promise<{ ok: boolean; projects: Project[] }> =>
-    request('/api/projects/delete', {
-      method: 'POST',
-      body: JSON.stringify({ slug, removeFiles }),
     }),
 
   open: (slug: string, project?: string): Promise<{ ok: boolean }> =>
