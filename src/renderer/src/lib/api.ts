@@ -71,12 +71,12 @@ export const api = {
   search: (q: string): Promise<{ requirements: Requirement[] }> =>
     request(`/api/search?q=${encodeURIComponent(q)}`),
 
-  move: (slug: string, column: string): Promise<Requirement> =>
-    request('/api/move', { method: 'POST', body: JSON.stringify({ slug, column }) }),
+  move: (slug: string, status: string): Promise<Requirement> =>
+    request('/api/move', { method: 'POST', body: JSON.stringify({ slug, status }) }),
 
   update: (
     slug: string,
-    patch: { stage?: string; priority?: string; title?: string },
+    patch: { status?: string; priority?: string; title?: string },
     project?: string,
   ): Promise<Requirement> =>
     request('/api/update', {

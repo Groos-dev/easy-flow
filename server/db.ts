@@ -6,8 +6,8 @@
  *   sqlite → 机器状态与索引，agent 不关心，UI 消费
  *
  * 同步策略（关键）：md 是"需求是否存在"的事实源，DB 是状态的权威。
- *   目录在、DB 无 → 新增（stage 默认澄清；若 md 还残留 frontmatter 则以此为初始值）
- *   目录在、DB 有 → 只更新标题/摘要/仓库/文档索引，绝不动 stage/priority
+ *   目录在、DB 无 → 新增（status 默认澄清）
+ *   目录在、DB 有 → 只更新标题/摘要/仓库/文档索引，绝不动 status/priority
  *   DB 有、目录没了 → 标记为孤儿，保留在列表中可见
  */
 import { DatabaseSync } from 'node:sqlite'
@@ -22,28 +22,11 @@ import {
   type DocFile,
 } from './markdown.ts'
 
-export const COLUMNS = ['澄清', '执行中', 'Review', '已完成'] as const
-export type Column = (typeof COLUMNS)[number]
-
-export const STAGES = ['澄清', '方案', '开发', '联调', '发布', '验证验收', '关闭'] as const
-export type Stage = (typeof STAGES)[number]
-
-export const STAGE_TO_COLUMN: Record<Stage, Column> = {
-  澄清: '澄清',
-  方案: '执行中',
-  开发: '执行中',
-  联调: 'Review',
-  发布: 'Review',
-  验证验收: 'Review',
-  关闭: '已完成',
-}
-
-export const COLUMN_TO_STAGE: Record<Column, Stage> = {
-  澄清: '澄清',
-  执行中: '方案',
-  Review: '发布',
-  已完成: '关闭',
-}
+/**
+ * 状态 = 看板的列。两者是同一个东西，所以只有这一套取值，顺序即列顺序。
+ */
+export const STATUSES = ['澄清', '执行中', 'Review', '已完成'] as const
+export type Status = (typeof STATUSES)[number]
 
 /**
  * 优先级四档 = 艾森豪威尔四象限：
@@ -52,35 +35,6 @@ export const COLUMN_TO_STAGE: Record<Column, Stage> = {
  */
 export const PRIORITIES = ['p0', 'p1', 'p2', 'p3'] as const
 export type Priority = (typeof PRIORITIES)[number]
-
-export interface Requirement {
-  slug: string
-  title: string
-  stage: Stage
-  column: Column
-  priority: Priority | ''
-  summary: string
-  repos: RepoRef[]
-  links: string
-  docs: Array<{ name: string; size: number }>
-  path: string
-  mtime: number
-  updated: string
-}
-
-interface Row {
-  slug: string
-  title: string
-  path: string
-  stage: string
-  priority: string | null
-  summary: string | null
-  repos: string | null
-  links: string | null
-  mtime: number
-  updated: string | null
-  orphan: number
-}
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS project (
@@ -97,7 +51,7 @@ CREATE TABLE IF NOT EXISTS requirement (
   project  TEXT NOT NULL DEFAULT '',
   title    TEXT NOT NULL,
   path     TEXT NOT NULL,
-  stage    TEXT NOT NULL,
+  status   TEXT NOT NULL,
   priority TEXT,
   summary  TEXT,
   repos    TEXT,
@@ -129,6 +83,17 @@ function migrate(db: DatabaseSync): void {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
     if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`)
   }
+  // 状态与看板列合并：老库的 stage（7 档）改名 status 并映射到 4 档
+  const cols = db.prepare('PRAGMA table_info(requirement)').all() as Array<{ name: string }>
+  if (cols.some((c) => c.name === 'stage') && !cols.some((c) => c.name === 'status')) {
+    db.exec('ALTER TABLE requirement RENAME COLUMN stage TO status')
+    db.exec(`UPDATE requirement SET status = CASE
+      WHEN status IN ('方案', '开发') THEN '执行中'
+      WHEN status IN ('联调', '发布', '验证验收') THEN 'Review'
+      WHEN status = '关闭' THEN '已完成'
+      ELSE '澄清' END`)
+  }
+
   addIfMissing('requirement', 'project', `project TEXT NOT NULL DEFAULT ''`)
   addIfMissing('doc', 'project', `project TEXT NOT NULL DEFAULT ''`)
   // 链接：写入入口留给 MCP，UI 只读展示
@@ -157,8 +122,7 @@ export interface Requirement {
   /** 所属项目 */
   project: string
   title: string
-  stage: Stage
-  column: Column
+  status: Status
   priority: Priority | ''
   summary: string
   repos: RepoRef[]
@@ -186,7 +150,7 @@ interface Row {
   project: string
   title: string
   path: string
-  stage: string
+  status: string
   priority: string | null
   summary: string | null
   repos: string | null
@@ -199,8 +163,8 @@ interface Row {
   orphan: number
 }
 
-function asStage(value: string | null | undefined): Stage | null {
-  return value && (STAGES as readonly string[]).includes(value) ? (value as Stage) : null
+function asStatus(value: string | null | undefined): Status | null {
+  return value && (STATUSES as readonly string[]).includes(value) ? (value as Status) : null
 }
 
 function asPriority(value: string | null | undefined): Priority | null {
@@ -411,8 +375,8 @@ export class BoardDatabase {
    * 把文件系统同步进数据库。目录结构：<dataDir>/<project>/<requirement>/
    *
    *   项目目录在、DB 无   → 新增项目
-   *   需求目录在、DB 无   → 新增需求（stage 默认澄清；若 md 还残留 frontmatter 则以此为初始值）
-   *   需求目录在、DB 有   → 只更新标题/摘要/仓库/文档索引，绝不动 stage/priority
+   *   需求目录在、DB 无   → 新增需求（status 默认澄清）
+   *   需求目录在、DB 有   → 只更新标题/摘要/仓库/文档索引，绝不动 status/priority
    *   目录消失            → 标记孤儿，保留可见（状态不丢）
    */
   syncProjects(): { added: string[]; updated: string[]; orphaned: string[]; restored: string[] } {
@@ -436,7 +400,7 @@ export class BoardDatabase {
     )
     const insertReq = this.db.prepare(
       `INSERT INTO requirement
-         (slug, project, title, path, stage, priority, summary, repos, links,
+         (slug, project, title, path, status, priority, summary, repos, links,
           feishu_task_links, code_links, ext_links, mtime, updated, orphan)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '[]', '[]', ?, ?, 0)`,
     )
@@ -475,21 +439,23 @@ export class BoardDatabase {
         clearDocs.run(parsed.slug, proj.slug)
         for (const d of parsed.docs) insertDoc.run(parsed.slug, proj.slug, d.name, d.content)
 
-        const mtime = parsed.docs.reduce((n, d) => n + d.content.length, 0)
+        // 取所有文档中最新的修改时间。
+        // 之前这里写的是 content.length 之和，于是「最近更新优先」实际变成「文档越长越靠前」。
+        const mtime = parsed.docs.reduce((latest, d) => Math.max(latest, d.mtime), 0)
         const existing = selectReq.get(parsed.slug, proj.slug) as
           | { slug: string; mtime: number; orphan: number }
           | undefined
 
         if (!existing) {
-          const stage = asStage(parsed.legacyStage) ?? '澄清'
-          const priority = asPriority(parsed.legacyPriority) ?? null
+          // 新记录一律从「澄清」起步。曾经从 md 的 frontmatter 读初始值，
+          // 但那套约定已废弃、文件里的 frontmatter 也早已清掉，读取路径是死的。
           insertReq.run(
             parsed.slug,
             proj.slug,
             parsed.title,
             dir,
-            stage,
-            priority,
+            '澄清',
+            null,
             parsed.summary,
             JSON.stringify(parsed.repos),
             parsed.links,
@@ -535,7 +501,7 @@ export class BoardDatabase {
   // ------------------------------------------------------------- 读取
 
   private toRequirement(row: Row): Requirement {
-    const stage = asStage(row.stage) ?? '澄清'
+    const status = asStatus(row.status) ?? '澄清'
     const docs = this.db
       .prepare(
         'SELECT name, length(content) AS size FROM doc WHERE slug = ? AND project = ? ORDER BY name',
@@ -546,8 +512,7 @@ export class BoardDatabase {
       slug: row.slug,
       project: row.project,
       title: row.title,
-      stage,
-      column: STAGE_TO_COLUMN[stage],
+      status,
       priority: asPriority(row.priority) ?? '',
       summary: row.summary ?? '',
       repos: row.repos ? (JSON.parse(row.repos) as RepoRef[]) : [],
@@ -630,13 +595,13 @@ export class BoardDatabase {
 
   // ------------------------------------------------------------- 写入
 
-  setStage(slug: string, stage: Stage, project = this.activeProject): Requirement {
-    if (!(STAGES as readonly string[]).includes(stage)) {
-      throw new Error(`未知阶段 ${stage}。合法取值：${STAGES.join(' / ')}`)
+  setStatus(slug: string, status: Status, project = this.activeProject): Requirement {
+    if (!(STATUSES as readonly string[]).includes(status)) {
+      throw new Error(`未知状态 ${status}。合法取值：${STATUSES.join(' / ')}`)
     }
     const info = this.db
-      .prepare('UPDATE requirement SET stage = ?, updated = ? WHERE slug = ? AND project = ?')
-      .run(stage, today(), slug, project)
+      .prepare('UPDATE requirement SET status = ?, updated = ? WHERE slug = ? AND project = ?')
+      .run(status, today(), slug, project)
     if (info.changes === 0) throw new Error(`需求不存在: ${project}/${slug}`)
     return this.get(slug, project)!
   }
@@ -697,9 +662,5 @@ export class BoardDatabase {
     return this.get(slug, project)!
   }
 
-  move(slug: string, column: Column, project = this.activeProject): Requirement {
-    const stage = COLUMN_TO_STAGE[column]
-    if (!stage) throw new Error(`未知列：${column}`)
-    return this.setStage(slug, stage, project)
-  }
+
 }

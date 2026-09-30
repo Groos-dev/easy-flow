@@ -22,8 +22,8 @@ export interface DocTarget {
 
 interface Props {
   target: DocTarget
-  /** 由服务端下发的枚举，避免这里再维护一份 */
-  stages: string[]
+  /** 由服务端下发的状态枚举，避免这里再维护一份 */
+  statuses: string[]
   priorities: string[]
   fontFamily: string
   fontSize: number
@@ -186,7 +186,7 @@ const AUTOSAVE_DELAY = 600
 
 export default function Detail({
   target,
-  stages,
+  statuses,
   priorities,
   fontFamily,
   fontSize,
@@ -336,12 +336,16 @@ export default function Detail({
     }
   }, [mode])
 
-  async function apply(patch: { stage?: string; priority?: string }) {
+  async function apply(patch: { status?: string; priority?: string }) {
+    if (!req) return
     setBusy(true)
+    setError('')
     try {
-      if (!req) return
       await api.update(req.slug, patch, target.project)
       onUpdated()
+    } catch (e) {
+      // 失败必须让用户看到：之前只有 finally，失败会变成 unhandled rejection
+      setError(`更新失败：${(e as Error).message}`)
     } finally {
       setBusy(false)
     }
@@ -426,12 +430,11 @@ export default function Detail({
           onChange={(p) => void apply({ priority: p })}
         />
         <SelectMenu
-          value={req.stage}
-          placeholder="未设阶段"
+          value={req.status}
+          placeholder="未设状态"
           disabled={busy}
-          hint="拖卡片只切到该列的首个阶段，细粒度在这里改"
-          options={stages.map((s) => ({ value: s, label: s }))}
-          onChange={(s) => void apply({ stage: s })}
+          options={statuses.map((s) => ({ value: s, label: s }))}
+          onChange={(s) => void apply({ status: s })}
         />
       </div>
       )}

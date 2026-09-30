@@ -10,15 +10,15 @@ export interface DocRef {
   size: number
 }
 
-export type Column = '澄清' | '执行中' | 'Review' | '已完成'
+/** 状态即看板列，两者是同一个东西 */
+export type Status = '澄清' | '执行中' | 'Review' | '已完成'
 
 export interface Requirement {
   slug: string
   /** 所属项目 */
   project: string
   title: string
-  stage: string
-  column: Column
+  status: string
   priority: string
   summary: string
   repos: RepoRef[]
@@ -48,11 +48,9 @@ export interface BoardData {
   requirements: Requirement[]
   /** 当前项目 */
   project: string
-  columns: Column[]
-  stages: string[]
+  /** 看板列顺序，也就是状态取值顺序 */
+  statuses: Status[]
   priorities: string[]
-  /** 列 → 阶段，由服务端下发，渲染层不再维护第二份 */
-  stageToColumn: Record<string, Column>
   /** 本次读取时做的增量同步，用于提示"新增了几个需求" */
   sync: SyncResult
 }

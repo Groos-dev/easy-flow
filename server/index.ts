@@ -11,18 +11,15 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import {
   BoardDatabase,
-  COLUMNS,
-  STAGES,
+  STATUSES,
   PRIORITIES,
-  STAGE_TO_COLUMN,
-  type Column,
+  type Status,
   type Priority,
-  type Stage,
 } from './db.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 
-export { COLUMNS, STAGES, PRIORITIES, STAGE_TO_COLUMN, COLUMN_TO_STAGE } from './db.ts'
-export type { Column, Stage, Priority, Requirement } from './db.ts'
+export { STATUSES, PRIORITIES } from './db.ts'
+export type { Status, Priority, Requirement } from './db.ts'
 
 export const DEFAULT_PORT = 3210
 
@@ -182,10 +179,8 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         json(req, res, 200, {
           requirements: db.list(),
           project: db.project,
-          columns: COLUMNS,
-          stages: STAGES,
+          statuses: STATUSES,
           priorities: PRIORITIES,
-          stageToColumn: STAGE_TO_COLUMN,
           sync,
         })
         return
@@ -267,18 +262,18 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
           req,
           res,
           200,
-          db.move(String(body.slug), String(body.column) as Column, project),
+          db.setStatus(String(body.slug), String(body.status) as Status, project),
         )
         return
       }
 
       if (url.pathname === '/api/update' && req.method === 'POST') {
-        const { slug, stage, priority, title, project: projectRaw } = await readBody(req)
+        const { slug, status, priority, title, project: projectRaw } = await readBody(req)
         const project = resolveProject(db, projectRaw ? String(projectRaw) : null)
         const id = String(slug)
         let result = db.get(id, project)
         if (!result) throw new Error(`需求不存在: ${id}`)
-        if (stage !== undefined) result = db.setStage(id, stage as Stage, project)
+        if (status !== undefined) result = db.setStatus(id, status as Status, project)
         if (priority !== undefined) result = db.setPriority(id, (priority as Priority) || '', project)
         if (title !== undefined) result = db.rename(id, String(title), project)
         // 详情页依赖返回对象里的 sync 来提示新增/失联

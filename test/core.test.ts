@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import { createServer } from 'node:http'
 
 import { BoardDatabase, normalizeLinkList, normalizeExtLinks } from '../server/db.ts'
-import { parseFrontmatter, patchFrontmatter, readDocs, section } from '../server/markdown.ts'
+import { parseFrontmatter, readDocs, section } from '../server/markdown.ts'
 import { createBoardApp } from '../server/index.ts'
 
 const TMP = '/tmp/easy-flow-test'
@@ -67,20 +67,6 @@ describe('markdown 解析', () => {
     const { data, body } = parseFrontmatter('# 标题\n正文')
     assert.deepEqual(data, {})
     assert.equal(body, '# 标题\n正文')
-  })
-
-  test('patchFrontmatter 只改头部，正文零改动', () => {
-    const before = '---\nstage: 澄清\n---\n\n# 标题\n\n正文段落\n'
-    const after = patchFrontmatter(before, { stage: '开发' })
-    assert.match(after, /stage: 开发/)
-    // 正文必须逐字保留
-    assert.ok(after.endsWith('# 标题\n\n正文段落\n'))
-  })
-
-  test('patchFrontmatter 合并已有字段而非覆盖整块', () => {
-    const after = patchFrontmatter('---\na: 1\nb: 2\n---\n\n正文', { b: '9' })
-    assert.match(after, /a: 1/)
-    assert.match(after, /b: 9/)
   })
 
   test('section 正确按 ## 切分（不会把正文截成空）', () => {
@@ -143,16 +129,16 @@ describe('数据层 · 项目与需求同步', () => {
     db.close()
   })
 
-  test('★ 同步不覆盖已有状态（stage/priority 是权威的）', () => {
+  test('★ 同步不覆盖已有状态（status/priority 是权威的）', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha\n\n## 需求\n\n内容'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    db.move('alpha', 'Review')
+    db.setStatus('alpha', 'Review')
 
     // 再同步多次，状态必须保持
     db.syncProjects()
     db.syncProjects()
-    assert.equal(db.get('alpha')?.column, 'Review')
+    assert.equal(db.get('alpha')?.status, 'Review')
     db.close()
   })
 
@@ -176,12 +162,12 @@ describe('数据层 · 项目与需求同步', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    db.move('alpha', '已完成')
+    db.setStatus('alpha', '已完成')
 
     makeReq(dir, 'onex', 'beta', '# beta')
     db.syncProjects()
 
-    assert.equal(db.get('alpha')?.column, '已完成')
+    assert.equal(db.get('alpha')?.status, '已完成')
     assert.ok(db.get('beta'))
     db.close()
   })
@@ -190,12 +176,12 @@ describe('数据层 · 项目与需求同步', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    db.move('alpha', 'Review')
+    db.setStatus('alpha', 'Review')
 
     rmSync(join(dir, 'onex', 'alpha'), { recursive: true, force: true })
     const sync = db.syncProjects()
     assert.ok(sync.orphaned.includes('onex/alpha'))
-    assert.equal(db.get('alpha')?.column, 'Review', '孤儿仍需可查且状态不丢')
+    assert.equal(db.get('alpha')?.status, 'Review', '孤儿仍需可查且状态不丢')
     db.close()
   })
 
@@ -226,17 +212,11 @@ describe('数据层 · 项目与需求同步', () => {
     db.close()
   })
 
-  test('旧 frontmatter 作为新记录的初始状态被迁移', () => {
-    const dir = fresh((d) =>
-      makeReq(d, 'onex', 'alpha', '# alpha', {
-        frontmatter: { stage: '联调', priority: 'p1' },
-      }),
-    )
+  test('新记录一律从「澄清」起步', () => {
+    const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    const req = db.get('alpha')
-    assert.equal(req?.stage, '联调')
-    assert.equal(req?.priority, 'p1')
+    assert.equal(db.get('alpha')?.status, '澄清')
     db.close()
   })
 })
@@ -261,32 +241,28 @@ describe('数据层 · 状态读写', () => {
 
   after(() => db.close())
 
-  test('move 按列映射到阶段', () => {
-    db.move('alpha', '澄清')
-    assert.equal(db.get('alpha')?.stage, '澄清')
-    db.move('alpha', '执行中')
-    assert.equal(db.get('alpha')?.stage, '方案')
-    db.move('alpha', 'Review')
-    assert.equal(db.get('alpha')?.stage, '发布')
-    db.move('alpha', '已完成')
-    assert.equal(db.get('alpha')?.stage, '关闭')
+  test('setStatus 接受四个看板状态', () => {
+    for (const s of ['澄清', '执行中', 'Review', '已完成'] as const) {
+      db.setStatus('alpha', s)
+      assert.equal(db.get('alpha')?.status, s)
+    }
   })
 
-  test('未知列/阶段/优先级被拒绝', () => {
-    assert.throws(() => db.move('alpha', 'Done' as never), /未知列/)
-    assert.throws(() => db.setStage('alpha', '开发中' as never), /未知阶段/)
+  test('未知状态/优先级被拒绝', () => {
+    assert.throws(() => db.setStatus('alpha', 'Done' as never), /未知状态/)
+    assert.throws(() => db.setStatus('alpha', '开发中' as never), /未知状态/)
     assert.throws(() => db.setPriority('alpha', 'high' as never), /未知优先级/)
   })
 
-  test('setStage/setPriority 会更新 updated 字段', () => {
+  test('setStatus/setPriority 会更新 updated 字段', () => {
     const before = db.get('alpha')?.updated
-    db.setStage('alpha', '开发')
+    db.setStatus('alpha', '执行中')
     assert.match(db.get('alpha')?.updated ?? '', /^\d{4}-\d{2}-\d{2}$/)
     assert.ok(before !== undefined)
   })
 
   test('操作不存在的需求会报错', () => {
-    assert.throws(() => db.setStage('nope', '澄清'), /需求不存在/)
+    assert.throws(() => db.setStatus('nope', '澄清'), /需求不存在/)
     assert.throws(() => db.setPriority('nope', 'p0'), /需求不存在/)
     assert.throws(() => db.rename('nope', 'x'), /需求不存在/)
   })
@@ -294,11 +270,11 @@ describe('数据层 · 状态读写', () => {
   test('项目隔离：同名需求互不干扰', () => {
     makeReq(dir, 'personal', 'alpha', '# personal alpha\n\n## 需求\n\n另一个 alpha')
     db.syncProjects()
-    db.setStage('alpha', '联调', 'onex')
+    db.setStatus('alpha', 'Review', 'onex')
     const inOnex = db.get('alpha', 'onex')
     const inPersonal = db.get('alpha', 'personal')
-    assert.equal(inOnex?.stage, '联调')
-    assert.notEqual(inPersonal?.stage, '联调')
+    assert.equal(inOnex?.status, 'Review')
+    assert.notEqual(inPersonal?.status, 'Review')
     db.setProject('onex')
   })
 
@@ -477,10 +453,8 @@ describe('HTTP 层', () => {
   test('GET /api/requirements 返回完整契约', async () => {
     const r = await get('/api/requirements')
     assert.ok(Array.isArray(r.requirements))
-    assert.deepEqual(r.columns, ['澄清', '执行中', 'Review', '已完成'])
-    assert.ok(Array.isArray(r.stages))
+    assert.deepEqual(r.statuses, ['澄清', '执行中', 'Review', '已完成'])
     assert.deepEqual(r.priorities, ['p0', 'p1', 'p2', 'p3'])
-    assert.ok(r.stageToColumn)
     assert.equal(r.project, 'onex')
   })
 
@@ -492,26 +466,25 @@ describe('HTTP 层', () => {
   })
 
   test('POST /api/move 改状态并落库', async () => {
-    const r = await post('/api/move', { slug: 'alpha', column: 'Review' })
-    assert.equal(r.column, 'Review')
-    assert.equal(r.stage, '发布')
+    const r = await post('/api/move', { slug: 'alpha', status: 'Review' })
+    assert.equal(r.status, 'Review')
     const list = await get('/api/requirements')
-    assert.equal(list.requirements.find((x: any) => x.slug === 'alpha').column, 'Review')
+    assert.equal(list.requirements.find((x: any) => x.slug === 'alpha').status, 'Review')
   })
 
   test('POST /api/move 拒绝未知列', async () => {
-    const r = await post('/api/move', { slug: 'alpha', column: 'Done' })
-    assert.match(r.error, /未知列/)
+    const r = await post('/api/move', { slug: 'alpha', status: 'Done' })
+    assert.match(r.error, /未知状态/)
   })
 
   test('POST /api/update 支持改阶段与优先级', async () => {
-    const r = await post('/api/update', { slug: 'alpha', stage: '联调', priority: 'p1' })
-    assert.equal(r.stage, '联调')
+    const r = await post('/api/update', { slug: 'alpha', status: 'Review', priority: 'p1' })
+    assert.equal(r.status, 'Review')
     assert.equal(r.priority, 'p1')
   })
 
   test('POST /api/update 拒绝非法枚举', async () => {
-    assert.match((await post('/api/update', { slug: 'alpha', stage: '开发中' })).error, /未知阶段/)
+    assert.match((await post('/api/update', { slug: 'alpha', status: '开发中' })).error, /未知状态/)
     assert.match((await post('/api/update', { slug: 'alpha', priority: 'high' })).error, /未知优先级/)
   })
 

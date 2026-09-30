@@ -12,25 +12,25 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { api } from './lib/api'
-import type { Column, Requirement } from './lib/types'
+import type { Requirement, Status } from './lib/types'
 import Card from './components/Card'
 import Detail from './components/Detail'
 import Settings from './components/Settings'
 import Sidebar from './components/Sidebar'
 
-interface ColumnProps {
-  stage: Column
+interface BoardColumnProps {
+  status: Status
   items: Requirement[]
   onOpen: (slug: string) => void
   isOver: boolean
 }
 
-function ColumnView({ stage, items, onOpen, isOver }: ColumnProps) {
-  const { setNodeRef } = useDroppable({ id: stage, data: { type: 'column', stage } })
+function ColumnView({ status, items, onOpen, isOver }: BoardColumnProps) {
+  const { setNodeRef } = useDroppable({ id: status, data: { status } })
   return (
     <div ref={setNodeRef} className={`column${isOver ? ' over' : ''}`}>
       <div className="column-head">
-        <span>{stage}</span>
+        <span>{status}</span>
         <span className="n">{items.length}</span>
       </div>
       <div className="column-body">
@@ -45,20 +45,19 @@ function ColumnView({ stage, items, onOpen, isOver }: ColumnProps) {
 }
 
 /** dnd-kit 的 data 是 unknown，这里收窄一次 */
-function stageOf(over: DragOverEvent['over']): Column | undefined {
-  const data = over?.data.current as { stage?: Column } | undefined
-  return data?.stage
+function statusOf(over: DragOverEvent['over']): Status | undefined {
+  const data = over?.data.current as { status?: Status } | undefined
+  return data?.status
 }
 
 export default function App() {
-  const [columns, setColumns] = useState<Column[]>([])
+  const [statuses, setStatuses] = useState<Status[]>([])
   /** 当前项目：看板数据按项目隔离 */
   const [project, setProject] = useState('')
   /** 侧边栏展开状态 */
   const [sidebarOpen, setSidebarOpen] = useState(true)
   /** 详情页挂载点：需求或项目。slugs 用 'project:<slug>' 区分 */
   const [detail, setDetail] = useState<{ project: string; slug: string | null } | null>(null)
-  const [stages, setStages] = useState<string[]>([])
   const [priorities, setPriorities] = useState<string[]>([])
   const [items, setItems] = useState<Requirement[]>([])
   const [query, setQuery] = useState('')
@@ -73,7 +72,7 @@ export default function App() {
   const [dragSlug, setDragSlug] = useState<string | null>(null)
   /** 侧边栏可能点开非当前项目的需求，这里单独持有 */
   const [crossReq, setCrossReq] = useState<Requirement | null>(null)
-  const [overStage, setOverStage] = useState<Column | null>(null)
+  const [overStatus, setOverStatus] = useState<Status | null>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const searchSeq = useRef(0)
@@ -99,8 +98,7 @@ export default function App() {
     try {
       const data = await api.list()
       setItems(data.requirements)
-      setColumns(data.columns)
-      setStages(data.stages)
+      setStatuses(data.statuses)
       setPriorities(data.priorities)
       setProject(data.project)
       setError('')
@@ -151,33 +149,34 @@ export default function App() {
     [items, hits],
   )
 
-  const byColumn = useMemo(() => {
-    // 列的唯一来源是 r.column（服务端给的就是列名），不要从 stage 推导
-    const map = new Map<Column, Requirement[]>((columns ?? []).map((c) => [c, []]))
+  const byStatus = useMemo(() => {
+    const map = new Map<Status, Requirement[]>(
+      (statuses ?? []).map((s) => [s, []]),
+    )
     for (const r of filtered) {
-      const col = (r.column ?? '澄清') as Column
-      if (!map.has(col)) map.set(col, [])
-      map.get(col)!.push(r)
+      const st = (r.status ?? '澄清') as Status
+      if (!map.has(st)) map.set(st, [])
+      map.get(st)!.push(r)
     }
     return map
-  }, [filtered, columns])
+  }, [filtered, statuses])
 
   async function handleDragEnd({ active, over }: DragEndEvent) {
     setDragSlug(null)
-    setOverStage(null)
+    setOverStatus(null)
     if (!over) return
 
     const slug = String(active.id)
-    const target = stageOf(over) ?? (over.id as Column)
+    const target = statusOf(over) ?? (over.id as Status)
     const req = items.find((r) => r.slug === slug)
-    if (!req || req.column === target) return
+    if (!req || req.status === target) return
 
     // 乐观更新：先动卡片，再落盘；失败回滚
     const previous = items
-    setItems((list) => list.map((r) => (r.slug === slug ? { ...r, column: target } : r)))
+    setItems((list) => list.map((r) => (r.slug === slug ? { ...r, status: target } : r)))
     try {
       const updated = await api.move(slug, target)
-      // 用服务端返回的完整对象回填，顺带纠正 stage 与 updated
+      // 用服务端返回的完整对象回填，顺带纠正 status 与 updated
       setItems((list) => list.map((r) => (r.slug === slug ? updated : r)))
     } catch (err) {
       setItems(previous)
@@ -252,7 +251,7 @@ export default function App() {
         ) : detailTarget ? (
           <Detail
             target={detailTarget}
-            stages={stages}
+            statuses={statuses}
             priorities={priorities}
             fontFamily={fontFamily}
             fontSize={fontSize}
@@ -306,17 +305,17 @@ export default function App() {
               sensors={sensors}
               collisionDetection={closestCorners}
               onDragStart={({ active }: DragStartEvent) => setDragSlug(String(active.id))}
-              onDragOver={({ over }: DragOverEvent) => setOverStage(stageOf(over) ?? null)}
+              onDragOver={({ over }: DragOverEvent) => setOverStatus(statusOf(over) ?? null)}
               onDragEnd={(e) => void handleDragEnd(e)}
             >
               <div className="board">
-                {columns.map((stage) => (
+                {statuses.map((status) => (
                   <ColumnView
-                    key={stage}
-                    stage={stage}
-                    items={byColumn.get(stage) ?? []}
+                    key={status}
+                    status={status}
+                    items={byStatus.get(status) ?? []}
                     onOpen={(slug) => setDetail({ project, slug })}
-                    isOver={overStage === stage}
+                    isOver={overStatus === status}
                   />
                 ))}
               </div>

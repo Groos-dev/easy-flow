@@ -35,17 +35,6 @@ export function parseFrontmatter(text: string): Frontmatter {
 }
 
 
-/** 就地替换 frontmatter 块，正文一个字节都不动 */
-export function patchFrontmatter(text: string, patch: Record<string, string>): string {
-  const hasFm = text.startsWith('---')
-  const { data, body } = parseFrontmatter(text)
-  const merged = { ...data, ...patch }
-  const lines = Object.entries(merged)
-    .filter(([, v]) => v !== undefined && v !== null && v !== '')
-    .map(([k, v]) => `${k}: ${v}`)
-  return `---\n${lines.join('\n')}\n---\n\n${hasFm ? body : text}`
-}
-
 // --------------------------------------------------------------------- 正文解析
 
 export function section(body: string, heading: string): string {
@@ -184,9 +173,6 @@ export interface ParsedRequirement {
   repos: RepoRef[]
   links: string
   docs: DocFile[]
-  /** 迁移用：md 里可能还残留的旧 frontmatter 状态 */
-  legacyStage?: string
-  legacyPriority?: string
 }
 
 /** 解析一个需求目录。状态不在这里——状态归 sqlite 管。 */
@@ -205,8 +191,6 @@ export function parseRequirement(dir: string, fallbackSlug: string): ParsedRequi
     repos: parseRepos(body),
     links: sectionAny(body, HEADINGS.links),
     docs,
-    legacyStage: data.stage,
-    legacyPriority: data.priority,
   }
 }
 

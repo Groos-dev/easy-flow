@@ -26,7 +26,7 @@ interface Props {
 export default function Card({ req, onOpen, overlay = false }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: req.slug,
-    data: { type: 'card', slug: req.slug, stage: req.column },
+    data: { type: 'card', slug: req.slug, status: req.status },
     disabled: overlay,
   })
 
