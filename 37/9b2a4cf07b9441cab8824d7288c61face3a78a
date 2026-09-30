@@ -1,0 +1,22 @@
+src/renderer/src/styles.css
+  s_7f8e8538a9a0fa::t_9fe27d1f28feb6 1218-1307
+src/renderer/src/components/Detail.tsx
+  s_7f8e8538a9a0fa::t_95a71b5d91a50b 84-181
+  s_7f8e8538a9a0fa::t_24e4308bb00c66 417-435
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "379b2a4cf07b9441cab8824d7288c61face3a78a",
+  "prompts": {},
+  "sessions": {
+    "s_7f8e8538a9a0fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0442d3f-5f08-416c-a727-c02ec2c23db7",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
