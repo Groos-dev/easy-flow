@@ -1,0 +1,19 @@
+.claude/settings.json
+  s_7f8e8538a9a0fa::t_089f1b249797a0 1-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "0772c4420138cb0f8947544541e5c52476eed2d4",
+  "prompts": {},
+  "sessions": {
+    "s_7f8e8538a9a0fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0442d3f-5f08-416c-a727-c02ec2c23db7",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
