@@ -17,6 +17,7 @@ import {
   type Priority,
 } from './db.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
+import { installMcp, mcpPlan } from './mcp-install.ts'
 
 export { STATUSES, PRIORITIES } from './db.ts'
 export type { Status, Priority, Requirement } from './db.ts'
@@ -392,6 +393,23 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
 
       if (url.pathname === '/api/settings/resync' && req.method === 'POST') {
         json(req, res, 200, { sync: db.syncProjects(), dataDir: currentDir })
+        return
+      }
+
+      // ----------------------------------------------------------- MCP
+
+      if (url.pathname === '/api/mcp' && req.method === 'GET') {
+        json(req, res, 200, mcpPlan())
+        return
+      }
+
+      if (url.pathname === '/api/mcp/install' && req.method === 'POST') {
+        const { agent } = await readBody(req)
+        if (agent !== undefined && agent !== 'claude' && agent !== 'codex') {
+          throw new Error(`未知的 agent：${String(agent)}`)
+        }
+        const installed = await installMcp(agent)
+        json(req, res, 200, { installed, ...mcpPlan() })
         return
       }
 

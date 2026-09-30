@@ -27,7 +27,17 @@ import {
 const VERSION = createRequire(import.meta.url)('../package.json').version as string
 
 const config = readConfig()
-const db = new BoardDatabase(config.dataDir)
+
+let instance: BoardDatabase | null = null
+
+/**
+ * 数据库延迟到第一次真正用到时才打开。
+ * 注册是用户级的，意味着每个 claude / codex 会话都会把这个进程拉起来，
+ * 哪怕根本没碰 easy-flow——不该一启动就去建库、跑迁移。
+ */
+function db(): BoardDatabase {
+  return (instance ??= new BoardDatabase(config.dataDir))
+}
 
 function text(message: string) {
   return { content: [{ type: 'text' as const, text: message }] }
@@ -61,7 +71,7 @@ function projectRoot(project: string): string {
 }
 
 function findById(id: string) {
-  const req = db.byId(id)
+  const req = db().byId(id)
   if (!req) throw new Error(`找不到需求：${id}。id 写在需求目录的 requirement.md 里`)
   return req
 }
@@ -83,7 +93,7 @@ function createRequirement(
   summary: string | undefined,
 ): { dir: string; id: string } {
   const created = createRequirementDir(root, slug?.trim() || deriveSlug(title), title, summary ?? '')
-  db.syncProjects()
+  db().syncProjects()
   return created
 }
 
@@ -150,7 +160,7 @@ server.registerTool(
   async ({ slug, name }) => {
     const display = name?.trim() || slug
     const dir = createProjectDir(config.dataDir, slug, display)
-    db.syncProjects()
+    db().syncProjects()
     return text(`已创建项目「${display}」（${slug}）\n目录：${dir}`)
   },
 )
@@ -210,7 +220,7 @@ server.registerTool(
     inputSchema: {},
   },
   async () => {
-    const missing = db.missingIds()
+    const missing = db().missingIds()
     const done: string[] = []
     for (const r of missing) {
       if (!existsSync(r.path)) continue
@@ -218,7 +228,7 @@ server.registerTool(
       setRequirementId(r.path, id)
       done.push(`${r.project}/${r.slug} → ${id}`)
     }
-    if (done.length) db.syncProjects()
+    if (done.length) db().syncProjects()
     return text(done.length ? `已补 ${done.length} 个：\n${done.join('\n')}` : '所有需求都已有 id')
   },
 )

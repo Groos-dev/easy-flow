@@ -866,6 +866,19 @@ describe('MCP 层', () => {
     assert.match(again.text, /所有需求都已有 id/)
     rmSync(base, { recursive: true, force: true })
   })
+
+  // 注册是用户级的：每个 claude / codex 会话都会拉起这个进程，
+  // 所以没碰工具时不该开库、更不该凭空造出一个数据目录
+  test('懒开库：只握手不调工具，不建库', async () => {
+    scaffold()
+    const never = join(base, 'never-used')
+    writeFileSync(configFile, JSON.stringify({ dataDir: never }), 'utf8')
+    await mcpSession(configFile, [
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } } },
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+    ])
+    assert.equal(existsSync(never), false)
+  })
 })
 
 // ---------------------------------------------------------------- HTTP 层
@@ -903,8 +916,7 @@ describe('HTTP 层', () => {
       body: JSON.stringify(body),
     })).json() as Promise<any>
 
-  test('GET /api/health', async () => {
-    const r = await get('/api/health')
+  test('GET /api/health', async () => {    const r = await get('/api/health')
     assert.equal(r.ok, true)
     assert.equal(r.dataDir, dir)
   })
@@ -1037,6 +1049,20 @@ describe('HTTP 层', () => {
   test('不存在的 slug 返回可读错误', async () => {
     const r = await get('/api/context?slug=nope')
     assert.match(r.error, /需求不存在/)
+  })
+
+  // 只读地看注册计划；不测 /api/mcp/install——那会改到本机真实的 agent 配置
+  test('GET /api/mcp 返回两个 agent 的注册计划', async () => {
+    const r = await get('/api/mcp')
+    assert.match(r.entry, /server\/mcp\.ts$/)
+    assert.deepEqual(
+      r.agents.map((a: { id: string }) => a.id),
+      ['claude', 'codex'],
+    )
+    for (const a of r.agents) {
+      assert.equal(typeof a.installed, 'boolean')
+      assert.ok(a.configFile.startsWith('/'))
+    }
   })
 })
 

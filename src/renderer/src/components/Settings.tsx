@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, type SettingsPayload } from '../lib/api'
+import { api, type McpPayload, type SettingsPayload } from '../lib/api'
 import { detectMonospaceFonts } from '../lib/fonts'
 import type { SyncResult } from '../lib/types'
 
@@ -9,11 +9,12 @@ interface Props {
   onApplied: () => void
 }
 
-type SectionId = 'data' | 'appearance' | 'about'
+type SectionId = 'data' | 'appearance' | 'mcp' | 'about'
 
 const SECTIONS: Array<{ id: SectionId; label: string }> = [
   { id: 'data', label: '数据目录' },
   { id: 'appearance', label: '外观' },
+  { id: 'mcp', label: 'MCP' },
   { id: 'about', label: '关于' },
 ]
 
@@ -43,6 +44,11 @@ export default function Settings({ onBack, onApplied }: Props) {
   const installedFonts = useMemo(() => detectMonospaceFonts(), [])
   const fontTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // MCP 注册状态：只在切到那一段时才去读两个 agent 的配置
+  const [mcp, setMcp] = useState<McpPayload | null>(null)
+  const [mcpNotice, setMcpNotice] = useState('')
+  const [mcpError, setMcpError] = useState('')
+
   const loadSettings = useCallback(async () => {
     const s = await api.settings()
     setSettings(s)
@@ -63,6 +69,14 @@ export default function Settings({ onBack, onApplied }: Props) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onBack])
+
+  useEffect(() => {
+    if (section !== 'mcp') return
+    void api
+      .mcp()
+      .then(setMcp)
+      .catch((e: Error) => setMcpError(`读取注册状态失败：${e.message}`))
+  }, [section])
 
   /** Electron 里可拉起原生目录选择器；浏览器开发时退化到手输 */
   const canPick = typeof window.easyFlow?.pickDirectory === 'function'
@@ -122,6 +136,25 @@ export default function Settings({ onBack, onApplied }: Props) {
       setFontNotice('已保存，终端立即生效')
     } catch (e) {
       setFontNotice(`保存失败：${(e as Error).message}`)
+    }
+  }
+
+  async function registerMcp(agent?: 'claude' | 'codex') {
+    setBusy(true)
+    setMcpNotice('')
+    setMcpError('')
+    try {
+      const res = await api.installMcp(agent)
+      setMcp(res)
+      setMcpNotice(
+        res.installed.length
+          ? `已注册到 ${res.installed.join('、')}，新开的会话生效`
+          : '没有需要注册的',
+      )
+    } catch (e) {
+      setMcpError(`注册失败：${(e as Error).message}`)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -264,6 +297,53 @@ export default function Settings({ onBack, onApplied }: Props) {
                 '餐食出票 → B2B 爬虫履约｜中文对齐测试',
               ].join('\n')}
             </pre>
+          </>
+        )}
+
+        {section === 'mcp' && (
+          <>
+            <h1>MCP</h1>
+            <p className="hint">
+              注册后 claude / codex 就能直接建项目与需求、按 id 取上下文，不必知道数据目录在哪。
+              注册写在各自的用户级配置里，不往需求目录或 worktree 落任何文件。
+            </p>
+
+            {mcpError && <div className="notice">{mcpError}</div>}
+            {mcpNotice && <div className="notice ok">{mcpNotice}</div>}
+            {mcp?.problem && <div className="notice">{mcp.problem}</div>}
+
+            <div className="section-label">服务入口</div>
+            {/* 拉取失败时别再显示"读取中…"，否则跟上面的报错自相矛盾 */}
+            <pre>{mcp?.entry ?? (mcpError || mcp?.problem ? '—' : '读取中…')}</pre>
+
+            <div className="section-label">注册状态</div>
+            {(mcp?.agents ?? []).map((a) => (
+              <div className="row" key={a.id}>
+                <span>
+                  {a.label} · {a.installed ? '已注册' : '未注册'}
+                </span>
+                <span className="spacer" />
+                <button
+                  className="btn"
+                  disabled={busy || !mcp?.entry}
+                  onClick={() => void registerMcp(a.id)}
+                >
+                  {a.installed ? '重新注册' : '注册'}
+                </button>
+              </div>
+            ))}
+            <div className="row">
+              <button
+                className="btn primary"
+                disabled={busy || !mcp?.entry}
+                onClick={() => void registerMcp()}
+              >
+                一次注册到两个
+              </button>
+            </div>
+
+            <div className="section-label">写入的配置文件</div>
+            <pre>{(mcp?.agents ?? []).map((a) => a.configFile).join('\n') || '—'}</pre>
           </>
         )}
 

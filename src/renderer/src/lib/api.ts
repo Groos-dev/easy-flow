@@ -39,6 +39,20 @@ export interface AppearancePayload {
   terminalFontSize: number
 }
 
+export interface AgentMcp {
+  id: 'claude' | 'codex'
+  label: string
+  configFile: string
+  installed: boolean
+}
+
+export interface McpPayload {
+  /** MCP server 入口文件，环境不允许时为 null */
+  entry: string | null
+  problem: string | null
+  agents: AgentMcp[]
+}
+
 export interface Project {
   slug: string
   name: string
@@ -156,4 +170,9 @@ export const api = {
 
   resync: (): Promise<{ sync: SwitchResult['sync']; dataDir: string }> =>
     request('/api/settings/resync', { method: 'POST' }),
+
+  mcp: (): Promise<McpPayload> => request('/api/mcp'),
+
+  installMcp: (agent?: AgentMcp['id']): Promise<McpPayload & { installed: string[] }> =>
+    request('/api/mcp/install', { method: 'POST', body: JSON.stringify({ agent }) }),
 }
