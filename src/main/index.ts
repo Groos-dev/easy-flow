@@ -141,12 +141,21 @@ async function boot(): Promise<void> {
   applyCsp()
   boardServer = await startBoardServer({ port: DEFAULT_PORT })
 
-  // 终端需要知道挂载点的目录：项目根，或项目下某个需求
+  // 终端需要知道挂载点的目录，以及这个挂载点对应哪个需求（agent 靠 id 认路）
   terminals = new TerminalManager((target) => {
     const project = boardServer?.db.listProjects().find((p) => p.slug === target.project)
     if (!project) return null
-    if (!target.slug) return project.root
-    return boardServer?.db.get(target.slug, target.project)?.path ?? null
+    const req = target.slug ? boardServer?.db.get(target.slug, target.project) : undefined
+    if (target.slug && !req) return null
+    return {
+      cwd: req?.path ?? project.root,
+      env: {
+        EASY_FLOW_SESSION: '1',
+        EASY_FLOW_PROJECT: target.project,
+        // 需求身份只留 id 这一个出口：slug 也能认的话，迟早有人读错那一个
+        ...(req?.id ? { EASY_FLOW_REQUIREMENT_ID: req.id } : {}),
+      },
+    }
   })
 }
 

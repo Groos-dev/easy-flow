@@ -129,11 +129,12 @@ export interface DocFile {
 /**
  * 递归收集需求目录下所有 markdown。
  *
- * 两条排除规则：
- *   不跟随符号链接 —— 需求目录里的仓库软链指向整个代码仓，跟进去会把无关文档全索引进来。
- *                     这同时解决了 CLAUDE.md：按约定它是 AGENTS.md 的软链，会被跳过；
- *                     而独立的 CLAUDE.md 是真实文档，会被正常索引。
- *   AGENTS.md      —— 已单独解析，不再重复进索引。
+ * 排除三类：
+ *   符号链接 —— 需求目录里的仓库软链指向整个代码仓，跟进去会把无关文档全索引进来
+ *   指令文件 —— AGENTS.md / CLAUDE.md 是约束 agent 的规则，不是需求内容，
+ *               不管在哪一层都不收（只排根级那个是不够的）
+ *   子需求目录 —— 它自己是一份需求，文件归它自己；下探会让父需求的标签栏里
+ *                 冒出一堆别人的 AGENTS.md
  */
 export function readDocs(dir: string): DocFile[] {
   const out: DocFile[] = []
@@ -147,10 +148,11 @@ export function readDocs(dir: string): DocFile[] {
         const lst = lstatSync(p)
         if (lst.isSymbolicLink()) continue
         if (lst.isDirectory()) {
-          walk(p, rel)
+          if (!isRequirementDir(p)) walk(p, rel)
           continue
         }
-        if (!entry.endsWith('.md') || rel === 'AGENTS.md') continue
+        if (!entry.endsWith('.md')) continue
+        if (entry === 'AGENTS.md' || entry === 'CLAUDE.md') continue
 
         let content = readFileSync(p, 'utf8')
         if (content.length > MAX_DOC_BYTES) content = content.slice(0, MAX_DOC_BYTES)
@@ -166,6 +168,8 @@ export function readDocs(dir: string): DocFile[] {
 }
 
 export interface ParsedRequirement {
+  /** 不透明 id，写在 requirement.md 的 frontmatter 里。老需求可能还没有 */
+  id: string
   slug: string
   title: string
   /** 从正文推导的摘要，用于卡片展示 */
@@ -189,6 +193,7 @@ export function parseRequirement(dir: string, fallbackSlug: string): ParsedRequi
   const h1 = /^#\s+(.+)$/m.exec(body)?.[1]?.trim()
 
   return {
+    id: data.id || '',
     slug: data.slug || fallbackSlug,
     title: data.title || h1 || fallbackSlug,
     summary: firstParagraph(sectionAny(body, HEADINGS.summary)) || fallbackSummary(body),

@@ -13,8 +13,12 @@ import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync
 import { join } from 'node:path'
 import { createServer } from 'node:http'
 
+import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+
 import { BoardDatabase, normalizeLinkList, normalizeExtLinks } from '../server/db.ts'
 import { parseFrontmatter, readDocs, section } from '../server/markdown.ts'
+import { createProjectDir, createRequirementDir, setRequirementId } from '../server/convention.ts'
 import { createBoardApp } from '../server/index.ts'
 
 const TMP = '/tmp/easy-flow-test'
@@ -537,6 +541,330 @@ describe('数据层 · 项目与规范', () => {
     assert.match(p.convention ?? '', /约定内容/)
     assert.equal(readFileSync(join(dir, 'onex', 'AGENTS.md'), 'utf8'), '# 项目规范\n\n约定内容')
     db.close()
+  })
+})
+
+// ---------------------------------------------------------------- 创建
+
+describe('创建 · 目录与模板', () => {
+  test('createProjectDir 建目录、写入显示名，同步后能认出项目', () => {
+    const dir = fresh(() => {})
+    const root = createProjectDir(dir, 'demo', '示例项目')
+    assert.equal(root, join(dir, 'demo'))
+    assert.match(readFileSync(join(root, 'AGENTS.md'), 'utf8'), /^name: 示例项目$/m)
+
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+    assert.equal(db.listProjects().find((p) => p.slug === 'demo')?.name, '示例项目')
+    db.close()
+  })
+
+  test('createProjectDir 拒绝非法标识与已存在的目录', () => {
+    const dir = fresh(() => {})
+    assert.throws(() => createProjectDir(dir, 'Bad_Slug'), /英文小写/)
+    createProjectDir(dir, 'demo')
+    assert.throws(() => createProjectDir(dir, 'demo'), /目录已存在/)
+  })
+
+  test('createRequirementDir 写齐两份文件，id 落进 frontmatter', () => {
+    const dir = fresh(() => {
+      createProjectDir(TMP, 'onex')
+    })
+    const created = createRequirementDir(join(dir, 'onex'), 'cny-not-rmb', '币种改 CNY', '上游只认 CNY')
+    assert.ok(existsSync(join(created.dir, 'AGENTS.md')))
+    const desc = readFileSync(join(created.dir, 'requirement.md'), 'utf8')
+    assert.match(desc, new RegExp(`^---\\nid: ${created.id}\\n---$`, 'm'))
+    assert.match(desc, /^# 币种改 CNY$/m)
+    assert.match(desc, /## 需求\n\n上游只认 CNY/)
+
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+    const r = db.list().find((x) => x.slug === 'cny-not-rmb')!
+    assert.equal(r.id, created.id)
+    assert.equal(r.title, '币种改 CNY')
+    assert.equal(r.summary, '上游只认 CNY')
+    assert.equal(r.status, '澄清')
+    assert.equal(db.byId(created.id)?.slug, 'cny-not-rmb')
+    db.close()
+  })
+
+  test('createRequirementDir 拒绝非法标识与已存在的目录', () => {
+    const dir = fresh(() => {
+      createProjectDir(TMP, 'onex')
+    })
+    const root = join(dir, 'onex')
+    assert.throws(() => createRequirementDir(root, '中文名', 'x'), /英文小写/)
+    createRequirementDir(root, 'alpha', 'x')
+    assert.throws(() => createRequirementDir(root, 'alpha', 'x'), /目录已存在/)
+  })
+
+  test('setRequirementId 只动 frontmatter，正文原样保留', () => {
+    const dir = fresh(() => {})
+    const reqDir = join(dir, 'onex', 'legacy')
+    mkdirSync(reqDir, { recursive: true })
+    writeFileSync(join(reqDir, 'AGENTS.md'), '<!-- 指令 -->\n', 'utf8')
+    writeFileSync(join(reqDir, 'requirement.md'), '# 老需求\n\n## 需求\n\n正文不能动。\n', 'utf8')
+
+    setRequirementId(reqDir, 'req-abc1234567')
+    const after = readFileSync(join(reqDir, 'requirement.md'), 'utf8')
+    assert.equal(after, '---\nid: req-abc1234567\n---\n\n# 老需求\n\n## 需求\n\n正文不能动。\n')
+
+    // 再补一次：幂等，不叠加 frontmatter
+    setRequirementId(reqDir, 'req-abc1234567')
+    assert.equal(readFileSync(join(reqDir, 'requirement.md'), 'utf8'), after)
+  })
+
+  test('子需求建在父需求下，结构相同；但看板只扫一层，还认不到它', () => {
+    const dir = fresh(() => {
+      createProjectDir(TMP, 'onex')
+    })
+    const root = join(dir, 'onex')
+    const parent = createRequirementDir(root, 'parent', '父需求')
+    const child = createRequirementDir(parent.dir, 'child', '子需求')
+    assert.ok(existsSync(join(child.dir, 'requirement.md')))
+
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+    assert.deepEqual(db.list().map((r) => r.slug), ['parent'])
+    // 父需求能按 id 反查，子需求还不能——它在库里根本没有行
+    assert.equal(db.byId(parent.id)?.slug, 'parent')
+    assert.equal(db.byId(child.id), undefined)
+    db.close()
+  })
+
+  test('子需求的文件不进父需求的文档索引', () => {
+    const dir = fresh(() => {
+      createProjectDir(TMP, 'onex')
+    })
+    const parent = createRequirementDir(join(dir, 'onex'), 'parent', '父需求')
+    createRequirementDir(parent.dir, 'child', '子需求')
+
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+    assert.deepEqual(
+      db.get('parent', 'onex')?.docs.map((d) => d.name),
+      ['requirement.md'],
+    )
+    db.close()
+  })
+
+  test('指令文件不进文档索引：嵌套的 AGENTS.md / CLAUDE.md 也不收', () => {
+    const dir = fresh(() => {
+      createProjectDir(TMP, 'onex')
+    })
+    const parent = createRequirementDir(join(dir, 'onex'), 'parent', '父需求')
+    // 嵌套的施工目录：只有 AGENTS.md，不算需求目录，但它照样是指令文件
+    const task = join(parent.dir, 'tasks', 'step-1')
+    mkdirSync(task, { recursive: true })
+    writeFileSync(join(task, 'AGENTS.md'), '<!-- 指令 -->\n', 'utf8')
+    writeFileSync(join(task, 'CLAUDE.md'), '# 指令\n', 'utf8')
+    writeFileSync(join(task, 'plan.md'), '# 计划\n', 'utf8')
+
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+    assert.deepEqual(
+      db.get('parent', 'onex')?.docs.map((d) => d.name),
+      ['requirement.md', 'tasks/step-1/plan.md'],
+    )
+    db.close()
+  })
+
+  test('复制需求目录撞出重复 id 时同步不炸，重复的那个落进 missingIds', () => {
+    const dir = fresh(() => {
+      createProjectDir(TMP, 'onex')
+    })
+    const root = join(dir, 'onex')
+    const alpha = createRequirementDir(root, 'alpha', '甲需求')
+    cpSync(alpha.dir, join(root, 'alpha-copy'), { recursive: true })
+
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+    assert.equal(db.get('alpha', 'onex')?.id, alpha.id)
+    assert.equal(db.get('alpha-copy', 'onex')?.id, '')
+    assert.deepEqual(db.missingIds().map((r) => r.slug), ['alpha-copy'])
+    db.close()
+  })
+})
+
+// ------------------------------------------------------------------ MCP
+
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
+
+/**
+ * 起真的 mcp 进程走一遍 stdio 协议。
+ * server/mcp.ts 是入口脚本（import 即连接），没法进程内调，只能当客户端说话。
+ */
+function mcpSession(
+  configFile: string,
+  requests: Array<Record<string, unknown>>,
+  extraEnv: Record<string, string> = {},
+): Promise<Array<{ id?: number; result?: any; error?: { message: string } }>> {
+  return new Promise((resolve, reject) => {
+    const env: Record<string, string> = { ...process.env, EASY_FLOW_CONFIG: configFile }
+    // 身份只该来自调用方，别让跑测试的 shell 里的残留 env 干扰
+    delete env.EASY_FLOW_PROJECT
+    delete env.EASY_FLOW_REQUIREMENT_ID
+    Object.assign(env, extraEnv)
+
+    const child = spawn(join(REPO_ROOT, 'node_modules/.bin/tsx'), [join(REPO_ROOT, 'server/mcp.ts')], {
+      cwd: REPO_ROOT,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    let stderr = ''
+    child.stderr.on('data', (d: Buffer) => {
+      stderr += d.toString()
+    })
+    const expected = requests.filter((r) => r.id !== undefined).length
+    const out: Array<{ id?: number; result?: any; error?: { message: string } }> = []
+    let buf = ''
+    const timer = setTimeout(() => {
+      child.kill()
+      reject(new Error('mcp 进程超时'))
+    }, 60_000)
+
+    child.stdout.on('data', (d: Buffer) => {
+      buf += d.toString()
+      let i
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim()
+        buf = buf.slice(i + 1)
+        if (!line) continue
+        out.push(JSON.parse(line))
+        // 收齐就关 stdin，进程随之退出，不用干等
+        if (out.filter((m) => m.id !== undefined).length >= expected) child.stdin.end()
+      }
+    })
+    child.on('error', reject)
+    child.on('exit', () => {
+      clearTimeout(timer)
+      // 一条响应都没收到，八成是进程起不来，把 stderr 一起抛出来
+      if (!out.length && stderr.trim()) reject(new Error(`mcp 进程没有响应：${stderr.trim()}`))
+      else resolve(out)
+    })
+    for (const r of requests) child.stdin.write(`${JSON.stringify(r)}\n`)
+  })
+}
+
+/** 一次会话只调一个工具，返回结果文本 */
+async function callTool(
+  configFile: string,
+  name: string,
+  args: Record<string, unknown> = {},
+  extraEnv: Record<string, string> = {},
+): Promise<{ isError: boolean; text: string }> {
+  const [reply] = await mcpSession(
+    configFile,
+    [{ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }],
+    extraEnv,
+  )
+  return { isError: !!reply.result.isError, text: reply.result.content[0].text }
+}
+
+describe('MCP 层', () => {
+  const base = '/tmp/easy-flow-mcp-test'
+  const dataDir = join(base, 'data')
+  const configFile = join(base, 'config.json')
+
+  function scaffold(): string {
+    rmSync(base, { recursive: true, force: true })
+    mkdirSync(dataDir, { recursive: true })
+    writeFileSync(configFile, JSON.stringify({ dataDir }), 'utf8')
+    return configFile
+  }
+
+  test('工具面：建项目与需求，缺上下文时报可读错误', async () => {
+    const replies = await mcpSession(scaffold(), [
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } } },
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+      { jsonrpc: '2.0', id: 2, method: 'tools/list' },
+      { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'create_project', arguments: { slug: 'demo', name: '示例项目' } } },
+      { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'create_requirement', arguments: { project: 'demo', title: '支持 1A 重试', slug: 'seat-retry', summary: '失败重试一次' } } },
+      { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'create_requirement', arguments: { title: '没有项目上下文' } } },
+    ])
+
+    const byId = new Map(replies.filter((r) => r.id !== undefined).map((r) => [r.id, r.result]))
+    assert.deepEqual(
+      byId.get(2).tools.map((t: { name: string }) => t.name).sort(),
+      ['assign_ids', 'create_project', 'create_requirement', 'create_sub_requirement', 'get_context'],
+    )
+    assert.match(byId.get(3).content[0].text, /已创建项目「示例项目」/)
+    assert.match(byId.get(4).content[0].text, /需求 id：req-/)
+    assert.equal(byId.get(5).isError, true)
+    assert.match(byId.get(5).content[0].text, /缺少 project/)
+
+    const db = new BoardDatabase(dataDir)
+    const r = db.get('seat-retry', 'demo')!
+    assert.equal(r.title, '支持 1A 重试')
+    assert.equal(r.status, '澄清')
+    assert.match(r.id, /^req-/)
+    assert.equal(db.listProjects().find((p) => p.slug === 'demo')?.name, '示例项目')
+    db.close()
+  })
+
+  test('get_context 只按 id 反查：显式传、env 传都行，缺 id 报错', async () => {
+    scaffold()
+    createProjectDir(dataDir, 'demo', '示例项目')
+    writeFileSync(
+      join(dataDir, 'demo', 'AGENTS.md'),
+      '---\nname: 示例项目\n---\n\n# 项目规范\n\n先查 CK 再改代码。',
+      'utf8',
+    )
+    const created = createRequirementDir(join(dataDir, 'demo'), 'csd-price', 'CSD 接 TF 标准价', '查价改走 TF')
+    writeFileSync(join(created.dir, 'context.md'), '跟 supply 对了，TF 报价要除税。', 'utf8')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    const byArg = await callTool(configFile, 'get_context', { id: created.id })
+    assert.equal(byArg.isError, false)
+    assert.match(byArg.text, new RegExp(`需求 id：${created.id}`))
+    assert.match(byArg.text, /项目：demo（示例项目）/)
+    assert.match(byArg.text, /需求：CSD 接 TF 标准价（csd-price）/)
+    assert.match(byArg.text, /状态：澄清/)
+    assert.match(byArg.text, /先查 CK 再改代码/)
+    assert.match(byArg.text, /跟 supply 对了/)
+
+    const byEnv = await callTool(configFile, 'get_context', {}, { EASY_FLOW_REQUIREMENT_ID: created.id })
+    assert.match(byEnv.text, new RegExp(`需求 id：${created.id}`))
+
+    const noId = await callTool(configFile, 'get_context')
+    assert.equal(noId.isError, true)
+    assert.match(noId.text, /缺少需求 id/)
+
+    const unknown = await callTool(configFile, 'get_context', { id: 'req-nope' })
+    assert.equal(unknown.isError, true)
+    assert.match(unknown.text, /找不到需求：req-nope/)
+  })
+
+  test('assign_ids 给老需求补 id，幂等', async () => {
+    scaffold()
+    createProjectDir(dataDir, 'demo')
+    // 手写一个没有 id 的老需求
+    const legacy = join(dataDir, 'demo', 'legacy')
+    mkdirSync(legacy, { recursive: true })
+    writeFileSync(join(legacy, 'AGENTS.md'), '<!-- 指令 -->\n', 'utf8')
+    writeFileSync(join(legacy, 'requirement.md'), '# 老需求\n\n## 需求\n\n正文不能动。\n', 'utf8')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    assert.equal(seed.get('legacy', 'demo')?.id, '')
+    seed.close()
+
+    const first = await callTool(configFile, 'assign_ids')
+    assert.match(first.text, /已补 1 个：\ndemo\/legacy → req-/)
+    const desc = readFileSync(join(legacy, 'requirement.md'), 'utf8')
+    const id = /id: (req-\w+)/.exec(desc)![1]
+    assert.equal(desc, `---\nid: ${id}\n---\n\n# 老需求\n\n## 需求\n\n正文不能动。\n`)
+
+    const db = new BoardDatabase(dataDir)
+    db.syncProjects()
+    assert.equal(db.get('legacy', 'demo')?.id, id)
+    assert.equal(db.byId(id)?.slug, 'legacy')
+    db.close()
+
+    const again = await callTool(configFile, 'assign_ids')
+    assert.match(again.text, /所有需求都已有 id/)
+    rmSync(base, { recursive: true, force: true })
   })
 })
 

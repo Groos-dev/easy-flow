@@ -24,6 +24,12 @@ export interface TerminalTarget {
   slug?: string
 }
 
+/** 挂载点解析结果：工作目录，以及要注入这个终端的环境变量 */
+export interface ResolvedTarget {
+  cwd: string
+  env: Record<string, string>
+}
+
 interface Session {
   id: string
   target: TerminalTarget
@@ -34,15 +40,13 @@ type Publish = (channel: string, payload: unknown) => void
 
 export class TerminalManager {
   private sessions = new Map<string, Session>()
-  private resolveCwd: (target: TerminalTarget) => string | null
 
-  constructor(resolveCwd: (target: TerminalTarget) => string | null) {
-    this.resolveCwd = resolveCwd
-  }
+  /** 环境变量由调用方给：它才知道这个挂载点对应哪个需求、id 是什么 */
+  constructor(private resolve: (target: TerminalTarget) => ResolvedTarget | null) {}
 
   create(target: TerminalTarget, publish: Publish, opts: { cols?: number; rows?: number } = {}): string {
-    const cwd = this.resolveCwd(target)
-    if (!cwd) {
+    const resolved = this.resolve(target)
+    if (!resolved) {
       throw new Error(
         target.slug ? `需求目录不存在: ${target.project}/${target.slug}` : `项目目录不存在: ${target.project}`,
       )
@@ -56,14 +60,11 @@ export class TerminalManager {
       name: 'xterm-256color',
       cols: opts.cols ?? 80,
       rows: opts.rows ?? 24,
-      cwd,
+      cwd: resolved.cwd,
       env: {
         ...process.env,
         TERM: 'xterm-256color',
-        // 让终端里的 CLI 知道自己在 easy-flow 里
-        EASY_FLOW_SESSION: '1',
-        EASY_FLOW_PROJECT: target.project,
-        ...(target.slug ? { EASY_FLOW_REQUIREMENT: target.slug } : {}),
+        ...resolved.env,
       } as Record<string, string>,
     })
 

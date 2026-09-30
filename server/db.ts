@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS project (
 CREATE TABLE IF NOT EXISTS requirement (
   slug     TEXT NOT NULL,
   project  TEXT NOT NULL DEFAULT '',
+  id       TEXT,
   title    TEXT NOT NULL,
   path     TEXT NOT NULL,
   status   TEXT NOT NULL,
@@ -98,6 +99,9 @@ function migrate(db: DatabaseSync): void {
 
   addIfMissing('requirement', 'project', `project TEXT NOT NULL DEFAULT ''`)
   addIfMissing('doc', 'project', `project TEXT NOT NULL DEFAULT ''`)
+  // 需求身份。索引必须建在补列之后——写在 SCHEMA 里，老库会先于补列执行而报找不到列
+  addIfMissing('requirement', 'id', 'id TEXT')
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_req_id ON requirement(id)')
   // 链接：写入入口留给 MCP，UI 只读展示
   addIfMissing('requirement', 'feishu_task_links', 'feishu_task_links TEXT')
   addIfMissing('requirement', 'code_links', 'code_links TEXT')
@@ -125,6 +129,8 @@ export interface Requirement {
   slug: string
   /** 所属项目 */
   project: string
+  /** 不透明需求 id（requirement.md 的 frontmatter）。老需求可能还没有，为空串 */
+  id: string
   title: string
   status: Status
   priority: Priority | ''
@@ -152,6 +158,7 @@ export interface ExtLink {
 interface Row {
   slug: string
   project: string
+  id: string | null
   title: string
   path: string
   status: string
@@ -388,18 +395,30 @@ export class BoardDatabase {
     )
     const insertReq = this.db.prepare(
       `INSERT INTO requirement
-         (slug, project, title, path, status, priority, summary, repos, links,
+         (slug, project, id, title, path, status, priority, summary, repos, links,
           feishu_task_links, code_links, ext_links, mtime, updated, orphan)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '[]', '[]', ?, ?, 0)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '[]', '[]', ?, ?, 0)`,
     )
     const updateReq = this.db.prepare(
-      `UPDATE requirement SET title = ?, path = ?, summary = ?, repos = ?, links = ?, mtime = ?, orphan = 0
+      `UPDATE requirement SET id = ?, title = ?, path = ?, summary = ?, repos = ?, links = ?, mtime = ?, orphan = 0
        WHERE slug = ? AND project = ?`,
     )
     const clearDocs = this.db.prepare('DELETE FROM doc WHERE slug = ? AND project = ?')
     const insertDoc = this.db.prepare(
       'INSERT INTO doc (slug, project, name, content) VALUES (?, ?, ?, ?)',
     )
+    const idOwner = this.db.prepare('SELECT slug, project FROM requirement WHERE id = ?')
+
+    /**
+     * 一个 id 只能归一个需求。复制需求目录会带出两个同 id 的目录，
+     * 那时唯一索引会让整个同步炸掉——宁可先不认，让它落进 missingIds()，
+     * 由 assign_ids 重新发一个，也不要因为一个目录坏了整个看板打不开。
+     */
+    const claimId = (id: string, slug: string, project: string): string | null => {
+      if (!id) return null
+      const owner = idOwner.get(id) as { slug: string; project: string } | undefined
+      return !owner || (owner.slug === slug && owner.project === project) ? id : null
+    }
 
     for (const proj of dirs) {
       seenProjects.add(proj.slug)
@@ -437,6 +456,7 @@ export class BoardDatabase {
           insertReq.run(
             parsed.slug,
             proj.slug,
+            claimId(parsed.id, parsed.slug, proj.slug),
             parsed.title,
             dir,
             '澄清',
@@ -450,6 +470,7 @@ export class BoardDatabase {
           added.push(key)
         } else {
           updateReq.run(
+            claimId(parsed.id, parsed.slug, proj.slug),
             parsed.title,
             dir,
             parsed.summary,
@@ -496,6 +517,7 @@ export class BoardDatabase {
     return {
       slug: row.slug,
       project: row.project,
+      id: row.id ?? '',
       title: row.title,
       status,
       priority: asPriority(row.priority) ?? '',
@@ -576,6 +598,24 @@ export class BoardDatabase {
     } catch {
       return null
     }
+  }
+
+  /**
+   * 按需求 id 反查。id 是写在 requirement.md 里的身份，改名、换项目、换 worktree 都不影响它，
+   * 所以"我属于哪个需求"只认这一条——不拿路径去猜。
+   */
+  byId(id: string): Requirement | undefined {
+    const row = this.db.prepare('SELECT * FROM requirement WHERE id = ?').get(id) as unknown as
+      | Row
+      | undefined
+    return row ? this.toRequirement(row) : undefined
+  }
+
+  /** 还没拿到 id 的需求（frontmatter 里缺 id 的老需求） */
+  missingIds(): Array<{ slug: string; project: string; path: string }> {
+    return this.db
+      .prepare('SELECT slug, project, path FROM requirement WHERE id IS NULL OR id = ?')
+      .all('') as unknown as Array<{ slug: string; project: string; path: string }>
   }
 
   // ------------------------------------------------------------- 写入

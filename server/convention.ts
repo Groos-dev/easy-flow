@@ -7,9 +7,10 @@
  *
  * 状态（阶段/优先级/链接）永远不写进 md；模板与规范只描述文件结构。
  */
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
-import { listStrayDirs, readProjectConvention } from './markdown.ts'
+import { listStrayDirs, parseFrontmatter, readProjectConvention } from './markdown.ts'
 
 /** 收纳目录。下划线开头，listProjectDirs 不会把它当成项目 */
 export const TEMPLATES_DIR = '_templates'
@@ -21,20 +22,33 @@ function templatesDir(dataDir: string): string {
 /** 原来的创建入口在这里做过校验，入口移除后只用于提示 */
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/
 
-const PROJECT_TEMPLATE = `---
-name:
+/** 写进单行结构的值先把换行压平，否则会把 frontmatter 和 H1 写坏 */
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * 项目规范正文。seed 版多一句"怎么用模板"的说明——
+ * 那是给要复制它的人看的，真实项目里只会显得莫名其妙。
+ */
+export function renderProjectTemplate(name: string, seed = false): string {
+  const howto = seed
+    ? '\n     模板用法：把本目录整个复制到数据目录下，目录名改成项目标识（英文小写 + 连字符）。'
+    : ''
+  return `---
+name: ${oneLine(name)}
 ---
 
 # 项目规范
 
-<!-- easy-flow 项目模板：把本目录整个复制到数据目录下，目录名改成项目标识（英文小写 + 连字符）。
-     显示名取上面 frontmatter 的 name，留空则用目录名，改完下次刷新生效。
+<!-- easy-flow 项目规范：显示名取上面 frontmatter 的 name，留空则用目录名，改完下次刷新生效。${howto}
      状态（阶段/优先级）存在 easy-flow.db 里，不要写进任何 md。 -->
 
 ## 背景
 
 ## 约定
 `
+}
 
 /** AGENTS.md：给 agent 读的指令，不承载需求描述 */
 const REQUIREMENT_AGENTS_TEMPLATE = `<!-- easy-flow 需求模板 · agent 指令：写怎么干活、有哪些约束、要避开什么。
@@ -45,14 +59,17 @@ const REQUIREMENT_AGENTS_TEMPLATE = `<!-- easy-flow 需求模板 · agent 指令
 `
 
 /** requirement.md：需求描述，卡片标题与摘要的来源 */
-const REQUIREMENT_DESC_TEMPLATE = `<!-- easy-flow 需求模板 · 需求描述：卡片标题取下面的 H1，摘要取「需求」段。
+function requirementDesc(id: string, title: string, summary: string): string {
+  // id 是需求的身份，写进 frontmatter：目录改名、换项目都不影响它
+  const frontmatter = id ? `---\nid: ${id}\n---\n\n` : ''
+  return `${frontmatter}<!-- easy-flow 需求模板 · 需求描述：卡片标题取下面的 H1，摘要取「需求」段。
      更长的方案、决策、踩坑放 docs/ 下，会自动出现在详情页标签栏。 -->
 
-# 需求标题
+# ${oneLine(title)}
 
 ## 需求
 
-一句话说清要做什么、为什么。
+${summary}
 
 ## 涉及仓库
 
@@ -63,6 +80,26 @@ const REQUIREMENT_DESC_TEMPLATE = `<!-- easy-flow 需求模板 · 需求描述�
 
 -
 `
+}
+
+const PLACEHOLDER_SUMMARY = '一句话说清要做什么、为什么。'
+
+const REQUIREMENT_DESC_TEMPLATE = requirementDesc('', '需求标题', PLACEHOLDER_SUMMARY)
+
+/** 不透明需求 id。人和 agent 都看不出它对应什么，换来的是改名搬家都不变 */
+export function newRequirementId(): string {
+  return `req-${randomUUID().replace(/-/g, '').slice(0, 10)}`
+}
+
+/** 给已有需求补 id：只动 frontmatter，正文原样写回 */
+export function setRequirementId(dir: string, id: string): void {
+  const file = join(dir, 'requirement.md')
+  const { data, body } = parseFrontmatter(readFileSync(file, 'utf8'))
+  const frontmatter = Object.entries({ ...data, id })
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n')
+  writeFileSync(file, `---\n${frontmatter}\n---\n\n${body}`, 'utf8')
+}
 
 /**
  * 把模板补到 <dataDir>/_templates/ 下：缺哪个补哪个，已存在不覆盖。
@@ -72,7 +109,7 @@ export function ensureTemplates(dataDir: string): void {
   try {
     const root = templatesDir(dataDir)
     const files: Array<[string, string]> = [
-      ['project/AGENTS.md', PROJECT_TEMPLATE],
+      ['project/AGENTS.md', renderProjectTemplate('', true)],
       ['requirement/AGENTS.md', REQUIREMENT_AGENTS_TEMPLATE],
       ['requirement/requirement.md', REQUIREMENT_DESC_TEMPLATE],
     ]
@@ -85,6 +122,50 @@ export function ensureTemplates(dataDir: string): void {
   } catch {
     /* 数据目录不可写等情况下跳过 */
   }
+}
+
+// ------------------------------------------------------------------ 创建
+
+/**
+ * 在数据目录下建一个项目目录，并写入项目规范（显示名取 frontmatter 的 name）。
+ * 和需求一样只落文件，入库交给 syncProjects。
+ */
+export function createProjectDir(dataDir: string, slug: string, name = ''): string {
+  if (!SLUG_RE.test(slug)) {
+    throw new Error(`项目标识只能用英文小写、数字和连字符，且不能以连字符开头：${slug}`)
+  }
+  const dir = join(dataDir, slug)
+  if (existsSync(dir)) throw new Error(`目录已存在：${dir}`)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'AGENTS.md'), renderProjectTemplate(name), 'utf8')
+  return dir
+}
+
+/**
+ * 在项目目录下建一个需求（子需求就是往下再建一层，结构完全相同）。
+ * 两份文件一次写齐——缺一份就不会被识别成需求。
+ * 已存在则报错，不静默复用，与 createProject 的取舍一致。
+ */
+export function createRequirementDir(
+  root: string,
+  slug: string,
+  title: string,
+  summary = '',
+): { dir: string; id: string } {
+  if (!SLUG_RE.test(slug)) {
+    throw new Error(`需求标识只能用英文小写、数字和连字符，且不能以连字符开头：${slug}`)
+  }
+  const dir = join(root, slug)
+  if (existsSync(dir)) throw new Error(`目录已存在：${dir}`)
+  const id = newRequirementId()
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'AGENTS.md'), REQUIREMENT_AGENTS_TEMPLATE, 'utf8')
+  writeFileSync(
+    join(dir, 'requirement.md'),
+    requirementDesc(id, title, summary || PLACEHOLDER_SUMMARY),
+    'utf8',
+  )
+  return { dir, id }
 }
 
 /**
