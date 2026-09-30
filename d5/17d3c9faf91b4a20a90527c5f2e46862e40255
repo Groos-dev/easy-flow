@@ -1,0 +1,106 @@
+src/main/index.ts
+  s_8ebbe1e38ecb1d::t_5fa35faa1ff2a4 169-170
+server/db.ts
+  s_8ebbe1e38ecb1d::t_2dc5590fe7ff8b 407-409,413,415
+  s_8ebbe1e38ecb1d::t_69a1b792d4a354 313
+  s_8ebbe1e38ecb1d::t_b157c4212312a8 434-436
+  s_8ebbe1e38ecb1d::t_2accca19d80647 570-571,575
+  s_8ebbe1e38ecb1d::t_9331b04249cf9b 369-370
+  s_8ebbe1e38ecb1d::t_ed56a3c567539f 117-118
+  s_8ebbe1e38ecb1d::t_f8bf47cd8abdde 14
+  s_8ebbe1e38ecb1d::t_fef708e8b094b9 19,25
+  s_8ebbe1e38ecb1d::t_5d01e80089ce4e 383
+src/renderer/src/lib/api.ts
+  s_8ebbe1e38ecb1d::t_9a0533d8cfb5e9 66
+  s_8ebbe1e38ecb1d::t_20d087ddb66d3a 48-49
+  s_8ebbe1e38ecb1d::t_4f33818b9f8372 95
+src/renderer/src/components/Sidebar.tsx
+  s_8ebbe1e38ecb1d::t_75cce43499cfc5 14-15
+  s_8ebbe1e38ecb1d::t_a57044ee051f54 129-134,136-140
+  s_8ebbe1e38ecb1d::t_2bb09f9ab6200a 27,50
+  s_8ebbe1e38ecb1d::t_5e77c3baa952cd 99-100
+src/renderer/src/lib/types.ts
+  s_8ebbe1e38ecb1d::t_713cf3bff98e31 51-52
+server/index.ts
+  s_8ebbe1e38ecb1d::t_257d5e998defb1 182-183
+  s_8ebbe1e38ecb1d::t_9c0595f31d96d8 295
+  s_8ebbe1e38ecb1d::t_4cc0928aaf83df 299,302
+src/renderer/src/styles.css
+  s_8ebbe1e38ecb1d::t_46c55667a79f30 62,64-72,74-76
+  s_8ebbe1e38ecb1d::t_c5632753058d1a 1178-1187
+  s_8ebbe1e38ecb1d::t_3f63acdb0b6184 228-229
+  s_8ebbe1e38ecb1d::t_8d85446b52a109 63,77-78
+  s_8ebbe1e38ecb1d::t_3493cef908abca 36-39,44-45
+  s_8ebbe1e38ecb1d::t_9513903fbe3060 619-624
+  s_8ebbe1e38ecb1d::t_31de85097d62bd 53-59
+  s_8ebbe1e38ecb1d::t_646fd7cf1ba8ab 73
+  s_8ebbe1e38ecb1d::t_4e8ed2ce1f4530 549-551
+  s_8ebbe1e38ecb1d::t_a43488c42af091 1080,1082-1083
+  s_8ebbe1e38ecb1d::t_912c8eac898da5 1084-1085
+test/core.test.ts
+  s_8ebbe1e38ecb1d::t_b130a9bc7c7c7a 630
+  s_8ebbe1e38ecb1d::t_35a43f697154ba 12
+  s_8ebbe1e38ecb1d::t_015f6b1bf28659 682
+  s_8ebbe1e38ecb1d::t_5ccff9db2f6f01 454-457
+  s_8ebbe1e38ecb1d::t_fd8113c1e101fc 35-37
+  s_8ebbe1e38ecb1d::t_c796f994da11e7 441
+  s_8ebbe1e38ecb1d::t_2ce874b693ba8f 464-465
+  s_8ebbe1e38ecb1d::t_c17523646ea191 371-372
+  s_8ebbe1e38ecb1d::t_e3e35d8ec04c73 153
+  s_8ebbe1e38ecb1d::t_acd1bd1541a2cf 362-363,367-370,373-400,404-433,437-440,442-453,458-463,466-473,491-509
+  s_8ebbe1e38ecb1d::t_25727967401583 477-490
+  s_8ebbe1e38ecb1d::t_7172a5a87b28ea 660-664,683-690
+src/renderer/src/components/Detail.tsx
+  s_8ebbe1e38ecb1d::t_46e8a9e7755d3b 396-399
+  s_8ebbe1e38ecb1d::t_887a7020283ac3 332-335
+  s_8ebbe1e38ecb1d::t_439d86a0cb6cff 322,326-329,347-348
+  s_8ebbe1e38ecb1d::t_915524f0fd62f5 378
+  s_8ebbe1e38ecb1d::t_1300f685a59183 395
+  s_8ebbe1e38ecb1d::t_a57f098f8e45fd 246-253
+  s_8ebbe1e38ecb1d::t_434dfee61eb459 221-230,233-237
+  s_8ebbe1e38ecb1d::t_1bd1b03b163ec4 452
+  s_8ebbe1e38ecb1d::t_b64cbaf98a8c2b 199-201
+src/renderer/src/App.tsx
+  s_8ebbe1e38ecb1d::t_a26223a4ffe4a4 228-239
+  s_8ebbe1e38ecb1d::t_97664002fc1589 128-133
+  s_8ebbe1e38ecb1d::t_5133e860f43fad 302
+  s_8ebbe1e38ecb1d::t_ae9c90716c453d 291
+  s_8ebbe1e38ecb1d::t_5cb2578228ea4e 78-79
+  s_8ebbe1e38ecb1d::t_7b2ff8fed21d50 108
+  s_8ebbe1e38ecb1d::t_aac4185a8a326e 283,286
+  s_8ebbe1e38ecb1d::t_a1e2e5ac081822 243
+  s_8ebbe1e38ecb1d::t_d69a79d4320b02 57-58
+  s_8ebbe1e38ecb1d::t_4ad72e7dc7e6e7 205
+  s_8ebbe1e38ecb1d::t_be3590281650b1 270
+server/convention.ts
+  s_8ebbe1e38ecb1d::t_59b39683a61b18 75-77,79-80,82
+  s_8ebbe1e38ecb1d::t_653d20c0b95a2a 109
+  s_8ebbe1e38ecb1d::t_22472f50a857e2 1-10,12-16,18-38,42,50-74,78,81,83-92,95-108,110-112
+  s_8ebbe1e38ecb1d::t_7c0955eead3f70 11
+  s_8ebbe1e38ecb1d::t_9b1254b0207dc5 17
+  s_8ebbe1e38ecb1d::t_8fd292908a06f5 39-41,43-49
+  s_8ebbe1e38ecb1d::t_f14a7ff13518fa 93-94
+server/markdown.ts
+  s_8ebbe1e38ecb1d::t_c6410680d4ed02 178-180,183
+  s_8ebbe1e38ecb1d::t_d977f92642dbe6 181-182,185
+  s_8ebbe1e38ecb1d::t_5571e118f30831 201-205
+  s_8ebbe1e38ecb1d::t_b3ed8839d08b0a 259,262-270,272-277
+  s_8ebbe1e38ecb1d::t_65be060ac26669 260-261,271
+  s_8ebbe1e38ecb1d::t_5cac160af1ac6e 206-210,217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "d517d3c9faf91b4a20a90527c5f2e46862e40255",
+  "prompts": {},
+  "sessions": {
+    "s_8ebbe1e38ecb1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b7c54001-a9ff-4a3d-a4bb-9597fc265756",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
