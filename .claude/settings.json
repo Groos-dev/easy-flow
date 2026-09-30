@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" 2>/dev/null || true; if [ -n \"$(git status --porcelain 2>/dev/null)\" ]; then n=$(git status --porcelain | wc -l | tr -d ' '); printf '{\"systemMessage\":\"⚠ %s 处未提交改动 —— 按约定应 commit\"}\\n' \"$n\"; fi",
+            "timeout": 10,
+            "statusMessage": "检查未提交改动"
+          }
+        ]
+      }
+    ]
+  }
+}
