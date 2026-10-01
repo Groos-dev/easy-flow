@@ -51,12 +51,56 @@ body {
 }
 
 /*
- * 中部的弹性空白兼作窗口拖拽区。
- * 不能整条 topbar 设 drag：折叠时它从窗口最左边开始，会盖住固定在左上角的侧边栏开关，
- * 而 drag 区域会把落在其上的点击当作拖窗口吞掉，按钮就点不动了。
+ * 两侧各占一半，夹在中间的搜索框才是真的居中。
+ * 这两块兼作窗口拖拽区——不能整条 topbar 设 drag：折叠时它从窗口最左边开始，
+ * 会盖住固定在左上角的侧边栏开关，而 drag 区域会把落在其上的点击当作拖窗口吞掉。
  */
-.topbar > .spacer {
+.topbar-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   -webkit-app-region: drag;
+}
+
+/* 拖拽区会吞点击，里面的按钮必须显式让开 */
+.topbar-side > * {
+  -webkit-app-region: no-drag;
+}
+
+.topbar-side.right {
+  justify-content: flex-end;
+}
+
+/* 搜索框：放大镜贴在输入框左边，输入框本身不要边框 */
+.search-box {
+  /* 能缩：窗口窄到放不下时让位，硬撑会把两侧挤没 */
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  background: var(--column);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-faint);
+}
+
+.search-box:focus-within {
+  border-color: var(--accent);
+}
+
+.search-input {
+  width: 240px;
+  min-width: 0;
+  padding: 5px 0;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
 }
 
 /* 侧边栏折叠时顶栏顶到窗口左边，整条让开 macOS 红绿灯与开关按钮 */
@@ -79,6 +123,11 @@ body {
 .brand {
   font-weight: 600;
   letter-spacing: 0.02em;
+  /* 窗口窄时先截断项目名：两侧各占一半，撑破了会把中间的搜索框挤偏 */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .count {
@@ -1093,7 +1142,8 @@ body {
 .sidebar-tree {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 8px 16px;
+  /* 底部留出固定在左下角的设置齿轮：不留的话列表滚到底会被它盖住 */
+  padding: 4px 8px 56px;
 }
 
 /* ------------------------------------------------------------ 树形结构 */

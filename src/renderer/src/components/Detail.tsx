@@ -28,7 +28,6 @@ interface Props {
   fontFamily: string
   fontSize: number
   onBack: () => void
-  onOpenSettings: () => void
   /** 改了状态后通知看板刷新 */
   onUpdated: () => void
 }
@@ -188,7 +187,6 @@ export default function Detail({
   fontFamily,
   fontSize,
   onBack,
-  onOpenSettings,
   onUpdated,
 }: Props) {
   const req = target.req
@@ -417,9 +415,6 @@ export default function Detail({
           onClick={() => setShowTerminal((v) => !v)}
         >
           终端
-        </button>
-        <button className="btn" onClick={onOpenSettings}>
-          设置
         </button>
       </header>
 
