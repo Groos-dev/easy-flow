@@ -14,15 +14,23 @@ import { createRequire } from 'node:module'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import { BoardDatabase } from './db.ts'
+import { BoardDatabase, PRIORITIES, STATUSES, type Priority, type Requirement, type Status, type Worktree } from './db.ts'
 import { readConfig } from './config.ts'
 import { listProjectDirs, parseFrontmatter, readProjectConvention } from './markdown.ts'
 import {
   createProjectDir,
   createRequirementDir,
   newRequirementId,
+  newWorktreeId,
   setRequirementId,
 } from './convention.ts'
+import {
+  deprovisionWorktree,
+  provisionWorktree,
+  resolveCheckout,
+  worktreeIdIn,
+  worktreePathFor,
+} from './worktree.ts'
 
 const VERSION = createRequire(import.meta.url)('../package.json').version as string
 
@@ -43,14 +51,13 @@ function text(message: string) {
   return { content: [{ type: 'text' as const, text: message }] }
 }
 
-/** 需求 id：显式传参 > 终端 env。都没有就报错，不去猜 */
-function requireId(explicit?: string): string {
-  const id = explicit?.trim() || process.env.EASY_FLOW_REQUIREMENT_ID?.trim()
-  if (!id) {
-    throw new Error(
-      '缺少需求 id：请显式传 id，或在 easy-flow 打开的需求终端 / 带 id 的 worktree 里调用',
-    )
-  }
+/** id 只认显式传参。env 与 cwd 都不作为来源——猜错了会把状态写到别的需求上 */
+function requireId(
+  explicit?: string,
+  hint = '需求 id（写在需求目录 requirement.md 的 frontmatter 里，形如 req-xxxxxxxxxx）',
+): string {
+  const id = explicit?.trim()
+  if (!id) throw new Error(`缺少${hint}：请显式传 id`)
   return id
 }
 
@@ -105,6 +112,69 @@ function readIfExists(file: string): string | null {
   }
 }
 
+/** 需求主体：头部几行 + 项目规范 + 需求描述 + context.md。extraHead 给 worktree 命中时补头 */
+function requirementBlocks(req: Requirement, extraHead: string[] = []): string[] {
+  const root = join(config.dataDir, req.project)
+  const convention = readProjectConvention(root)
+  const display = convention ? parseFrontmatter(convention).data.name : ''
+
+  const head = [
+    ...extraHead,
+    `需求 id：${req.id}`,
+    `项目：${req.project}${display && display !== req.project ? `（${display}）` : ''}`,
+    `需求：${req.title}（${req.slug}）`,
+    `需求目录：${req.path}`,
+    `状态：${req.status}${req.priority ? ` · 优先级：${req.priority}` : ''}`,
+  ]
+  if (req.repos.length) head.push(`涉及仓库：${req.repos.map((r) => `${r.short}=${r.repo ?? ''}`).join('、')}`)
+  const docs = req.docs.filter((d) => d.name !== 'requirement.md')
+  if (docs.length) head.push(`其他文档：${docs.map((d) => d.name).join('、')}`)
+
+  const blocks = [head.join('\n')]
+  if (convention) blocks.push(`## 项目规范（${join(root, 'AGENTS.md')}）\n\n${convention.trim()}`)
+  const desc = readIfExists(join(req.path, 'requirement.md'))
+  if (desc) blocks.push(`## 需求描述（requirement.md）\n\n${desc.trim()}`)
+  const ctx = readIfExists(join(req.path, 'context.md'))
+  if (ctx) blocks.push(`## 上下文（context.md）\n\n${ctx.trim()}`)
+  return blocks
+}
+
+function worktreeLine(w: Worktree): string {
+  const short = w.short ? `${w.short} / ` : ''
+  return `- ${w.id}  ${short}${w.repo}  ${w.branch}  ${w.path}${w.orphan ? '（目录已失联，可 remove_worktree）' : ''}`
+}
+
+/** 项目视图：只给 id / 状态 / 标题与 worktree 计数，不带需求正文——正文要另调一次 */
+function projectContext(slug: string): string {
+  const board = db()
+  const project = board.listProjects().find((p) => p.slug === slug)
+  if (!project) {
+    const known = board.listProjects().map((p) => p.slug)
+    throw new Error(
+      `找不到「${slug}」：现有项目 ${known.join('、') || '（还没有项目）'}；需求请传 req-…，worktree 请传 wt-…`,
+    )
+  }
+  const counts = new Map<string, number>()
+  for (const w of board.listWorktrees()) {
+    counts.set(w.requirementId, (counts.get(w.requirementId) ?? 0) + 1)
+  }
+  const requirements = board.listIn(project.slug)
+  const lines = requirements.map(
+    (r) =>
+      `- ${r.id || '（无 id）'}  ${r.status}  ${r.slug}  ${r.title}` +
+      (counts.get(r.id) ? `（${counts.get(r.id)} 个 worktree）` : ''),
+  )
+  const blocks = [
+    `项目：${project.name}（${project.slug}）\n目录：${project.root}\n需求（${requirements.length}）：\n${
+      lines.join('\n') || '（无）'
+    }`,
+  ]
+  if (project.convention) {
+    blocks.push(`## 项目规范（${join(project.root, 'AGENTS.md')}）\n\n${project.convention.trim()}`)
+  }
+  return blocks.join('\n\n')
+}
+
 const server = new McpServer({ name: 'easy-flow', version: VERSION })
 
 server.registerTool(
@@ -112,37 +182,61 @@ server.registerTool(
   {
     title: '取上下文',
     description:
-      '按需求 id 取它属于哪个项目，并返回项目规范、需求描述、context.md、状态与文档索引。' +
-      '在 easy-flow 开的需求终端里可以省略 id；在 worktree 里用创建时写进 AGENTS.md 的那个 id。',
+      '按 id 取上下文，返回从命中处向上到项目的整条链（项目规范、需求描述、context.md、状态、文档索引）。' +
+      '三种 id 都收：wt-… 是 worktree（在它的 AGENTS.md frontmatter 里）、req-… 是需求（在 requirement.md 里）、' +
+      '裸值当项目标识。id 必须显式传，不做猜测。',
     inputSchema: {
-      id: z.string().optional().describe('需求 id（req-xxxx）。省略则取终端 env'),
+      id: z.string().optional().describe('wt-xxxxxxxxxx / req-xxxxxxxxxx / 项目标识'),
     },
   },
   async ({ id }) => {
-    const req = findById(requireId(id))
-    const root = join(config.dataDir, req.project)
-    const convention = readProjectConvention(root)
-    const display = convention ? parseFrontmatter(convention).data.name : ''
+    const board = db()
+    board.syncProjects()
+    const key = requireId(id)
 
-    const head = [
-      `需求 id：${req.id}`,
-      `项目：${req.project}${display && display !== req.project ? `（${display}）` : ''}`,
-      `需求：${req.title}（${req.slug}）`,
-      `需求目录：${req.path}`,
-      `状态：${req.status}${req.priority ? ` · 优先级：${req.priority}` : ''}`,
-    ]
-    if (req.repos.length) head.push(`涉及仓库：${req.repos.map((r) => `${r.short}=${r.repo ?? ''}`).join('、')}`)
-    const docs = req.docs.filter((d) => d.name !== 'requirement.md')
-    if (docs.length) head.push(`其他文档：${docs.map((d) => d.name).join('、')}`)
+    // 项目名的字符集包含 req-/wt- 前缀，所以 id 查不到时再看一眼项目表
+    const asProject = (): string | null =>
+      board.listProjects().some((p) => p.slug === key) ? projectContext(key) : null
 
-    const blocks = [head.join('\n')]
-    if (convention) blocks.push(`## 项目规范（${join(root, 'AGENTS.md')}）\n\n${convention.trim()}`)
-    const desc = readIfExists(join(req.path, 'requirement.md'))
-    if (desc) blocks.push(`## 需求描述（requirement.md）\n\n${desc.trim()}`)
-    const ctx = readIfExists(join(req.path, 'context.md'))
-    if (ctx) blocks.push(`## 上下文（context.md）\n\n${ctx.trim()}`)
+    if (key.startsWith('wt-')) {
+      const wt = board.worktreeById(key)
+      const alt = wt ? null : asProject()
+      if (alt) return text(alt)
+      if (!wt) throw new Error(`找不到 worktree：${key}。id 写在 worktree 的 AGENTS.md 里`)
+      const req = board.byId(wt.requirementId)
+      if (!req) throw new Error(`worktree ${key} 记的需求 ${wt.requirementId} 不在库里了`)
+      const blocks = requirementBlocks(req, [
+        `worktree id：${wt.id}`,
+        `仓库：${wt.repo}${wt.short ? `（短名 ${wt.short}）` : ''}`,
+        `分支：${wt.branch}`,
+        `路径：${wt.path}${existsSync(wt.path) ? '' : '（目录已不存在）'}`,
+        `主 checkout：${wt.main}`,
+      ])
+      const siblings = board.listWorktrees(req.id).filter((w) => w.id !== wt.id)
+      blocks.push(
+        siblings.length
+          ? `## 同一需求的其它 worktree\n${siblings.map(worktreeLine).join('\n')}`
+          : '## 同一需求的其它 worktree\n（无）',
+      )
+      return text(blocks.join('\n\n'))
+    }
 
-    return text(blocks.join('\n\n'))
+    if (key.startsWith('req-')) {
+      const req = board.byId(key)
+      const alt = req ? null : asProject()
+      if (alt) return text(alt)
+      if (!req) throw new Error(`找不到需求：${key}`)
+      const wts = board.listWorktrees(req.id)
+      const blocks = requirementBlocks(req)
+      blocks.push(
+        wts.length
+          ? `## worktree（${wts.length}）\n${wts.map(worktreeLine).join('\n')}`
+          : '## worktree（0）\n还没有工作区；要在某个仓库里动手，先用 create_worktree 建一个',
+      )
+      return text(blocks.join('\n\n'))
+    }
+
+    return text(projectContext(key))
   },
 )
 
@@ -198,7 +292,7 @@ server.registerTool(
     inputSchema: {
       title: z.string().describe('子需求标题，一行'),
       summary: z.string().optional().describe('一句话说清这次要改什么'),
-      id: z.string().optional().describe('父需求 id，默认取终端 env'),
+      id: z.string().optional().describe('父需求 id（req-xxxxxxxxxx）'),
       slug: z.string().optional().describe('目录名（英文小写、数字、连字符）；省略则从标题推导'),
     },
   },
@@ -230,6 +324,189 @@ server.registerTool(
     }
     if (done.length) db().syncProjects()
     return text(done.length ? `已补 ${done.length} 个：\n${done.join('\n')}` : '所有需求都已有 id')
+  },
+)
+
+server.registerTool(
+  'update_requirement',
+  {
+    title: '改需求状态',
+    description: '改需求的看板状态与优先级。传了哪个改哪个，没传的保持不动。',
+    inputSchema: {
+      id: z.string().describe('需求 id（req-xxxxxxxxxx）'),
+      status: z.enum(STATUSES).optional().describe('看板状态'),
+      priority: z
+        .union([z.enum(PRIORITIES), z.literal('')])
+        .optional()
+        .describe('优先级；空串表示清空'),
+    },
+  },
+  async ({ id, status, priority }) => {
+    const board = db()
+    board.syncProjects()
+    const req = findById(requireId(id))
+    if (status === undefined && priority === undefined) {
+      throw new Error('status 与 priority 至少传一个')
+    }
+    let next = req
+    if (status !== undefined) next = board.setStatus(req.slug, status as Status, req.project)
+    if (priority !== undefined) next = board.setPriority(req.slug, priority as Priority, req.project)
+    return text(
+      `需求：${next.title}（${next.id}）\n状态：${next.status}${
+        next.priority ? ` · 优先级：${next.priority}` : ''
+      }`,
+    )
+  },
+)
+
+server.registerTool(
+  'set_links',
+  {
+    title: '写需求链接',
+    description:
+      '整体替换需求的链接字段（飞书任务 / 代码 MR / 扩展链接）。传哪个字段就替换哪个，' +
+      '没传的保持不动；传空数组表示清空。',
+    inputSchema: {
+      id: z.string().describe('需求 id（req-xxxxxxxxxx）'),
+      feishuTaskLinks: z.array(z.string()).optional().describe('飞书任务链接'),
+      codeLinks: z.array(z.string()).optional().describe('GitLab MR / GitHub PR 链接'),
+      extLinks: z
+        .array(z.object({ detail: z.string(), url: z.string() }))
+        .optional()
+        .describe('扩展链接：描述 + 链接'),
+    },
+  },
+  async ({ id, feishuTaskLinks, codeLinks, extLinks }) => {
+    const board = db()
+    board.syncProjects()
+    const req = findById(requireId(id))
+    const next = board.setLinks(req.slug, { feishuTaskLinks, codeLinks, extLinks }, req.project)
+    const line = (label: string, list: string[]) => `${label}（${list.length}）：${list.join('、') || '（空）'}`
+    return text(
+      [
+        `需求：${next.title}（${next.id}）`,
+        line('飞书任务', next.feishuTaskLinks),
+        line('代码链接', next.codeLinks),
+        line('扩展链接', next.extLinks.map((l) => `${l.detail} ${l.url}`)),
+      ].join('\n'),
+    )
+  },
+)
+
+server.registerTool(
+  'create_worktree',
+  {
+    title: '新建 worktree',
+    description:
+      '给需求开一个代码工作区：在主 checkout 旁边建 git worktree（名字是 <仓库>.<分支>），' +
+      '写进身份文件 AGENTS.md、建一条指向 requirement.md 的软链，并登记到 easy-flow。' +
+      '同路径重复调用是幂等的，中途失败也不会动已建好的目录，重试即可。',
+    inputSchema: {
+      requirementId: z.string().describe('需求 id（req-xxxxxxxxxx）'),
+      repo: z.string().describe('仓库名（在仓库根下找），或主 checkout 的绝对路径'),
+      branch: z.string().describe('分支名，如 feature-seatmap-truemap；本地已有则复用'),
+      base: z.string().optional().describe('新分支起点，缺省用主 checkout 当前的 HEAD'),
+      short: z.string().optional().describe('短名（涉及仓库表的短名列），仅用于展示'),
+    },
+  },
+  async ({ requirementId, repo, branch, base, short }) => {
+    const board = db()
+    board.syncProjects()
+    const req = findById(requireId(requirementId))
+    if (!existsSync(req.path)) throw new Error(`需求目录不存在：${req.path}`)
+
+    const target = await resolveCheckout(repo)
+    const path = worktreePathFor(target.main, branch)
+    const known = board.worktreeByPath(path)
+    const id = known?.id || worktreeIdIn(path) || newWorktreeId()
+
+    const provision = await provisionWorktree({
+      worktreeId: id,
+      requirementId: req.id,
+      requirementDir: req.path,
+      target,
+      branch,
+      base,
+    })
+
+    try {
+      board.addWorktree({
+        id,
+        requirementId: req.id,
+        short: short ?? '',
+        repo: target.repo,
+        branch,
+        path: provision.path,
+        main: target.main,
+      })
+    } catch (err) {
+      // 目录已经建好了，不撤——重试会认领它，并从它的 AGENTS.md 读回同一个 id
+      throw new Error(
+        `登记失败：${(err as Error).message}\n` +
+          `worktree 目录已经建好（${provision.path}，id 就写在它的 AGENTS.md 里），再调一次 create_worktree 即可补上登记。`,
+      )
+    }
+
+    return text(
+      [
+        provision.created
+          ? '已建好 worktree'
+          : '这个 worktree 本就存在，只补齐了 easy-flow 的产物（目录与分支没动）',
+        `worktree id：${id}`,
+        `需求：${req.title}（${req.id}）`,
+        `仓库：${target.repo}${short ? `（短名 ${short}）` : ''}`,
+        `分支：${branch}（${provision.branchCreated ? `新建，起点 ${base || '主 checkout 的 HEAD'}` : '复用本地已有分支'}）`,
+        `路径：${provision.path}`,
+        `主 checkout：${target.main}`,
+        provision.excludeNote,
+        provision.identityInFile
+          ? `在这个目录里调 get_context，请传 ${id}。`
+          : `注意：目录里已有一份不是 easy-flow 写的 AGENTS.md，没动它，${id} 因此没落进文件。` +
+            `在该目录里可以读软链 requirement.md 的 frontmatter 拿需求 id，再 get_context 列出它的 worktree 对号入座。`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    )
+  },
+)
+
+server.registerTool(
+  'remove_worktree',
+  {
+    title: '移除 worktree',
+    description:
+      '删掉一个 worktree：目录、git 登记与 easy-flow 里的记录一起清掉，分支保留（里面有提交的可能）。' +
+      '有未提交改动时会拒绝，确认丢弃再传 force。',
+    inputSchema: {
+      id: z.string().describe('worktree id（wt-xxxxxxxxxx）'),
+      force: z.boolean().optional().describe('丢弃未提交改动，强制移除'),
+    },
+  },
+  async ({ id, force }) => {
+    const board = db()
+    board.syncProjects()
+    const wt = board.worktreeById(
+      requireId(id, 'worktree id（写在它自己 AGENTS.md 的 frontmatter 里，形如 wt-xxxxxxxxxx）'),
+    )
+    if (!wt) throw new Error(`找不到 worktree：${id}`)
+    const result = await deprovisionWorktree({
+      path: wt.path,
+      main: wt.main,
+      branch: wt.branch,
+      force: !!force,
+    })
+    board.removeWorktree(wt.id)
+    return text(
+      [
+        result.missing ? '目录本就不在，已清掉记录与 git 登记' : '已移除 worktree',
+        `worktree id：${wt.id}`,
+        `路径：${wt.path}`,
+        result.discarded.length ? `丢弃了 ${result.discarded.length} 处未提交改动` : '',
+        `分支 ${wt.branch} 已保留；要删：git -C ${wt.main} branch -D ${wt.branch}`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    )
   },
 )
 

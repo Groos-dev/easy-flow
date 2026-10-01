@@ -11,7 +11,7 @@
  *   DB 有、目录没了 → 标记为孤儿，保留在列表中可见
  */
 import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
 import {
   listProjectDirs,
@@ -76,8 +76,27 @@ CREATE TABLE IF NOT EXISTS doc (
   PRIMARY KEY (slug, project, name)
 );
 
+/*
+ * worktree：需求的工作区。文件系统只能证明它存在，证明不了它属于谁——
+ * 需求目录里没有反向指针，所以关系只存在这张表里，创建时必须落库。
+ */
+CREATE TABLE IF NOT EXISTS worktree (
+  id       TEXT PRIMARY KEY,
+  req_id   TEXT NOT NULL,
+  short    TEXT NOT NULL DEFAULT '',
+  repo     TEXT NOT NULL,
+  branch   TEXT NOT NULL,
+  path     TEXT NOT NULL,
+  main     TEXT NOT NULL,
+  created  TEXT,
+  updated  TEXT,
+  orphan   INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE INDEX IF NOT EXISTS idx_doc_scope ON doc(project, slug);
 CREATE INDEX IF NOT EXISTS idx_req_project ON requirement(project);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wt_path ON worktree(path);
+CREATE INDEX IF NOT EXISTS idx_wt_req ON worktree(req_id);
 `
 
 /** 老库升级：补齐后加的列 */
@@ -155,6 +174,40 @@ export interface ExtLink {
   url: string
 }
 
+/**
+ * 需求的一个工作区（git worktree）。
+ * id 写在 worktree 自己的 AGENTS.md frontmatter 里，是它自证身份的唯一凭据。
+ */
+export interface Worktree {
+  id: string
+  /** 所属需求的 id */
+  requirementId: string
+  /** 需求里的短名（涉及仓库表的短名列）。可空：调用方直接给路径时没有短名 */
+  short: string
+  /** 仓库名，即主 checkout 的目录名 */
+  repo: string
+  branch: string
+  path: string
+  /** 主 checkout 路径。worktree 没了也留着，否则无法定位到仓库去收拾残局 */
+  main: string
+  created: string
+  updated: string
+  orphan: boolean
+}
+
+interface WtRow {
+  id: string
+  req_id: string
+  short: string
+  repo: string
+  branch: string
+  path: string
+  main: string
+  created: string | null
+  updated: string | null
+  orphan: number
+}
+
 interface Row {
   slug: string
   project: string
@@ -228,6 +281,21 @@ function parseLinks<T>(raw: string | null, fallback: T): T | undefined {
   }
 }
 
+function toWorktree(row: WtRow): Worktree {
+  return {
+    id: row.id,
+    requirementId: row.req_id,
+    short: row.short,
+    repo: row.repo,
+    branch: row.branch,
+    path: row.path,
+    main: row.main,
+    created: row.created ?? '',
+    updated: row.updated ?? '',
+    orphan: !!row.orphan,
+  }
+}
+
 
 export class BoardDatabase {
   readonly dataDir: string
@@ -247,6 +315,8 @@ export class BoardDatabase {
     this.file = join(dataDir, 'easy-flow.db')
     mkdirSync(dirname(this.file), { recursive: true })
     this.db = new DatabaseSync(this.file)
+    // 应用与每个 agent 会话各持一个连接，写撞车时先等一会儿，别直接抛 SQLITE_BUSY
+    this.db.exec('PRAGMA busy_timeout = 5000')
     this.db.exec(SCHEMA)
     migrate(this.db)
   }
@@ -357,6 +427,13 @@ export class BoardDatabase {
   deleteProject(slug: string): void {
     const exists = this.db.prepare('SELECT slug FROM project WHERE slug = ?').get(slug)
     if (!exists) throw new Error(`项目不存在: ${slug}`)
+    this.db
+      .prepare(
+        `DELETE FROM worktree WHERE req_id IN (
+           SELECT id FROM requirement WHERE project = ? AND id IS NOT NULL AND id <> ''
+         )`,
+      )
+      .run(slug)
     this.db.prepare('DELETE FROM doc WHERE project = ?').run(slug)
     this.db.prepare('DELETE FROM requirement WHERE project = ?').run(slug)
     this.db.prepare('DELETE FROM project WHERE slug = ?').run(slug)
@@ -371,8 +448,16 @@ export class BoardDatabase {
    *   需求目录在、DB 无   → 新增需求（status 默认澄清）
    *   需求目录在、DB 有   → 只更新标题/摘要/仓库/文档索引，绝不动 status/priority
    *   目录消失            → 标记孤儿，保留可见（状态不丢）
+   *
+   * worktree 一并校对，但只 stat 路径：它的归属是库里的关系，文件系统证明不了。
    */
-  syncProjects(): { added: string[]; updated: string[]; orphaned: string[]; restored: string[] } {
+  syncProjects(): {
+    added: string[]
+    updated: string[]
+    orphaned: string[]
+    restored: string[]
+    worktrees: { orphaned: string[]; restored: string[] }
+  } {
     // 模板随扫描补齐。这里是唯一扫 dataDir 的入口，看板/树/设置页/切换数据目录都会经过
     ensureTemplates(this.dataDir)
     const dirs = listProjectDirs(this.dataDir)
@@ -501,7 +586,28 @@ export class BoardDatabase {
     }
 
     this.reconcileProject()
-    return { added, updated, orphaned, restored }
+    return { added, updated, orphaned, restored, worktrees: this.syncWorktrees() }
+  }
+
+  /** worktree 的存活校对：只 stat，不跑 git——这条路每次刷看板都会走 */
+  private syncWorktrees(): { orphaned: string[]; restored: string[] } {
+    const orphaned: string[] = []
+    const restored: string[] = []
+    const rows = this.db
+      .prepare('SELECT id, path, orphan FROM worktree')
+      .all() as unknown as Array<{ id: string; path: string; orphan: number }>
+    const setOrphan = this.db.prepare('UPDATE worktree SET orphan = ? WHERE id = ?')
+    for (const w of rows) {
+      const alive = existsSync(w.path)
+      if (!alive && !w.orphan) {
+        setOrphan.run(1, w.id)
+        orphaned.push(w.id)
+      } else if (alive && w.orphan) {
+        setOrphan.run(0, w.id)
+        restored.push(w.id)
+      }
+    }
+    return { orphaned, restored }
   }
 
   // ------------------------------------------------------------- 读取
@@ -534,12 +640,17 @@ export class BoardDatabase {
     }
   }
 
-  /** 当前项目下的需求 */
-  list(): Requirement[] {
+  /** 指定项目下的需求 */
+  listIn(project: string): Requirement[] {
     const rows = this.db
       .prepare('SELECT * FROM requirement WHERE project = ? ORDER BY mtime DESC')
-      .all(this.activeProject) as unknown as Row[]
+      .all(project) as unknown as Row[]
     return rows.map((r) => this.toRequirement(r))
+  }
+
+  /** 当前项目下的需求 */
+  list(): Requirement[] {
+    return this.listIn(this.activeProject)
   }
 
   /** 在指定项目内按 slug 找需求 */
@@ -687,5 +798,71 @@ export class BoardDatabase {
     return this.get(slug, project)!
   }
 
+  // ------------------------------------------------------------- worktree
 
+  /** 某个需求名下的 worktree；不传则全部。按仓库排，列表稳定好读 */
+  listWorktrees(requirementId?: string): Worktree[] {
+    const rows = (
+      requirementId
+        ? this.db
+            .prepare('SELECT * FROM worktree WHERE req_id = ? ORDER BY created, repo')
+            .all(requirementId)
+        : this.db.prepare('SELECT * FROM worktree ORDER BY created, repo').all()
+    ) as unknown as WtRow[]
+    return rows.map(toWorktree)
+  }
+
+  worktreeById(id: string): Worktree | undefined {
+    const row = this.db.prepare('SELECT * FROM worktree WHERE id = ?').get(id) as unknown as
+      | WtRow
+      | undefined
+    return row ? toWorktree(row) : undefined
+  }
+
+  worktreeByPath(path: string): Worktree | undefined {
+    const row = this.db.prepare('SELECT * FROM worktree WHERE path = ?').get(path) as unknown as
+      | WtRow
+      | undefined
+    return row ? toWorktree(row) : undefined
+  }
+
+  /**
+   * 登记一个 worktree。path 是幂等键：一条语句 upsert，同路径重复登记只刷新字段，
+   * id 与 created 保持第一次的值——那个 id 已经写进 worktree 自己的 AGENTS.md 了。
+   */
+  addWorktree(input: {
+    id: string
+    requirementId: string
+    short?: string
+    repo: string
+    branch: string
+    path: string
+    main: string
+  }): Worktree {
+    this.db
+      .prepare(
+        `INSERT INTO worktree (id, req_id, short, repo, branch, path, main, created, updated, orphan)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+         ON CONFLICT(path) DO UPDATE SET
+           req_id = excluded.req_id, short = excluded.short, repo = excluded.repo,
+           branch = excluded.branch, main = excluded.main, updated = excluded.updated, orphan = 0`,
+      )
+      .run(
+        input.id,
+        input.requirementId,
+        input.short ?? '',
+        input.repo,
+        input.branch,
+        input.path,
+        input.main,
+        today(),
+        today(),
+      )
+    return this.worktreeByPath(input.path)!
+  }
+
+  /** 只删记录。目录与 git 登记归 worktree 层处理 */
+  removeWorktree(id: string): boolean {
+    return this.db.prepare('DELETE FROM worktree WHERE id = ?').run(id).changes > 0
+  }
 }

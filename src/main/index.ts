@@ -141,7 +141,8 @@ async function boot(): Promise<void> {
   applyCsp()
   boardServer = await startBoardServer({ port: DEFAULT_PORT })
 
-  // 终端需要知道挂载点的目录，以及这个挂载点对应哪个需求（agent 靠 id 认路）
+  // 终端只需要挂载点目录。需求身份不由环境变量传递——agent 从需求目录里读 id 再显式传给 MCP，
+  // 这样在 easy-flow 之外开的终端也能用。
   terminals = new TerminalManager((target) => {
     const project = boardServer?.db.listProjects().find((p) => p.slug === target.project)
     if (!project) return null
@@ -152,8 +153,6 @@ async function boot(): Promise<void> {
       env: {
         EASY_FLOW_SESSION: '1',
         EASY_FLOW_PROJECT: target.project,
-        // 需求身份只留 id 这一个出口：slug 也能认的话，迟早有人读错那一个
-        ...(req?.id ? { EASY_FLOW_REQUIREMENT_ID: req.id } : {}),
       },
     }
   })

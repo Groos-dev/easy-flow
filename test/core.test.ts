@@ -9,11 +9,11 @@
  */
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync, cpSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync, cpSync, realpathSync } from 'node:fs'
+import { join, basename } from 'node:path'
 import { createServer } from 'node:http'
 
-import { spawn } from 'node:child_process'
+import { spawn, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { BoardDatabase, normalizeLinkList, normalizeExtLinks } from '../server/db.ts'
@@ -703,7 +703,7 @@ function mcpSession(
     const env: Record<string, string> = { ...process.env, EASY_FLOW_CONFIG: configFile }
     // 身份只该来自调用方，别让跑测试的 shell 里的残留 env 干扰
     delete env.EASY_FLOW_PROJECT
-    delete env.EASY_FLOW_REQUIREMENT_ID
+    delete env.EASY_FLOW_REPO_ROOTS
     Object.assign(env, extraEnv)
 
     const child = spawn(join(REPO_ROOT, 'node_modules/.bin/tsx'), [join(REPO_ROOT, 'server/mcp.ts')], {
@@ -761,6 +761,115 @@ async function callTool(
   return { isError: !!reply.result.isError, text: reply.result.content[0].text }
 }
 
+const GIT_TMP = '/tmp/easy-flow-git-test'
+
+/**
+ * 造一个真仓库当夹具。worktree 至少要有一个 commit 才建得出来，
+ * 所以这里连带写一次提交；git 身份用 -c 传，不依赖开发机的全局配置。
+ */
+function gitFixture(): { workspace: string; repo: string; repoName: string } {
+  rmSync(GIT_TMP, { recursive: true, force: true })
+  const workspace = join(GIT_TMP, 'workspace')
+  const repoName = 'flight-onex-exchange-router'
+  const repo = join(workspace, repoName)
+  mkdirSync(repo, { recursive: true })
+  const who = ['-c', 'user.name=test', '-c', 'user.email=test@test']
+  execFileSync('git', ['init', '-q', '-b', 'main', repo])
+  // 镜像真实仓库：身份文件与 CLAUDE.md 本就在 .gitignore 里
+  writeFileSync(join(repo, '.gitignore'), 'AGENTS.md\nCLAUDE.md\n', 'utf8')
+  writeFileSync(join(repo, 'README.md'), '# fixture\n', 'utf8')
+  execFileSync('git', ['-C', repo, ...who, 'add', '-A'])
+  execFileSync('git', ['-C', repo, ...who, 'commit', '-qm', 'init'])
+  // macOS 的 /tmp 是软链，而 git 报的是真实路径（/private/tmp）：两边对齐才好断言
+  return { workspace: realpathSync(workspace), repo: realpathSync(repo), repoName }
+}
+
+function sh(cwd: string, ...args: string[]): string {
+  return execFileSync('git', ['-C', cwd, ...args]).toString().trim()
+}
+
+describe('数据层 · worktree', () => {
+  test('登记：path 是幂等键，id 与 created 不因重登而变', () => {
+    const d = fresh(() => {
+      makeReq(TMP, 'demo', 'alpha', '# alpha', { frontmatter: { id: 'req-alpha' } })
+    })
+    const db = new BoardDatabase(d)
+    db.syncProjects()
+    const req = db.get('alpha', 'demo')!
+
+    const first = db.addWorktree({
+      id: 'wt-0001',
+      requirementId: req.id,
+      short: 'router',
+      repo: 'flight-onex-exchange-router',
+      branch: 'feature-a',
+      path: '/tmp/wt/a',
+      main: '/tmp/repo/router',
+    })
+    assert.equal(first.created, first.updated)
+
+    const again = db.addWorktree({
+      id: 'wt-9999',
+      requirementId: req.id,
+      short: '',
+      repo: 'other',
+      branch: 'feature-b',
+      path: '/tmp/wt/a',
+      main: '/tmp/repo/other',
+    })
+    assert.equal(again.id, 'wt-0001')
+    assert.equal(again.created, first.created)
+    assert.equal(again.branch, 'feature-b')
+    assert.equal(again.short, '')
+    assert.equal(db.listWorktrees(req.id).length, 1)
+    assert.equal(db.worktreeByPath('/tmp/wt/a')!.id, 'wt-0001')
+    db.close()
+  })
+
+  test('目录消失标孤儿、回来即恢复，记录一直留着', () => {
+    const d = fresh(() => {
+      makeReq(TMP, 'demo', 'alpha', '# alpha', { frontmatter: { id: 'req-alpha' } })
+    })
+    const live = join(d, 'wt-live')
+    mkdirSync(live, { recursive: true })
+    const db = new BoardDatabase(d)
+    db.syncProjects()
+    const req = db.get('alpha', 'demo')!
+    const base = { requirementId: req.id, repo: 'r', main: '/tmp/repo/r' }
+    db.addWorktree({ ...base, id: 'wt-live', branch: 'b1', path: live })
+    db.addWorktree({ ...base, id: 'wt-gone', branch: 'b2', path: join(d, 'wt-gone') })
+
+    let sync = db.syncProjects()
+    assert.deepEqual(sync.worktrees.orphaned, ['wt-gone'])
+    assert.equal(db.worktreeById('wt-gone')!.orphan, true)
+    assert.equal(db.listWorktrees(req.id).length, 2)
+
+    mkdirSync(join(d, 'wt-gone'), { recursive: true })
+    sync = db.syncProjects()
+    assert.deepEqual(sync.worktrees.restored, ['wt-gone'])
+    assert.equal(db.worktreeById('wt-gone')!.orphan, false)
+    db.close()
+  })
+
+  test('删项目连带清掉它名下需求的 worktree 记录', () => {
+    const d = fresh(() => {
+      makeReq(TMP, 'demo', 'alpha', '# alpha', { frontmatter: { id: 'req-alpha' } })
+      makeReq(TMP, 'other', 'beta', '# beta', { frontmatter: { id: 'req-beta' } })
+    })
+    const db = new BoardDatabase(d)
+    db.syncProjects()
+    const a = db.get('alpha', 'demo')!
+    const b = db.get('beta', 'other')!
+    db.addWorktree({ id: 'wt-a', requirementId: a.id, repo: 'r', branch: 'b', path: '/tmp/a', main: '/tmp/r' })
+    db.addWorktree({ id: 'wt-b', requirementId: b.id, repo: 'r', branch: 'b', path: '/tmp/b', main: '/tmp/r' })
+
+    db.deleteProject('demo')
+    assert.equal(db.worktreeById('wt-a'), undefined)
+    assert.equal(db.worktreeById('wt-b')!.id, 'wt-b')
+    db.close()
+  })
+})
+
 describe('MCP 层', () => {
   const base = '/tmp/easy-flow-mcp-test'
   const dataDir = join(base, 'data')
@@ -786,7 +895,17 @@ describe('MCP 层', () => {
     const byId = new Map(replies.filter((r) => r.id !== undefined).map((r) => [r.id, r.result]))
     assert.deepEqual(
       byId.get(2).tools.map((t: { name: string }) => t.name).sort(),
-      ['assign_ids', 'create_project', 'create_requirement', 'create_sub_requirement', 'get_context'],
+      [
+        'assign_ids',
+        'create_project',
+        'create_requirement',
+        'create_sub_requirement',
+        'create_worktree',
+        'get_context',
+        'remove_worktree',
+        'set_links',
+        'update_requirement',
+      ],
     )
     assert.match(byId.get(3).content[0].text, /已创建项目「示例项目」/)
     assert.match(byId.get(4).content[0].text, /需求 id：req-/)
@@ -802,7 +921,7 @@ describe('MCP 层', () => {
     db.close()
   })
 
-  test('get_context 只按 id 反查：显式传、env 传都行，缺 id 报错', async () => {
+  test('get_context 只按 id 反查：必须显式传，缺 id 报错', async () => {
     scaffold()
     createProjectDir(dataDir, 'demo', '示例项目')
     writeFileSync(
@@ -825,9 +944,6 @@ describe('MCP 层', () => {
     assert.match(byArg.text, /先查 CK 再改代码/)
     assert.match(byArg.text, /跟 supply 对了/)
 
-    const byEnv = await callTool(configFile, 'get_context', {}, { EASY_FLOW_REQUIREMENT_ID: created.id })
-    assert.match(byEnv.text, new RegExp(`需求 id：${created.id}`))
-
     const noId = await callTool(configFile, 'get_context')
     assert.equal(noId.isError, true)
     assert.match(noId.text, /缺少需求 id/)
@@ -835,6 +951,368 @@ describe('MCP 层', () => {
     const unknown = await callTool(configFile, 'get_context', { id: 'req-nope' })
     assert.equal(unknown.isError, true)
     assert.match(unknown.text, /找不到需求：req-nope/)
+  })
+
+  test('create_worktree：目录、身份文件、软链、exclude、落库一次做完', async () => {
+    scaffold()
+    const { workspace, repo, repoName } = gitFixture()
+    createProjectDir(dataDir, 'demo', '示例项目')
+    const created = createRequirementDir(join(dataDir, 'demo'), 'seatmap-truemap', '接真图数据源', '新增 TRUEMAP')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    const env = { EASY_FLOW_REPO_ROOTS: workspace }
+    const args = { requirementId: created.id, repo: repoName, branch: 'feature-truemap', short: 'router' }
+    const res = await callTool(configFile, 'create_worktree', args, env)
+    assert.equal(res.isError, false, res.text)
+    const id = /worktree id：(wt-[0-9a-f]+)/.exec(res.text)?.[1]
+    assert.ok(id, res.text)
+
+    const wtPath = join(workspace, `${repoName}.feature-truemap`)
+    assert.equal(sh(wtPath, 'rev-parse', '--abbrev-ref', 'HEAD'), 'feature-truemap')
+    assert.match(readFileSync(join(wtPath, 'AGENTS.md'), 'utf8'), new RegExp(`id: ${id}`))
+    assert.equal(
+      readFileSync(join(wtPath, 'requirement.md'), 'utf8'),
+      readFileSync(join(created.dir, 'requirement.md'), 'utf8'),
+    )
+    assert.match(readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8'), /^\/requirement\.md$/m)
+    // 三件产物都不该脏了 git status
+    assert.equal(sh(wtPath, 'status', '--porcelain'), '')
+
+    // 幂等：同参数再来一次，还是同一个 wt，exclude 不重复追加
+    const again = await callTool(configFile, 'create_worktree', args, env)
+    assert.equal(again.isError, false, again.text)
+    assert.equal(/worktree id：(wt-[0-9a-f]+)/.exec(again.text)?.[1], id)
+    assert.equal(
+      readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8')
+        .split('\n')
+        .filter((l) => l.trim() === '/requirement.md').length,
+      1,
+    )
+
+    const db = new BoardDatabase(dataDir)
+    const row = db.worktreeById(id!)!
+    assert.equal(row.requirementId, created.id)
+    assert.equal(row.repo, repoName)
+    assert.equal(row.short, 'router')
+    assert.equal(row.path, wtPath)
+    assert.equal(row.main, repo)
+    assert.equal(db.listWorktrees(created.id).length, 1)
+    db.close()
+  })
+
+  test('create_worktree 拒绝：分支在别处检出、路径被占、分支名非法', async () => {
+    scaffold()
+    const { workspace, repo, repoName } = gitFixture()
+    createProjectDir(dataDir, 'demo')
+    const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    const env = { EASY_FLOW_REPO_ROOTS: workspace }
+    const call = (branch: string) =>
+      callTool(configFile, 'create_worktree', { requirementId: created.id, repo: repoName, branch }, env)
+
+    // 手工在别的路径建一个，占住分支
+    const who = ['-c', 'user.name=test', '-c', 'user.email=test@test']
+    execFileSync('git', ['-C', repo, ...who, 'worktree', 'add', '-q', join(workspace, 'manual'), '-b', 'feature-taken'])
+    const taken = await call('feature-taken')
+    assert.equal(taken.isError, true)
+    assert.match(taken.text, /已在 .*manual 检出/)
+
+    // 目标路径被普通目录占着
+    mkdirSync(join(workspace, `${repoName}.feature-blocked`), { recursive: true })
+    const blocked = await call('feature-blocked')
+    assert.equal(blocked.isError, true)
+    assert.match(blocked.text, /已被占用/)
+
+    // 非法分支名在预检就挡下，不留任何东西
+    const bad = await call('feature bad')
+    assert.equal(bad.isError, true)
+    assert.match(bad.text, /check-ref-format/)
+    assert.equal(existsSync(join(workspace, `${repoName}.feature bad`)), false)
+
+    // 走到 git 自己的失败：报错要带 fatal 那句，而不是 stderr 的进度行
+    const badBase = await callTool(
+      configFile,
+      'create_worktree',
+      { requirementId: created.id, repo: repoName, branch: 'feature-new', base: 'no-such-ref' },
+      env,
+    )
+    assert.equal(badBase.isError, true)
+    assert.match(badBase.text, /invalid reference/)
+    // git 自己什么都没建出来
+    assert.equal(existsSync(join(workspace, `${repoName}.feature-new`)), false)
+    assert.equal(sh(repo, 'branch', '--list', 'feature-new'), '')
+  })
+
+  test('同一条分支被另一个需求再要一次：报错，且不动那个 worktree', async () => {
+    scaffold()
+    const { workspace, repoName } = gitFixture()
+    createProjectDir(dataDir, 'demo')
+    const alpha = createRequirementDir(join(dataDir, 'demo'), 'alpha', '甲需求', '摘要')
+    const beta = createRequirementDir(join(dataDir, 'demo'), 'beta', '乙需求', '摘要')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    const env = { EASY_FLOW_REPO_ROOTS: workspace }
+    const first = await callTool(
+      configFile,
+      'create_worktree',
+      { requirementId: alpha.id, repo: repoName, branch: 'feature-shared' },
+      env,
+    )
+    assert.equal(first.isError, false, first.text)
+    const wtPath = join(workspace, `${repoName}.feature-shared`)
+    writeFileSync(join(wtPath, 'README.md'), 'work in progress\n')
+
+    const second = await callTool(
+      configFile,
+      'create_worktree',
+      { requirementId: beta.id, repo: repoName, branch: 'feature-shared' },
+      env,
+    )
+    assert.equal(second.isError, true)
+    // 兜底的是「软链不覆盖」，不是归属预检——正常不会走到这里，走到了也不能动别人的目录
+    assert.match(second.text, /已指向/)
+
+    // 甲的目录、分支与未提交改动一样不少
+    assert.equal(existsSync(wtPath), true)
+    assert.equal(readFileSync(join(wtPath, 'README.md'), 'utf8'), 'work in progress\n')
+    assert.equal(sh(wtPath, 'rev-parse', '--abbrev-ref', 'HEAD'), 'feature-shared')
+
+    const db = new BoardDatabase(dataDir)
+    assert.equal(db.listWorktrees(alpha.id).length, 1)
+    assert.equal(db.listWorktrees(beta.id).length, 0)
+    db.close()
+  })
+
+  test('重复认领撞上不一致的软链：报错，但不回滚，目录与未提交改动原样', async () => {
+    scaffold()
+    const { workspace, repoName } = gitFixture()
+    createProjectDir(dataDir, 'demo')
+    const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    const env = { EASY_FLOW_REPO_ROOTS: workspace }
+    const args = { requirementId: created.id, repo: repoName, branch: 'feature-own' }
+    const made = await callTool(configFile, 'create_worktree', args, env)
+    assert.equal(made.isError, false, made.text)
+    const wtPath = join(workspace, `${repoName}.feature-own`)
+    writeFileSync(join(wtPath, 'README.md'), 'half done\n')
+
+    // 把软链指到别处，制造一个「认领走到一半失败」的现场
+    rmSync(join(wtPath, 'requirement.md'))
+    symlinkSync(join(wtPath, 'README.md'), join(wtPath, 'requirement.md'))
+
+    const again = await callTool(configFile, 'create_worktree', args, env)
+    assert.equal(again.isError, true)
+    assert.match(again.text, /已指向/)
+
+    // 认领失败不回滚，更不该丢未提交改动
+    assert.equal(existsSync(wtPath), true)
+    assert.equal(readFileSync(join(wtPath, 'README.md'), 'utf8'), 'half done\n')
+    assert.equal(sh(wtPath, 'rev-parse', '--abbrev-ref', 'HEAD'), 'feature-own')
+    const db = new BoardDatabase(dataDir)
+    assert.equal(db.listWorktrees(created.id).length, 1)
+    db.close()
+  })
+
+  test('认领已有 worktree：不覆盖仓库自己的 AGENTS.md，并说明 id 只在库里', async () => {
+    scaffold()
+    const { workspace, repo, repoName } = gitFixture()
+    createProjectDir(dataDir, 'demo')
+    const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    const wtPath = join(workspace, `${repoName}.feature-owned`)
+    const who = ['-c', 'user.name=test', '-c', 'user.email=test@test']
+    execFileSync('git', ['-C', repo, ...who, 'worktree', 'add', '-q', wtPath, '-b', 'feature-owned'])
+    writeFileSync(join(wtPath, 'AGENTS.md'), '仓库自己的指令，别动\n')
+
+    const env = { EASY_FLOW_REPO_ROOTS: workspace }
+    const res = await callTool(
+      configFile,
+      'create_worktree',
+      { requirementId: created.id, repo: repoName, branch: 'feature-owned' },
+      env,
+    )
+    assert.equal(res.isError, false, res.text)
+    assert.match(res.text, /本就存在/)
+    assert.match(res.text, /没落进文件/)
+    assert.equal(readFileSync(join(wtPath, 'AGENTS.md'), 'utf8'), '仓库自己的指令，别动\n')
+    // 软链与 exclude 照补
+    assert.equal(
+      readFileSync(join(wtPath, 'requirement.md'), 'utf8'),
+      readFileSync(join(created.dir, 'requirement.md'), 'utf8'),
+    )
+    assert.match(readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8'), /^\/requirement\.md$/m)
+
+    const id = /worktree id：(wt-[0-9a-f]+)/.exec(res.text)![1]
+    const db = new BoardDatabase(dataDir)
+    assert.equal(db.worktreeById(id)!.path, wtPath)
+    db.close()
+  })
+
+  test('git 登记被手工删掉后，remove_worktree 仍能清干净', async () => {
+    scaffold()
+    const { workspace, repo, repoName } = gitFixture()
+    createProjectDir(dataDir, 'demo')
+    const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    const env = { EASY_FLOW_REPO_ROOTS: workspace }
+    const made = await callTool(
+      configFile,
+      'create_worktree',
+      { requirementId: created.id, repo: repoName, branch: 'feature-orphan' },
+      env,
+    )
+    const id = /worktree id：(wt-[0-9a-f]+)/.exec(made.text)![1]
+    const wtPath = join(workspace, `${repoName}.feature-orphan`)
+
+    // 模拟别处 prune 过：git 不再认它，目录还在
+    rmSync(join(repo, '.git', 'worktrees', basename(wtPath)), { recursive: true, force: true })
+
+    // 这种目录问不出 git status，所以必须显式 force
+    const guarded = await callTool(configFile, 'remove_worktree', { id })
+    assert.equal(guarded.isError, true)
+    assert.match(guarded.text, /判断不了工作区是否干净/)
+
+    const res = await callTool(configFile, 'remove_worktree', { id, force: true })
+    assert.equal(res.isError, false, res.text)
+    assert.equal(existsSync(wtPath), false)
+    const db = new BoardDatabase(dataDir)
+    assert.equal(db.worktreeById(id), undefined)
+    db.close()
+  })
+
+  test('remove_worktree：脏工作区要 force，分支永远保留', async () => {
+    scaffold()
+    const { workspace, repo, repoName } = gitFixture()
+    createProjectDir(dataDir, 'demo')
+    const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    const env = { EASY_FLOW_REPO_ROOTS: workspace }
+    const made = await callTool(
+      configFile,
+      'create_worktree',
+      { requirementId: created.id, repo: repoName, branch: 'feature-x' },
+      env,
+    )
+    assert.equal(made.isError, false, made.text)
+    const id = /worktree id：(wt-[0-9a-f]+)/.exec(made.text)![1]
+    const wtPath = join(workspace, `${repoName}.feature-x`)
+
+    writeFileSync(join(wtPath, 'README.md'), 'changed\n')
+    const refuse = await callTool(configFile, 'remove_worktree', { id })
+    assert.equal(refuse.isError, true)
+    assert.match(refuse.text, /未提交改动/)
+
+    const forced = await callTool(configFile, 'remove_worktree', { id, force: true })
+    assert.equal(forced.isError, false, forced.text)
+    assert.match(forced.text, /丢弃了 1 处未提交改动/)
+    assert.match(forced.text, /分支 feature-x 已保留/)
+    assert.equal(existsSync(wtPath), false)
+    assert.equal(sh(repo, 'branch', '--list', 'feature-x'), 'feature-x')
+
+    const db = new BoardDatabase(dataDir)
+    assert.equal(db.worktreeById(id), undefined)
+    db.close()
+  })
+
+  test('get_context 多态：wt- 拿到工作区与需求，裸值当项目', async () => {
+    scaffold()
+    const { workspace, repoName } = gitFixture()
+    createProjectDir(dataDir, 'demo', '示例项目')
+    const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '接真图', '新增 TRUEMAP')
+    writeFileSync(join(created.dir, 'context.md'), '跟 supply 对过：灰度按航司放。', 'utf8')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    const env = { EASY_FLOW_REPO_ROOTS: workspace }
+    const made = await callTool(
+      configFile,
+      'create_worktree',
+      { requirementId: created.id, repo: repoName, branch: 'feature-x', short: 'router' },
+      env,
+    )
+    const id = /worktree id：(wt-[0-9a-f]+)/.exec(made.text)![1]
+
+    const byWt = await callTool(configFile, 'get_context', { id }, env)
+    assert.equal(byWt.isError, false, byWt.text)
+    assert.match(byWt.text, new RegExp(`worktree id：${id}`))
+    assert.match(byWt.text, /分支：feature-x/)
+    assert.match(byWt.text, new RegExp(`需求 id：${created.id}`))
+    assert.match(byWt.text, /新增 TRUEMAP/)
+    assert.match(byWt.text, /灰度按航司放/)
+
+    const byReq = await callTool(configFile, 'get_context', { id: created.id }, env)
+    assert.match(byReq.text, /## worktree（1）/)
+    assert.match(byReq.text, new RegExp(id))
+
+    const byProject = await callTool(configFile, 'get_context', { id: 'demo' }, env)
+    assert.match(byProject.text, /项目：示例项目（demo）/)
+    assert.match(byProject.text, new RegExp(`${created.id}.*1 个 worktree`))
+
+    const nowhere = await callTool(configFile, 'get_context', { id: 'nope' }, env)
+    assert.equal(nowhere.isError, true)
+    assert.match(nowhere.text, /现有项目/)
+  })
+
+  test('update_requirement 与 set_links：按 id 改，没传的字段不动', async () => {
+    scaffold()
+    createProjectDir(dataDir, 'demo')
+    const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    const moved = await callTool(configFile, 'update_requirement', {
+      id: created.id,
+      status: '执行中',
+      priority: 'p1',
+    })
+    assert.equal(moved.isError, false, moved.text)
+    assert.match(moved.text, /状态：执行中 · 优先级：p1/)
+
+    const links = await callTool(configFile, 'set_links', {
+      id: created.id,
+      codeLinks: ['https://gitlab.example.com/mr/1'],
+      extLinks: [{ detail: '设计稿', url: 'https://example.com/design' }],
+    })
+    assert.equal(links.isError, false, links.text)
+    assert.match(links.text, /代码链接（1）/)
+    assert.match(links.text, /扩展链接（1）：设计稿/)
+
+    const bad = await callTool(configFile, 'set_links', { id: created.id, codeLinks: ['ftp://x'] })
+    assert.equal(bad.isError, true)
+    assert.match(bad.text, /http\(s\)/)
+
+    const none = await callTool(configFile, 'update_requirement', { id: created.id })
+    assert.equal(none.isError, true)
+    assert.match(none.text, /至少传/)
+
+    const db = new BoardDatabase(dataDir)
+    const r = db.byId(created.id)!
+    assert.equal(r.status, '执行中')
+    assert.equal(r.priority, 'p1')
+    assert.deepEqual(r.codeLinks, ['https://gitlab.example.com/mr/1'])
+    assert.equal(r.feishuTaskLinks.length, 0)
+    db.close()
   })
 
   test('assign_ids 给老需求补 id，幂等', async () => {

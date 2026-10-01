@@ -86,9 +86,17 @@ const PLACEHOLDER_SUMMARY = '一句话说清要做什么、为什么。'
 
 const REQUIREMENT_DESC_TEMPLATE = requirementDesc('', '需求标题', PLACEHOLDER_SUMMARY)
 
-/** 不透明需求 id。人和 agent 都看不出它对应什么，换来的是改名搬家都不变 */
+/** 不透明 id：人和 agent 都看不出它对应什么，换来的是改名搬家都不变 */
+function newId(prefix: string): string {
+  return `${prefix}-${randomUUID().replace(/-/g, '').slice(0, 10)}`
+}
+
 export function newRequirementId(): string {
-  return `req-${randomUUID().replace(/-/g, '').slice(0, 10)}`
+  return newId('req')
+}
+
+export function newWorktreeId(): string {
+  return newId('wt')
 }
 
 /** 给已有需求补 id：只动 frontmatter，正文原样写回 */
@@ -99,6 +107,31 @@ export function setRequirementId(dir: string, id: string): void {
     .map(([k, v]) => `${k}: ${v}`)
     .join('\n')
   writeFileSync(file, `---\n${frontmatter}\n---\n\n${body}`, 'utf8')
+}
+
+/**
+ * worktree 的 AGENTS.md：agent 在这里自证身份——需求目录没有反向指针，
+ * 它是「这份工作区属于哪个需求」在文件系统里的唯一凭据。不承载需求内容。
+ */
+export function renderWorktreeAgents(input: {
+  id: string
+  requirementId: string
+  requirementDir: string
+  repo: string
+  branch: string
+}): string {
+  return `---
+id: ${input.id}
+requirement: ${input.requirementId}
+---
+
+<!-- easy-flow worktree 指令：这里是一份代码工作区，需求内容在软链 requirement.md 里。
+     身份认上面 frontmatter 的 id：调用 get_context 时显式传它（wt-…）。 -->
+
+需求目录：${input.requirementDir}
+仓库：${oneLine(input.repo)}
+分支：${oneLine(input.branch)}
+`
 }
 
 /**

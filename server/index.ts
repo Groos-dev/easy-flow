@@ -25,7 +25,13 @@ export type { Status, Priority, Requirement } from './db.ts'
 export const DEFAULT_PORT = 3210
 
 /** 单条记录变更不涉及目录扫描，给详情页一个稳定的 sync 形状 */
-const NO_CHANGES = { added: [], updated: [], orphaned: [], restored: [] }
+const NO_CHANGES = {
+  added: [],
+  updated: [],
+  orphaned: [],
+  restored: [],
+  worktrees: { orphaned: [], restored: [] },
+}
 
 export interface BoardAppOptions {
   /** 数据目录；不传则读配置 */
