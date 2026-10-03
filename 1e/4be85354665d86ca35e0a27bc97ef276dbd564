@@ -1,0 +1,40 @@
+server/db.ts
+  s_14f5e060888425::t_7a9961dd0789a5 2
+  s_14f5e060888425::t_5f9aedfa1a54d2 442
+server/convention.ts
+  s_14f5e060888425::t_518fd9b621cc0f 45
+  s_14f5e060888425::t_78db546b134fd2 8
+  s_14f5e060888425::t_733a4860fdc7de 68
+  s_14f5e060888425::t_08be22de93c0d8 101
+src/renderer/src/components/Settings.tsx
+  s_14f5e060888425::t_807d6ee1e4f3bf 360
+server/markdown.ts
+  s_14f5e060888425::t_065a2abd683e79 142
+  s_14f5e060888425::t_4d75a9699f2e28 9-12
+  s_14f5e060888425::t_8543c2a522e93f 156
+server/mcp.ts
+  s_14f5e060888425::t_37074786b5c088 421
+  s_14f5e060888425::t_070b47c46562c1 285
+  s_14f5e060888425::t_de1befc4f3284e 265
+  s_14f5e060888425::t_a47a39319ff5f2 175-178
+  s_14f5e060888425::t_cfe5f5b71e02c0 2
+test/core.test.ts
+  s_14f5e060888425::t_bc4c63382eaf01 715
+  s_14f5e060888425::t_2f7485b429f3eb 1514
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "1e4be85354665d86ca35e0a27bc97ef276dbd564",
+  "prompts": {},
+  "sessions": {
+    "s_14f5e060888425": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0faa5006-438e-4f13-93a1-1f09b590dabf",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
