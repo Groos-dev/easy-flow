@@ -1,0 +1,19 @@
+server/convention.ts
+  s_14f5e060888425::t_c5cd61406f8dda 8-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "448537dc4e693ca816f4cf94077f8459f2f03bd5",
+  "prompts": {},
+  "sessions": {
+    "s_14f5e060888425": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0faa5006-438e-4f13-93a1-1f09b590dabf",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
