@@ -15,7 +15,7 @@
 | `pnpm typecheck` | 两套 tsconfig：node 侧（server / main / preload / test）、web 侧（renderer） |
 | `pnpm dead-code` | 找仓库内无引用的导出符号；预留接口需人工判断 |
 | `pnpm build` | 三端产物打到 `out/` |
-| `pnpm mcp` | 单独起 MCP server（一般不手跑，注册走设置页的 MCP 段） |
+| `pnpm cli <命令>` | 直接跑 CLI（`pnpm cli --help`）；装好的 shim 是 `easy-flow <命令>` |
 
 数据目录、终端字体等偏好存在应用配置里，**换目录等于换一整套看板数据**（状态在库里，
 不在 md 里）；设置页可以切、可以重新扫描。
@@ -27,7 +27,8 @@
 | `server/` | 数据层与 HTTP 层。`db.ts` 是 SQLite 门面（状态的唯一权威），`markdown.ts` 只读文件不持状态，`http.ts` 是 CORS / JSON / 文档读写的零件，`index.ts` 是路由 |
 | `src/main/` | Electron 主进程：起内嵌服务、开窗口、管 PTY 会话（`terminal.ts`） |
 | `src/renderer/` | 渲染层（React）。数据只经 HTTP 拿（开发与打包共用同一套代码）；终端与原生目录选择走 preload 桥的 IPC |
-| `server/mcp.ts` | MCP server，agent 在终端里用它认路、建需求与工作区。与 HTTP 层共用同一个数据层 |
+| `server/cli.ts` | 给 agent 与脚本用的命令行（context / project new / req new\|set\|link / wt new\|rm），与 HTTP 层共用同一个数据层 |
+| `skill/SKILL.md` | agent 的接入说明（触发条件、意图→命令对照），由设置页链进各 agent 的 skills 目录 |
 
 `tsx server/dev.ts` 提供第三种跑法：只起 HTTP 服务，不拉 Electron。
 

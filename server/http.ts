@@ -46,12 +46,12 @@ export async function readBody(req: IncomingMessage): Promise<Record<string, unk
 const READABLE = /\.(md|markdown|txt|json|ya?ml)$/i
 
 function resolveDocPath(reqDir: string, name: string): string {
-  if (isAbsolute(name)) throw new Error('不允许绝对路径')
-  if (!READABLE.test(name)) throw new Error(`不支持的文件类型：${name}`)
+  if (isAbsolute(name)) throw new Error('Absolute paths are not allowed')
+  if (!READABLE.test(name)) throw new Error(`Unsupported file type: ${name}`)
   const base = resolve(reqDir)
   const target = resolve(base, name)
   const rel = relative(base, target)
-  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error('路径越界')
+  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error('Path escapes the root')
   return target
 }
 
@@ -60,7 +60,7 @@ export function readRequirementDoc(reqDir: string, name: string): string {
   try {
     return readFileSync(target, 'utf8')
   } catch {
-    throw new Error(`读不到文件：${name}`)
+    throw new Error(`Cannot read file: ${name}`)
   }
 }
 

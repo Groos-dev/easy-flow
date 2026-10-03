@@ -1,12 +1,11 @@
 import type {
-  AgentMcp,
   AppearancePayload,
   BoardData,
   ContextPayload,
-  McpPayload,
   Project,
   Requirement,
   SettingsPayload,
+  SkillPayload,
   SwitchResult,
 } from './types'
 
@@ -128,8 +127,8 @@ export const api = {
   resync: (): Promise<{ sync: SwitchResult['sync']; dataDir: string }> =>
     request('/api/settings/resync', { method: 'POST' }),
 
-  mcp: (): Promise<McpPayload> => request('/api/mcp'),
+  skill: (): Promise<SkillPayload> => request('/api/skill'),
 
-  installMcp: (agent?: AgentMcp['id']): Promise<McpPayload & { installed: string[] }> =>
-    request('/api/mcp/install', { method: 'POST', body: JSON.stringify({ agent }) }),
+  installSkill: (): Promise<SkillPayload & { installed: string[] }> =>
+    request('/api/skill/install', { method: 'POST' }),
 }

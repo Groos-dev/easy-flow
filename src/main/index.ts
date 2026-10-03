@@ -140,9 +140,9 @@ async function boot(): Promise<void> {
   applyCsp()
   boardServer = await startBoardServer({ port: DEFAULT_PORT })
 
-  // 终端只需要挂载点目录。身份（需求 id / 项目）不经环境变量传：agent 从需求目录里的
-  // AGENTS.md 读 id 再显式传给 MCP，这样在 easy-flow 之外开的终端也能用；env 里只留一个
-  // 「这个终端是本应用开的」标记。
+  // Terminals only need the mount dir. Identity (requirement id / project) is never passed via env:
+  // agents read the id from the requirement dir and hand it to easy-flow explicitly, so terminals
+  // opened outside easy-flow work too. The only env var here is a "this terminal came from the app" marker.
   terminals = new TerminalManager((target) => {
     const project = boardServer?.db.listProjects().find((p) => p.slug === target.project)
     if (!project) return null

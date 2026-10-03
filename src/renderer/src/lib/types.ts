@@ -52,9 +52,9 @@ export interface Requirement {
   summary: string
   repos: RepoRef[]
   links: string
-  /** 飞书任务链接。由 MCP 写入，UI 只读 */
+  /** Feishu task links. Written by the CLI; the UI is read-only */
   feishuTaskLinks: string[]
-  /** 代码链接（GitLab MR / GitHub PR）。由 MCP 写入，UI 只读 */
+  /** Code links (GitLab MR / GitHub PR). Written by the CLI; the UI is read-only */
   codeLinks: string[]
   /** 扩展链接：detail 是描述，url 是链接 */
   extLinks: Array<{ detail: string; url: string }>
@@ -138,16 +138,24 @@ export interface AppearancePayload {
   terminalFontSize: number
 }
 
-export interface AgentMcp {
-  id: 'claude' | 'codex'
+export interface AgentSkill {
+  id: 'claude' | 'cursor' | 'codex'
   label: string
-  configFile: string
-  installed: boolean
+  /** That agent's skills dir; it may not exist when the agent is not installed */
+  dir: string
+  available: boolean
+  linked: boolean
 }
 
-export interface McpPayload {
-  /** MCP server 入口文件，环境不允许时为 null */
-  entry: string | null
+export interface SkillPayload {
+  /** The skill entity and CLI entry inside the repo; null when the environment does not allow it */
+  source: string | null
+  cli: string | null
   problem: string | null
-  agents: AgentMcp[]
+  shim: { path: string; installed: boolean }
+  /** node resolved from a login shell; running .ts directly needs >= 22.18 */
+  node: { path: string; version: string } | null
+  agents: AgentSkill[]
+  /** Legacy MCP registrations still present; installing removes them */
+  legacyMcp: Array<{ id: 'claude' | 'codex'; label: string; registered: boolean }>
 }

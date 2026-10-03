@@ -61,7 +61,7 @@ name: ${oneLine(name)}
 function requirementAgents(id: string): string {
   const frontmatter = id ? `---\nid: ${id}\n---\n\n` : ''
   return `${frontmatter}<!-- easy-flow 需求 · agent 指令：写怎么干活、有哪些约束、要避开什么。
-     调 easy-flow 的 MCP 工具时，用上面 frontmatter 里的 id 显式传参。 -->
+     跑 easy-flow 命令时（如 easy-flow context），用上面 frontmatter 里的 id 显式传参。 -->
 
 ## 这个目录里有什么
 
@@ -165,7 +165,7 @@ requirement: ${input.requirementId}
 ---
 
 <!-- easy-flow worktree 指令：这里是一份代码工作区，需求内容在软链 requirement.md 里。
-     身份认上面 frontmatter 的 id：调用 get_context 时显式传它（wt-…）。 -->
+     身份认上面 frontmatter 的 id：取上下文时显式传它（easy-flow context wt-…）。 -->
 
 需求目录：${input.requirementDir}
 仓库：${oneLine(input.repo)}
@@ -211,10 +211,10 @@ export function ensureTemplates(dataDir: string): void {
  */
 export function createProjectDir(dataDir: string, slug: string, name = ''): string {
   if (!SLUG_RE.test(slug)) {
-    throw new Error(`项目标识只能用英文小写、数字和连字符，且不能以连字符开头：${slug}`)
+    throw new Error(`Project slug may only contain lowercase letters, digits and hyphens, and may not start with a hyphen: ${slug}`)
   }
   const dir = join(dataDir, slug)
-  if (existsSync(dir)) throw new Error(`目录已存在：${dir}`)
+  if (existsSync(dir)) throw new Error(`Directory already exists: ${dir}`)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'AGENTS.md'), renderProjectTemplate(name), 'utf8')
   return dir
@@ -232,10 +232,10 @@ export function createRequirementDir(
   summary = '',
 ): { dir: string; id: string } {
   if (!SLUG_RE.test(slug)) {
-    throw new Error(`需求标识只能用英文小写、数字和连字符，且不能以连字符开头：${slug}`)
+    throw new Error(`Requirement slug may only contain lowercase letters, digits and hyphens, and may not start with a hyphen: ${slug}`)
   }
   const dir = join(root, slug)
-  if (existsSync(dir)) throw new Error(`目录已存在：${dir}`)
+  if (existsSync(dir)) throw new Error(`Directory already exists: ${dir}`)
   const id = newRequirementId()
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'AGENTS.md'), requirementAgents(id), 'utf8')

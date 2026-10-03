@@ -91,7 +91,7 @@ function migrate(db: DatabaseSync): void {
   // 子需求：父需求的 id。层级同时体现在 slug（parent/child）里，这里存一份便于按父子查
   addIfMissing('requirement', 'parent_id', 'parent_id TEXT')
   db.exec('CREATE INDEX IF NOT EXISTS idx_req_parent ON requirement(parent_id)')
-  // 链接：写入入口留给 MCP，UI 只读展示
+  // Links: written by the CLI; the UI only displays them
   addIfMissing('requirement', 'feishu_task_links', 'feishu_task_links TEXT')
   addIfMissing('requirement', 'code_links', 'code_links TEXT')
   addIfMissing('requirement', 'ext_links', 'ext_links TEXT')

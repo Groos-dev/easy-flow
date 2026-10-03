@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
-import type { McpPayload, SettingsPayload, SyncResult } from '../lib/types'
+import type { SettingsPayload, SkillPayload, SyncResult } from '../lib/types'
 import { detectMonospaceFonts } from '../lib/fonts'
 
 interface Props {
@@ -9,12 +9,12 @@ interface Props {
   onApplied: () => void
 }
 
-type SectionId = 'data' | 'appearance' | 'mcp' | 'about'
+type SectionId = 'data' | 'appearance' | 'skill' | 'about'
 
 const SECTIONS: Array<{ id: SectionId; label: string }> = [
   { id: 'data', label: '数据目录' },
   { id: 'appearance', label: '外观' },
-  { id: 'mcp', label: 'MCP' },
+  { id: 'skill', label: 'CLI 与 Skill' },
   { id: 'about', label: '关于' },
 ]
 
@@ -51,10 +51,10 @@ export default function Settings({ onBack, onApplied }: Props) {
     }
   }, [])
 
-  // MCP 注册状态：只在切到那一段时才去读两个 agent 的配置
-  const [mcp, setMcp] = useState<McpPayload | null>(null)
-  const [mcpNotice, setMcpNotice] = useState('')
-  const [mcpError, setMcpError] = useState('')
+  // CLI / skill install state: only read from the filesystem when that section is opened
+  const [skill, setSkill] = useState<SkillPayload | null>(null)
+  const [skillNotice, setSkillNotice] = useState('')
+  const [skillError, setSkillError] = useState('')
 
   const loadSettings = useCallback(async () => {
     const s = await api.settings()
@@ -78,11 +78,11 @@ export default function Settings({ onBack, onApplied }: Props) {
   }, [onBack])
 
   useEffect(() => {
-    if (section !== 'mcp') return
+    if (section !== 'skill') return
     void api
-      .mcp()
-      .then(setMcp)
-      .catch((e: Error) => setMcpError(`读取注册状态失败：${e.message}`))
+      .skill()
+      .then(setSkill)
+      .catch((e: Error) => setSkillError(`读取安装状态失败：${e.message}`))
   }, [section])
 
   /** Electron 里可拉起原生目录选择器；浏览器开发时退化到手输 */
@@ -146,20 +146,16 @@ export default function Settings({ onBack, onApplied }: Props) {
     }
   }
 
-  async function registerMcp(agent?: 'claude' | 'codex') {
+  async function install() {
     setBusy(true)
-    setMcpNotice('')
-    setMcpError('')
+    setSkillNotice('')
+    setSkillError('')
     try {
-      const res = await api.installMcp(agent)
-      setMcp(res)
-      setMcpNotice(
-        res.installed.length
-          ? `已注册到 ${res.installed.join('、')}，新开的会话生效`
-          : '没有需要注册的',
-      )
+      const res = await api.installSkill()
+      setSkill(res)
+      setSkillNotice(res.installed.length ? `已完成：${res.installed.join('；')}` : '没有需要安装的')
     } catch (e) {
-      setMcpError(`注册失败：${(e as Error).message}`)
+      setSkillError(`安装失败：${(e as Error).message}`)
     } finally {
       setBusy(false)
     }
@@ -307,50 +303,61 @@ export default function Settings({ onBack, onApplied }: Props) {
           </>
         )}
 
-        {section === 'mcp' && (
+        {section === 'skill' && (
           <>
-            <h1>MCP</h1>
+            <h1>CLI 与 Skill</h1>
             <p className="hint">
-              注册后 claude / codex 就能直接建项目与需求、按 id 取上下文，不必知道数据目录在哪。
-              注册写在各自的用户级配置里，不往需求目录或 worktree 落任何文件。
+              装一条 <code>easy-flow</code> 命令和一个 skill：人、脚本与 agent 都走这条命令，
+              skill 让 agent 在该用时想得起来。安装只动用户环境（PATH 与各 agent 的 skills 目录），
+              不往需求目录或 worktree 落任何文件。
             </p>
 
-            {mcpError && <div className="notice">{mcpError}</div>}
-            {mcpNotice && <div className="notice ok">{mcpNotice}</div>}
-            {mcp?.problem && <div className="notice">{mcp.problem}</div>}
+            {skillError && <div className="notice">{skillError}</div>}
+            {skillNotice && <div className="notice ok">{skillNotice}</div>}
+            {skill?.problem && <div className="notice">{skill.problem}</div>}
 
-            <div className="section-label">服务入口</div>
-            {/* 拉取失败时别再显示"读取中…"，否则跟上面的报错自相矛盾 */}
-            <pre>{mcp?.entry ?? (mcpError || mcp?.problem ? '—' : '读取中…')}</pre>
+            <div className="section-label">装什么</div>
+            <pre>
+              {[
+                `命令   ${skill?.shim.path ?? '—'}`,
+                `skill  ${skill?.source ?? '—'}`,
+                skill?.node ? `node   ${skill.node.version}（${skill.node.path}）` : 'node   读不到',
+              ].join('\n')}
+            </pre>
 
-            <div className="section-label">注册状态</div>
-            {(mcp?.agents ?? []).map((a) => (
+            <div className="section-label">安装状态</div>
+            <div className="row">
+              <span>命令行 · {skill?.shim.installed ? '已安装' : '未安装'}</span>
+            </div>
+            {(skill?.agents ?? []).map((a) => (
               <div className="row" key={a.id}>
                 <span>
-                  {a.label} · {a.installed ? '已注册' : '未注册'}
+                  {a.label} · {!a.available ? '未装这个 agent' : a.linked ? '已安装' : '未安装'}
                 </span>
-                <span className="spacer" />
-                <button
-                  className="btn"
-                  disabled={busy || !mcp?.entry}
-                  onClick={() => void registerMcp(a.id)}
-                >
-                  {a.installed ? '重新注册' : '注册'}
-                </button>
               </div>
             ))}
             <div className="row">
               <button
                 className="btn primary"
-                disabled={busy || !mcp?.entry}
-                onClick={() => void registerMcp()}
+                disabled={busy || !skill?.source}
+                onClick={() => void install()}
               >
-                一次注册到两个
+                {skill?.shim.installed ? '重新安装' : '安装'}
               </button>
             </div>
 
-            <div className="section-label">写入的配置文件</div>
-            <pre>{(mcp?.agents ?? []).map((a) => a.configFile).join('\n') || '—'}</pre>
+            {!!skill?.legacyMcp.some((m) => m.registered) && (
+              <>
+                <div className="section-label">旧的 MCP 注册</div>
+                <p className="hint">
+                  {skill.legacyMcp
+                    .filter((m) => m.registered)
+                    .map((m) => m.label)
+                    .join('、')}
+                  还挂着 easy-flow 的 MCP 注册；安装时会自动摘掉——旧的入口文件已删，留着只会让每个会话报错。
+                </p>
+              </>
+            )}
           </>
         )}
 
