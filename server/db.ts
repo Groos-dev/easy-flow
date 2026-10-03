@@ -121,7 +121,7 @@ function migrate(db: DatabaseSync): void {
   // 需求身份。索引必须建在补列之后——写在 SCHEMA 里，老库会先于补列执行而报找不到列
   addIfMissing('requirement', 'id', 'id TEXT')
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_req_id ON requirement(id)')
-  // 链接：写入入口留给 MCP，UI 只读展示
+  // Links: written by the CLI; the UI only displays them
   addIfMissing('requirement', 'feishu_task_links', 'feishu_task_links TEXT')
   addIfMissing('requirement', 'code_links', 'code_links TEXT')
   addIfMissing('requirement', 'ext_links', 'ext_links TEXT')
@@ -156,9 +156,9 @@ export interface Requirement {
   summary: string
   repos: RepoRef[]
   links: string
-  /** 飞书任务（Meego story）链接。写入入口留给 MCP，UI 只读 */
+  /** Feishu task (Meego story) links. Written by the CLI; the UI is read-only */
   feishuTaskLinks: string[]
-  /** 代码链接：GitLab MR / GitHub PR 等。写入入口留给 MCP，UI 只读 */
+  /** Code links: GitLab MR / GitHub PR etc. Written by the CLI; the UI is read-only */
   codeLinks: string[]
   /** 扩展链接：{ detail 描述, url 链接 } */
   extLinks: ExtLink[]
@@ -237,30 +237,30 @@ function asPriority(value: string | null | undefined): Priority | null {
 
 // ------------------------------------------------------------------ 链接
 
-/** 链接字段的规范化：写入方是 MCP / AI，这里做一次清洗 */
+/** Normalize link fields: writers are the CLI / AI; sanitize once here */
 export function normalizeLinkList(input: unknown): string[] {
-  if (!Array.isArray(input)) throw new Error('链接列表必须是数组')
+  if (!Array.isArray(input)) throw new Error('Link list must be an array')
   const out: string[] = []
   for (const item of input) {
     const url = String(item ?? '').trim()
     if (!url) continue
-    if (!/^https?:\/\//i.test(url)) throw new Error(`链接必须以 http(s):// 开头：${url}`)
+    if (!/^https?:\/\//i.test(url)) throw new Error(`Link must start with http(s)://: ${url}`)
     if (!out.includes(url)) out.push(url)
   }
   return out
 }
 
 export function normalizeExtLinks(input: unknown): ExtLink[] {
-  if (!Array.isArray(input)) throw new Error('扩展链接必须是数组')
+  if (!Array.isArray(input)) throw new Error('Ext links must be an array')
   const out: ExtLink[] = []
   for (const item of input) {
     const obj = item as Partial<ExtLink> | null
     const detail = String(obj?.detail ?? '').trim()
     const url = String(obj?.url ?? '').trim()
     if (!detail && !url) continue
-    if (!url) throw new Error(`扩展链接缺少 url（描述：${detail}）`)
-    if (!/^https?:\/\//i.test(url)) throw new Error(`链接必须以 http(s):// 开头：${url}`)
-    if (!detail) throw new Error(`扩展链接缺少描述：${url}`)
+    if (!url) throw new Error(`Ext link is missing a url (detail: ${detail})`)
+    if (!/^https?:\/\//i.test(url)) throw new Error(`Link must start with http(s)://: ${url}`)
+    if (!detail) throw new Error(`Ext link is missing a detail: ${url}`)
     if (!out.some((l) => l.detail === detail && l.url === url)) out.push({ detail, url })
   }
   return out
@@ -358,7 +358,7 @@ export class BoardDatabase {
   /** 切到另一个项目；不存在则报错，避免静默落到空看板 */
   setProject(slug: string): void {
     const row = this.db.prepare('SELECT slug FROM project WHERE slug = ?').get(slug)
-    if (!row) throw new Error(`项目不存在: ${slug}`)
+    if (!row) throw new Error(`Project not found: ${slug}`)
     this.activeProject = slug
     this.activePinned = true
   }
@@ -413,7 +413,7 @@ export class BoardDatabase {
     const row = this.db.prepare('SELECT root FROM project WHERE slug = ?').get(slug) as
       | { root: string }
       | undefined
-    if (!row) throw new Error(`项目不存在: ${slug}`)
+    if (!row) throw new Error(`Project not found: ${slug}`)
     const file = join(row.root, 'AGENTS.md')
     writeFileSync(file, content, 'utf8')
     const bytes = Buffer.byteLength(content, 'utf8')
@@ -426,7 +426,7 @@ export class BoardDatabase {
   /** 删除项目记录。落盘文件由调用方决定是否一并删除。 */
   deleteProject(slug: string): void {
     const exists = this.db.prepare('SELECT slug FROM project WHERE slug = ?').get(slug)
-    if (!exists) throw new Error(`项目不存在: ${slug}`)
+    if (!exists) throw new Error(`Project not found: ${slug}`)
     this.db
       .prepare(
         `DELETE FROM worktree WHERE req_id IN (
@@ -733,23 +733,23 @@ export class BoardDatabase {
 
   setStatus(slug: string, status: Status, project = this.activeProject): Requirement {
     if (!(STATUSES as readonly string[]).includes(status)) {
-      throw new Error(`未知状态 ${status}。合法取值：${STATUSES.join(' / ')}`)
+      throw new Error(`Unknown status ${status}. Valid: ${STATUSES.join(' / ')}`)
     }
     const info = this.db
       .prepare('UPDATE requirement SET status = ?, updated = ? WHERE slug = ? AND project = ?')
       .run(status, today(), slug, project)
-    if (info.changes === 0) throw new Error(`需求不存在: ${project}/${slug}`)
+    if (info.changes === 0) throw new Error(`Requirement not found: ${project}/${slug}`)
     return this.get(slug, project)!
   }
 
   setPriority(slug: string, priority: Priority | '', project = this.activeProject): Requirement {
     if (priority && !(PRIORITIES as readonly string[]).includes(priority)) {
-      throw new Error(`未知优先级 ${priority}。合法取值：${PRIORITIES.join(' / ')}`)
+      throw new Error(`Unknown priority ${priority}. Valid: ${PRIORITIES.join(' / ')}`)
     }
     const info = this.db
       .prepare('UPDATE requirement SET priority = ?, updated = ? WHERE slug = ? AND project = ?')
       .run(priority || null, today(), slug, project)
-    if (info.changes === 0) throw new Error(`需求不存在: ${project}/${slug}`)
+    if (info.changes === 0) throw new Error(`Requirement not found: ${project}/${slug}`)
     return this.get(slug, project)!
   }
 
@@ -757,12 +757,12 @@ export class BoardDatabase {
     const info = this.db
       .prepare('UPDATE requirement SET title = ? WHERE slug = ? AND project = ?')
       .run(title, slug, project)
-    if (info.changes === 0) throw new Error(`需求不存在: ${project}/${slug}`)
+    if (info.changes === 0) throw new Error(`Requirement not found: ${project}/${slug}`)
     return this.get(slug, project)!
   }
 
   /**
-   * 更新需求的外部链接。写入入口留给 MCP（UI 不提供手动编辑）；
+   * Update a requirement's external links. Written by the CLI (the UI has no manual edit);
    * 传 undefined 表示该字段不变，传数组表示整体替换。
    */
   setLinks(
@@ -770,7 +770,7 @@ export class BoardDatabase {
     links: { feishuTaskLinks?: unknown; codeLinks?: unknown; extLinks?: unknown },
     project = this.activeProject,
   ): Requirement {
-    if (!this.get(slug, project)) throw new Error(`需求不存在: ${project}/${slug}`)
+    if (!this.get(slug, project)) throw new Error(`Requirement not found: ${project}/${slug}`)
 
     const sets: string[] = []
     const params: string[] = []
@@ -786,7 +786,7 @@ export class BoardDatabase {
       sets.push('ext_links = ?')
       params.push(JSON.stringify(normalizeExtLinks(links.extLinks)))
     }
-    if (!sets.length) throw new Error('没有需要更新的链接字段')
+    if (!sets.length) throw new Error('No link fields to update')
 
     sets.push('updated = ?')
     params.push(today())

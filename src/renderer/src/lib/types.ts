@@ -43,9 +43,9 @@ export interface Requirement {
   summary: string
   repos: RepoRef[]
   links: string
-  /** 飞书任务链接。由 MCP 写入，UI 只读 */
+  /** Feishu task links. Written by the CLI; the UI is read-only */
   feishuTaskLinks: string[]
-  /** 代码链接（GitLab MR / GitHub PR）。由 MCP 写入，UI 只读 */
+  /** Code links (GitLab MR / GitHub PR). Written by the CLI; the UI is read-only */
   codeLinks: string[]
   /** 扩展链接：detail 是描述，url 是链接 */
   extLinks: Array<{ detail: string; url: string }>

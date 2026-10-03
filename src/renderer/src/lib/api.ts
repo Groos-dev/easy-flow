@@ -39,18 +39,26 @@ export interface AppearancePayload {
   terminalFontSize: number
 }
 
-export interface AgentMcp {
-  id: 'claude' | 'codex'
+export interface AgentSkill {
+  id: 'claude' | 'cursor' | 'codex'
   label: string
-  configFile: string
-  installed: boolean
+  /** That agent's skills dir; it may not exist when the agent is not installed */
+  dir: string
+  available: boolean
+  linked: boolean
 }
 
-export interface McpPayload {
-  /** MCP server 入口文件，环境不允许时为 null */
-  entry: string | null
+export interface SkillPayload {
+  /** The skill entity and CLI entry inside the repo; null when the environment does not allow it */
+  source: string | null
+  cli: string | null
   problem: string | null
-  agents: AgentMcp[]
+  shim: { path: string; installed: boolean }
+  /** node resolved from a login shell; running .ts directly needs >= 22.18 */
+  node: { path: string; version: string } | null
+  agents: AgentSkill[]
+  /** Legacy MCP registrations still present; installing removes them */
+  legacyMcp: Array<{ id: 'claude' | 'codex'; label: string; registered: boolean }>
 }
 
 export interface Project {
@@ -177,8 +185,8 @@ export const api = {
   resync: (): Promise<{ sync: SwitchResult['sync']; dataDir: string }> =>
     request('/api/settings/resync', { method: 'POST' }),
 
-  mcp: (): Promise<McpPayload> => request('/api/mcp'),
+  skill: (): Promise<SkillPayload> => request('/api/skill'),
 
-  installMcp: (agent?: AgentMcp['id']): Promise<McpPayload & { installed: string[] }> =>
-    request('/api/mcp/install', { method: 'POST', body: JSON.stringify({ agent }) }),
+  installSkill: (): Promise<SkillPayload & { installed: string[] }> =>
+    request('/api/skill/install', { method: 'POST' }),
 }

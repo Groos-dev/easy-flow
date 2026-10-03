@@ -17,7 +17,7 @@ import {
   type Priority,
 } from './db.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
-import { installMcp, mcpPlan } from './mcp-install.ts'
+import { installSkill, skillPlan } from './skill-install.ts'
 
 export { STATUSES, PRIORITIES } from './db.ts'
 export type { Status, Priority, Requirement } from './db.ts'
@@ -86,10 +86,10 @@ function resolveProject(db: BoardDatabase, raw: string | null): string {
   try {
     slug = decodeURIComponent(raw)
   } catch {
-    throw new Error(`项目标识编码不合法: ${raw}`)
+    throw new Error(`Invalid project slug encoding: ${raw}`)
   }
   if (!db.listProjects().some((p) => p.slug === slug)) {
-    throw new Error(`项目不存在: ${slug}`)
+    throw new Error(`Project not found: ${slug}`)
   }
   return slug
 }
@@ -106,12 +106,12 @@ function removeProjectData(db: BoardDatabase, slug: string): void {
 const READABLE = /\.(md|markdown|txt|json|ya?ml)$/i
 
 function resolveDocPath(reqDir: string, name: string): string {
-  if (isAbsolute(name)) throw new Error('不允许绝对路径')
-  if (!READABLE.test(name)) throw new Error(`不支持的文件类型：${name}`)
+  if (isAbsolute(name)) throw new Error('Absolute paths are not allowed')
+  if (!READABLE.test(name)) throw new Error(`Unsupported file type: ${name}`)
   const base = resolve(reqDir)
   const target = resolve(base, name)
   const rel = relative(base, target)
-  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error('路径越界')
+  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error('Path escapes the root')
   return target
 }
 
@@ -120,7 +120,7 @@ function readRequirementDoc(reqDir: string, name: string): string {
   try {
     return readFileSync(target, 'utf8')
   } catch {
-    throw new Error(`读不到文件：${name}`)
+    throw new Error(`Cannot read file: ${name}`)
   }
 }
 
@@ -241,7 +241,7 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
       if (url.pathname === '/api/projects/open' && req.method === 'POST') {
         const { slug } = await readBody(req)
         const found = db.listProjects().find((p) => p.slug === String(slug))
-        if (!found) throw new Error(`项目不存在: ${slug}`)
+        if (!found) throw new Error(`Project not found: ${slug}`)
         execFile('open', [found.root], () => {})
         json(req, res, 200, { ok: true, root: found.root })
         return
@@ -250,7 +250,7 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
       if (url.pathname === '/api/projects/delete' && req.method === 'POST') {
         const { slug, removeFiles } = await readBody(req)
         const target = String(slug)
-        if (target === db.project) throw new Error('不能删除当前正在使用的项目')
+        if (target === db.project) throw new Error('Cannot delete the project currently in use')
         if (removeFiles) removeProjectData(db, target)
         db.deleteProject(target)
         json(req, res, 200, { ok: true, removedFiles: !!removeFiles, projects: db.listProjects() })
@@ -274,7 +274,7 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         const project = resolveProject(db, projectRaw ? String(projectRaw) : null)
         const id = String(slug)
         let result = db.get(id, project)
-        if (!result) throw new Error(`需求不存在: ${id}`)
+        if (!result) throw new Error(`Requirement not found: ${id}`)
         if (status !== undefined) result = db.setStatus(id, status as Status, project)
         if (priority !== undefined) result = db.setPriority(id, (priority as Priority) || '', project)
         if (title !== undefined) result = db.rename(id, String(title), project)
@@ -293,12 +293,12 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         return
       }
 
-      // 一个需求的完整上下文（含 md 原文），给详情页与后续 MCP 用
+      // Full context of one requirement (raw markdown included), for the detail page
       if (url.pathname === '/api/context' && req.method === 'GET') {
         const slug = url.searchParams.get('slug') ?? ''
         const project = resolveProject(db, url.searchParams.get('project'))
         const ctx = db.context(slug, project)
-        if (!ctx) throw new Error(`需求不存在: ${slug}`)
+        if (!ctx) throw new Error(`Requirement not found: ${slug}`)
         json(req, res, 200, {
           ...ctx,
           requirementMd: db.readRequirementMd(slug, project),
@@ -314,7 +314,7 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         const name = url.searchParams.get('name') || 'requirement.md'
         const project = resolveProject(db, url.searchParams.get('project'))
         const target = db.get(slug, project)
-        if (!target) throw new Error(`需求不存在: ${slug}`)
+        if (!target) throw new Error(`Requirement not found: ${slug}`)
         const content = readRequirementDoc(target.path, name)
         json(req, res, 200, { slug, project, name, content })
         return
@@ -325,7 +325,7 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         const { slug, name, content, project: projectRaw } = await readBody(req)
         const project = resolveProject(db, projectRaw ? String(projectRaw) : null)
         const target = db.get(String(slug), project)
-        if (!target) throw new Error(`需求不存在: ${slug}`)
+        if (!target) throw new Error(`Requirement not found: ${slug}`)
         const result = writeRequirementDoc(target.path, String(name), String(content ?? ''))
         json(req, res, 200, { slug, project, name, ...result })
         return
@@ -344,8 +344,8 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
       if (url.pathname === '/api/worktree/open' && req.method === 'POST') {
         const { id } = await readBody(req)
         const wt = db.worktreeById(String(id))
-        if (!wt) throw new Error(`找不到 worktree: ${id}`)
-        if (!existsSync(wt.path)) throw new Error(`目录已不存在：${wt.path}`)
+        if (!wt) throw new Error(`Worktree not found: ${id}`)
+        if (!existsSync(wt.path)) throw new Error(`Directory no longer exists: ${wt.path}`)
         execFile('open', [wt.path], () => {})
         json(req, res, 200, { ok: true, path: wt.path })
         return
@@ -388,7 +388,7 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
       if (url.pathname === '/api/settings' && req.method === 'POST') {
         const { dataDir: next } = await readBody(req)
         const dir = String(next ?? '').trim()
-        if (!dir) throw new Error('数据目录不能为空')
+        if (!dir) throw new Error('Data dir cannot be empty')
         if (dir === currentDir) {
           json(req, res, 200, { dataDir: currentDir, dbFile: db.file, unchanged: true, sync: null })
           return
@@ -408,7 +408,7 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
           db = new BoardDatabase(previous, readConfig().activeProject)
           currentDir = previous
           db.pickProject()
-          throw new Error(`切换失败，已回滚：${(err as Error).message}`)
+          throw new Error(`Switch failed, rolled back: ${(err as Error).message}`)
         }
         return
       }
@@ -418,20 +418,16 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         return
       }
 
-      // ----------------------------------------------------------- MCP
+      // --------------------------------------------------- CLI and skill
 
-      if (url.pathname === '/api/mcp' && req.method === 'GET') {
-        json(req, res, 200, mcpPlan())
+      if (url.pathname === '/api/skill' && req.method === 'GET') {
+        json(req, res, 200, await skillPlan())
         return
       }
 
-      if (url.pathname === '/api/mcp/install' && req.method === 'POST') {
-        const { agent } = await readBody(req)
-        if (agent !== undefined && agent !== 'claude' && agent !== 'codex') {
-          throw new Error(`未知的 agent：${String(agent)}`)
-        }
-        const installed = await installMcp(agent)
-        json(req, res, 200, { installed, ...mcpPlan() })
+      if (url.pathname === '/api/skill/install' && req.method === 'POST') {
+        const installed = await installSkill()
+        json(req, res, 200, { installed, ...(await skillPlan()) })
         return
       }
 

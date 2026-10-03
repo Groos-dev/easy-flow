@@ -4,8 +4,8 @@
  * 需求目录里没有指向 worktree 的反向指针，所以归属只能靠创建时落库。
  * 创建不回滚：重试是幂等的，而回滚要先判断"哪些是本次造的"，判错一次就是数据丢失。
  *
- * git 一律经登录 shell 解析绝对路径再执行：MCP 进程由 agent 拉起，PATH 未必是全的
- * （与 mcp-install.ts 同一个坑）。
+ * git is always resolved to an absolute path through a login shell: the caller (agent or GUI)
+ * may not have a full PATH — only a login shell brings those paths in.
  */
 import { execFile } from 'node:child_process'
 import {
@@ -73,7 +73,7 @@ async function gitBinary(): Promise<string> {
     if (!found) throw new Error('empty')
     gitPath = found
   } catch {
-    throw new Error(`找不到 git 命令（SHELL=${shell}）：确认已安装，且在登录 shell 的 PATH 里`)
+    throw new Error(`Cannot find the git command (SHELL=${shell}); make sure it is installed and on the login shell's PATH`)
   }
   return gitPath
 }
@@ -82,7 +82,7 @@ async function git(args: string[], cwd?: string): Promise<string> {
   try {
     return (await exec(await gitBinary(), args, cwd)).trim()
   } catch (err) {
-    throw new Error(`git ${args[0]} 失败：${(err as Error).message}`)
+    throw new Error(`git ${args[0]} failed: ${(err as Error).message}`)
   }
 }
 
@@ -108,7 +108,7 @@ async function describeCheckout(path: string): Promise<RepoCheckout> {
   const here = await git(['rev-parse', '--show-toplevel'], path)
   const head = (await git(['worktree', 'list', '--porcelain'], here)).split('\n\n')[0] ?? ''
   const main = /^worktree (.+)$/m.exec(head)?.[1]?.trim()
-  if (!main || !existsSync(main)) throw new Error(`认不出 ${path} 的主 checkout`)
+  if (!main || !existsSync(main)) throw new Error(`Cannot identify the main checkout for ${path}`)
   return { repo: basename(main), main }
 }
 
@@ -119,7 +119,7 @@ async function describeCheckout(path: string): Promise<RepoCheckout> {
 export async function resolveCheckout(repo: string): Promise<RepoCheckout> {
   const asPath = repo.startsWith('~') ? join(homedir(), repo.slice(1)) : repo
   if (asPath.startsWith('/')) {
-    if (!existsSync(asPath)) throw new Error(`路径不存在：${asPath}`)
+    if (!existsSync(asPath)) throw new Error(`Path does not exist: ${asPath}`)
     return describeCheckout(asPath)
   }
 
@@ -128,10 +128,10 @@ export async function resolveCheckout(repo: string): Promise<RepoCheckout> {
   if (hits.length === 1) return describeCheckout(hits[0])
   if (!hits.length) {
     throw new Error(
-      `没找到仓库「${repo}」：在 ${roots.join('、')} 下按目录名找（两层以内），也可以直接传主 checkout 的绝对路径`,
+      `Repo "${repo}" not found: looked up by dir name (up to two levels) under ${roots.join(', ')}; you can also pass the main checkout's absolute path`,
     )
   }
-  throw new Error(`仓库名「${repo}」有多个候选，请传绝对路径：\n${hits.slice(0, 5).join('\n')}`)
+  throw new Error(`Multiple candidates for repo "${repo}"; pass an absolute path:\n${hits.slice(0, 5).join('\n')}`)
 }
 
 /** 在 root 下按目录名找 git 仓库。深度受限，跳过点开头与 node_modules */
@@ -207,13 +207,13 @@ export async function provisionWorktree(input: ProvisionInput): Promise<Provisio
   const registered = await registeredWorktrees(target.main)
   const mine = registered.find((w) => w.path === path)
   if (mine && mine.branch && mine.branch !== branch) {
-    throw new Error(`${path} 已登记给分支 ${mine.branch}，换路径或换分支`)
+    throw new Error(`${path} is already registered for branch ${mine.branch}; pick another path or branch`)
   }
   if (existsSync(path) && !mine) {
-    throw new Error(`${path} 已被占用（不是已登记的 worktree），先腾开它`)
+    throw new Error(`${path} is occupied (not a registered worktree); move it away first`)
   }
   const elsewhere = registered.find((w) => w.branch === branch && w.path !== path)
-  if (elsewhere) throw new Error(`分支 ${branch} 已在 ${elsewhere.path} 检出，一个分支只能有一处`)
+  if (elsewhere) throw new Error(`Branch ${branch} is already checked out at ${elsewhere.path}; a branch can live in only one worktree`)
 
   let created = false
   let branchCreated = false
@@ -265,12 +265,12 @@ export async function adoptWorktree(input: {
   short?: string
 }): Promise<Adopted> {
   if (!lstatOrNull(join(input.path, '.git'))?.isFile()) {
-    throw new Error(`${input.path} 不是 git worktree（.git 不是指向主仓的文件）`)
+    throw new Error(`${input.path} is not a git worktree (.git is not a file pointing at the main repo)`)
   }
   // describeCheckout 顺手校验了 --show-toplevel 就是它自己，主 checkout 从 worktree list 取
   const { repo, main } = await describeCheckout(input.path)
   const branch = await branchOf(input.path)
-  if (!branch) throw new Error(`${input.path} 没停在分支上（detached HEAD?）`)
+  if (!branch) throw new Error(`${input.path} is not on a branch (detached HEAD?)`)
 
   const decorated = await decorate({
     worktreeId: input.worktreeId,
@@ -373,7 +373,7 @@ export async function deprovisionWorktree(input: {
       .filter((l) => l && !OURS.includes(l.slice(3).trim()))
     if (discarded.length && !force) {
       const shown = discarded.slice(0, 5).join('\n')
-      throw new Error(`worktree 里有未提交改动，确认丢弃请传 force：\n${shown}`)
+      throw new Error(`The worktree has uncommitted changes; pass force to discard them:\n${shown}`)
     }
     await git(['worktree', 'remove', '--force', path], main)
     await git(['worktree', 'prune'], main)
@@ -385,10 +385,10 @@ export async function deprovisionWorktree(input: {
   // 另外再看一眼它停在哪，对不上就不动——那说明它已经不是记录里那个 worktree 了。
   const here = await branchOf(path)
   if (here && here !== input.branch) {
-    throw new Error(`${path} 现在停在分支 ${here}，不是记录里的 ${input.branch}，不敢删`)
+    throw new Error(`${path} is on branch ${here}, not the recorded ${input.branch}; refusing to delete`)
   }
   if (!force) {
-    throw new Error(`${path} 已不在 ${main} 的 git 登记里，判断不了工作区是否干净；确认丢弃请传 force`)
+    throw new Error(`${path} is no longer registered with git under ${main}, so its cleanliness cannot be judged; pass force to discard`)
   }
   rmSync(path, { recursive: true, force: true })
   return { missing: false, discarded: [] }
@@ -470,9 +470,9 @@ function ensureSymlink(link: string, target: string): void {
     symlinkSync(target, link)
     return
   }
-  if (!st.isSymbolicLink()) throw new Error(`${link} 已存在且不是软链，不覆盖`)
+  if (!st.isSymbolicLink()) throw new Error(`${link} exists and is not a symlink; not overwriting`)
   const current = readlinkSync(link)
-  if (current !== target) throw new Error(`${link} 已指向 ${current}，不覆盖`)
+  if (current !== target) throw new Error(`${link} already points at ${current}; not overwriting`)
 }
 
 /**

@@ -13,7 +13,7 @@ import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync
 import { join, basename } from 'node:path'
 import { createServer } from 'node:http'
 
-import { spawn, execFileSync } from 'node:child_process'
+import { spawnSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { BoardDatabase, normalizeLinkList, normalizeExtLinks } from '../server/db.ts'
@@ -257,9 +257,9 @@ describe('数据层 · 状态读写', () => {
   })
 
   test('未知状态/优先级被拒绝', () => {
-    assert.throws(() => db.setStatus('alpha', 'Done' as never), /未知状态/)
-    assert.throws(() => db.setStatus('alpha', '开发中' as never), /未知状态/)
-    assert.throws(() => db.setPriority('alpha', 'high' as never), /未知优先级/)
+    assert.throws(() => db.setStatus('alpha', 'Done' as never), /Unknown status/)
+    assert.throws(() => db.setStatus('alpha', '开发中' as never), /Unknown status/)
+    assert.throws(() => db.setPriority('alpha', 'high' as never), /Unknown priority/)
   })
 
   test('setStatus/setPriority 会更新 updated 字段', () => {
@@ -270,9 +270,9 @@ describe('数据层 · 状态读写', () => {
   })
 
   test('操作不存在的需求会报错', () => {
-    assert.throws(() => db.setStatus('nope', '澄清'), /需求不存在/)
-    assert.throws(() => db.setPriority('nope', 'p0'), /需求不存在/)
-    assert.throws(() => db.rename('nope', 'x'), /需求不存在/)
+    assert.throws(() => db.setStatus('nope', '澄清'), /Requirement not found/)
+    assert.throws(() => db.setPriority('nope', 'p0'), /Requirement not found/)
+    assert.throws(() => db.rename('nope', 'x'), /Requirement not found/)
   })
 
   test('项目隔离：同名需求互不干扰', () => {
@@ -326,14 +326,14 @@ describe('数据层 · 链接字段', () => {
     assert.deepEqual(normalizeLinkList(['https://a.com', 'https://a.com']), ['https://a.com'])
     assert.throws(() => normalizeLinkList(['ftp://a.com']), /http/)
     assert.throws(() => normalizeLinkList(['not-a-url']), /http/)
-    assert.throws(() => normalizeLinkList('str' as never), /数组/)
+    assert.throws(() => normalizeLinkList('str' as never), /array/)
   })
 
   test('normalizeExtLinks 要求 detail 与 url 成对', () => {
     const ok = normalizeExtLinks([{ detail: '设计', url: 'https://a.com' }])
     assert.deepEqual(ok, [{ detail: '设计', url: 'https://a.com' }])
-    assert.throws(() => normalizeExtLinks([{ detail: '缺链接' }]), /缺少 url/)
-    assert.throws(() => normalizeExtLinks([{ url: 'https://a.com' }]), /缺少描述/)
+    assert.throws(() => normalizeExtLinks([{ detail: '缺链接' }]), /missing a url/)
+    assert.throws(() => normalizeExtLinks([{ url: 'https://a.com' }]), /missing a detail/)
   })
 
   test('setLinks 部分更新，未传的字段不动', () => {
@@ -563,9 +563,9 @@ describe('创建 · 目录与模板', () => {
 
   test('createProjectDir 拒绝非法标识与已存在的目录', () => {
     const dir = fresh(() => {})
-    assert.throws(() => createProjectDir(dir, 'Bad_Slug'), /英文小写/)
+    assert.throws(() => createProjectDir(dir, 'Bad_Slug'), /lowercase letters/)
     createProjectDir(dir, 'demo')
-    assert.throws(() => createProjectDir(dir, 'demo'), /目录已存在/)
+    assert.throws(() => createProjectDir(dir, 'demo'), /already exists/)
   })
 
   test('createRequirementDir 写齐三份文件，id 落在 AGENTS.md', () => {
@@ -599,9 +599,9 @@ describe('创建 · 目录与模板', () => {
       createProjectDir(TMP, 'onex')
     })
     const root = join(dir, 'onex')
-    assert.throws(() => createRequirementDir(root, '中文名', 'x'), /英文小写/)
+    assert.throws(() => createRequirementDir(root, '中文名', 'x'), /lowercase letters/)
     createRequirementDir(root, 'alpha', 'x')
-    assert.throws(() => createRequirementDir(root, 'alpha', 'x'), /目录已存在/)
+    assert.throws(() => createRequirementDir(root, 'alpha', 'x'), /already exists/)
   })
 
   test('setRequirementId 只动 frontmatter，正文原样保留', () => {
@@ -697,79 +697,47 @@ describe('创建 · 目录与模板', () => {
   })
 })
 
-// ------------------------------------------------------------------ MCP
+// ------------------------------------------------------------------ CLI
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
+const CLI = join(REPO_ROOT, 'server', 'cli.ts')
 
 /**
- * 起真的 mcp 进程走一遍 stdio 协议。
- * server/mcp.ts 是入口脚本（import 即连接），没法进程内调，只能当客户端说话。
+ * Run a real CLI process. server/cli.ts is an entry script (importing it executes), so it
+ * cannot be called in-process — spawn it as a subprocess, which is also how humans and
+ * agents use it.
  */
-function mcpSession(
+function cli(
   configFile: string,
-  requests: Array<Record<string, unknown>>,
+  args: string[],
   extraEnv: Record<string, string> = {},
-): Promise<Array<{ id?: number; result?: any; error?: { message: string } }>> {
-  return new Promise((resolve, reject) => {
-    const env: Record<string, string> = { ...process.env, EASY_FLOW_CONFIG: configFile }
-    // 身份只该来自调用方，别让跑测试的 shell 里的残留 env 干扰
-    delete env.EASY_FLOW_PROJECT
-    delete env.EASY_FLOW_REPO_ROOTS
-    Object.assign(env, extraEnv)
-
-    const child = spawn(join(REPO_ROOT, 'node_modules/.bin/tsx'), [join(REPO_ROOT, 'server/mcp.ts')], {
-      cwd: REPO_ROOT,
-      env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-    let stderr = ''
-    child.stderr.on('data', (d: Buffer) => {
-      stderr += d.toString()
-    })
-    const expected = requests.filter((r) => r.id !== undefined).length
-    const out: Array<{ id?: number; result?: any; error?: { message: string } }> = []
-    let buf = ''
-    const timer = setTimeout(() => {
-      child.kill()
-      reject(new Error('mcp 进程超时'))
-    }, 60_000)
-
-    child.stdout.on('data', (d: Buffer) => {
-      buf += d.toString()
-      let i
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, i).trim()
-        buf = buf.slice(i + 1)
-        if (!line) continue
-        out.push(JSON.parse(line))
-        // 收齐就关 stdin，进程随之退出，不用干等
-        if (out.filter((m) => m.id !== undefined).length >= expected) child.stdin.end()
-      }
-    })
-    child.on('error', reject)
-    child.on('exit', () => {
-      clearTimeout(timer)
-      // 一条响应都没收到，八成是进程起不来，把 stderr 一起抛出来
-      if (!out.length && stderr.trim()) reject(new Error(`mcp 进程没有响应：${stderr.trim()}`))
-      else resolve(out)
-    })
-    for (const r of requests) child.stdin.write(`${JSON.stringify(r)}\n`)
+): { code: number; stdout: string; stderr: string } {
+  const env: Record<string, string> = { ...process.env, EASY_FLOW_CONFIG: configFile }
+  // identity must come from the caller only; keep leftover env from the test shell out
+  delete env.EASY_FLOW_PROJECT
+  delete env.EASY_FLOW_REPO_ROOTS
+  Object.assign(env, extraEnv)
+  const r = spawnSync(process.execPath, [CLI, ...args], {
+    cwd: REPO_ROOT,
+    env,
+    encoding: 'utf8',
+    timeout: 60_000,
   })
+  return { code: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
 }
 
-/** 一次会话只调一个工具，返回结果文本 */
-async function callTool(
-  configFile: string,
-  name: string,
-  args: Record<string, unknown> = {},
-  extraEnv: Record<string, string> = {},
-): Promise<{ isError: boolean; text: string }> {
-  const [reply] = await mcpSession(
-    configFile,
-    [{ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }],
-    extraEnv,
-  )
-  return { isError: !!reply.result.isError, text: reply.result.content[0].text }
+/** One successful call; returns stdout */
+function cliOk(configFile: string, args: string[], extraEnv: Record<string, string> = {}): string {
+  const r = cli(configFile, args, extraEnv)
+  assert.equal(r.code, 0, `expected success: easy-flow ${args.join(' ')}\n${r.stderr}`)
+  return r.stdout
+}
+
+/** One failing call; returns the error text (stderr in text mode, usage included for usage errors) */
+function cliFail(configFile: string, args: string[], extraEnv: Record<string, string> = {}): string {
+  const r = cli(configFile, args, extraEnv)
+  assert.notEqual(r.code, 0, `expected failure: easy-flow ${args.join(' ')}\n${r.stdout}`)
+  return r.stderr
 }
 
 const GIT_TMP = '/tmp/easy-flow-git-test'
@@ -882,8 +850,8 @@ describe('数据层 · worktree', () => {
   })
 })
 
-describe('MCP 层', () => {
-  const base = '/tmp/easy-flow-mcp-test'
+describe('CLI 层', () => {
+  const base = '/tmp/easy-flow-cli-test'
   const dataDir = join(base, 'data')
   const configFile = join(base, 'config.json')
 
@@ -894,38 +862,36 @@ describe('MCP 层', () => {
     return configFile
   }
 
-  test('工具面：建项目与需求，缺上下文时报可读错误', async () => {
-    const replies = await mcpSession(scaffold(), [
-      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } } },
-      { jsonrpc: '2.0', method: 'notifications/initialized' },
-      { jsonrpc: '2.0', id: 2, method: 'tools/list' },
-      { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'create_project', arguments: { slug: 'demo', name: '示例项目' } } },
-      { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'create_requirement', arguments: { project: 'demo', title: '支持 1A 重试', slug: 'seat-retry', summary: '失败重试一次' } } },
-      { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'create_requirement', arguments: { title: '没有项目上下文' } } },
-    ])
-
-    const byId = new Map(replies.filter((r) => r.id !== undefined).map((r) => [r.id, r.result]))
-    assert.deepEqual(
-      byId.get(2).tools.map((t: { name: string }) => t.name).sort(),
-      [
-        'add_links',
-        'assign_ids',
-        'create_project',
-        'create_requirement',
-        'create_sub_requirement',
-        'create_worktree',
-        'get_context',
-        'import_worktrees',
-        'remove_worktree',
-        'update_requirement',
-      ],
+  test('命令面：建项目与需求，缺上下文时报可读错误', () => {
+    scaffold()
+    assert.match(cliOk(configFile, ['project', 'new', 'demo', '--name', '示例项目']), /已创建项目「示例项目」/)
+    assert.match(
+      cliOk(configFile, [
+        'req',
+        'new',
+        '支持 1A 重试',
+        '--project',
+        'demo',
+        '--slug',
+        'seat-retry',
+        '--summary',
+        '失败重试一次',
+      ]),
+      /需求 id：req-/,
     )
-    assert.match(byId.get(3).content[0].text, /已创建项目「示例项目」/)
-    assert.match(byId.get(4).content[0].text, /需求 id：req-/)
-    assert.equal(byId.get(5).isError, true)
-    // project 是必填参数，缺了由参数校验挡下（指名了工具与字段）
-    assert.match(byId.get(5).content[0].text, /create_requirement/)
-    assert.match(byId.get(5).content[0].text, /project/)
+    // --project is required (or --parent); missing both is caught as a usage error
+    const missing = cli(configFile, ['req', 'new', '没有项目上下文'])
+    assert.equal(missing.code, 2)
+    assert.match(missing.stderr, /Pass one of --project \/ --parent/)
+    // root help lists the command groups; group help lists each subcommand
+    const help = cliOk(configFile, ['--help'])
+    for (const c of ['context', 'project new', 'req new|set|link', 'wt new|rm']) {
+      assert.ok(help.includes(c), `expected help to list ${c}:\n${help}`)
+    }
+    const reqHelp = cliOk(configFile, ['req', '--help'])
+    for (const c of ['req new', 'req set', 'req link']) assert.ok(reqHelp.includes(c), reqHelp)
+    const wtHelp = cliOk(configFile, ['wt', '--help'])
+    for (const c of ['wt new', 'wt rm']) assert.ok(wtHelp.includes(c), wtHelp)
 
     const db = new BoardDatabase(dataDir)
     const r = db.get('seat-retry', 'demo')!
@@ -936,7 +902,45 @@ describe('MCP 层', () => {
     db.close()
   })
 
-  test('get_context 只按 id 反查：必须显式传，缺 id 报错', async () => {
+  test('req new --parent：子需求建在父需求下，--project 与 --parent 互斥', () => {
+    scaffold()
+    cliOk(configFile, ['project', 'new', 'demo'])
+    const parent = JSON.parse(
+      cliOk(configFile, ['req', 'new', '父需求', '--project', 'demo', '--slug', 'alpha', '--json']),
+    )
+    const sub = JSON.parse(cliOk(configFile, ['req', 'new', '子需求', '--parent', parent.id, '--slug', 'sub', '--json']))
+    assert.equal(sub.parent, parent.id)
+    assert.match(sub.dir, /alpha\/sub$/)
+    assert.equal(existsSync(join(sub.dir, 'requirement.md')), true)
+
+    const both = cli(configFile, ['req', 'new', '两个都给', '--project', 'demo', '--parent', parent.id])
+    assert.equal(both.code, 2)
+    assert.match(both.stderr, /not both/)
+  })
+
+  test('--json：成功打数据可串联，失败也是 JSON 且退出码语义分明', () => {
+    scaffold()
+    cliOk(configFile, ['project', 'new', 'demo'])
+    const made = JSON.parse(
+      cliOk(configFile, ['req', 'new', '甲需求', '--project', 'demo', '--slug', 'alpha', '--json']),
+    )
+    assert.match(made.id, /^req-/)
+
+    const moved = JSON.parse(cliOk(configFile, ['req', 'set', made.id, '--status', '执行中', '--json']))
+    assert.equal(moved.status, '执行中')
+
+    // runtime error: JSON on stdout, exit code 1
+    const failed = cli(configFile, ['context', 'req-nope', '--json'])
+    assert.equal(failed.code, 1)
+    assert.match(JSON.parse(failed.stdout).error, /Requirement not found/)
+
+    // usage error: JSON too, exit code 2
+    const usage = cli(configFile, ['context', '--json'])
+    assert.equal(usage.code, 2)
+    assert.match(JSON.parse(usage.stdout).error, /Missing id/)
+  })
+
+  test('context 只按 id 反查：必须显式传，缺 id 报错', () => {
     scaffold()
     createProjectDir(dataDir, 'demo', '示例项目')
     writeFileSync(
@@ -950,25 +954,22 @@ describe('MCP 层', () => {
     seed.syncProjects()
     seed.close()
 
-    const byArg = await callTool(configFile, 'get_context', { id: created.id })
-    assert.equal(byArg.isError, false)
-    assert.match(byArg.text, new RegExp(`需求 id：${created.id}`))
-    assert.match(byArg.text, /项目：demo（示例项目）/)
-    assert.match(byArg.text, /需求：CSD 接 TF 标准价（csd-price）/)
-    assert.match(byArg.text, /状态：澄清/)
-    assert.match(byArg.text, /先查 CK 再改代码/)
-    assert.match(byArg.text, /跟 supply 对了/)
+    const byArg = cliOk(configFile, ['context', created.id])
+    assert.match(byArg, new RegExp(`需求 id：${created.id}`))
+    assert.match(byArg, /项目：demo（示例项目）/)
+    assert.match(byArg, /需求：CSD 接 TF 标准价（csd-price）/)
+    assert.match(byArg, /状态：澄清/)
+    assert.match(byArg, /先查 CK 再改代码/)
+    assert.match(byArg, /跟 supply 对了/)
 
-    const noId = await callTool(configFile, 'get_context')
-    assert.equal(noId.isError, true)
-    assert.match(noId.text, /缺少需求 id/)
+    const noId = cli(configFile, ['context'])
+    assert.equal(noId.code, 2)
+    assert.match(noId.stderr, /Missing id/)
 
-    const unknown = await callTool(configFile, 'get_context', { id: 'req-nope' })
-    assert.equal(unknown.isError, true)
-    assert.match(unknown.text, /找不到需求：req-nope/)
+    assert.match(cliFail(configFile, ['context', 'req-nope']), /Requirement not found: req-nope/)
   })
 
-  test('create_worktree：目录、身份文件、软链、exclude、落库一次做完', async () => {
+  test('wt new：目录、身份文件、软链、exclude、落库一次做完', () => {
     scaffold()
     const { workspace, repo, repoName } = gitFixture()
     createProjectDir(dataDir, 'demo', '示例项目')
@@ -978,11 +979,10 @@ describe('MCP 层', () => {
     seed.close()
 
     const env = { EASY_FLOW_REPO_ROOTS: workspace }
-    const args = { requirementId: created.id, repo: repoName, branch: 'feature-truemap', short: 'router' }
-    const res = await callTool(configFile, 'create_worktree', args, env)
-    assert.equal(res.isError, false, res.text)
-    const id = /worktree id：(wt-[0-9a-f]+)/.exec(res.text)?.[1]
-    assert.ok(id, res.text)
+    const args = ['wt', 'new', created.id, '--repo', repoName, '--branch', 'feature-truemap', '--short', 'router']
+    const res = cliOk(configFile, args, env)
+    const id = /worktree id：(wt-[0-9a-f]+)/.exec(res)?.[1]
+    assert.ok(id, res)
 
     const wtPath = join(workspace, `${repoName}.feature-truemap`)
     assert.equal(sh(wtPath, 'rev-parse', '--abbrev-ref', 'HEAD'), 'feature-truemap')
@@ -1000,9 +1000,8 @@ describe('MCP 层', () => {
     assert.equal(sh(wtPath, 'status', '--porcelain'), '')
 
     // 幂等：同参数再来一次，还是同一个 wt，exclude 不重复追加
-    const again = await callTool(configFile, 'create_worktree', args, env)
-    assert.equal(again.isError, false, again.text)
-    assert.equal(/worktree id：(wt-[0-9a-f]+)/.exec(again.text)?.[1], id)
+    const again = cliOk(configFile, args, env)
+    assert.equal(/worktree id：(wt-[0-9a-f]+)/.exec(again)?.[1], id)
     assert.equal(
       readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8')
         .split('\n')
@@ -1021,7 +1020,7 @@ describe('MCP 层', () => {
     db.close()
   })
 
-  test('create_worktree 拒绝：分支在别处检出、路径被占、分支名非法', async () => {
+  test('wt new 拒绝：分支在别处检出、路径被占、分支名非法', () => {
     scaffold()
     const { workspace, repo, repoName } = gitFixture()
     createProjectDir(dataDir, 'demo')
@@ -1032,42 +1031,40 @@ describe('MCP 层', () => {
 
     const env = { EASY_FLOW_REPO_ROOTS: workspace }
     const call = (branch: string) =>
-      callTool(configFile, 'create_worktree', { requirementId: created.id, repo: repoName, branch }, env)
+      cli(configFile, ['wt', 'new', created.id, '--repo', repoName, '--branch', branch], env)
 
     // 手工在别的路径建一个，占住分支
     const who = ['-c', 'user.name=test', '-c', 'user.email=test@test']
     execFileSync('git', ['-C', repo, ...who, 'worktree', 'add', '-q', join(workspace, 'manual'), '-b', 'feature-taken'])
-    const taken = await call('feature-taken')
-    assert.equal(taken.isError, true)
-    assert.match(taken.text, /已在 .*manual 检出/)
+    const taken = call('feature-taken')
+    assert.notEqual(taken.code, 0)
+    assert.match(taken.stderr, /already checked out at .*manual/)
 
     // 目标路径被普通目录占着
     mkdirSync(join(workspace, `${repoName}.feature-blocked`), { recursive: true })
-    const blocked = await call('feature-blocked')
-    assert.equal(blocked.isError, true)
-    assert.match(blocked.text, /已被占用/)
+    const blocked = call('feature-blocked')
+    assert.notEqual(blocked.code, 0)
+    assert.match(blocked.stderr, /is occupied/)
 
     // 非法分支名在预检就挡下，不留任何东西
-    const bad = await call('feature bad')
-    assert.equal(bad.isError, true)
-    assert.match(bad.text, /check-ref-format/)
+    const bad = call('feature bad')
+    assert.notEqual(bad.code, 0)
+    assert.match(bad.stderr, /check-ref-format/)
     assert.equal(existsSync(join(workspace, `${repoName}.feature bad`)), false)
 
     // 走到 git 自己的失败：报错要带 fatal 那句，而不是 stderr 的进度行
-    const badBase = await callTool(
+    const badBase = cliFail(
       configFile,
-      'create_worktree',
-      { requirementId: created.id, repo: repoName, branch: 'feature-new', base: 'no-such-ref' },
+      ['wt', 'new', created.id, '--repo', repoName, '--branch', 'feature-new', '--base', 'no-such-ref'],
       env,
     )
-    assert.equal(badBase.isError, true)
-    assert.match(badBase.text, /invalid reference/)
+    assert.match(badBase, /invalid reference/)
     // git 自己什么都没建出来
     assert.equal(existsSync(join(workspace, `${repoName}.feature-new`)), false)
     assert.equal(sh(repo, 'branch', '--list', 'feature-new'), '')
   })
 
-  test('同一条分支被另一个需求再要一次：报错，且不动那个 worktree', async () => {
+  test('同一条分支被另一个需求再要一次：报错，且不动那个 worktree', () => {
     scaffold()
     const { workspace, repoName } = gitFixture()
     createProjectDir(dataDir, 'demo')
@@ -1078,25 +1075,13 @@ describe('MCP 层', () => {
     seed.close()
 
     const env = { EASY_FLOW_REPO_ROOTS: workspace }
-    const first = await callTool(
-      configFile,
-      'create_worktree',
-      { requirementId: alpha.id, repo: repoName, branch: 'feature-shared' },
-      env,
-    )
-    assert.equal(first.isError, false, first.text)
+    cliOk(configFile, ['wt', 'new', alpha.id, '--repo', repoName, '--branch', 'feature-shared'], env)
     const wtPath = join(workspace, `${repoName}.feature-shared`)
     writeFileSync(join(wtPath, 'README.md'), 'work in progress\n')
 
-    const second = await callTool(
-      configFile,
-      'create_worktree',
-      { requirementId: beta.id, repo: repoName, branch: 'feature-shared' },
-      env,
-    )
-    assert.equal(second.isError, true)
+    const second = cliFail(configFile, ['wt', 'new', beta.id, '--repo', repoName, '--branch', 'feature-shared'], env)
     // 兜底的是「软链不覆盖」，不是归属预检——正常不会走到这里，走到了也不能动别人的目录
-    assert.match(second.text, /已指向/)
+    assert.match(second, /already points at/)
 
     // 甲的目录、分支与未提交改动一样不少
     assert.equal(existsSync(wtPath), true)
@@ -1109,7 +1094,7 @@ describe('MCP 层', () => {
     db.close()
   })
 
-  test('重复认领撞上不一致的软链：报错，但不回滚，目录与未提交改动原样', async () => {
+  test('重复认领撞上不一致的软链：报错，但不回滚，目录与未提交改动原样', () => {
     scaffold()
     const { workspace, repoName } = gitFixture()
     createProjectDir(dataDir, 'demo')
@@ -1119,9 +1104,8 @@ describe('MCP 层', () => {
     seed.close()
 
     const env = { EASY_FLOW_REPO_ROOTS: workspace }
-    const args = { requirementId: created.id, repo: repoName, branch: 'feature-own' }
-    const made = await callTool(configFile, 'create_worktree', args, env)
-    assert.equal(made.isError, false, made.text)
+    const args = ['wt', 'new', created.id, '--repo', repoName, '--branch', 'feature-own']
+    cliOk(configFile, args, env)
     const wtPath = join(workspace, `${repoName}.feature-own`)
     writeFileSync(join(wtPath, 'README.md'), 'half done\n')
 
@@ -1129,9 +1113,7 @@ describe('MCP 层', () => {
     rmSync(join(wtPath, 'requirement.md'))
     symlinkSync(join(wtPath, 'README.md'), join(wtPath, 'requirement.md'))
 
-    const again = await callTool(configFile, 'create_worktree', args, env)
-    assert.equal(again.isError, true)
-    assert.match(again.text, /已指向/)
+    assert.match(cliFail(configFile, args, env), /already points at/)
 
     // 认领失败不回滚，更不该丢未提交改动
     assert.equal(existsSync(wtPath), true)
@@ -1142,7 +1124,7 @@ describe('MCP 层', () => {
     db.close()
   })
 
-  test('认领已有 worktree：不覆盖仓库自己的 AGENTS.md，并说明 id 只在库里', async () => {
+  test('认领已有 worktree：不覆盖仓库自己的 AGENTS.md，并说明 id 只在库里', () => {
     scaffold()
     const { workspace, repo, repoName } = gitFixture()
     createProjectDir(dataDir, 'demo')
@@ -1157,15 +1139,9 @@ describe('MCP 层', () => {
     writeFileSync(join(wtPath, 'AGENTS.md'), '仓库自己的指令，别动\n')
 
     const env = { EASY_FLOW_REPO_ROOTS: workspace }
-    const res = await callTool(
-      configFile,
-      'create_worktree',
-      { requirementId: created.id, repo: repoName, branch: 'feature-owned' },
-      env,
-    )
-    assert.equal(res.isError, false, res.text)
-    assert.match(res.text, /本就存在/)
-    assert.match(res.text, /没落进文件/)
+    const res = cliOk(configFile, ['wt', 'new', created.id, '--repo', repoName, '--branch', 'feature-owned'], env)
+    assert.match(res, /本就存在/)
+    assert.match(res, /没落进文件/)
     assert.equal(readFileSync(join(wtPath, 'AGENTS.md'), 'utf8'), '仓库自己的指令，别动\n')
     // 软链与 exclude 照补
     assert.equal(
@@ -1174,13 +1150,13 @@ describe('MCP 层', () => {
     )
     assert.match(readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8'), /^\/requirement\.md$/m)
 
-    const id = /worktree id：(wt-[0-9a-f]+)/.exec(res.text)![1]
+    const id = /worktree id：(wt-[0-9a-f]+)/.exec(res)![1]
     const db = new BoardDatabase(dataDir)
     assert.equal(db.worktreeById(id)!.path, wtPath)
     db.close()
   })
 
-  test('git 登记被手工删掉后，remove_worktree 仍能清干净', async () => {
+  test('git 登记被手工删掉后，wt rm 仍能清干净', () => {
     scaffold()
     const { workspace, repo, repoName } = gitFixture()
     createProjectDir(dataDir, 'demo')
@@ -1190,32 +1166,24 @@ describe('MCP 层', () => {
     seed.close()
 
     const env = { EASY_FLOW_REPO_ROOTS: workspace }
-    const made = await callTool(
-      configFile,
-      'create_worktree',
-      { requirementId: created.id, repo: repoName, branch: 'feature-orphan' },
-      env,
-    )
-    const id = /worktree id：(wt-[0-9a-f]+)/.exec(made.text)![1]
+    const made = cliOk(configFile, ['wt', 'new', created.id, '--repo', repoName, '--branch', 'feature-orphan'], env)
+    const id = /worktree id：(wt-[0-9a-f]+)/.exec(made)![1]
     const wtPath = join(workspace, `${repoName}.feature-orphan`)
 
     // 模拟别处 prune 过：git 不再认它，目录还在
     rmSync(join(repo, '.git', 'worktrees', basename(wtPath)), { recursive: true, force: true })
 
     // 这种目录问不出 git status，所以必须显式 force
-    const guarded = await callTool(configFile, 'remove_worktree', { id })
-    assert.equal(guarded.isError, true)
-    assert.match(guarded.text, /判断不了工作区是否干净/)
+    assert.match(cliFail(configFile, ['wt', 'rm', id]), /cleanliness cannot be judged/)
 
-    const res = await callTool(configFile, 'remove_worktree', { id, force: true })
-    assert.equal(res.isError, false, res.text)
+    cliOk(configFile, ['wt', 'rm', id, '--force'])
     assert.equal(existsSync(wtPath), false)
     const db = new BoardDatabase(dataDir)
     assert.equal(db.worktreeById(id), undefined)
     db.close()
   })
 
-  test('remove_worktree：脏工作区要 force，分支永远保留', async () => {
+  test('wt rm：脏工作区要 force，分支永远保留', () => {
     scaffold()
     const { workspace, repo, repoName } = gitFixture()
     createProjectDir(dataDir, 'demo')
@@ -1225,25 +1193,16 @@ describe('MCP 层', () => {
     seed.close()
 
     const env = { EASY_FLOW_REPO_ROOTS: workspace }
-    const made = await callTool(
-      configFile,
-      'create_worktree',
-      { requirementId: created.id, repo: repoName, branch: 'feature-x' },
-      env,
-    )
-    assert.equal(made.isError, false, made.text)
-    const id = /worktree id：(wt-[0-9a-f]+)/.exec(made.text)![1]
+    const made = cliOk(configFile, ['wt', 'new', created.id, '--repo', repoName, '--branch', 'feature-x'], env)
+    const id = /worktree id：(wt-[0-9a-f]+)/.exec(made)![1]
     const wtPath = join(workspace, `${repoName}.feature-x`)
 
     writeFileSync(join(wtPath, 'README.md'), 'changed\n')
-    const refuse = await callTool(configFile, 'remove_worktree', { id })
-    assert.equal(refuse.isError, true)
-    assert.match(refuse.text, /未提交改动/)
+    assert.match(cliFail(configFile, ['wt', 'rm', id]), /uncommitted changes/)
 
-    const forced = await callTool(configFile, 'remove_worktree', { id, force: true })
-    assert.equal(forced.isError, false, forced.text)
-    assert.match(forced.text, /丢弃了 1 处未提交改动/)
-    assert.match(forced.text, /分支 feature-x 已保留/)
+    const forced = cliOk(configFile, ['wt', 'rm', id, '--force'])
+    assert.match(forced, /丢弃了 1 处未提交改动/)
+    assert.match(forced, /分支 feature-x 已保留/)
     assert.equal(existsSync(wtPath), false)
     assert.equal(sh(repo, 'branch', '--list', 'feature-x'), 'feature-x')
 
@@ -1252,7 +1211,7 @@ describe('MCP 层', () => {
     db.close()
   })
 
-  test('get_context 多态：wt- 拿到工作区与需求，裸值当项目', async () => {
+  test('context 多态：wt- 拿到工作区与需求，裸值当项目', () => {
     scaffold()
     const { workspace, repoName } = gitFixture()
     createProjectDir(dataDir, 'demo', '示例项目')
@@ -1263,87 +1222,32 @@ describe('MCP 层', () => {
     seed.close()
 
     const env = { EASY_FLOW_REPO_ROOTS: workspace }
-    const made = await callTool(
+    const made = cliOk(
       configFile,
-      'create_worktree',
-      { requirementId: created.id, repo: repoName, branch: 'feature-x', short: 'router' },
+      ['wt', 'new', created.id, '--repo', repoName, '--branch', 'feature-x', '--short', 'router'],
       env,
     )
-    const id = /worktree id：(wt-[0-9a-f]+)/.exec(made.text)![1]
+    const id = /worktree id：(wt-[0-9a-f]+)/.exec(made)![1]
 
-    const byWt = await callTool(configFile, 'get_context', { id }, env)
-    assert.equal(byWt.isError, false, byWt.text)
-    assert.match(byWt.text, new RegExp(`worktree id：${id}`))
-    assert.match(byWt.text, /分支：feature-x/)
-    assert.match(byWt.text, new RegExp(`需求 id：${created.id}`))
-    assert.match(byWt.text, /新增 TRUEMAP/)
-    assert.match(byWt.text, /灰度按航司放/)
+    const byWt = cliOk(configFile, ['context', id], env)
+    assert.match(byWt, new RegExp(`worktree id：${id}`))
+    assert.match(byWt, /分支：feature-x/)
+    assert.match(byWt, new RegExp(`需求 id：${created.id}`))
+    assert.match(byWt, /新增 TRUEMAP/)
+    assert.match(byWt, /灰度按航司放/)
 
-    const byReq = await callTool(configFile, 'get_context', { id: created.id }, env)
-    assert.match(byReq.text, /## worktree（1）/)
-    assert.match(byReq.text, new RegExp(id))
+    const byReq = cliOk(configFile, ['context', created.id], env)
+    assert.match(byReq, /## worktree（1）/)
+    assert.match(byReq, new RegExp(id))
 
-    const byProject = await callTool(configFile, 'get_context', { id: 'demo' }, env)
-    assert.match(byProject.text, /项目：示例项目（demo）/)
-    assert.match(byProject.text, new RegExp(`${created.id}.*1 个 worktree`))
+    const byProject = cliOk(configFile, ['context', 'demo'], env)
+    assert.match(byProject, /项目：示例项目（demo）/)
+    assert.match(byProject, new RegExp(`${created.id}.*1 个 worktree`))
 
-    const nowhere = await callTool(configFile, 'get_context', { id: 'nope' }, env)
-    assert.equal(nowhere.isError, true)
-    assert.match(nowhere.text, /现有项目/)
+    assert.match(cliFail(configFile, ['context', 'nope'], env), /Known projects/)
   })
 
-  test('import_worktrees：收编旧布局的 worktree，幂等，且一个工作区只归一个需求', async () => {
-    scaffold()
-    const { workspace, repo, repoName } = gitFixture()
-    createProjectDir(dataDir, 'demo')
-    const alpha = createRequirementDir(join(dataDir, 'demo'), 'alpha', '甲需求', '摘要')
-    const beta = createRequirementDir(join(dataDir, 'demo'), 'beta', '乙需求', '摘要')
-    const seed = new BoardDatabase(dataDir)
-    seed.syncProjects()
-    seed.close()
-
-    // 旧工作流留下的形态：worktree 不在 <仓库>.<分支> 这个规范路径上，靠需求目录的软链认人
-    const legacy = join(workspace, 'legacy-checkout')
-    const who = ['-c', 'user.name=test', '-c', 'user.email=test@test']
-    execFileSync('git', ['-C', repo, ...who, 'worktree', 'add', '-q', legacy, '-b', 'feature-legacy'])
-    symlinkSync(legacy, join(alpha.dir, 'router'))
-    // 同一个工作区还被另一个需求链着
-    symlinkSync(legacy, join(beta.dir, 'router'))
-
-    const env = { EASY_FLOW_REPO_ROOTS: workspace }
-    const res = await callTool(configFile, 'import_worktrees', { requirementId: alpha.id }, env)
-    assert.equal(res.isError, false, res.text)
-    assert.match(res.text, /收编 1 个/)
-    assert.match(res.text, /feature-legacy/)
-
-    // 产物齐了
-    assert.match(readFileSync(join(legacy, 'AGENTS.md'), 'utf8'), /^id: wt-/m)
-    assert.equal(
-      readFileSync(join(legacy, 'requirement.md'), 'utf8'),
-      readFileSync(join(alpha.dir, 'requirement.md'), 'utf8'),
-    )
-    assert.match(readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8'), /^\/requirement\.md$/m)
-
-    const db = new BoardDatabase(dataDir)
-    const wts = db.listWorktrees(alpha.id)
-    assert.equal(wts.length, 1)
-    assert.equal(wts[0].path, legacy)
-    assert.equal(wts[0].branch, 'feature-legacy')
-    assert.equal(wts[0].short, 'router')
-    assert.equal(wts[0].repo, repoName)
-    assert.equal(wts[0].main, repo)
-    db.close()
-
-    // 幂等：同一个需求再跑，跳过；另一个需求来要同一路径，也跳过（先登记者得）
-    const again = await callTool(configFile, 'import_worktrees', { requirementId: alpha.id }, env)
-    assert.match(again.text, /收编 0 个/)
-    assert.match(again.text, /已归/)
-    const other = await callTool(configFile, 'import_worktrees', { requirementId: beta.id }, env)
-    assert.match(other.text, /收编 0 个/)
-    assert.match(other.text, /甲需求/)
-  })
-
-  test('update_requirement 与 add_links：按 id 改，链接只增不删', async () => {
+  test('req set 与 req link：按 id 改，链接只增不删', () => {
     scaffold()
     createProjectDir(dataDir, 'demo')
     const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
@@ -1351,40 +1255,36 @@ describe('MCP 层', () => {
     seed.syncProjects()
     seed.close()
 
-    const moved = await callTool(configFile, 'update_requirement', {
-      id: created.id,
-      status: '执行中',
-      priority: 'p1',
-    })
-    assert.equal(moved.isError, false, moved.text)
-    assert.match(moved.text, /状态：执行中 · 优先级：p1/)
+    const moved = cliOk(configFile, ['req', 'set', created.id, '--status', '执行中', '--priority', 'p1'])
+    assert.match(moved, /状态：执行中 · 优先级：p1/)
 
-    const links = await callTool(configFile, 'add_links', {
-      id: created.id,
-      codeLinks: ['https://gitlab.example.com/mr/1'],
-      extLinks: [{ detail: '设计稿', url: 'https://example.com/design' }],
-    })
-    assert.equal(links.isError, false, links.text)
-    assert.match(links.text, /代码链接（1）/)
-    assert.match(links.text, /扩展链接（1）：设计稿/)
+    const links = cliOk(configFile, [
+      'req',
+      'link',
+      created.id,
+      '--mr',
+      'https://gitlab.example.com/mr/1',
+      '--ext',
+      '设计稿=https://example.com/design',
+    ])
+    assert.match(links, /代码链接（1）/)
+    assert.match(links, /扩展链接（1）：设计稿/)
 
-    const bad = await callTool(configFile, 'add_links', { id: created.id, codeLinks: ['ftp://x'] })
-    assert.equal(bad.isError, true)
-    assert.match(bad.text, /http\(s\)/)
+    assert.match(cliFail(configFile, ['req', 'link', created.id, '--mr', 'ftp://x']), /http\(s\)/)
 
     // 只增不删：再追加一条，原来那条与扩展链接都还在
-    const more = await callTool(configFile, 'add_links', {
-      id: created.id,
-      feishuTaskLinks: ['https://project.feishu.cn/x7mm65/story/detail/1'],
-    })
-    assert.equal(more.isError, false, more.text)
-    assert.match(more.text, /飞书任务（1）/)
-    assert.match(more.text, /代码链接（1）/)
-    assert.match(more.text, /扩展链接（1）/)
+    const more = cliOk(configFile, [
+      'req',
+      'link',
+      created.id,
+      '--feishu',
+      'https://project.feishu.cn/x7mm65/story/detail/1',
+    ])
+    assert.match(more, /飞书任务（1）/)
+    assert.match(more, /代码链接（1）/)
+    assert.match(more, /扩展链接（1）/)
 
-    const none = await callTool(configFile, 'update_requirement', { id: created.id })
-    assert.equal(none.isError, true)
-    assert.match(none.text, /至少传/)
+    assert.match(cliFail(configFile, ['req', 'set', created.id]), /Pass at least one of --status/)
 
     const db = new BoardDatabase(dataDir)
     const r = db.byId(created.id)!
@@ -1396,50 +1296,14 @@ describe('MCP 层', () => {
     db.close()
   })
 
-  test('assign_ids 给老需求补 id，幂等', async () => {
-    scaffold()
-    createProjectDir(dataDir, 'demo')
-    // 手写一个没有 id 的老需求
-    const legacy = join(dataDir, 'demo', 'legacy')
-    mkdirSync(legacy, { recursive: true })
-    writeFileSync(join(legacy, 'AGENTS.md'), '<!-- 指令 -->\n', 'utf8')
-    writeFileSync(join(legacy, 'requirement.md'), '# 老需求\n\n## 需求\n\n正文不能动。\n', 'utf8')
-    const seed = new BoardDatabase(dataDir)
-    seed.syncProjects()
-    assert.equal(seed.get('legacy', 'demo')?.id, '')
-    seed.close()
-
-    const first = await callTool(configFile, 'assign_ids')
-    assert.match(first.text, /已补 1 个：\ndemo\/legacy → req-/)
-    const agents = readFileSync(join(legacy, 'AGENTS.md'), 'utf8')
-    const id = /id: (req-\w+)/.exec(agents)![1]
-    assert.equal(agents, `---\nid: ${id}\n---\n\n<!-- 指令 -->\n`)
-    assert.equal(
-      readFileSync(join(legacy, 'requirement.md'), 'utf8'),
-      '# 老需求\n\n## 需求\n\n正文不能动。\n',
-    )
-
-    const db = new BoardDatabase(dataDir)
-    db.syncProjects()
-    assert.equal(db.get('legacy', 'demo')?.id, id)
-    assert.equal(db.byId(id)?.slug, 'legacy')
-    db.close()
-
-    const again = await callTool(configFile, 'assign_ids')
-    assert.match(again.text, /所有需求都已有 id/)
-    rmSync(base, { recursive: true, force: true })
-  })
-
-  // 注册是用户级的：每个 claude / codex 会话都会拉起这个进程，
-  // 所以没碰工具时不该开库、更不该凭空造出一个数据目录
-  test('懒开库：只握手不调工具，不建库', async () => {
+  // only commands that really use the db open it; --help / --version must not create a data dir
+  test('--help / --version 不开库', () => {
     scaffold()
     const never = join(base, 'never-used')
     writeFileSync(configFile, JSON.stringify({ dataDir: never }), 'utf8')
-    await mcpSession(configFile, [
-      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } } },
-      { jsonrpc: '2.0', method: 'notifications/initialized' },
-    ])
+    cliOk(configFile, ['--help'])
+    cliOk(configFile, ['--version'])
+    cliOk(configFile, ['req', 'new', '--help'])
     assert.equal(existsSync(never), false)
   })
 })
@@ -1510,7 +1374,7 @@ describe('HTTP 层', () => {
 
   test('POST /api/move 拒绝未知列', async () => {
     const r = await post('/api/move', { slug: 'alpha', status: 'Done' })
-    assert.match(r.error, /未知状态/)
+    assert.match(r.error, /Unknown status/)
   })
 
   test('POST /api/update 支持改阶段与优先级', async () => {
@@ -1520,8 +1384,8 @@ describe('HTTP 层', () => {
   })
 
   test('POST /api/update 拒绝非法枚举', async () => {
-    assert.match((await post('/api/update', { slug: 'alpha', status: '开发中' })).error, /未知状态/)
-    assert.match((await post('/api/update', { slug: 'alpha', priority: 'high' })).error, /未知优先级/)
+    assert.match((await post('/api/update', { slug: 'alpha', status: '开发中' })).error, /Unknown status/)
+    assert.match((await post('/api/update', { slug: 'alpha', priority: 'high' })).error, /Unknown priority/)
   })
 
   test('GET /api/search 返回命中的完整需求对象', async () => {
@@ -1560,10 +1424,10 @@ describe('HTTP 层', () => {
 
   test('POST /api/worktree/open 只认库里的记录，目录不在就报错', async () => {
     const unknown = await post('/api/worktree/open', { id: 'wt-nope' })
-    assert.match(unknown.error, /找不到 worktree/)
+    assert.match(unknown.error, /Worktree not found/)
     // 上一条用例登记的路径本来就不存在：不该真去 open，而是报出来
     const gone = await post('/api/worktree/open', { id: 'wt-ctx' })
-    assert.match(gone.error, /目录已不存在/)
+    assert.match(gone.error, /Directory no longer exists/)
   })
 
   test('文档读写往返', async () => {
@@ -1579,18 +1443,18 @@ describe('HTTP 层', () => {
 
   test('★ 文档接口拒绝路径越界', async () => {
     const up = await get('/api/doc?slug=alpha&name=' + encodeURIComponent('../../etc/hosts'))
-    assert.match(up.error, /越界|不支持/)
+    assert.match(up.error, /escapes the root|Unsupported/)
     const abs = await get('/api/doc?slug=alpha&name=' + encodeURIComponent('/etc/hosts'))
-    assert.match(abs.error, /绝对路径|不支持/)
+    assert.match(abs.error, /Absolute paths|Unsupported/)
     const traverse = await get(
       '/api/doc?slug=alpha&name=' + encodeURIComponent('../../../package.json'),
     )
-    assert.match(traverse.error, /越界|不支持/)
+    assert.match(traverse.error, /escapes the root|Unsupported/)
   })
 
   test('文档接口拒绝非文本类型', async () => {
     const r = await get('/api/doc?slug=alpha&name=shell.sh')
-    assert.match(r.error, /不支持的文件类型/)
+    assert.match(r.error, /Unsupported file type/)
   })
 
   test('项目接口：列表 / 切 / 删', async () => {
@@ -1628,7 +1492,7 @@ describe('HTTP 层', () => {
 
   test('不能删除当前项目', async () => {
     const r = await post('/api/projects/delete', { slug: 'onex', removeFiles: false })
-    assert.match(r.error, /不能删除当前/)
+    assert.match(r.error, /currently in use/)
   })
 
   test('项目总规范读写', async () => {
@@ -1644,21 +1508,27 @@ describe('HTTP 层', () => {
 
   test('不存在的 slug 返回可读错误', async () => {
     const r = await get('/api/context?slug=nope')
-    assert.match(r.error, /需求不存在/)
+    assert.match(r.error, /Requirement not found/)
   })
 
-  // 只读地看注册计划；不测 /api/mcp/install——那会改到本机真实的 agent 配置
-  test('GET /api/mcp 返回两个 agent 的注册计划', async () => {
-    const r = await get('/api/mcp')
-    assert.match(r.entry, /server\/mcp\.ts$/)
+  // read the install plan only; /api/skill/install is not tested — it would touch the real user environment
+  test('GET /api/skill 返回 CLI 与 skill 的安装计划', async () => {
+    const r = await get('/api/skill')
+    assert.match(r.source, /skill$/)
+    assert.match(r.cli, /server\/cli\.ts$/)
+    assert.ok(r.shim.path.endsWith('/.local/bin/easy-flow'))
     assert.deepEqual(
       r.agents.map((a: { id: string }) => a.id),
-      ['claude', 'codex'],
+      ['claude', 'cursor', 'codex'],
     )
     for (const a of r.agents) {
-      assert.equal(typeof a.installed, 'boolean')
-      assert.ok(a.configFile.startsWith('/'))
+      assert.equal(typeof a.linked, 'boolean')
+      assert.ok(a.dir.startsWith('/'))
     }
+    assert.deepEqual(
+      r.legacyMcp.map((m: { id: string }) => m.id),
+      ['claude', 'codex'],
+    )
   })
 })
 
