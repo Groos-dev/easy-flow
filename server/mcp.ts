@@ -8,7 +8,7 @@
  * 写进它自己 AGENTS.md 的 id 提供。不拿 cwd、也不拿正文里出现的路径去猜是哪个需求——
  * 猜错了会把状态写到别的需求上，而 id 查不到只会报错。
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -16,7 +16,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { BoardDatabase, PRIORITIES, STATUSES, type Priority, type Requirement, type Status, type Worktree } from './db.ts'
 import { readConfig } from './config.ts'
-import { listProjectDirs, parseFrontmatter, readProjectConvention } from './markdown.ts'
+import { listProjectDirs, projectDisplayName, readProjectConvention } from './markdown.ts'
+import { readTextOrNull } from './fsutil.ts'
 import {
   createProjectDir,
   createRequirementDir,
@@ -100,19 +101,11 @@ function createRequirement(
   return created
 }
 
-function readIfExists(file: string): string | null {
-  try {
-    return readFileSync(file, 'utf8')
-  } catch {
-    return null
-  }
-}
-
 /** 需求主体：头部几行 + 项目规范 + 需求描述 + context.md。extraHead 给 worktree 命中时补头 */
 function requirementBlocks(req: Requirement, extraHead: string[] = []): string[] {
   const root = join(config.dataDir, req.project)
   const convention = readProjectConvention(root)
-  const display = convention ? parseFrontmatter(convention).data.name : ''
+  const display = projectDisplayName(convention, req.project)
 
   const head = [
     ...extraHead,
@@ -129,9 +122,9 @@ function requirementBlocks(req: Requirement, extraHead: string[] = []): string[]
 
   const blocks = [head.join('\n')]
   if (convention) blocks.push(`## 项目规范（${join(root, 'AGENTS.md')}）\n\n${convention.trim()}`)
-  const desc = readIfExists(join(req.path, 'requirement.md'))
+  const desc = readTextOrNull(join(req.path, 'requirement.md'))
   if (desc) blocks.push(`## 需求描述（requirement.md）\n\n${desc.trim()}`)
-  const ctx = readIfExists(join(req.path, 'context.md'))
+  const ctx = readTextOrNull(join(req.path, 'context.md'))
   if (ctx) blocks.push(`## 上下文（context.md）\n\n${ctx.trim()}`)
   return blocks
 }

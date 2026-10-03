@@ -10,9 +10,7 @@
 import { execFile } from 'node:child_process'
 import {
   existsSync,
-  lstatSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
   readlinkSync,
   renameSync,
@@ -23,6 +21,7 @@ import {
 import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { renderWorktreeAgents } from './convention.ts'
+import { lstatOrNull, readdirOrEmpty } from './fsutil.ts'
 import { parseFrontmatter } from './markdown.ts'
 
 /**
@@ -139,7 +138,7 @@ function findRepo(root: string, name: string, depth: number): string[] {
   if (depth < 0 || !existsSync(root)) return []
   const hits: string[] = []
   const walk = (dir: string, left: number): void => {
-    for (const entry of readdirSafe(dir)) {
+    for (const entry of readdirOrEmpty(dir)) {
       if (entry.startsWith('.') || entry === 'node_modules') continue
       const p = join(dir, entry)
       const st = lstatOrNull(p)
@@ -150,14 +149,6 @@ function findRepo(root: string, name: string, depth: number): string[] {
   }
   walk(root, depth - 1)
   return hits
-}
-
-function readdirSafe(dir: string): string[] {
-  try {
-    return readdirSync(dir)
-  } catch {
-    return []
-  }
 }
 
 /** worktree 路径：主 checkout 旁边，`<仓库名>.<分支扁平化>`。分支里的 / 会坏掉目录名 */
@@ -288,7 +279,7 @@ export async function adoptWorktree(input: {
 /** 需求目录里指向 git worktree 的软链。旧工作流留下的关联只剩这一条线索 */
 export function linkedWorktrees(requirementDir: string): Array<{ short: string; path: string }> {
   const out: Array<{ short: string; path: string }> = []
-  for (const entry of readdirSafe(requirementDir)) {
+  for (const entry of readdirOrEmpty(requirementDir)) {
     if (entry.startsWith('.')) continue
     const link = join(requirementDir, entry)
     if (!lstatOrNull(link)?.isSymbolicLink()) continue
@@ -420,14 +411,6 @@ async function branchOf(path: string): Promise<string> {
     return branch === 'HEAD' ? '' : branch
   } catch {
     return ''
-  }
-}
-
-function lstatOrNull(p: string): ReturnType<typeof lstatSync> | null {
-  try {
-    return lstatSync(p)
-  } catch {
-    return null
   }
 }
 

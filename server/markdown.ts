@@ -2,8 +2,9 @@
  * markdown 解析工具。被数据层（同步 md → sqlite）和 HTTP 层共用。
  * 这里只负责"读懂文件"，不持有任何状态。
  */
-import { existsSync, readdirSync, statSync, lstatSync, readFileSync } from 'node:fs'
+import { existsSync, statSync, lstatSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { readdirOrEmpty, readTextOrNull } from './fsutil.ts'
 
 /** 单文件索引上限：超出只索引前 N 字节，避免大文档拖垮内存 */
 const MAX_DOC_BYTES = 64 * 1024
@@ -111,12 +112,9 @@ function parseRepos(body: string): RepoRef[] {
   return repos
 }
 
+/** 目录下的可见条目（点开头的不算，它们在数据目录里是"应用自己的东西"） */
 function entries(dir: string): string[] {
-  try {
-    return readdirSync(dir).filter((e) => !e.startsWith('.'))
-  } catch {
-    return []
-  }
+  return readdirOrEmpty(dir).filter((e) => !e.startsWith('.'))
 }
 
 export interface DocFile {
@@ -257,11 +255,6 @@ export function listProjectDirs(dataDir: string): ProjectDir[] {
     })
 }
 
-/** 列出某个项目下的需求目录 */
-export function listRequirementsIn(projectRoot: string): string[] {
-  return listRequirementDirs(projectRoot)
-}
-
 /**
  * 列出 root 下"看着像需求、文件却不齐"的直接子目录。
  * 文件不齐就不会被识别成需求，只能在这里露面——仅供提示，不做任何过滤。
@@ -283,10 +276,13 @@ export function listStrayDirs(root: string): string[] {
 
 /** 读取项目级规范文件（约定为项目根目录的 AGENTS.md），不存在则返回 null */
 export function readProjectConvention(projectRoot: string): string | null {
-  const file = join(projectRoot, 'AGENTS.md')
-  try {
-    return readFileSync(file, 'utf8')
-  } catch {
-    return null
-  }
+  return readTextOrNull(join(projectRoot, 'AGENTS.md'))
+}
+
+/**
+ * 项目显示名：项目根 AGENTS.md 的 frontmatter name，缺省用目录名。
+ * 显示名归 md 管（与状态无关），读它的地方不止一处，写法必须一致。
+ */
+export function projectDisplayName(convention: string | null, slug: string): string {
+  return (convention && parseFrontmatter(convention).data.name) || slug
 }
