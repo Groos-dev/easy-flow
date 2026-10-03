@@ -1,0 +1,31 @@
+src/renderer/src/components/Detail.tsx
+  s_14f5e060888425::t_4ffc467bb8ee2a 87-88,93-99
+  s_14f5e060888425::t_4074528a3f5f0c 124-128,144
+src/renderer/src/lib/types.ts
+  s_14f5e060888425::t_02f3e392af957e 63-66
+  s_14f5e060888425::t_844ac3fbcec73e 75-76
+  s_14f5e060888425::t_fe9d56e265f738 122,131
+src/renderer/src/components/Settings.tsx
+  s_14f5e060888425::t_0956fe068dec1b 47-53
+src/renderer/src/components/InfoPanel.tsx
+  s_14f5e060888425::t_c9e31063827654 95-102,110-112
+  s_14f5e060888425::t_ba7ea60979eec9 1
+src/renderer/src/components/icons.tsx
+  s_14f5e060888425::t_b0760980803888 2-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "0bfcab3cf5e1a2a38aa824f4da86d3652747b261",
+  "prompts": {},
+  "sessions": {
+    "s_14f5e060888425": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0faa5006-438e-4f13-93a1-1f09b590dabf",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
