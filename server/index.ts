@@ -27,7 +27,7 @@ import {
 
 export const DEFAULT_PORT = 3210
 
-/** 单条记录变更不涉及目录扫描，给详情页一个稳定的 sync 形状 */
+/** 单条记录变更不涉及目录扫描，但仍然回一个空 sync：列表与单条接口的对象形状保持一致 */
 const NO_CHANGES = {
   added: [],
   updated: [],
@@ -57,7 +57,7 @@ function resolveProject(db: BoardDatabase, raw: string | null): string {
   } catch {
     throw new Error(`项目标识编码不合法: ${raw}`)
   }
-  if (!db.listProjects().some((p) => p.slug === slug)) {
+  if (!db.hasProject(slug)) {
     throw new Error(`项目不存在: ${slug}`)
   }
   return slug
@@ -213,7 +213,6 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         if (status !== undefined) result = db.setStatus(id, status as Status, project)
         if (priority !== undefined) result = db.setPriority(id, (priority as Priority) || '', project)
         if (title !== undefined) result = db.rename(id, String(title), project)
-        // 详情页依赖返回对象里的 sync 来提示新增/失联
         json(req, res, 200, { ...result, sync: NO_CHANGES })
         return
       }

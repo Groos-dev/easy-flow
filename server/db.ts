@@ -267,9 +267,16 @@ export class BoardDatabase {
 
   /** 切到另一个项目；不存在则报错，避免静默落到空看板 */
   setProject(slug: string): void {
-    const row = this.db.prepare('SELECT slug FROM project WHERE slug = ?').get(slug)
-    if (!row) throw new Error(`项目不存在: ${slug}`)
+    if (!this.hasProject(slug)) throw new Error(`项目不存在: ${slug}`)
     this.activeProject = slug
+  }
+
+  /**
+   * 项目是否存在。判存在只查这一行——listProjects 为了列表展示要读规范文件、
+   * 遍历子目录、逐项目 COUNT，接口的每个请求都拿它做参数校验的话太重。
+   */
+  hasProject(slug: string): boolean {
+    return !!this.db.prepare('SELECT 1 FROM project WHERE slug = ?').get(slug)
   }
 
   // ------------------------------------------------------------- 项目
