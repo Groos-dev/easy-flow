@@ -231,67 +231,6 @@ export async function provisionWorktree(input: ProvisionInput): Promise<Provisio
   return { path, created, branchCreated, ...decorated }
 }
 
-export interface Adopted {
-  path: string
-  repo: string
-  branch: string
-  main: string
-  identityInFile: boolean
-  excludeNote: string
-}
-
-/**
- * 收编一个已存在的 git worktree：登记进 easy-flow 并在它里面补齐产物。
- *
- * 与创建的区别是不建目录、也不要求路径符合 `<仓库>.<分支>`——旧工作流留下的工作区
- * 散在好几套布局里（`~/repo/java/x.y`、`~/worktrees/<host>/<repo>/<branch>`、
- * codex 的临时目录），能认出来就该能收编。
- */
-export async function adoptWorktree(input: {
-  path: string
-  worktreeId: string
-  requirementId: string
-  requirementDir: string
-  /** 需求里的短名，用来给设计目录起名字（如 agg） */
-  short?: string
-}): Promise<Adopted> {
-  if (!lstatOrNull(join(input.path, '.git'))?.isFile()) {
-    throw new Error(`${input.path} is not a git worktree (.git is not a file pointing at the main repo)`)
-  }
-  // describeCheckout 顺手校验了 --show-toplevel 就是它自己，主 checkout 从 worktree list 取
-  const { repo, main } = await describeCheckout(input.path)
-  const branch = await branchOf(input.path)
-  if (!branch) throw new Error(`${input.path} is not on a branch (detached HEAD?)`)
-
-  const decorated = await decorate({
-    worktreeId: input.worktreeId,
-    requirementId: input.requirementId,
-    requirementDir: input.requirementDir,
-    path: input.path,
-    repo,
-    branch,
-    short: input.short,
-    main,
-  })
-  return { path: input.path, repo, branch, main, ...decorated }
-}
-
-/** 需求目录里指向 git worktree 的软链。旧工作流留下的关联只剩这一条线索 */
-export function linkedWorktrees(requirementDir: string): Array<{ short: string; path: string }> {
-  const out: Array<{ short: string; path: string }> = []
-  for (const entry of readdirOrEmpty(requirementDir)) {
-    if (entry.startsWith('.')) continue
-    const link = join(requirementDir, entry)
-    if (!lstatOrNull(link)?.isSymbolicLink()) continue
-    const target = readlinkSync(link)
-    const abs = target.startsWith('/') ? target : join(requirementDir, target)
-    // .git 是文件才算 worktree：指向主 checkout 的、以及死链，都不是迁移对象
-    if (!lstatOrNull(join(abs, '.git'))?.isFile()) continue
-    out.push({ short: entry, path: abs })
-  }
-  return out
-}
-
 /** 补齐产物需要知道的全部信息；writeAgentsFile 取其中的一部分 */
 interface DecorateInput {
   worktreeId: string
