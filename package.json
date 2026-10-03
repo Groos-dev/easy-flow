@@ -12,6 +12,7 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "dead-code": "node scripts/dead-code.mjs",
     "postinstall": "node scripts/fix-node-pty.mjs",
     "test": "node --test test/core.test.ts"
   },

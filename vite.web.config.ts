@@ -13,7 +13,4 @@ export default defineConfig({
     port: 5273,
     proxy: { '/api': 'http://127.0.0.1:3210' },
   },
-  resolve: {
-    alias: { '@': resolve(__dirname, 'src/renderer/src') },
-  },
 })

@@ -5,7 +5,7 @@
  * 覆盖数据层（markdown 解析、sqlite 同步、状态读写）与 HTTP 层的外在行为，
  * 不测内部实现细节——所以重构实现时这些测试应保持全绿。
  *
- * 运行：node --test test/
+ * 运行：pnpm test
  */
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
@@ -1448,7 +1448,6 @@ describe('MCP 层', () => {
 
 describe('HTTP 层', () => {
   let dir: string
-  let db: BoardDatabase
   let app: ReturnType<typeof createBoardApp>
   let server: ReturnType<typeof createServer>
   let base: string
@@ -1470,7 +1469,6 @@ describe('HTTP 层', () => {
   after(async () => {
     await new Promise<void>((r) => server.close(() => r()))
     app.close()
-    db?.close()
   })
 
   const get = async (p: string) => (await fetch(`${base}${p}`)).json() as Promise<any>
@@ -1481,7 +1479,8 @@ describe('HTTP 层', () => {
       body: JSON.stringify(body),
     })).json() as Promise<any>
 
-  test('GET /api/health', async () => {    const r = await get('/api/health')
+  test('GET /api/health', async () => {
+    const r = await get('/api/health')
     assert.equal(r.ok, true)
     assert.equal(r.dataDir, dir)
   })
