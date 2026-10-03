@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron'
 import { join } from 'node:path'
 import type { RunningBoardServer } from '../../server/index.ts'
-import { TerminalManager } from './terminal.ts'
+import { TerminalManager, type TerminalTarget } from './terminal.ts'
 
 let win: BrowserWindow | null = null
 let boardServer: RunningBoardServer | null = null
@@ -51,7 +51,7 @@ function registerIpc(): void {
 
   ipcMain.handle(
     'terminal:create',
-    (event, target: { project: string; slug?: string }, opts: { cols?: number; rows?: number } = {}) => {
+    (event, target: TerminalTarget, opts: { cols?: number; rows?: number } = {}) => {
       if (!terminals) throw new Error('终端服务未就绪')
       const publish = (channel: string, payload: unknown) => event.sender.send(channel, payload)
       return terminals.create(target, publish, opts)
@@ -140,8 +140,9 @@ async function boot(): Promise<void> {
   applyCsp()
   boardServer = await startBoardServer({ port: DEFAULT_PORT })
 
-  // 终端只需要挂载点目录。需求身份不由环境变量传递——agent 从需求目录里读 id 再显式传给 MCP，
-  // 这样在 easy-flow 之外开的终端也能用。
+  // 终端只需要挂载点目录。身份（需求 id / 项目）不经环境变量传：agent 从需求目录里的
+  // AGENTS.md 读 id 再显式传给 MCP，这样在 easy-flow 之外开的终端也能用；env 里只留一个
+  // 「这个终端是本应用开的」标记。
   terminals = new TerminalManager((target) => {
     const project = boardServer?.db.listProjects().find((p) => p.slug === target.project)
     if (!project) return null
@@ -149,8 +150,6 @@ async function boot(): Promise<void> {
     if (target.slug && !req) return null
     return {
       cwd: req?.path ?? project.root,
-      // 身份（需求 id / 项目）都不经环境变量传：agent 从需求目录里读，再显式传给 MCP，
-      // 这样在 easy-flow 之外开的终端也能用。这里只留一个"这是本应用开的终端"的标记。
       env: {
         EASY_FLOW_SESSION: '1',
       },

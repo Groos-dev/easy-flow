@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { TerminalTarget } from '../main/terminal.ts'
 
 /** 订阅形如 terminal:data:<id> 的动态频道，返回取消订阅函数 */
 function subscribe(channel: string, handler: (payload: never) => void): () => void {
@@ -15,10 +16,10 @@ contextBridge.exposeInMainWorld('easyFlow', {
   onOpenSettings: (handler: () => void): (() => void) =>
     subscribe('easy-flow:open-settings', handler),
 
-  /** 终端：在指定需求目录下开一个登录 shell */
+  /** 终端：在指定挂载点（需求或项目）的目录下开一个登录 shell */
   terminal: {
-    create: (slug: string, opts?: { cols?: number; rows?: number }): Promise<string> =>
-      ipcRenderer.invoke('terminal:create', slug, opts ?? {}),
+    create: (target: TerminalTarget, opts?: { cols?: number; rows?: number }): Promise<string> =>
+      ipcRenderer.invoke('terminal:create', target, opts ?? {}),
 
     input: (id: string, data: string): void => ipcRenderer.send('terminal:input', id, data),
 
