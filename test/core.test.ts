@@ -712,8 +712,7 @@ function mcpSession(
 ): Promise<Array<{ id?: number; result?: any; error?: { message: string } }>> {
   return new Promise((resolve, reject) => {
     const env: Record<string, string> = { ...process.env, EASY_FLOW_CONFIG: configFile }
-    // 身份只该来自调用方，别让跑测试的 shell 里的残留 env 干扰
-    delete env.EASY_FLOW_PROJECT
+    // 仓库根参数只该来自调用方，别让跑测试的 shell 里的残留 env 干扰
     delete env.EASY_FLOW_REPO_ROOTS
     Object.assign(env, extraEnv)
 
@@ -1512,7 +1511,7 @@ describe('HTTP 层', () => {
     assert.match(r.error, /未知状态/)
   })
 
-  test('POST /api/update 支持改阶段与优先级', async () => {
+  test('POST /api/update 支持改状态与优先级', async () => {
     const r = await post('/api/update', { slug: 'alpha', status: 'Review', priority: 'p1' })
     assert.equal(r.status, 'Review')
     assert.equal(r.priority, 'p1')

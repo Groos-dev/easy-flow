@@ -357,7 +357,7 @@ export default function Settings({ onBack, onApplied }: Props) {
             <pre>
               {[
                 'md      → 需求内容（需求、方案、决策、踩坑），agent 读写',
-                'sqlite  → 机器状态（阶段、优先级、更新日期）与文档索引',
+                'sqlite  → 机器状态（看板列、优先级、更新日期）与文档索引',
                 '',
                 '状态不再写在 markdown 里，因此 agent 重写文档不会破坏状态。',
               ].join('\n')}

@@ -1,5 +1,5 @@
 /**
- * easy-flow MCP：终端里的 agent 用它认路、建项目与需求。
+ * easy-flow MCP：终端里的 agent 用它认路，并建项目、需求与代码工作区。
  *
  * 数据目录在哪、模板长什么样、目录要摆成什么结构，都由服务端掌握，
  * agent 只需要回答"叫什么、做什么"——不需要被告知自己处在什么环境里。
@@ -172,9 +172,10 @@ server.registerTool(
   {
     title: '取上下文',
     description:
-      '按 id 取上下文，返回从命中处向上到项目的整条链（项目规范、需求描述、context.md、状态、文档索引）。' +
-      '三种 id 都收：wt-… 是 worktree（在它的 AGENTS.md frontmatter 里）、req-… 是需求（在需求目录的 AGENTS.md 里）、' +
-      '裸值当项目标识。id 必须显式传，不做猜测。',
+      '按 id 取上下文，返回从命中处向上到项目的整条链：几行头部（id、项目、需求、状态、目录），' +
+      '加上项目规范、需求描述（requirement.md）与 context.md 的原文。req- 还会列出它名下的 worktree；' +
+      'wt- 会补上仓库、分支与设计文档目录的位置。三种 id 都收：wt-… 是 worktree（在它的 AGENTS.md frontmatter 里）、' +
+      'req-… 是需求（在需求目录的 AGENTS.md 里）、裸值当项目标识。id 必须显式传，不做猜测。',
     inputSchema: {
       id: z.string().optional().describe('wt-xxxxxxxxxx / req-xxxxxxxxxx / 项目标识'),
     },
@@ -261,7 +262,7 @@ server.registerTool(
     inputSchema: {
       title: z.string().describe('需求标题，一行'),
       summary: z.string().optional().describe('一句话说清要做什么、为什么'),
-      project: z.string().describe('项目标识（如 onex），必传——环境变量不再兜底'),
+      project: z.string().describe('项目标识（如 onex），必传；不知道有哪些项目就先调 get_context 传裸值查'),
       slug: z.string().optional().describe('目录名（英文小写、数字、连字符）；省略则从标题推导'),
     },
   },
@@ -281,7 +282,7 @@ server.registerTool(
     title: '新建子需求',
     description:
       '在某个需求下再建一层需求目录，结构与需求相同，用来拆解跨仓或多步的改动。' +
-      '注意：看板只扫一层，子需求既不出现在看板上、也还不能按 id 反查，要等索引改成递归。',
+      '注意：看板只扫一层——子需求不出现在看板上，也不能按 id 反查（它的 id 只写在自己目录的 AGENTS.md 里）。',
     inputSchema: {
       title: z.string().describe('子需求标题，一行'),
       summary: z.string().optional().describe('一句话说清这次要改什么'),
@@ -417,7 +418,7 @@ server.registerTool(
       repo: z.string().describe('仓库名（在仓库根下找），或主 checkout 的绝对路径'),
       branch: z.string().describe('分支名，如 feature-seatmap-truemap；本地已有则复用'),
       base: z.string().optional().describe('新分支起点，缺省用主 checkout 当前的 HEAD'),
-      short: z.string().optional().describe('短名（涉及仓库表的短名列），仅用于展示'),
+      short: z.string().optional().describe('需求「涉及仓库」表里的短名，用来给设计目录 docs/<短名>/ 命名并展示'),
     },
   },
   async ({ requirementId, repo, branch, base, short }) => {

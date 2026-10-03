@@ -5,7 +5,7 @@
  * 这里只做两件事：把模板补到 <dataDir>/_templates/ 下，以及只读地报告目录哪里不合规范。
  * 规范问题只用于 UI 提示：不拦截操作、不改状态、不过滤列表。
  *
- * 状态（阶段/优先级/链接）永远不写进 md；模板与规范只描述文件结构。
+ * 状态（看板列、优先级、链接）永远不写进 md；模板与规范只描述文件结构。
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -42,7 +42,7 @@ name: ${oneLine(name)}
 # 项目规范
 
 <!-- easy-flow 项目规范：显示名取上面 frontmatter 的 name，留空则用目录名，改完下次刷新生效。${howto}
-     状态（阶段/优先级）存在 easy-flow.db 里，不要写进任何 md。 -->
+     状态（看板列、优先级）存在 easy-flow.db 里，不要写进任何 md。 -->
 
 ## 背景
 
@@ -65,6 +65,7 @@ function requirementAgents(id: string): string {
 
 | 文件 | 作用 |
 | --- | --- |
+| \`AGENTS.md\` | 本文件：身份（frontmatter 的 id）与 agent 指令 |
 | \`requirement.md\` | 需求描述。看板卡片的标题取它的 H1、摘要取「需求」段 |
 | \`context.md\` | 需求的上下文：背景、约束、相关的人与系统、决策依据 |
 | \`docs/\` | 设计、调研、踩坑。会出现在详情页标签栏；工作区里的 \`design/\` 软链指向它下面的仓库目录 |
@@ -97,6 +98,7 @@ ${summary}
 
 /** context.md：需求的上下文。一开始只是骨架，边做边补 */
 const REQUIREMENT_CONTEXT_TEMPLATE = `<!-- easy-flow 需求 · 上下文：需求描述之外的补充——背景、约束、相关的人与系统、决策依据。
+     不记进度：进度从看板状态与工作区里的代码就能推出来，写在这里只会过期。
      身份与目录约定见同目录 AGENTS.md，需求描述见 requirement.md。 -->
 
 ## 背景

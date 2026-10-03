@@ -1,5 +1,5 @@
 /**
- * SQLite 数据层：状态（阶段/优先级）的唯一权威 + 文档全文索引。
+ * SQLite 数据层：状态（看板列、优先级）的唯一权威 + 文档全文索引。
  *
  * 职责划分：
  *   md   → 需求内容，agent 读写
@@ -439,7 +439,7 @@ export class BoardDatabase {
 
         if (!existing) {
           // 新记录一律从「澄清」起步。曾经从 md 的 frontmatter 读初始状态，
-          // 但那套约定已废弃——状态（stage/priority）只归 sqlite；
+          // 但那套约定已废弃——状态（status/priority）只归 sqlite；
           // title/name 这类「内容」仍从文件读，两者不要混。
           insertReq.run(
             parsed.slug,

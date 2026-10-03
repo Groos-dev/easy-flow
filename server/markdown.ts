@@ -6,10 +6,10 @@ import { existsSync, statSync, lstatSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readdirOrEmpty, readTextOrNull } from './fsutil.ts'
 
-/** 单文件索引上限：超出只索引前 N 字节，避免大文档拖垮内存 */
-const MAX_DOC_BYTES = 64 * 1024
-/** 单需求索引总量上限 */
-const MAX_REQ_BYTES = 512 * 1024
+/** 单文件索引上限：超出只索引前 N 个字符。按 content.length 算（UTF-16 码元），给超大文档兜底够用 */
+const MAX_DOC_CHARS = 64 * 1024
+/** 单需求索引总量上限，口径同上 */
+const MAX_REQ_CHARS = 512 * 1024
 
 export interface Frontmatter {
   data: Record<string, string>
@@ -139,7 +139,7 @@ export function readDocs(dir: string): DocFile[] {
   let total = 0
   const walk = (d: string, prefix: string): void => {
     for (const entry of entries(d)) {
-      if (total >= MAX_REQ_BYTES) return
+      if (total >= MAX_REQ_CHARS) return
       const p = join(d, entry)
       const rel = prefix ? `${prefix}/${entry}` : entry
       try {
@@ -153,7 +153,7 @@ export function readDocs(dir: string): DocFile[] {
         if (entry === 'AGENTS.md' || entry === 'CLAUDE.md') continue
 
         let content = readFileSync(p, 'utf8')
-        if (content.length > MAX_DOC_BYTES) content = content.slice(0, MAX_DOC_BYTES)
+        if (content.length > MAX_DOC_CHARS) content = content.slice(0, MAX_DOC_CHARS)
         out.push({ name: rel, content, mtime: lst.mtimeMs })
         total += content.length
       } catch {
