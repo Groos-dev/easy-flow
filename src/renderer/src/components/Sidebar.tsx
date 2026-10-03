@@ -154,25 +154,21 @@ export default function Sidebar({
 
               {isOpen && (
                 <div className="tree-children">
-                  {p.requirements.length === 0 ? (
-                    <div className="tree-empty">（无需求）</div>
-                  ) : (
-                    p.requirements.map((r) => {
-                      const isSel =
-                        selected?.project === p.slug && selected?.slug === r.slug
-                      return (
-                        <button
-                          key={r.slug}
-                          className={`tree-row requirement${isSel ? ' selected' : ''}`}
-                          onClick={() => onOpenRequirement(p.slug, r.slug)}
-                          title={r.title}
-                        >
-                          <span className={`prio ${r.priority}`} style={{ visibility: r.priority ? 'visible' : 'hidden' }} />
-                          <span className="tree-name">{r.title || r.slug}</span>
-                        </button>
-                      )
-                    })
-                  )}
+                  {p.requirements.map((r) => {
+                    const isSel =
+                      selected?.project === p.slug && selected?.slug === r.slug
+                    return (
+                      <button
+                        key={r.slug}
+                        className={`tree-row requirement${isSel ? ' selected' : ''}`}
+                        onClick={() => onOpenRequirement(p.slug, r.slug)}
+                        title={r.title}
+                      >
+                        <span className={`prio ${r.priority}`} style={{ visibility: r.priority ? 'visible' : 'hidden' }} />
+                        <span className="tree-name">{r.title || r.slug}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>

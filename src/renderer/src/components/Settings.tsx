@@ -9,13 +9,12 @@ interface Props {
   onApplied: () => void
 }
 
-type SectionId = 'data' | 'appearance' | 'skill' | 'about'
+type SectionId = 'data' | 'appearance' | 'skill'
 
 const SECTIONS: Array<{ id: SectionId; label: string }> = [
   { id: 'data', label: '数据目录' },
   { id: 'appearance', label: '外观' },
   { id: 'skill', label: 'CLI 与 Skill' },
-  { id: 'about', label: '关于' },
 ]
 
 function describeSync(sync: SyncResult | null): string {
@@ -184,10 +183,6 @@ export default function Settings({ onBack, onApplied }: Props) {
         {section === 'data' && (
           <>
             <h1>数据目录</h1>
-            <p className="hint">
-              需求目录与 <code>easy-flow.db</code> 都放在这里。状态保存在数据库中，
-              因此换目录等于换一整套看板数据；切换后会扫描新目录并初始化数据库。
-            </p>
 
             {error && <div className="notice">{error}</div>}
             {message && <pre className="ok-box">{message}</pre>}
@@ -231,10 +226,6 @@ export default function Settings({ onBack, onApplied }: Props) {
         {section === 'appearance' && (
           <>
             <h1>外观</h1>
-            <p className="hint">
-              终端字体影响所有 CLI 的显示效果。如果提示符里的图标、分隔符显示为方块或错位，
-              说明当前字体缺少 Nerd Font 字形，从下面挑一个带 Nerd 字形的即可。
-            </p>
 
             {fontNotice && <div className="notice ok">{fontNotice}</div>}
 
@@ -251,9 +242,6 @@ export default function Settings({ onBack, onApplied }: Props) {
                   <span className="font-sample">❯ ~/req  main +2 !2 ?48 ──╮</span>
                 </button>
               ))}
-              {installedFonts.length === 0 && (
-                <div className="hint">未检测到常见等宽字体，可在下方手动填写字体名。</div>
-              )}
             </div>
 
             <div className="section-label">或手动填写 font-family</div>
@@ -306,11 +294,6 @@ export default function Settings({ onBack, onApplied }: Props) {
         {section === 'skill' && (
           <>
             <h1>CLI 与 Skill</h1>
-            <p className="hint">
-              装一条 <code>easy-flow</code> 命令和一个 skill：人、脚本与 agent 都走这条命令，
-              skill 让 agent 在该用时想得起来。安装只动用户环境（PATH 与各 agent 的 skills 目录），
-              不往需求目录或 worktree 落任何文件。
-            </p>
 
             {skillError && <div className="notice">{skillError}</div>}
             {skillNotice && <div className="notice ok">{skillNotice}</div>}
@@ -354,30 +337,10 @@ export default function Settings({ onBack, onApplied }: Props) {
                     .filter((m) => m.registered)
                     .map((m) => m.label)
                     .join('、')}
-                  还挂着 easy-flow 的 MCP 注册；安装时会自动摘掉——旧的入口文件已删，留着只会让每个会话报错。
+                  还挂着 easy-flow 的 MCP 注册，安装时会自动摘掉。
                 </p>
               </>
             )}
-          </>
-        )}
-
-        {section === 'about' && (
-          <>
-            <h1>关于</h1>
-            <p className="hint">
-              easy-flow —— 以 markdown 为内容事实源、以 SQLite 为状态权威的需求看板。
-            </p>
-            <div className="section-label">职责划分</div>
-            <pre>
-              {[
-                'md      → 需求内容（需求、方案、决策、踩坑），agent 读写',
-                'sqlite  → 机器状态（看板列、优先级、更新日期）与文档索引',
-                '',
-                '状态不再写在 markdown 里，因此 agent 重写文档不会破坏状态。',
-              ].join('\n')}
-            </pre>
-            <div className="section-label">数据位置</div>
-            <pre>{settings ? `${settings.dataDir}/easy-flow.db` : '—'}</pre>
           </>
         )}
       </main>

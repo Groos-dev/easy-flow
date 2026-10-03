@@ -359,7 +359,6 @@ export default function Detail({
         <section className="doc-pane">
           <div className="doc-bar">
             <div className="doc-tabs">
-              {docTabs.length === 0 && <span className="doc-empty">暂无文档</span>}
               {docTabs.map((tab) => (
                 <button
                   key={tab.name}
@@ -406,7 +405,6 @@ export default function Detail({
             <div
               className="doc-scroll"
               onDoubleClick={() => setMode('source')}
-              title="双击进入源码编辑"
             >
               {loading && <div className="loading">读取中…</div>}
               {!loading && (

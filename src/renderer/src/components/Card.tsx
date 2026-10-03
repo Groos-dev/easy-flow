@@ -47,7 +47,7 @@ export default function Card({ req, onOpen, overlay = false }: Props) {
         {req.priority && (
           <span
             className={`prio ${req.priority}`}
-            title={`${req.priority.toUpperCase()} ${PRIORITY_LABEL[req.priority] ?? ''}（点卡片可改）`}
+            title={`${req.priority.toUpperCase()} ${PRIORITY_LABEL[req.priority] ?? ''}`}
           />
         )}
         <span className="card-title">{req.title}</span>

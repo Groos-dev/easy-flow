@@ -53,21 +53,7 @@ export default function TerminalPane({ target, fontFamily, fontSize }: Props) {
           </button>
         )}
       </div>
-      {state === 'unavailable' ? (
-        <div className="terminal-fallback">
-          <p>浏览器模式下无法创建终端（需要 Electron 的原生 PTY）。</p>
-          <p>
-            请用桌面应用打开，或在终端里手动进入需求目录：
-            <code>
-              cd ~/requirements/{target.project}
-              {target.slug ? `/${target.slug}` : ''}
-            </code>{' '}
-            然后运行 <code>claude</code>。
-          </p>
-        </div>
-      ) : (
-        <div className="terminal-host" ref={hostRef} />
-      )}
+      {state !== 'unavailable' && <div className="terminal-host" ref={hostRef} />}
     </div>
   )
 }
