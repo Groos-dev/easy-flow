@@ -84,12 +84,19 @@ export default function Detail({
   const docSeq = useRef(0)
   /** 保存用的最新值，避免防抖回调闭包过期 */
   const draftRef = useRef('')
+  /** 项目页的规范原文。文档列表已经拿到，正文复用它——同一个接口不该拉两次 */
+  const projectDoc = useRef<Promise<string> | null>(null)
 
   useEffect(() => {
     let alive = true
     if (isProject) setCtx(null)
-    const load = isProject
-      ? api.projectConvention(target.project).then((r) => (r.content ? ['AGENTS.md'] : []))
+    // 项目页的规范原文在这里先发起，文档列表与正文共用这一次
+    const convention = isProject
+      ? api.projectConvention(target.project).then((r) => r.content ?? '')
+      : null
+    projectDoc.current = convention
+    const load = convention
+      ? convention.then((content) => (content ? ['AGENTS.md'] : []))
       : api
           .context(target.slug!, target.project)
           .then((c) => {
@@ -114,6 +121,11 @@ export default function Detail({
     }
   }, [target.project, target.slug, isProject])
 
+  /** 项目页的规范原文：正常走上面那次请求，挂载顺序有变时兜一次新请求 */
+  function projectContent(): Promise<string> {
+    return projectDoc.current ?? api.projectConvention(target.project).then((r) => r.content ?? '')
+  }
+
   const loadDoc = useCallback(async () => {
     // 需求页在文档列表到位前（或这个需求没有文档）没有可打开的文档
     if (!isProject && !activeDoc) {
@@ -129,9 +141,7 @@ export default function Detail({
     setSaveState('idle')
     try {
       const res = isProject
-        ? await api.projectConvention(target.project).then((r) => ({
-            content: r.content ?? '',
-          }))
+        ? { content: await projectContent() }
         : await api.doc(target.slug!, activeDoc, target.project)
       if (seq !== docSeq.current) return // 已被更新的请求取代
       setDraft(res.content)

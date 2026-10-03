@@ -60,7 +60,10 @@ export interface Requirement {
   path: string
   mtime: number
   updated: string
-  /** 本次同步做的增量（仅详情页刷新用） */
+  /**
+   * 本次同步的增量，随列表与单条更新一起下发。
+   * 渲染层目前只有设置页在读它（切数据目录 / 重新扫描那份），别处不看。
+   */
   sync?: SyncResult
 }
 
@@ -69,6 +72,8 @@ export interface SyncResult {
   updated: string[]
   orphaned: string[]
   restored: string[]
+  /** 工作区的存量校对（只 stat 路径，不跑 git） */
+  worktrees: { orphaned: string[]; restored: string[] }
 }
 
 export interface BoardData {
@@ -114,7 +119,7 @@ export interface SwitchResult {
   dbFile: string
   previous?: string
   unchanged?: boolean
-  sync: { added: string[]; updated: string[]; orphaned: string[]; restored: string[] } | null
+  sync: SyncResult | null
 }
 
 export interface SettingsPayload {
@@ -123,7 +128,7 @@ export interface SettingsPayload {
   defaultDataDir: string
   terminalFontFamily: string
   terminalFontSize: number
-  counts: { requirements: number }
+  counts: { requirements: number; projects: number }
 }
 
 export interface AppearancePayload {

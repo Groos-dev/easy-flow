@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api } from '../lib/api'
@@ -92,6 +92,14 @@ function OneLine(props: {
 export default function InfoPanel({ req, ctx }: { req: Requirement; ctx: ContextPayload | null }) {
   const [copied, setCopied] = useState('')
   const worktrees = ctx?.worktrees ?? []
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 浮窗随时会被关掉，定时器要跟着一起清，别对已卸载的组件 setState
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current)
+    }
+  }, [])
 
   /** 复制到剪贴板。失败就什么也不说，别谎报"已复制" */
   function copy(text: string) {
@@ -99,7 +107,9 @@ export default function InfoPanel({ req, ctx }: { req: Requirement; ctx: Context
       ?.writeText(text)
       .then(() => {
         setCopied(text)
-        setTimeout(() => setCopied(''), 1200)
+        // 连点两下时后一次要重新计时，否则第一下的定时器会提前把勾收掉
+        if (copiedTimer.current) clearTimeout(copiedTimer.current)
+        copiedTimer.current = setTimeout(() => setCopied(''), 1200)
       })
       .catch(() => {})
   }

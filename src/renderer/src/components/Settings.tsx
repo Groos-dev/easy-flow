@@ -44,6 +44,13 @@ export default function Settings({ onBack, onApplied }: Props) {
   const installedFonts = useMemo(() => detectMonospaceFonts(), [])
   const fontTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // 离开设置页时把还在飞的防抖清掉：它到点会写一次配置，并对已卸载的组件 setState
+  useEffect(() => {
+    return () => {
+      if (fontTimer.current) clearTimeout(fontTimer.current)
+    }
+  }, [])
+
   // MCP 注册状态：只在切到那一段时才去读两个 agent 的配置
   const [mcp, setMcp] = useState<McpPayload | null>(null)
   const [mcpNotice, setMcpNotice] = useState('')
