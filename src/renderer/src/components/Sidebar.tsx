@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, type Project } from '../lib/api'
-import type { Requirement } from '../lib/types'
+import { api } from '../lib/api'
+import type { Project, Requirement } from '../lib/types'
 
 interface Props {
   /** 当前选中的挂载点（用于高亮）；slug 为 null 表示选中了项目本身 */

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { api, type ContextPayload } from '../lib/api'
-import type { Requirement } from '../lib/types'
+import { api } from '../lib/api'
+import type { ContextPayload, Requirement } from '../lib/types'
 import TerminalPane from './TerminalPane'
 
 /**

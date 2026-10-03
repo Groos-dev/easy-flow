@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, type McpPayload, type SettingsPayload } from '../lib/api'
+import { api } from '../lib/api'
+import type { McpPayload, SettingsPayload, SyncResult } from '../lib/types'
 import { detectMonospaceFonts } from '../lib/fonts'
-import type { SyncResult } from '../lib/types'
 
 interface Props {
   onBack: () => void

@@ -1,4 +1,11 @@
-/** 与 server/db.ts 的 Requirement 对应 */
+/**
+ * 与服务端契约对应的类型。
+ *
+ * 渲染层只经 HTTP 拿到 JSON，没有编译期保证，所以这份声明是那层契约的档案：
+ * 服务端改了字段名不会在这里报错，只能靠测试与代码审查对齐。
+ */
+
+// ------------------------------------------------------------------ 需求
 
 export interface RepoRef {
   short: string
@@ -75,4 +82,65 @@ export interface BoardData {
   priorities: string[]
   /** 本次读取时做的增量同步，用于提示"新增了几个需求" */
   sync: SyncResult
+}
+
+// ------------------------------------------------------------------ 项目
+
+export interface Project {
+  slug: string
+  name: string
+  root: string
+  hasConvention: boolean
+  convention: string | null
+  /** 目录不合规范之处，只读提示（空数组即合规） */
+  issues: string[]
+  requirementCount: number
+  mtime: number
+  updated: string
+}
+
+// ------------------------------------------------------------------ 载荷
+
+export interface ContextPayload {
+  requirement: Requirement
+  docs: Array<{ name: string; content: string }>
+  requirementMd: string | null
+  /** 这个需求名下的工作区 */
+  worktrees: Worktree[]
+}
+
+export interface SwitchResult {
+  dataDir: string
+  dbFile: string
+  previous?: string
+  unchanged?: boolean
+  sync: { added: string[]; updated: string[]; orphaned: string[]; restored: string[] } | null
+}
+
+export interface SettingsPayload {
+  dataDir: string
+  dbFile: string
+  defaultDataDir: string
+  terminalFontFamily: string
+  terminalFontSize: number
+  counts: { requirements: number }
+}
+
+export interface AppearancePayload {
+  terminalFontFamily: string
+  terminalFontSize: number
+}
+
+export interface AgentMcp {
+  id: 'claude' | 'codex'
+  label: string
+  configFile: string
+  installed: boolean
+}
+
+export interface McpPayload {
+  /** MCP server 入口文件，环境不允许时为 null */
+  entry: string | null
+  problem: string | null
+  agents: AgentMcp[]
 }

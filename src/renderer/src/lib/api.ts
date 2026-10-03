@@ -1,4 +1,14 @@
-import type { BoardData, Requirement, Worktree } from './types'
+import type {
+  AgentMcp,
+  AppearancePayload,
+  BoardData,
+  ContextPayload,
+  McpPayload,
+  Project,
+  Requirement,
+  SettingsPayload,
+  SwitchResult,
+} from './types'
 
 // 渲染层走 HTTP 访问本地服务，开发与打包共用同一套代码：
 //   dev（浏览器）  → 相对路径，由 Vite proxy 转发到 127.0.0.1:3210
@@ -23,63 +33,6 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const data = JSON.parse(text) as T & { error?: string }
   if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
   return data
-}
-
-export interface SettingsPayload {
-  dataDir: string
-  dbFile: string
-  defaultDataDir: string
-  terminalFontFamily: string
-  terminalFontSize: number
-  counts: { requirements: number }
-}
-
-export interface AppearancePayload {
-  terminalFontFamily: string
-  terminalFontSize: number
-}
-
-export interface AgentMcp {
-  id: 'claude' | 'codex'
-  label: string
-  configFile: string
-  installed: boolean
-}
-
-export interface McpPayload {
-  /** MCP server 入口文件，环境不允许时为 null */
-  entry: string | null
-  problem: string | null
-  agents: AgentMcp[]
-}
-
-export interface Project {
-  slug: string
-  name: string
-  root: string
-  hasConvention: boolean
-  convention: string | null
-  /** 目录不合规范之处，只读提示（空数组即合规） */
-  issues: string[]
-  requirementCount: number
-  mtime: number
-  updated: string
-}
-
-export interface SwitchResult {
-  dataDir: string
-  dbFile: string
-  previous?: string
-  unchanged?: boolean
-  sync: { added: string[]; updated: string[]; orphaned: string[]; restored: string[] } | null
-}
-
-export interface ContextPayload {
-  requirement: Requirement
-  docs: Array<{ name: string; content: string }>
-  requirementMd: string | null
-  /** 这个需求名下的工作区 */
-  worktrees: Worktree[]
 }
 
 export const api = {
