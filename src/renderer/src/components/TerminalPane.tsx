@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { acquireTerminal, type TerminalTarget } from '../lib/terminals'
 
-export type { TerminalTarget }
-
 interface Props {
   target: TerminalTarget
   /** CSS font-family 值，来自设置页 */

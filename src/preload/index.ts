@@ -8,8 +8,6 @@ function subscribe(channel: string, handler: (payload: never) => void): () => vo
 }
 
 contextBridge.exposeInMainWorld('easyFlow', {
-  platform: process.platform,
-
   /** 拉起原生目录选择器，返回选中路径（取消则返回 null） */
   pickDirectory: (): Promise<string | null> => ipcRenderer.invoke('easy-flow:pick-directory'),
 
@@ -34,7 +32,5 @@ contextBridge.exposeInMainWorld('easyFlow', {
 
     onExit: (id: string, handler: (code: number) => void): (() => void) =>
       subscribe(`terminal:exit:${id}`, handler),
-
-    count: (): Promise<number> => ipcRenderer.invoke('terminal:count'),
   },
 })

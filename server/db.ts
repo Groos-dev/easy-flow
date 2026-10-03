@@ -303,8 +303,6 @@ export class BoardDatabase {
   private db: DatabaseSync
   /** 当前看板展示的项目 */
   private activeProject = DEFAULT_PROJECT_SLUG
-  /** 用户显式切过项目后，不再自动改选 */
-  private activePinned = false
 
   /** 配置里记住的项目，pickProject() 用它做首选 */
   private preferredProject: string | undefined
@@ -360,11 +358,6 @@ export class BoardDatabase {
     const row = this.db.prepare('SELECT slug FROM project WHERE slug = ?').get(slug)
     if (!row) throw new Error(`项目不存在: ${slug}`)
     this.activeProject = slug
-    this.activePinned = true
-  }
-
-  get projectPinned(): boolean {
-    return this.activePinned
   }
 
   // ------------------------------------------------------------- 项目

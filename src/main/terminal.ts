@@ -107,19 +107,4 @@ export class TerminalManager {
   destroyAll(): void {
     for (const id of [...this.sessions.keys()]) this.destroy(id)
   }
-
-  get count(): number {
-    return this.sessions.size
-  }
-
-  /** 便于设置页展示：当前终端都开在哪些挂载点上 */
-  openTargets(): string[] {
-    return [
-      ...new Set(
-        [...this.sessions.values()].map((s) =>
-          s.target.slug ? `${s.target.project}/${s.target.slug}` : `${s.target.project}/`,
-        ),
-      ),
-    ]
-  }
 }

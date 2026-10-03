@@ -19,12 +19,10 @@ interface EasyFlowTerminal {
   destroy: (id: string) => void
   onData: (id: string, handler: (data: string) => void) => () => void
   onExit: (id: string, handler: (code: number) => void) => () => void
-  count: () => Promise<number>
 }
 
 /** preload 通过 contextBridge 暴露的能力；浏览器开发时不存在 */
 interface EasyFlowBridge {
-  platform: string
   pickDirectory?: () => Promise<string | null>
   /** 订阅菜单里的「偏好设置 ⌘,」，返回取消订阅函数 */
   onOpenSettings?: (handler: () => void) => () => void

@@ -63,7 +63,6 @@ function registerIpc(): void {
     terminals?.resize(id, cols, rows),
   )
   ipcMain.on('terminal:destroy', (_e, id: string) => terminals?.destroy(id))
-  ipcMain.handle('terminal:count', () => terminals?.count ?? 0)
 }
 
 /**

@@ -136,8 +136,6 @@ export const api = {
 
   // ------------------------------------------------------------- 项目
 
-  projects: (): Promise<{ projects: Project[]; active: string }> => request('/api/projects'),
-
   /** 侧边栏树：所有项目 + 各自需求，一次拉全 */
   tree: (): Promise<{ tree: Array<Project & { requirements: Requirement[] }>; active: string }> =>
     request('/api/tree'),

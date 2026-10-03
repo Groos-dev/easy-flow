@@ -19,9 +19,6 @@ import {
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 import { installMcp, mcpPlan } from './mcp-install.ts'
 
-export { STATUSES, PRIORITIES } from './db.ts'
-export type { Status, Priority, Requirement } from './db.ts'
-
 export const DEFAULT_PORT = 3210
 
 /** 单条记录变更不涉及目录扫描，给详情页一个稳定的 sync 形状 */

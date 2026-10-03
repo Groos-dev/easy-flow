@@ -76,11 +76,3 @@ export interface BoardData {
   /** 本次读取时做的增量同步，用于提示"新增了几个需求" */
   sync: SyncResult
 }
-
-export interface Settings {
-  dataDir: string
-  dbFile: string
-  defaultDataDir: string
-  counts: { requirements: number }
-}
-
