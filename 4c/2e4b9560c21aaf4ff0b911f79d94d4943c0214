@@ -1,0 +1,25 @@
+server/mcp.ts
+  s_14f5e060888425::t_9851ae34479a89 104-116,135-142,148-151
+  s_14f5e060888425::t_641a313e432e3c 223
+  s_14f5e060888425::t_4dd58d4969b03e 246
+  s_14f5e060888425::t_9e54e062c0e057 199-202
+  s_14f5e060888425::t_72ef7af685d9de 308-309
+src/renderer/src/lib/types.ts
+  s_14f5e060888425::t_abbf9d35156617 47-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "4c2e4b9560c21aaf4ff0b911f79d94d4943c0214",
+  "prompts": {},
+  "sessions": {
+    "s_14f5e060888425": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0faa5006-438e-4f13-93a1-1f09b590dabf",
+        "model": "unknown"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
