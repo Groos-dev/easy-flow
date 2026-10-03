@@ -1,0 +1,38 @@
+test/core.test.ts
+  s_14f5e060888425::t_4ffcb9af15b2a6 1034-1063,1065-1073
+  s_14f5e060888425::t_c044b8243c5836 1064
+  s_14f5e060888425::t_2edc2d3abae786 231-255
+  s_14f5e060888425::t_6984050390aa87 654,661,666-706
+  s_14f5e060888425::t_ff8169272af694 15
+README.md
+  s_14f5e060888425::t_a564e4757072b9 42-45
+server/markdown.ts
+  s_14f5e060888425::t_9aa1161cfd8249 210-215,217-222,224-229,231,233,235-241
+server/db.ts
+  s_14f5e060888425::t_d43517a66f367c 15
+  s_14f5e060888425::t_f32b0cf8692a6d 66-67
+  s_14f5e060888425::t_03410ac47e195f 398,400,403
+  s_14f5e060888425::t_fc4108ea59c6d0 130
+  s_14f5e060888425::t_6b874d4eb193bb 435-440,444-450,468-469,483-484
+  s_14f5e060888425::t_91a3838b342d22 553
+  s_14f5e060888425::t_6b461b30f53299 648-672
+server/schema.ts
+  s_14f5e060888425::t_e9aaf2eb3a8cea 21
+  s_14f5e060888425::t_3555e29ce8e691 91-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "4a5ac9354b2b69087759838a52dde78fe9cc9071",
+  "prompts": {},
+  "sessions": {
+    "s_14f5e060888425": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0faa5006-438e-4f13-93a1-1f09b590dabf",
+        "model": "unknown"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
