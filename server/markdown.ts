@@ -207,22 +207,38 @@ function isRequirementDir(dir: string): boolean {
   return existsSync(join(dir, 'AGENTS.md')) && existsSync(join(dir, 'requirement.md'))
 }
 
+/** 一个需求目录：绝对路径，以及相对项目根目录的路径（后者就是它的 slug，子需求形如 parent/child） */
+export interface RequirementDir {
+  dir: string
+  slug: string
+}
+
 /**
- * 列出 root 下文件齐备的直接子目录（需求目录）。
- * 软链不算：工位里的软链指向代码仓 worktree，而 worktree 里也会有需求文档，
- * 跟随进去就会把同一个需求认成两个。
+ * 列出 root 下的需求目录，递归到任意深度。
+ *
+ * 判据（AGENTS.md + requirement.md 齐备）不分层级——子需求就是需求目录里的需求目录，
+ * 所以递归与只看一层用的是同一把尺子。父需求先于子需求入列（先收录再下探）。
+ * 软链一律不跟：工位里的软链指向代码仓 worktree，而 worktree 里也有需求文档，
+ * 跟进去会把同一个需求认成两个。
  */
-export function listRequirementDirs(root: string): string[] {
-  if (!existsSync(root)) return []
-  return entries(root)
-    .map((e) => join(root, e))
-    .filter((p) => {
+export function listRequirementDirs(root: string): RequirementDir[] {
+  const out: RequirementDir[] = []
+  const walk = (dir: string, prefix: string): void => {
+    for (const entry of entries(dir)) {
+      if (entry === 'node_modules') continue
+      const p = join(dir, entry)
       try {
-        return statSync(p).isDirectory() && !lstatSync(p).isSymbolicLink() && isRequirementDir(p)
+        if (!statSync(p).isDirectory() || lstatSync(p).isSymbolicLink()) continue
       } catch {
-        return false
+        continue
       }
-    })
+      const slug = prefix ? `${prefix}/${entry}` : entry
+      if (isRequirementDir(p)) out.push({ dir: p, slug })
+      walk(p, slug)
+    }
+  }
+  if (existsSync(root)) walk(root, '')
+  return out
 }
 
 /**

@@ -12,6 +12,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync, cpSync, realpathSync, lstatSync, readlinkSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { createServer } from 'node:http'
+import { DatabaseSync } from 'node:sqlite'
 
 import { spawn, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -225,6 +226,31 @@ describe('数据层 · 项目与需求同步', () => {
     const db = new BoardDatabase(dir)
     db.syncProjects()
     assert.equal(db.get('alpha')?.status, '澄清')
+    db.close()
+  })
+
+  test('老库升级：补出 parent_id 列，已有需求的状态不被同步覆盖', () => {
+    const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha\n\n## 需求\n\n甲', { id: 'req-alpha' }))
+    // 造一个没有 parent_id 的老库（这次改动之前的表结构）
+    const old = new DatabaseSync(join(dir, 'easy-flow.db'))
+    old.exec(`CREATE TABLE requirement (
+      slug TEXT NOT NULL, project TEXT NOT NULL DEFAULT '', id TEXT, title TEXT NOT NULL,
+      path TEXT NOT NULL, status TEXT NOT NULL, priority TEXT, summary TEXT, repos TEXT, links TEXT,
+      feishu_task_links TEXT, code_links TEXT, ext_links TEXT, mtime INTEGER NOT NULL DEFAULT 0,
+      updated TEXT, orphan INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (slug, project))`)
+    old
+      .prepare(
+        `INSERT INTO requirement (slug, project, id, title, path, status, mtime)
+         VALUES ('alpha', 'onex', 'req-alpha', '标题', '/x', '已完成', 0)`,
+      )
+      .run()
+    old.close()
+
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+    const r = db.get('alpha', 'onex')!
+    assert.equal(r.status, '已完成', '老库的状态是权威，同步不能动它')
+    assert.equal(r.parentId, '')
     db.close()
   })
 })
@@ -625,21 +651,59 @@ describe('创建 · 目录与模板', () => {
     assert.equal(readFileSync(join(reqDir, 'AGENTS.md'), 'utf8'), after)
   })
 
-  test('子需求建在父需求下，结构相同；但看板只扫一层，还认不到它', () => {
+  test('子需求与父需求一样入库：slug 带层级、parent_id 指向父需求，任意深度', () => {
     const dir = fresh(() => {
       createProjectDir(TMP, 'onex')
     })
     const root = join(dir, 'onex')
     const parent = createRequirementDir(root, 'parent', '父需求')
     const child = createRequirementDir(parent.dir, 'child', '子需求')
+    const grand = createRequirementDir(child.dir, 'grand', '孙需求')
     assert.ok(existsSync(join(child.dir, 'requirement.md')))
 
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    assert.deepEqual(db.list().map((r) => r.slug), ['parent'])
-    // 父需求能按 id 反查，子需求还不能——它在库里根本没有行
-    assert.equal(db.byId(parent.id)?.slug, 'parent')
-    assert.equal(db.byId(child.id), undefined)
+    // slug 就是相对项目根的路径：子需求形如 parent/child
+    assert.deepEqual(
+      db.list().map((r) => r.slug).sort(),
+      ['parent', 'parent/child', 'parent/child/grand'],
+    )
+    const c = db.get('parent/child', 'onex')!
+    assert.equal(c.parentId, parent.id)
+    assert.equal(c.path, child.dir)
+    assert.equal(c.status, '澄清')
+    // 任意深度：孙需求的父是中间那层
+    assert.equal(db.get('parent/child/grand', 'onex')!.parentId, child.id)
+    // 按 id 反查对子需求同样成立
+    assert.equal(db.byId(child.id)?.slug, 'parent/child')
+    assert.equal(db.byId(grand.id)?.slug, 'parent/child/grand')
+    // 父子两条查询
+    assert.deepEqual(db.children(parent.id).map((r) => r.slug), ['parent/child'])
+    assert.deepEqual(db.ancestors(c).map((r) => r.slug), ['parent'])
+    assert.deepEqual(
+      db.ancestors(db.get('parent/child/grand', 'onex')!).map((r) => r.slug),
+      ['parent/child', 'parent'],
+    )
+    db.close()
+  })
+
+  test('子需求的状态与优先级独立维护，父需求不受影响', () => {
+    const dir = fresh(() => {
+      createProjectDir(TMP, 'onex')
+    })
+    const parent = createRequirementDir(join(dir, 'onex'), 'parent', '父需求')
+    createRequirementDir(parent.dir, 'child', '子需求')
+
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+    db.setStatus('parent/child', '执行中', 'onex')
+    db.setPriority('parent/child', 'p1', 'onex')
+    assert.equal(db.get('parent/child', 'onex')!.status, '执行中')
+    assert.equal(db.get('parent/child', 'onex')!.priority, 'p1')
+    assert.equal(db.get('parent', 'onex')!.status, '澄清')
+    // 同步是幂等的，也不会把子需求的状态刷掉
+    db.syncProjects()
+    assert.equal(db.get('parent/child', 'onex')!.status, '执行中')
     db.close()
   })
 
@@ -965,6 +1029,46 @@ describe('MCP 层', () => {
     const unknown = await callTool(configFile, 'get_context', { id: 'req-nope' })
     assert.equal(unknown.isError, true)
     assert.match(unknown.text, /找不到需求：req-nope/)
+  })
+
+  test('子需求入库、能按 id 反查，取上下文时能看到父链与兄弟', async () => {
+    scaffold()
+    createProjectDir(dataDir, 'demo', '示例项目')
+    const parent = createRequirementDir(join(dataDir, 'demo'), 'seatmap', '接真图', '先灰度 5%')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    const created = await callTool(configFile, 'create_sub_requirement', {
+      id: parent.id,
+      title: '网关改造',
+      summary: '拆给 router',
+      slug: 'gateway',
+    })
+    assert.equal(created.isError, false, created.text)
+    const childId = /子需求 id：(req-[0-9a-f]+)/.exec(created.text)?.[1]
+    assert.ok(childId, created.text)
+
+    const db = new BoardDatabase(dataDir)
+    db.syncProjects()
+    const child = db.byId(childId)!
+    assert.equal(child.slug, 'seatmap/gateway')
+    assert.equal(child.parentId, parent.id)
+    assert.equal(child.status, '澄清')
+    db.close()
+
+    // 子需求：带出上层需求与父需求描述
+    const childCtx = await callTool(configFile, 'get_context', { id: childId })
+    assert.equal(childCtx.isError, false, childCtx.text)
+    assert.match(childCtx.text, /## 上层需求（从近到远）/)
+    assert.match(childCtx.text, /- req-[0-9a-f]+ {2}seatmap {2}接真图/)
+    assert.match(childCtx.text, /## 父需求描述/)
+    assert.match(childCtx.text, /先灰度 5%/)
+
+    // 父需求：列出名下子需求
+    const parentCtx = await callTool(configFile, 'get_context', { id: parent.id })
+    assert.match(parentCtx.text, /## 子需求（1）/)
+    assert.match(parentCtx.text, /seatmap\/gateway/)
   })
 
   test('create_worktree：目录、身份文件、软链、exclude、落库一次做完', async () => {

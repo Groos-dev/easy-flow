@@ -12,7 +12,7 @@
  */
 import { DatabaseSync } from 'node:sqlite'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join, dirname, basename } from 'node:path'
+import { join, dirname } from 'node:path'
 import {
   listProjectDirs,
   listRequirementDirs,
@@ -63,6 +63,8 @@ export interface Requirement {
   project: string
   /** 不透明需求 id（AGENTS.md 的 frontmatter）。老需求可能还没有，为空串 */
   id: string
+  /** 父需求的 id；顶层需求为空串。slug 里也带着层级（parent/child），两者互为印证 */
+  parentId: string
   title: string
   status: Status
   priority: Priority | ''
@@ -125,6 +127,7 @@ interface Row {
   slug: string
   project: string
   id: string | null
+  parent_id: string | null
   title: string
   path: string
   status: string
@@ -392,12 +395,12 @@ export class BoardDatabase {
     )
     const insertReq = this.db.prepare(
       `INSERT INTO requirement
-         (slug, project, id, title, path, status, priority, summary, repos, links,
+         (slug, project, id, parent_id, title, path, status, priority, summary, repos, links,
           feishu_task_links, code_links, ext_links, mtime, updated, orphan)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '[]', '[]', ?, ?, 0)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '[]', '[]', ?, ?, 0)`,
     )
     const updateReq = this.db.prepare(
-      `UPDATE requirement SET id = ?, title = ?, path = ?, summary = ?, repos = ?, links = ?, mtime = ?, orphan = 0
+      `UPDATE requirement SET id = ?, parent_id = ?, title = ?, path = ?, summary = ?, repos = ?, links = ?, mtime = ?, orphan = 0
        WHERE slug = ? AND project = ?`,
     )
     const clearDocs = this.db.prepare('DELETE FROM doc WHERE slug = ? AND project = ?')
@@ -429,10 +432,21 @@ export class BoardDatabase {
         touchProject.run(proj.root, name, convention ? 1 : 0, projectMtime, proj.slug)
       }
 
-      for (const dir of listRequirementDirs(proj.root)) {
-        const parsed = parseRequirement(dir, basename(dir))
+      // 本次扫描里 slug → 需求在库里的 id。子需求的 parent_id 直接从这里取——
+      // 父需求先于子需求入列（listRequirementDirs 先收录再下探）
+      const idBySlug = new Map<string, string>()
+
+      for (const { dir, slug: relSlug } of listRequirementDirs(proj.root)) {
+        const parsed = parseRequirement(dir, relSlug)
         const key = `${proj.slug}/${parsed.slug}`
         seenReqs.add(key)
+
+        const id = claimId(parsed.id, parsed.slug, proj.slug)
+        if (id) idBySlug.set(parsed.slug, id)
+        // 父需求 = slug 去掉最后一段。父需求自己还没 id 时留空，
+        // 层级仍能从 slug 推出来，不因为它缺 id 就把整棵树拆散
+        const cut = parsed.slug.lastIndexOf('/')
+        const parentId = cut === -1 ? '' : (idBySlug.get(parsed.slug.slice(0, cut)) ?? '')
 
         clearDocs.run(parsed.slug, proj.slug)
         for (const d of parsed.docs) insertDoc.run(parsed.slug, proj.slug, d.name, d.content)
@@ -451,7 +465,8 @@ export class BoardDatabase {
           insertReq.run(
             parsed.slug,
             proj.slug,
-            claimId(parsed.id, parsed.slug, proj.slug),
+            id,
+            parentId,
             parsed.title,
             dir,
             '澄清',
@@ -465,7 +480,8 @@ export class BoardDatabase {
           added.push(key)
         } else {
           updateReq.run(
-            claimId(parsed.id, parsed.slug, proj.slug),
+            id,
+            parentId,
             parsed.title,
             dir,
             parsed.summary,
@@ -534,6 +550,7 @@ export class BoardDatabase {
       slug: row.slug,
       project: row.project,
       id: row.id ?? '',
+      parentId: row.parent_id ?? '',
       title: row.title,
       status,
       priority: asPriority(row.priority) ?? '',
@@ -626,6 +643,31 @@ export class BoardDatabase {
       | Row
       | undefined
     return row ? this.toRequirement(row) : undefined
+  }
+
+  /**
+   * 需求的祖先链，从近到远（父、祖父……）。
+   * slug 里带着层级（parent/child），逐段去掉最后一段查即可，不用递归查库。
+   */
+  ancestors(req: Requirement): Requirement[] {
+    const out: Requirement[] = []
+    let slug = req.slug
+    for (let cut = slug.lastIndexOf('/'); cut !== -1; cut = slug.lastIndexOf('/')) {
+      slug = slug.slice(0, cut)
+      const parent = this.get(slug, req.project)
+      if (!parent) break
+      out.push(parent)
+    }
+    return out
+  }
+
+  /** 直接子需求。父需求没有 id 时返回空——关系靠 id 承载 */
+  children(parentId: string): Requirement[] {
+    if (!parentId) return []
+    const rows = this.db
+      .prepare('SELECT * FROM requirement WHERE parent_id = ? ORDER BY slug')
+      .all(parentId) as unknown as Row[]
+    return rows.map((r) => this.toRequirement(r))
   }
 
   /** 还没拿到 id 的需求（frontmatter 里缺 id 的老需求） */

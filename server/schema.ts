@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS requirement (
   slug     TEXT NOT NULL,
   project  TEXT NOT NULL DEFAULT '',
   id       TEXT,
+  parent_id TEXT,
   title    TEXT NOT NULL,
   path     TEXT NOT NULL,
   status   TEXT NOT NULL,
@@ -87,6 +88,9 @@ function migrate(db: DatabaseSync): void {
   // 需求身份。索引必须建在补列之后——写在 SCHEMA 里，老库会先于补列执行而报找不到列
   addIfMissing('requirement', 'id', 'id TEXT')
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_req_id ON requirement(id)')
+  // 子需求：父需求的 id。层级同时体现在 slug（parent/child）里，这里存一份便于按父子查
+  addIfMissing('requirement', 'parent_id', 'parent_id TEXT')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_req_parent ON requirement(parent_id)')
   // 链接：写入入口留给 MCP，UI 只读展示
   addIfMissing('requirement', 'feishu_task_links', 'feishu_task_links TEXT')
   addIfMissing('requirement', 'code_links', 'code_links TEXT')
