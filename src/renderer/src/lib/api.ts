@@ -1,4 +1,4 @@
-import type { BoardData, Requirement } from './types'
+import type { BoardData, Requirement, Worktree } from './types'
 
 // 渲染层走 HTTP 访问本地服务，开发与打包共用同一套代码：
 //   dev（浏览器）  → 相对路径，由 Vite proxy 转发到 127.0.0.1:3210
@@ -78,6 +78,8 @@ export interface ContextPayload {
   requirement: Requirement
   docs: Array<{ name: string; content: string }>
   requirementMd: string | null
+  /** 这个需求名下的工作区 */
+  worktrees: Worktree[]
 }
 
 export const api = {
@@ -162,6 +164,10 @@ export const api = {
 
   open: (slug: string, project?: string): Promise<{ ok: boolean }> =>
     request('/api/open', { method: 'POST', body: JSON.stringify({ slug, project }) }),
+
+  /** 在 Finder 里打开某个工作区的目录 */
+  openWorktree: (id: string): Promise<{ ok: boolean; path: string }> =>
+    request('/api/worktree/open', { method: 'POST', body: JSON.stringify({ id }) }),
 
   settings: (): Promise<SettingsPayload> => request('/api/settings'),
 

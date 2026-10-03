@@ -655,14 +655,30 @@ body {
   border-right: none;
 }
 
+/* 收起终端 = 藏起来而不是卸载：PTY 会话留在后台，展开即恢复 */
+.detail-body.no-terminal .terminal-pane {
+  display: none;
+}
+
+/*
+ * 标签多到换行时，右侧的开关与保存状态不该被带着走——所以换行交给 .doc-tabs，
+ * 这一层不换行、顶部对齐，开关就钉在右上角。
+ */
 .doc-bar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
-  row-gap: 4px;
-  flex-wrap: wrap;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
+}
+
+.doc-tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  row-gap: 4px;
 }
 
 /* 需求没有任何文档时标签栏占个位，免得整条只剩工具按钮 */
@@ -1367,4 +1383,199 @@ body {
 
 .select-item.active {
   color: var(--accent);
+}
+
+/* ------------------------------------------------------ 详情页信息浮窗 */
+
+/*
+ * 头部图标按钮 + 它的浮窗。观感沿用 .select-list（同一套底色与投影），
+ * 差别只是锚在右边、内容更多。
+ */
+.info-menu {
+  position: relative;
+  display: flex;
+}
+
+/* 图标按钮的"开着"状态：与 hover 同一套配色，但常驻 */
+.icon-btn.on {
+  color: var(--accent);
+  background: var(--column);
+  border-color: var(--border);
+}
+
+.info-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  width: 380px;
+  max-height: 62vh;
+  overflow: auto;
+  padding: 12px;
+  background: #1a1f27;
+  border: 1px solid #333b47;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  text-align: left;
+}
+
+/* 可折叠的一段：标题行 + 计数 + 折叠箭头 */
+.info-block + .info-block {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.info-block-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.info-block-head:hover {
+  color: var(--text);
+}
+
+.info-block-label {
+  font-weight: 500;
+}
+
+.info-count {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.info-caret {
+  color: var(--text-faint);
+  transition: transform 0.12s ease;
+}
+
+.info-caret.open {
+  transform: rotate(90deg);
+}
+
+.info-block-body {
+  padding-top: 6px;
+}
+
+.info-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 12px;
+}
+
+.info-row .k {
+  flex: none;
+  width: 60px;
+  color: var(--text-faint);
+}
+
+.info-row .v {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+/* 路径与 id：等宽，方便肉眼比对 */
+.info-panel .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+}
+
+/* 长文本一律占一行，放不下截断；完整内容靠 title 的原生提示给出 */
+.line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 可点的路径：看着像链接，点了在访达里打开 */
+.info-path {
+  flex: 1;
+  min-width: 0;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.info-path:hover:not(.disabled) {
+  text-decoration: underline;
+}
+
+.info-path.disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+/* 复制按钮：方形图标按钮 */
+.info-action {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.info-action:hover {
+  color: var(--text);
+  background: var(--column);
+}
+
+.info-link {
+  display: block;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.info-link:hover {
+  text-decoration: underline;
+}
+
+.wt + .wt {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.wt-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.wt-orphan {
+  color: #e0a458;
+  font-size: 11px;
+}
+
+.wt-meta {
+  color: var(--text-faint);
+}
+
+/* requirement.md 的「链接」段原文：它可能是表格，也可能是 bullet */
+.info-md {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+  font-size: 12px;
+}
+
+.info-md .markdown-body {
+  font-size: 12px;
 }

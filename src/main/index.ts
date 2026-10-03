@@ -150,9 +150,10 @@ async function boot(): Promise<void> {
     if (target.slug && !req) return null
     return {
       cwd: req?.path ?? project.root,
+      // 身份（需求 id / 项目）都不经环境变量传：agent 从需求目录里读，再显式传给 MCP，
+      // 这样在 easy-flow 之外开的终端也能用。这里只留一个"这是本应用开的终端"的标记。
       env: {
         EASY_FLOW_SESSION: '1',
-        EASY_FLOW_PROJECT: target.project,
       },
     }
   })

@@ -50,20 +50,33 @@ name: ${oneLine(name)}
 `
 }
 
-/** AGENTS.md：给 agent 读的指令，不承载需求描述 */
-const REQUIREMENT_AGENTS_TEMPLATE = `<!-- easy-flow 需求模板 · agent 指令：写怎么干活、有哪些约束、要避开什么。
-     需求描述放同目录的 requirement.md，卡片标题和摘要从那里读。
-     状态（阶段/优先级/链接）存在 easy-flow.db 里，不要写进任何 md。 -->
+/**
+ * 需求目录的 AGENTS.md：agent 的说明书，身份（id）也写在这里。
+ *
+ * 为什么身份不放 requirement.md：那份文件是"要做什么"（人写的需求描述），
+ * 而 id 是"你是谁"，跟文件约定、约束是一类东西，都属于给 agent 看的说明书。
+ */
+function requirementAgents(id: string): string {
+  const frontmatter = id ? `---\nid: ${id}\n---\n\n` : ''
+  return `${frontmatter}<!-- easy-flow 需求 · agent 指令：写怎么干活、有哪些约束、要避开什么。
+     调 easy-flow 的 MCP 工具时，用上面 frontmatter 里的 id 显式传参。 -->
+
+## 这个目录里有什么
+
+| 文件 | 作用 |
+| --- | --- |
+| \`requirement.md\` | 需求描述。看板卡片的标题取它的 H1、摘要取「需求」段 |
+| \`context.md\` | 需求的上下文：背景、约束、相关的人与系统、决策依据 |
+| \`docs/\` | 设计、调研、踩坑。会出现在详情页标签栏；工作区里的 \`design/\` 软链指向它下面的仓库目录 |
 
 ## 约束
 `
+}
 
-/** requirement.md：需求描述，卡片标题与摘要的来源 */
-function requirementDesc(id: string, title: string, summary: string): string {
-  // id 是需求的身份，写进 frontmatter：目录改名、换项目都不影响它
-  const frontmatter = id ? `---\nid: ${id}\n---\n\n` : ''
-  return `${frontmatter}<!-- easy-flow 需求模板 · 需求描述：卡片标题取下面的 H1，摘要取「需求」段。
-     更长的方案、决策、踩坑放 docs/ 下，会自动出现在详情页标签栏。 -->
+/** requirement.md：需求描述，卡片标题与摘要的来源。身份不在这里 */
+function requirementDesc(title: string, summary: string): string {
+  return `<!-- easy-flow 需求 · 需求描述：看板标题取下面的 H1，摘要取「需求」段。
+     上下文（背景、约束、决策）写同目录的 context.md，更长的方案放 docs/。 -->
 
 # ${oneLine(title)}
 
@@ -82,9 +95,28 @@ ${summary}
 `
 }
 
+/** context.md：需求的上下文。一开始只是骨架，边做边补 */
+const REQUIREMENT_CONTEXT_TEMPLATE = `<!-- easy-flow 需求 · 上下文：需求描述之外的补充——背景、约束、相关的人与系统、决策依据。
+     身份与目录约定见同目录 AGENTS.md，需求描述见 requirement.md。 -->
+
+## 背景
+
+## 约束
+
+## 决策
+`
+
 const PLACEHOLDER_SUMMARY = '一句话说清要做什么、为什么。'
 
-const REQUIREMENT_DESC_TEMPLATE = requirementDesc('', '需求标题', PLACEHOLDER_SUMMARY)
+const REQUIREMENT_DESC_TEMPLATE = requirementDesc('需求标题', PLACEHOLDER_SUMMARY)
+
+/** 补上 context.md 脚手架：缺才写，已有不动 */
+export function ensureRequirementContext(dir: string): boolean {
+  const file = join(dir, 'context.md')
+  if (existsSync(file)) return false
+  writeFileSync(file, REQUIREMENT_CONTEXT_TEMPLATE, 'utf8')
+  return true
+}
 
 /** 不透明 id：人和 agent 都看不出它对应什么，换来的是改名搬家都不变 */
 function newId(prefix: string): string {
@@ -101,7 +133,8 @@ export function newWorktreeId(): string {
 
 /** 给已有需求补 id：只动 frontmatter，正文原样写回 */
 export function setRequirementId(dir: string, id: string): void {
-  const file = join(dir, 'requirement.md')
+  // 身份归说明书：写入 AGENTS.md 的 frontmatter，正文原样写回
+  const file = join(dir, 'AGENTS.md')
   const { data, body } = parseFrontmatter(readFileSync(file, 'utf8'))
   const frontmatter = Object.entries({ ...data, id })
     .map(([k, v]) => `${k}: ${v}`)
@@ -119,6 +152,8 @@ export function renderWorktreeAgents(input: {
   requirementDir: string
   repo: string
   branch: string
+  /** design/ 软链指向的真实目录 */
+  designDir: string
 }): string {
   return `---
 id: ${input.id}
@@ -131,6 +166,12 @@ requirement: ${input.requirementId}
 需求目录：${input.requirementDir}
 仓库：${oneLine(input.repo)}
 分支：${oneLine(input.branch)}
+
+## 设计文档写在哪
+
+\`design/\` 是软链，指向 ${input.designDir}。
+这个仓库在这个需求下的设计、取舍、踩坑写在那里——文件存在需求目录里，
+不进 git、也不要提交；详情页的标签栏会直接读到。
 `
 }
 
@@ -143,8 +184,9 @@ export function ensureTemplates(dataDir: string): void {
     const root = templatesDir(dataDir)
     const files: Array<[string, string]> = [
       ['project/AGENTS.md', renderProjectTemplate('', true)],
-      ['requirement/AGENTS.md', REQUIREMENT_AGENTS_TEMPLATE],
+      ['requirement/AGENTS.md', requirementAgents('')],
       ['requirement/requirement.md', REQUIREMENT_DESC_TEMPLATE],
+      ['requirement/context.md', REQUIREMENT_CONTEXT_TEMPLATE],
     ]
     for (const [rel, content] of files) {
       const file = join(root, rel)
@@ -192,12 +234,9 @@ export function createRequirementDir(
   if (existsSync(dir)) throw new Error(`目录已存在：${dir}`)
   const id = newRequirementId()
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'AGENTS.md'), REQUIREMENT_AGENTS_TEMPLATE, 'utf8')
-  writeFileSync(
-    join(dir, 'requirement.md'),
-    requirementDesc(id, title, summary || PLACEHOLDER_SUMMARY),
-    'utf8',
-  )
+  writeFileSync(join(dir, 'AGENTS.md'), requirementAgents(id), 'utf8')
+  writeFileSync(join(dir, 'requirement.md'), requirementDesc(title, summary || PLACEHOLDER_SUMMARY), 'utf8')
+  ensureRequirementContext(dir)
   return { dir, id }
 }
 

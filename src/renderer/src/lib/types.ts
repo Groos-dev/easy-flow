@@ -10,6 +10,24 @@ export interface DocRef {
   size: number
 }
 
+/** 与 server/db.ts 的 Worktree 对应。归属只存在库里，UI 只读 */
+export interface Worktree {
+  id: string
+  /** 所属需求的 id */
+  requirementId: string
+  /** 需求里的短名（涉及仓库表的短名列），可能为空 */
+  short: string
+  repo: string
+  branch: string
+  path: string
+  /** 主 checkout 路径 */
+  main: string
+  created: string
+  updated: string
+  /** 目录已失联（被手工删过、或盘不在） */
+  orphan: boolean
+}
+
 /** 状态即看板列，两者是同一个东西 */
 export type Status = '澄清' | '执行中' | 'Review' | '已完成'
 
@@ -17,6 +35,8 @@ export interface Requirement {
   slug: string
   /** 所属项目 */
   project: string
+  /** 不透明需求 id（AGENTS.md frontmatter 里那个 req-xxxxxxxxxx）*/
+  id: string
   title: string
   status: string
   priority: string

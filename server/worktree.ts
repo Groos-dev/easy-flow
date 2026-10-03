@@ -25,10 +25,16 @@ import { homedir } from 'node:os'
 import { renderWorktreeAgents } from './convention.ts'
 import { parseFrontmatter } from './markdown.ts'
 
+/**
+ * 设计文档的挂载点：工作区里这个目录是一条软链，指向需求目录的 `docs/<短名>/`。
+ * 设计的物理文件留在需求目录（单一副本、随需求长存），工作区里只是看得见、写得进。
+ */
+const DESIGN_DIR = 'design'
+
 /** info/exclude 里那几行的抬头注释，同时当"我们写过"的标记用，避免重复追加 */
 const EXCLUDE_MARK = '# easy-flow：需求软链与身份文件，勿删'
-/** 不让 easy-flow 的三件产物进 git status */
-const EXCLUDE_LINES = ['/requirement.md', '/AGENTS.md', '/CLAUDE.md']
+/** 不让 easy-flow 的产物进 git status */
+const EXCLUDE_LINES = ['/requirement.md', '/AGENTS.md', '/CLAUDE.md', `/${DESIGN_DIR}`]
 /** 同上，去掉开头的斜杠，便于和 git status 的输出比对 */
 const OURS = EXCLUDE_LINES.map((f) => f.slice(1))
 
@@ -178,6 +184,8 @@ export interface ProvisionInput {
   worktreeId: string
   requirementId: string
   requirementDir: string
+  /** 需求里的短名，用来给设计目录起名字（如 agg） */
+  short?: string
   target: RepoCheckout
   branch: string
   /** 新分支的起点，缺省主 checkout 当前的 HEAD */
@@ -219,17 +227,114 @@ export async function provisionWorktree(input: ProvisionInput): Promise<Provisio
     created = true
   }
 
-  const agentsCreated = writeAgentsFile(input, path)
-  ensureSymlink(join(path, 'requirement.md'), join(input.requirementDir, 'requirement.md'))
-  // 最后这步只影响观感，成败都不该拖垮创建
-  const excludeNote = await ensureExclude(target.main)
-
-  return {
+  const decorated = await decorate({
+    worktreeId: input.worktreeId,
+    requirementId: input.requirementId,
+    requirementDir: input.requirementDir,
     path,
-    created,
-    branchCreated,
-    identityInFile: agentsCreated || !!worktreeIdIn(path),
-    excludeNote,
+    repo: target.repo,
+    branch,
+    short: input.short,
+    main: target.main,
+  })
+  return { path, created, branchCreated, ...decorated }
+}
+
+export interface Adopted {
+  path: string
+  repo: string
+  branch: string
+  main: string
+  identityInFile: boolean
+  excludeNote: string
+}
+
+/**
+ * 收编一个已存在的 git worktree：登记进 easy-flow 并在它里面补齐产物。
+ *
+ * 与创建的区别是不建目录、也不要求路径符合 `<仓库>.<分支>`——旧工作流留下的工作区
+ * 散在好几套布局里（`~/repo/java/x.y`、`~/worktrees/<host>/<repo>/<branch>`、
+ * codex 的临时目录），能认出来就该能收编。
+ */
+export async function adoptWorktree(input: {
+  path: string
+  worktreeId: string
+  requirementId: string
+  requirementDir: string
+  /** 需求里的短名，用来给设计目录起名字（如 agg） */
+  short?: string
+}): Promise<Adopted> {
+  if (!lstatOrNull(join(input.path, '.git'))?.isFile()) {
+    throw new Error(`${input.path} 不是 git worktree（.git 不是指向主仓的文件）`)
+  }
+  // describeCheckout 顺手校验了 --show-toplevel 就是它自己，主 checkout 从 worktree list 取
+  const { repo, main } = await describeCheckout(input.path)
+  const branch = await branchOf(input.path)
+  if (!branch) throw new Error(`${input.path} 没停在分支上（detached HEAD?）`)
+
+  const decorated = await decorate({
+    worktreeId: input.worktreeId,
+    requirementId: input.requirementId,
+    requirementDir: input.requirementDir,
+    path: input.path,
+    repo,
+    branch,
+    short: input.short,
+    main,
+  })
+  return { path: input.path, repo, branch, main, ...decorated }
+}
+
+/** 需求目录里指向 git worktree 的软链。旧工作流留下的关联只剩这一条线索 */
+export function linkedWorktrees(requirementDir: string): Array<{ short: string; path: string }> {
+  const out: Array<{ short: string; path: string }> = []
+  for (const entry of readdirSafe(requirementDir)) {
+    if (entry.startsWith('.')) continue
+    const link = join(requirementDir, entry)
+    if (!lstatOrNull(link)?.isSymbolicLink()) continue
+    const target = readlinkSync(link)
+    const abs = target.startsWith('/') ? target : join(requirementDir, target)
+    // .git 是文件才算 worktree：指向主 checkout 的、以及死链，都不是迁移对象
+    if (!lstatOrNull(join(abs, '.git'))?.isFile()) continue
+    out.push({ short: entry, path: abs })
+  }
+  return out
+}
+
+/** 补齐产物需要知道的全部信息；writeAgentsFile 取其中的一部分 */
+interface DecorateInput {
+  worktreeId: string
+  requirementId: string
+  requirementDir: string
+  path: string
+  repo: string
+  branch: string
+  short?: string
+  main: string
+}
+
+/** 设计目录：需求目录下按短名分仓（没有短名就用仓库名） */
+function designDirFor(input: { requirementDir: string; short?: string; repo: string }): string {
+  return join(input.requirementDir, 'docs', (input.short || input.repo).trim())
+}
+
+/**
+ * 补齐 easy-flow 的产物：身份文件、requirement.md 软链、设计目录挂载、info/exclude。
+ * 创建与收编共用这一步，所以两边的产物一定一致。
+ */
+async function decorate(input: DecorateInput): Promise<{ identityInFile: boolean; excludeNote: string }> {
+  const agentsCreated = writeAgentsFile(input)
+  ensureSymlink(
+    join(input.path, 'requirement.md'),
+    join(input.requirementDir, 'requirement.md'),
+  )
+  // 设计文档挂进来：需求目录里建 docs/<短名>/，工作区里一条软链指过去
+  const designDir = designDirFor(input)
+  mkdirSync(designDir, { recursive: true })
+  ensureSymlink(join(input.path, DESIGN_DIR), designDir)
+  return {
+    identityInFile: agentsCreated || !!worktreeIdIn(input.path),
+    excludeNote: await ensureExclude(input.main),
   }
 }
 
@@ -340,8 +445,8 @@ export function worktreeIdIn(path: string): string {
  * 身份文件。已经有一份不是 easy-flow 写的就留着——那份多半是仓库自己的 agent 指令，
  * 覆盖它会把仓库的约束弄丢（返回值告诉调用方这次到底写没写）。
  */
-function writeAgentsFile(input: ProvisionInput, path: string): boolean {
-  const file = join(path, 'AGENTS.md')
+function writeAgentsFile(input: DecorateInput): boolean {
+  const file = join(input.path, 'AGENTS.md')
   if (existsSync(file)) return false
   writeFileSync(
     file,
@@ -349,8 +454,9 @@ function writeAgentsFile(input: ProvisionInput, path: string): boolean {
       id: input.worktreeId,
       requirementId: input.requirementId,
       requirementDir: input.requirementDir,
-      repo: input.target.repo,
+      repo: input.repo,
       branch: input.branch,
+      designDir: designDirFor(input),
     }),
     'utf8',
   )

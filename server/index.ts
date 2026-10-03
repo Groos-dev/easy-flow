@@ -299,7 +299,12 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         const project = resolveProject(db, url.searchParams.get('project'))
         const ctx = db.context(slug, project)
         if (!ctx) throw new Error(`需求不存在: ${slug}`)
-        json(req, res, 200, { ...ctx, requirementMd: db.readRequirementMd(slug, project) })
+        json(req, res, 200, {
+          ...ctx,
+          requirementMd: db.readRequirementMd(slug, project),
+          // 归属只存在库里，详情页要展示工作区就得从这儿带出去
+          worktrees: db.listWorktrees(ctx.requirement.id),
+        })
         return
       }
 
@@ -332,6 +337,17 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         const target = db.get(String(slug), project)
         if (target) execFile('open', [target.path], () => {})
         json(req, res, 200, { ok: true })
+        return
+      }
+
+      // 打开某个工作区的目录。路径从库里取，不接受调用方给的路径
+      if (url.pathname === '/api/worktree/open' && req.method === 'POST') {
+        const { id } = await readBody(req)
+        const wt = db.worktreeById(String(id))
+        if (!wt) throw new Error(`找不到 worktree: ${id}`)
+        if (!existsSync(wt.path)) throw new Error(`目录已不存在：${wt.path}`)
+        execFile('open', [wt.path], () => {})
+        json(req, res, 200, { ok: true, path: wt.path })
         return
       }
 

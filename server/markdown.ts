@@ -168,7 +168,7 @@ export function readDocs(dir: string): DocFile[] {
 }
 
 export interface ParsedRequirement {
-  /** 不透明 id，写在 requirement.md 的 frontmatter 里。老需求可能还没有 */
+  /** 不透明 id，写在 AGENTS.md 的 frontmatter 里。老需求可能还没有 */
   id: string
   slug: string
   title: string
@@ -182,23 +182,24 @@ export interface ParsedRequirement {
 /**
  * 解析一个需求目录。状态不在这里——状态归 sqlite 管。
  *
+ * 身份（id）读 AGENTS.md 的 frontmatter，卡片用的标题/摘要/仓库/链接读 requirement.md。
  * AGENTS.md 放 agent 指令，requirement.md 放需求描述；两者齐备才算需求
  * （见 listRequirementDirs），所以这里可以放心直接读。
  */
 export function parseRequirement(dir: string, fallbackSlug: string): ParsedRequirement {
-  const raw = readFileSync(join(dir, 'requirement.md'), 'utf8')
-  const { data, body } = parseFrontmatter(raw)
+  const desc = parseFrontmatter(readFileSync(join(dir, 'requirement.md'), 'utf8'))
+  const { data: identity } = parseFrontmatter(readFileSync(join(dir, 'AGENTS.md'), 'utf8'))
 
   const docs = readDocs(dir)
-  const h1 = /^#\s+(.+)$/m.exec(body)?.[1]?.trim()
+  const h1 = /^#\s+(.+)$/m.exec(desc.body)?.[1]?.trim()
 
   return {
-    id: data.id || '',
-    slug: data.slug || fallbackSlug,
-    title: data.title || h1 || fallbackSlug,
-    summary: firstParagraph(sectionAny(body, HEADINGS.summary)) || fallbackSummary(body),
-    repos: parseRepos(body),
-    links: sectionAny(body, HEADINGS.links),
+    id: identity.id || '',
+    slug: identity.slug || fallbackSlug,
+    title: desc.data.title || h1 || fallbackSlug,
+    summary: firstParagraph(sectionAny(desc.body, HEADINGS.summary)) || fallbackSummary(desc.body),
+    repos: parseRepos(desc.body),
+    links: sectionAny(desc.body, HEADINGS.links),
     docs,
   }
 }

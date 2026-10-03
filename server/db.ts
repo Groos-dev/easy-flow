@@ -148,7 +148,7 @@ export interface Requirement {
   slug: string
   /** 所属项目 */
   project: string
-  /** 不透明需求 id（requirement.md 的 frontmatter）。老需求可能还没有，为空串 */
+  /** 不透明需求 id（AGENTS.md 的 frontmatter）。老需求可能还没有，为空串 */
   id: string
   title: string
   status: Status
@@ -712,7 +712,7 @@ export class BoardDatabase {
   }
 
   /**
-   * 按需求 id 反查。id 是写在 requirement.md 里的身份，改名、换项目、换 worktree 都不影响它，
+   * 按需求 id 反查。id 是写在 AGENTS.md 里的身份，改名、换项目、换 worktree 都不影响它，
    * 所以"我属于哪个需求"只认这一条——不拿路径去猜。
    */
   byId(id: string): Requirement | undefined {
@@ -802,12 +802,14 @@ export class BoardDatabase {
 
   /** 某个需求名下的 worktree；不传则全部。按仓库排，列表稳定好读 */
   listWorktrees(requirementId?: string): Worktree[] {
+    // 判 undefined 而不是真假：需求没 id 时传进来的是空串，
+    // 那表示"它名下不可能有工作区"，不是"列出全部"
     const rows = (
-      requirementId
-        ? this.db
+      requirementId === undefined
+        ? this.db.prepare('SELECT * FROM worktree ORDER BY created, repo').all()
+        : this.db
             .prepare('SELECT * FROM worktree WHERE req_id = ? ORDER BY created, repo')
             .all(requirementId)
-        : this.db.prepare('SELECT * FROM worktree ORDER BY created, repo').all()
     ) as unknown as WtRow[]
     return rows.map(toWorktree)
   }
