@@ -5,7 +5,9 @@
  * 这里只做两件事：把模板补到 <dataDir>/_templates/ 下，以及只读地报告目录哪里不合规范。
  * 规范问题只用于 UI 提示：不拦截操作、不改状态、不过滤列表。
  *
- * 状态（看板列、优先级、链接）永远不写进 md；模板与规范只描述文件结构。
+ * 看板列（状态）、优先级与结构化链接（飞书任务 / MR / 扩展链接）只存在 easy-flow.db 里，
+ * 不要在 md 里维护它们；requirement.md 的「链接」段是自由文本，会被读出来当展示用。
+ * 规范与模板只描述文件结构。
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
