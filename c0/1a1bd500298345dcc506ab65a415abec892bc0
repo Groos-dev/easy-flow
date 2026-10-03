@@ -1,0 +1,20 @@
+README.md
+  s_14f5e060888425::t_a1511855204509 29
+  s_14f5e060888425::t_65b3fa0af8f709 1-28,30-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "c01a1bd500298345dcc506ab65a415abec892bc0",
+  "prompts": {},
+  "sessions": {
+    "s_14f5e060888425": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0faa5006-438e-4f13-93a1-1f09b590dabf",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
