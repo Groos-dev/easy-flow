@@ -44,6 +44,8 @@ export interface Requirement {
   project: string
   /** 不透明需求 id（AGENTS.md frontmatter 里那个 req-xxxxxxxxxx）*/
   id: string
+  /** 父需求的 id；顶层需求为空串。slug 里也带着层级（parent/child） */
+  parentId: string
   title: string
   status: string
   priority: string

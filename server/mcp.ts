@@ -101,8 +101,19 @@ function createRequirement(
   return created
 }
 
-/** 需求主体：头部几行 + 项目规范 + 需求描述 + context.md。extraHead 给 worktree 命中时补头 */
-function requirementBlocks(req: Requirement, extraHead: string[] = []): string[] {
+/** 需求清单里的一行 */
+function requirementLine(r: Requirement): string {
+  return `- ${r.id || '（无 id）'}  ${r.slug}  ${r.title}`
+}
+
+/**
+ * 需求主体：头部几行 + 上层需求 + 项目规范 + 需求描述 + context.md + 子需求。
+ * extraHead 给 worktree 命中时补头。
+ *
+ * 层级是把需求拆开做的产物：子需求要在自己的上下文里看见父需求（它拆的就是父需求），
+ * 父需求也要知道下面挂了哪些子需求。父需求的正文只带最近那一层——再往上是又一次调用的事。
+ */
+function requirementBlocks(board: BoardDatabase, req: Requirement, extraHead: string[] = []): string[] {
   const root = join(config.dataDir, req.project)
   const convention = readProjectConvention(root)
   const display = projectDisplayName(convention, req.project)
@@ -121,11 +132,23 @@ function requirementBlocks(req: Requirement, extraHead: string[] = []): string[]
   if (docs.length) head.push(`其他文档：${docs.map((d) => d.name).join('、')}`)
 
   const blocks = [head.join('\n')]
+  const ancestors = board.ancestors(req)
+  if (ancestors.length) {
+    blocks.push(`## 上层需求（从近到远）\n${ancestors.map(requirementLine).join('\n')}`)
+    const parentDesc = readTextOrNull(join(ancestors[0].path, 'requirement.md'))
+    if (parentDesc) {
+      blocks.push(`## 父需求描述（${ancestors[0].slug}/requirement.md）\n\n${parentDesc.trim()}`)
+    }
+  }
   if (convention) blocks.push(`## 项目规范（${join(root, 'AGENTS.md')}）\n\n${convention.trim()}`)
   const desc = readTextOrNull(join(req.path, 'requirement.md'))
   if (desc) blocks.push(`## 需求描述（requirement.md）\n\n${desc.trim()}`)
   const ctx = readTextOrNull(join(req.path, 'context.md'))
   if (ctx) blocks.push(`## 上下文（context.md）\n\n${ctx.trim()}`)
+  const kids = board.children(req.id)
+  if (kids.length) {
+    blocks.push(`## 子需求（${kids.length}）\n${kids.map(requirementLine).join('\n')}`)
+  }
   return blocks
 }
 
@@ -173,9 +196,10 @@ server.registerTool(
     title: '取上下文',
     description:
       '按 id 取上下文，返回从命中处向上到项目的整条链：几行头部（id、项目、需求、状态、目录），' +
-      '加上项目规范、需求描述（requirement.md）与 context.md 的原文。req- 还会列出它名下的 worktree；' +
-      'wt- 会补上仓库、分支与设计文档目录的位置。三种 id 都收：wt-… 是 worktree（在它的 AGENTS.md frontmatter 里）、' +
-      'req-… 是需求（在需求目录的 AGENTS.md 里）、裸值当项目标识。id 必须显式传，不做猜测。',
+      '加上项目规范、需求描述（requirement.md）与 context.md 的原文；是子需求还会带上上层需求与父需求描述，' +
+      '是父需求会列出它名下的子需求。req- 还会列出它名下的 worktree；wt- 会补上仓库、分支与设计文档目录的位置。' +
+      '三种 id 都收：wt-… 是 worktree（在它的 AGENTS.md frontmatter 里）、req-… 是需求（在需求目录的 AGENTS.md 里）、' +
+      '裸值当项目标识。id 必须显式传，不做猜测。',
     inputSchema: {
       id: z.string().optional().describe('wt-xxxxxxxxxx / req-xxxxxxxxxx / 项目标识'),
     },
@@ -196,7 +220,7 @@ server.registerTool(
       if (!wt) throw new Error(`找不到 worktree：${key}。id 写在 worktree 的 AGENTS.md 里`)
       const req = board.byId(wt.requirementId)
       if (!req) throw new Error(`worktree ${key} 记的需求 ${wt.requirementId} 不在库里了`)
-      const blocks = requirementBlocks(req, [
+      const blocks = requirementBlocks(board, req, [
         `worktree id：${wt.id}`,
         `仓库：${wt.repo}${wt.short ? `（短名 ${wt.short}）` : ''}`,
         `分支：${wt.branch}`,
@@ -219,7 +243,7 @@ server.registerTool(
       if (alt) return text(alt)
       if (!req) throw new Error(`找不到需求：${key}`)
       const wts = board.listWorktrees(req.id)
-      const blocks = requirementBlocks(req)
+      const blocks = requirementBlocks(board, req)
       blocks.push(
         wts.length
           ? `## worktree（${wts.length}）\n${wts.map(worktreeLine).join('\n')}`
@@ -281,8 +305,8 @@ server.registerTool(
   {
     title: '新建子需求',
     description:
-      '在某个需求下再建一层需求目录，结构与需求相同，用来拆解跨仓或多步的改动。' +
-      '注意：看板只扫一层——子需求不出现在看板上，也不能按 id 反查（它的 id 只写在自己目录的 AGENTS.md 里）。',
+      '在某个需求下建子需求：目录嵌在父需求里，文件与结构同普通需求，用来拆解跨仓或多步的改动。' +
+      '子需求一样入库、一样出现在看板上，也能按 id 反查；层级可以往下续，slug 是相对项目根的路径（如 parent/child）。',
     inputSchema: {
       title: z.string().describe('子需求标题，一行'),
       summary: z.string().optional().describe('一句话说清这次要改什么'),
