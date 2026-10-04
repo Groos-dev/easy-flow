@@ -44,7 +44,8 @@ name: ${oneLine(name)}
 # 项目规范
 
 <!-- easy-flow 项目规范：显示名取上面 frontmatter 的 name，留空则用目录名，改完下次刷新生效。${howto}
-     状态（看板列、优先级）存在 easy-flow.db 里，不要写进任何 md。 -->
+     状态（看板列、优先级）存在 easy-flow.db 里，不要写进任何 md。
+     完整流程（三阶段、每阶段做什么、内容放哪）见 easy-flow skill。 -->
 
 ## 背景
 
@@ -61,14 +62,15 @@ name: ${oneLine(name)}
 function requirementAgents(id: string): string {
   const frontmatter = id ? `---\nid: ${id}\n---\n\n` : ''
   return `${frontmatter}<!-- easy-flow 需求 · agent 指令：写怎么干活、有哪些约束、要避开什么。
-     跑 easy-flow 命令时（如 easy-flow context），用上面 frontmatter 里的 id 显式传参。 -->
+     跑 easy-flow 命令时（如 easy-flow context），用上面 frontmatter 里的 id 显式传参。
+     完整流程（三阶段、每阶段做什么、内容放哪）见 easy-flow skill。 -->
 
 ## 这个目录里有什么
 
 | 文件 | 作用 |
 | --- | --- |
 | \`AGENTS.md\` | 本文件：身份（frontmatter 的 id）与 agent 指令 |
-| \`requirement.md\` | 需求描述。看板卡片的标题取它的 H1、摘要取「需求」段 |
+| \`requirement.md\` | 需求描述。看板卡片的标题取它的 H1、摘要取「需求」段；验收段写做到什么算完成 |
 | \`context.md\` | 需求的上下文：背景、约束、相关的人与系统、决策依据 |
 | \`docs/\` | 设计、调研、踩坑。会出现在详情页标签栏；工作区里的 \`design/\` 软链指向它下面的仓库目录 |
 
@@ -78,7 +80,7 @@ function requirementAgents(id: string): string {
 
 /** requirement.md：需求描述，卡片标题与摘要的来源。身份不在这里 */
 function requirementDesc(title: string, summary: string): string {
-  return `<!-- easy-flow 需求 · 需求描述：看板标题取下面的 H1，摘要取「需求」段。
+  return `<!-- easy-flow 需求 · 需求描述：看板标题取下面的 H1，摘要取「需求」段，验收段写做到什么算完成。
      上下文（背景、约束、决策）写同目录的 context.md，更长的方案放 docs/。 -->
 
 # ${oneLine(title)}
@@ -86,6 +88,8 @@ function requirementDesc(title: string, summary: string): string {
 ## 需求
 
 ${summary}
+
+## 验收
 
 ## 涉及仓库
 
@@ -165,7 +169,8 @@ requirement: ${input.requirementId}
 ---
 
 <!-- easy-flow worktree 指令：这里是一份代码工作区，需求内容在软链 requirement.md 里。
-     身份认上面 frontmatter 的 id：取上下文时显式传它（easy-flow context wt-…）。 -->
+     身份认上面 frontmatter 的 id：取上下文时显式传它（easy-flow context wt-…）。
+     完整流程（三阶段、每阶段做什么、内容放哪）见 easy-flow skill。 -->
 
 需求目录：${input.requirementDir}
 仓库：${oneLine(input.repo)}

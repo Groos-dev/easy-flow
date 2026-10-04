@@ -580,6 +580,7 @@ describe('创建 · 目录与模板', () => {
     const root = createProjectDir(dir, 'demo', '示例项目')
     assert.equal(root, join(dir, 'demo'))
     assert.match(readFileSync(join(root, 'AGENTS.md'), 'utf8'), /^name: 示例项目$/m)
+    assert.match(readFileSync(join(root, 'AGENTS.md'), 'utf8'), /见 easy-flow skill/)
 
     const db = new BoardDatabase(dir)
     db.syncProjects()
@@ -604,10 +605,14 @@ describe('创建 · 目录与模板', () => {
     const agents = readFileSync(join(created.dir, 'AGENTS.md'), 'utf8')
     assert.match(agents, new RegExp(`^---\\nid: ${created.id}\\n---$`, 'm'))
     assert.match(agents, /requirement\.md/)
+    assert.match(agents, /见 easy-flow skill/)
     const desc = readFileSync(join(created.dir, 'requirement.md'), 'utf8')
     assert.ok(!desc.includes('id:'))
     assert.match(desc, /^# 币种改 CNY$/m)
     assert.match(desc, /## 需求\n\n上游只认 CNY/)
+    // 澄清阶段要求讲清验收边界，模板给它固定位置
+    assert.match(desc, /## 验收/)
+    assert.match(desc, /## 需求[\s\S]*## 验收[\s\S]*## 涉及仓库/)
 
     const db = new BoardDatabase(dir)
     db.syncProjects()
@@ -1085,6 +1090,7 @@ describe('CLI 层', () => {
     const wtPath = join(workspace, `${repoName}.feature-truemap`)
     assert.equal(sh(wtPath, 'rev-parse', '--abbrev-ref', 'HEAD'), 'feature-truemap')
     assert.match(readFileSync(join(wtPath, 'AGENTS.md'), 'utf8'), new RegExp(`id: ${id}`))
+    assert.match(readFileSync(join(wtPath, 'AGENTS.md'), 'utf8'), /见 easy-flow skill/)
     assert.equal(
       readFileSync(join(wtPath, 'requirement.md'), 'utf8'),
       readFileSync(join(created.dir, 'requirement.md'), 'utf8'),
