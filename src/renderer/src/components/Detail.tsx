@@ -288,7 +288,7 @@ export default function Detail({ target, statuses, priorities, todoStatuses, onB
   return (
     <div className="detail-page">
       <header className="detail-head">
-        <button className="icon-btn" onClick={onBack} title="返回看板（Esc / ⌘[）">
+        <button className="icon-btn" onClick={onBack} title="返回（Esc / ⌘[）">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="19" y1="12" x2="5" y2="12" />
             <polyline points="12 19 5 12 12 5" />

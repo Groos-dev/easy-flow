@@ -144,7 +144,7 @@ export default function Settings({ onBack, onApplied }: Props) {
         ))}
         <span className="spacer" />
         <button className="settings-nav-item back" onClick={onBack}>
-          ← 返回看板
+          ← 返回
         </button>
       </aside>
 
