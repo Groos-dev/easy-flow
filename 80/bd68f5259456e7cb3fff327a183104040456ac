@@ -1,0 +1,41 @@
+src/renderer/src/App.tsx
+  s_527d7fddfb8a8d::t_e4721f75fcefc9 122
+  s_527d7fddfb8a8d::t_cab1a1b5aa79b4 267
+src/renderer/src/components/Detail.tsx
+  s_527d7fddfb8a8d::t_0d1f61ff3f3c0e 204,214
+  s_527d7fddfb8a8d::t_e68aff4385e4e9 47
+  s_527d7fddfb8a8d::t_f0abb524a7fa06 8
+  s_527d7fddfb8a8d::t_ea17ff14dedfdd 332
+src/preload/index.ts
+  s_527d7fddfb8a8d::t_b5f36520336105 3
+src/renderer/src/components/icons.tsx
+  s_527d7fddfb8a8d::t_0c9dc74bc98fd8 3
+src/renderer/src/components/Sidebar.tsx
+  s_527d7fddfb8a8d::t_31cd9b5789a6fd 10
+  s_527d7fddfb8a8d::t_d6b04f3ca3d9c8 145
+src/renderer/src/styles.css
+  s_527d7fddfb8a8d::t_1a8e7cdfd269b9 569
+README.md
+  s_527d7fddfb8a8d::t_8315b0b7c99b7b 29-30
+  s_527d7fddfb8a8d::t_ee6b85e5063e7d 6-7
+  s_527d7fddfb8a8d::t_dbf15eb80b6d6d 21
+  s_527d7fddfb8a8d::t_dd35adc20b6c81 13
+src/renderer/src/components/Settings.tsx
+  s_527d7fddfb8a8d::t_495838ecd603f2 1,11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "80bd68f5259456e7cb3fff327a183104040456ac",
+  "prompts": {},
+  "sessions": {
+    "s_527d7fddfb8a8d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e3bf63b-f04c-4a95-8285-02d1578e2daa",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
