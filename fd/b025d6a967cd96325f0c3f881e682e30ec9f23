@@ -1,0 +1,21 @@
+src/renderer/src/components/Detail.tsx
+  s_8a6887babed8b2::t_d7724d2b0392ed 295
+src/renderer/src/components/Settings.tsx
+  s_8a6887babed8b2::t_2d687c96ba0b83 178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "fdb025d6a967cd96325f0c3f881e682e30ec9f23",
+  "prompts": {},
+  "sessions": {
+    "s_8a6887babed8b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb7e409e-488f-4abf-9693-ab7fa46b8dbc",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
