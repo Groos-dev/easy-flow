@@ -1,0 +1,22 @@
+test/core.test.ts
+  s_8a6887babed8b2::t_33899d0f14b90b 24-25
+  s_8a6887babed8b2::t_af9397e5fb6b60 1640-1831
+src/renderer/src/lib/mindmap.ts
+  s_8a6887babed8b2::t_e37a09ee096f4c 1-244
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "e95be2970f692c99f91fbe7a48f4022f9cef50c9",
+  "prompts": {},
+  "sessions": {
+    "s_8a6887babed8b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb7e409e-488f-4abf-9693-ab7fa46b8dbc",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}

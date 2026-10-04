@@ -1,0 +1,27 @@
+src/renderer/src/App.tsx
+  s_8a6887babed8b2::t_73f31bd117722c 16
+  s_8a6887babed8b2::t_5ab710a81612cb 62-63
+  s_8a6887babed8b2::t_b026a418e20b31 310-317
+  s_8a6887babed8b2::t_2c58f409b29de9 330-360
+src/renderer/src/components/MindMap.tsx
+  s_8a6887babed8b2::t_2efdb88bb0bbe0 1-234
+src/renderer/src/styles.css
+  s_8a6887babed8b2::t_976866e1bb1f59 12-17
+  s_8a6887babed8b2::t_886e7e52abadeb 1340-1531
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "3af0c103cb8c01bd3ba8848119b322fc40841df2",
+  "prompts": {},
+  "sessions": {
+    "s_8a6887babed8b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb7e409e-488f-4abf-9693-ab7fa46b8dbc",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
