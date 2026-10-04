@@ -1,0 +1,27 @@
+test/core.test.ts
+  s_0213e0f10e625e::t_b3c86f0054e51f 608
+  s_0213e0f10e625e::t_fae85d0e09a424 613-615
+  s_0213e0f10e625e::t_9ce4b0f805ac0b 583
+  s_0213e0f10e625e::t_846ab51975eb9d 1093
+server/convention.ts
+  s_0213e0f10e625e::t_2baac247066053 47-48
+  s_0213e0f10e625e::t_e7e233dd74711f 83,92
+  s_0213e0f10e625e::t_ba44c25a209e1b 172-173
+  s_0213e0f10e625e::t_aade3c23f64497 65-66,73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "1625294e376ac6d8d5e98d1e5114a27b622adefc",
+  "prompts": {},
+  "sessions": {
+    "s_0213e0f10e625e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "90d06ebd-c1e0-4034-a1dc-d54cf1e9638c",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
