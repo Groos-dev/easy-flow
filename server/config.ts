@@ -13,16 +13,7 @@ export interface AppConfig {
   dataDir: string
   /** 当前看板的项目（用户切换后记住） */
   activeProject: string
-  /** 终端字体族。多个用逗号分隔，第一项优先。 */
-  terminalFontFamily: string
-  terminalFontSize: number
 }
-
-/** 默认终端字体：优先带 Nerd 字形的等宽字体，否则退回系统等宽 */
-export const DEFAULT_TERMINAL_FONT =
-  "'JetBrainsMono Nerd Font Mono', 'MesloLGS NF', Menlo, ui-monospace, monospace"
-
-export const DEFAULT_TERMINAL_FONT_SIZE = 12.5
 
 /** 配置文件路径。由 main 进程通过 EASY_FLOW_CONFIG 指定；独立运行 server 时回退到约定路径。 */
 export function configPath(): string {
@@ -52,8 +43,6 @@ export function readConfig(): AppConfig {
   const defaults: AppConfig = {
     dataDir: devFallbackDir(),
     activeProject: '',
-    terminalFontFamily: DEFAULT_TERMINAL_FONT,
-    terminalFontSize: DEFAULT_TERMINAL_FONT_SIZE,
   }
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<AppConfig>
@@ -61,14 +50,6 @@ export function readConfig(): AppConfig {
       dataDir: typeof raw?.dataDir === 'string' && raw.dataDir ? raw.dataDir : defaults.dataDir,
       activeProject:
         typeof raw?.activeProject === 'string' ? raw.activeProject : defaults.activeProject,
-      terminalFontFamily:
-        typeof raw?.terminalFontFamily === 'string' && raw.terminalFontFamily
-          ? raw.terminalFontFamily
-          : defaults.terminalFontFamily,
-      terminalFontSize:
-        typeof raw?.terminalFontSize === 'number' && raw.terminalFontSize > 0
-          ? raw.terminalFontSize
-          : defaults.terminalFontSize,
     }
   } catch {
     /* 首次运行或文件损坏，走默认值 */

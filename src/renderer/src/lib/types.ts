@@ -128,14 +128,7 @@ export interface SettingsPayload {
   dataDir: string
   dbFile: string
   defaultDataDir: string
-  terminalFontFamily: string
-  terminalFontSize: number
   counts: { requirements: number; projects: number }
-}
-
-export interface AppearancePayload {
-  terminalFontFamily: string
-  terminalFontSize: number
 }
 
 export interface AgentSkill {

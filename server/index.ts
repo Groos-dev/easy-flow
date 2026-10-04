@@ -288,33 +288,14 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
       // ----------------------------------------------------------- 设置
 
       if (url.pathname === '/api/settings' && req.method === 'GET') {
-        const cfg = readConfig()
         json(req, res, 200, {
           dataDir: currentDir,
           dbFile: db.file,
           defaultDataDir: defaultDataDir(),
-          terminalFontFamily: cfg.terminalFontFamily,
-          terminalFontSize: cfg.terminalFontSize,
           counts: {
             requirements: db.list().length,
             projects: db.listProjects().length,
           },
-        })
-        return
-      }
-
-      // 终端外观等偏好（与数据目录无关，纯配置写入）
-      if (url.pathname === '/api/settings/appearance' && req.method === 'POST') {
-        const { terminalFontFamily, terminalFontSize } = await readBody(req)
-        const patch: { terminalFontFamily?: string; terminalFontSize?: number } = {}
-        if (typeof terminalFontFamily === 'string') patch.terminalFontFamily = terminalFontFamily
-        if (typeof terminalFontSize === 'number' && terminalFontSize > 0 && terminalFontSize <= 32) {
-          patch.terminalFontSize = terminalFontSize
-        }
-        const next = writeConfig(patch)
-        json(req, res, 200, {
-          terminalFontFamily: next.terminalFontFamily,
-          terminalFontSize: next.terminalFontSize,
         })
         return
       }
@@ -393,8 +374,6 @@ export interface RunningBoardServer {
   server: ReturnType<typeof createServer>
   port: number
   dataDir: string
-  /** 供主进程查需求目录等元信息（终端要按 slug 定位工作目录） */
-  db: BoardDatabase
   close: () => void
 }
 
@@ -415,10 +394,6 @@ export function startBoardServer({
         server,
         port,
         dataDir: app.dataDir,
-        // 用取值器转发，切换数据目录后仍指向当前库
-        get db() {
-          return app.db
-        },
         close: () => {
           server.close()
           app.close()

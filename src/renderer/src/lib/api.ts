@@ -1,5 +1,4 @@
 import type {
-  AppearancePayload,
   BoardData,
   ContextPayload,
   Project,
@@ -82,9 +81,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ slug, name, content, project }),
     }),
-
-  saveAppearance: (patch: Partial<AppearancePayload>): Promise<AppearancePayload> =>
-    request('/api/settings/appearance', { method: 'POST', body: JSON.stringify(patch) }),
 
   // ------------------------------------------------------------- 项目
 

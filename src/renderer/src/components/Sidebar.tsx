@@ -7,7 +7,7 @@ interface Props {
   selected: { project: string; slug: string | null } | null
   /** 点了项目：切到该项目的看板 */
   onOpenProjectBoard: () => void
-  /** 点了项目名旁的「详情」：打开项目详情页（含终端） */
+  /** 点了项目名旁的「详情」：打开项目详情页 */
   onOpenProjectDetail: (slug: string) => void
   /** 点了需求：打开需求详情页 */
   onOpenRequirement: (project: string, slug: string) => void
@@ -142,7 +142,7 @@ export default function Sidebar({
                 </button>
                 <button
                   className="tree-action"
-                  title="打开项目详情（含终端）"
+                  title="打开项目详情"
                   onClick={() => onOpenProjectDetail(p.slug)}
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

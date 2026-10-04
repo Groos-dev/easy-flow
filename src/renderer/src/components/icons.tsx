@@ -1,6 +1,6 @@
 /**
  * 详情页的图标。都是纯 markup，抽出来只为让页面与浮窗的组件专心排版。
- * 两边各用一部分（页面用源码/信息/终端，浮窗用复制与勾），合在一起是因为同属一类，
+ * 两边各用一部分（页面用源码/信息，浮窗用复制与勾），合在一起是因为同属一类，
  * 不是因为共享。
  */
 
@@ -19,17 +19,6 @@ export function CodeIcon() {
     >
       <polyline points="16 18 22 12 16 6" />
       <polyline points="8 6 2 12 8 18" />
-    </svg>
-  )
-}
-
-/** 终端图标：一个提示符窗口 */
-export function TerminalIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="4" width="20" height="16" rx="2" />
-      <polyline points="7 10 10 12.5 7 15" />
-      <line x1="12.5" y1="15" x2="17" y2="15" />
     </svg>
   )
 }

@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type { SettingsPayload, SkillPayload, SyncResult } from '../lib/types'
-import { detectMonospaceFonts } from '../lib/fonts'
 
 interface Props {
   onBack: () => void
@@ -9,11 +8,10 @@ interface Props {
   onApplied: () => void
 }
 
-type SectionId = 'data' | 'appearance' | 'skill'
+type SectionId = 'data' | 'skill'
 
 const SECTIONS: Array<{ id: SectionId; label: string }> = [
   { id: 'data', label: '数据目录' },
-  { id: 'appearance', label: '外观' },
   { id: 'skill', label: 'CLI 与 Skill' },
 ]
 
@@ -35,21 +33,6 @@ export default function Settings({ onBack, onApplied }: Props) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  // 终端外观
-  const [fontFamily, setFontFamily] = useState('')
-  const [fontSize, setFontSize] = useState(12.5)
-  const [fontNotice, setFontNotice] = useState('')
-
-  const installedFonts = useMemo(() => detectMonospaceFonts(), [])
-  const fontTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // 离开设置页时把还在飞的防抖清掉：它到点会写一次配置，并对已卸载的组件 setState
-  useEffect(() => {
-    return () => {
-      if (fontTimer.current) clearTimeout(fontTimer.current)
-    }
-  }, [])
-
   // CLI / skill install state: only read from the filesystem when that section is opened
   const [skill, setSkill] = useState<SkillPayload | null>(null)
   const [skillNotice, setSkillNotice] = useState('')
@@ -59,8 +42,6 @@ export default function Settings({ onBack, onApplied }: Props) {
     const s = await api.settings()
     setSettings(s)
     setDraft(s.dataDir)
-    setFontFamily(s.terminalFontFamily)
-    setFontSize(s.terminalFontSize)
   }, [])
 
   useEffect(() => {
@@ -130,18 +111,6 @@ export default function Settings({ onBack, onApplied }: Props) {
       setError((e as Error).message)
     } finally {
       setBusy(false)
-    }
-  }
-
-  async function applyAppearance(patch: { terminalFontFamily?: string; terminalFontSize?: number }) {
-    setFontNotice('')
-    try {
-      const res = await api.saveAppearance(patch)
-      setFontFamily(res.terminalFontFamily)
-      setFontSize(res.terminalFontSize)
-      setFontNotice('已保存，终端立即生效')
-    } catch (e) {
-      setFontNotice(`保存失败：${(e as Error).message}`)
     }
   }
 
@@ -219,74 +188,6 @@ export default function Settings({ onBack, onApplied }: Props) {
                     `需求数：  ${settings.counts.requirements}`,
                   ].join('\n')
                 : '读取中…'}
-            </pre>
-          </>
-        )}
-
-        {section === 'appearance' && (
-          <>
-            <h1>外观</h1>
-
-            {fontNotice && <div className="notice ok">{fontNotice}</div>}
-
-            <div className="section-label">终端字体（检测到 {installedFonts.length} 个等宽字体）</div>
-            <div className="font-list">
-              {installedFonts.map((f) => (
-                <button
-                  key={f}
-                  // 配置里存的是完整字体栈，只要包含该字体名就算选中
-                  className={`font-item${fontFamily.includes(f) ? ' active' : ''}`}
-                  onClick={() => void applyAppearance({ terminalFontFamily: f })}
-                >
-                  <span className="font-name">{f}</span>
-                  <span className="font-sample">❯ ~/req  main +2 !2 ?48 ──╮</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="section-label">或手动填写 font-family</div>
-            <div className="row">
-              <input
-                className="search wide"
-                value={fontFamily}
-                onChange={(e) => setFontFamily(e.target.value)}
-                spellCheck={false}
-              />
-              <button className="btn" onClick={() => void applyAppearance({ terminalFontFamily: fontFamily })}>
-                应用
-              </button>
-            </div>
-
-            <div className="section-label">字号 · {fontSize}px</div>
-            <div className="row">
-              <input
-                type="range"
-                min={10}
-                max={20}
-                step={0.5}
-                value={fontSize}
-                // 拖动与键盘调整都走 onChange；原先只在 mouseUp 保存，
-                // 用方向键调完永远不落盘，返回后会被弹回。
-                onChange={(e) => {
-                  const v = Number(e.target.value)
-                  setFontSize(v)
-                  if (fontTimer.current) clearTimeout(fontTimer.current)
-                  fontTimer.current = setTimeout(
-                    () => void applyAppearance({ terminalFontSize: v }),
-                    400,
-                  )
-                }}
-              />
-            </div>
-
-            <div className="section-label">预览</div>
-            <pre className="font-preview" style={{ fontFamily, fontSize }}>
-              {[
-                '❯ ~/requirements/tf-meal-b2b-crawler   main +2 !2 ?48',
-                '~/req  ──╮  ╰─  ▶  ● ○ ◆  ⚡',
-                'const s = "JetBrainsMono 0123456789"',
-                '餐食出票 → B2B 爬虫履约｜中文对齐测试',
-              ].join('\n')}
             </pre>
           </>
         )}

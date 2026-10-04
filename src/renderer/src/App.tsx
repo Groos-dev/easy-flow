@@ -63,9 +63,6 @@ export default function App() {
   const [priorities, setPriorities] = useState<string[]>([])
   const [items, setItems] = useState<Requirement[]>([])
   const [query, setQuery] = useState('')
-  // 终端外观（来自设置），改完设置页返回时会重新拉取
-  const [fontFamily, setFontFamily] = useState('monospace')
-  const [fontSize, setFontSize] = useState(12.5)
   /** 搜索命中的 slug 集合；null 表示未搜索 */
   const [hits, setHits] = useState<Set<string> | null>(null)
   const [error, setError] = useState('')
@@ -114,17 +111,6 @@ export default function App() {
     }
   }, [])
 
-  // 外观配置只在启动与离开设置页时拉取
-  const loadAppearance = useCallback(async () => {
-    try {
-      const s = await api.settings()
-      setFontFamily(s.terminalFontFamily)
-      setFontSize(s.terminalFontSize)
-    } catch {
-      /* 设置读不到时用默认字体，不阻断看板 */
-    }
-  }, [])
-
   /** 看板与侧边栏一起重拉：agent 建完目录后不用重启应用就能看到 */
   const refresh = useCallback(() => {
     void load()
@@ -133,8 +119,7 @@ export default function App() {
 
   useEffect(() => {
     void load()
-    void loadAppearance()
-  }, [load, loadAppearance])
+  }, [load])
 
   // 搜索交给服务端（md 与索引都在那边），防抖 + 序号防乱序
   useEffect(() => {
@@ -279,20 +264,12 @@ export default function App() {
 
       <main className="main-area">
         {showSettings ? (
-          <Settings
-            onBack={() => setShowSettings(false)}
-            onApplied={() => {
-              refresh()
-              void loadAppearance()
-            }}
-          />
+          <Settings onBack={() => setShowSettings(false)} onApplied={refresh} />
         ) : detailTarget ? (
           <Detail
             target={detailTarget}
             statuses={statuses}
             priorities={priorities}
-            fontFamily={fontFamily}
-            fontSize={fontSize}
             onBack={() => {
               setDetail(null)
               refresh()

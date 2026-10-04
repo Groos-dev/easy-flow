@@ -566,14 +566,9 @@ body {
 .detail-body {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 42%);
-  min-height: 0;
-  /* 关键：两栏各自滚动，滚动绝不冒泡到外层把另一栏带走 */
-  overflow: hidden;
-}
-
-.detail-body.no-terminal {
   grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .doc-pane {
@@ -583,16 +578,6 @@ body {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  border-right: 1px solid var(--border);
-}
-
-.detail-body.no-terminal .doc-pane {
-  border-right: none;
-}
-
-/* 收起终端 = 藏起来而不是卸载：PTY 会话留在后台，展开即恢复 */
-.detail-body.no-terminal .terminal-pane {
-  display: none;
 }
 
 /*
@@ -777,62 +762,6 @@ body {
   max-width: 100%;
 }
 
-/* ---------------------------------------------------------------- 终端 */
-
-.terminal-pane {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  /* 终端有自己的滚动缓冲，不能再向外冒泡 */
-  overflow: hidden;
-  background: var(--bg);
-}
-
-.terminal-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-faint);
-  font-size: 11.5px;
-}
-
-.terminal-bar .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-faint);
-  flex: none;
-}
-.terminal-bar .dot.ready {
-  background: #3ddc84;
-}
-.terminal-bar .dot.connecting {
-  background: #ffd93d;
-}
-.terminal-bar .dot.exited {
-  background: #ff5c5c;
-}
-
-.terminal-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.terminal-host {
-  flex: 1;
-  min-height: 0;
-  padding: 8px 6px 6px 10px;
-  overflow: hidden;
-}
-
-.terminal-host .xterm {
-  height: 100%;
-}
-
 /* ------------------------------------------------- 文档模式切换 / 编辑 */
 
 /* 单图标切换：点一下在预览/源码之间切 */
@@ -877,73 +806,6 @@ body {
   border-color: #2b4a37;
   color: #a8e6bf;
   margin: 8px 12px 0;
-}
-
-/* ------------------------------------------------------ 字体设置 */
-
-.font-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-height: 260px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.font-item {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--column);
-  color: var(--text-dim);
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-}
-
-.font-item:hover {
-  border-color: #38404c;
-  color: var(--text);
-}
-
-.font-item.active {
-  border-color: var(--accent);
-  background: #1b2536;
-  color: var(--text);
-}
-
-.font-name {
-  font-size: 12px;
-  flex: none;
-  min-width: 190px;
-}
-
-.font-sample {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  color: var(--text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.font-item.active .font-sample {
-  color: var(--text-dim);
-}
-
-.font-preview {
-  background: var(--column);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
-  margin: 0;
-  white-space: pre;
-  overflow-x: auto;
-  line-height: 1.5;
-  color: var(--text);
 }
 
 /* 自动保存状态指示（替代原来的保存/重载按钮） */

@@ -5,8 +5,7 @@ import { api } from '../lib/api'
 import type { ContextPayload, Requirement } from '../lib/types'
 import InfoPanel from './InfoPanel'
 import SelectMenu from './SelectMenu'
-import TerminalPane from './TerminalPane'
-import { CodeIcon, InfoIcon, TerminalIcon } from './icons'
+import { CodeIcon, InfoIcon } from './icons'
 
 /**
  * 详情页的两种挂载点：
@@ -28,8 +27,6 @@ interface Props {
   /** 由服务端下发的状态枚举，避免这里再维护一份 */
   statuses: string[]
   priorities: string[]
-  fontFamily: string
-  fontSize: number
   onBack: () => void
   /** 改了状态后通知看板刷新 */
   onUpdated: () => void
@@ -47,20 +44,9 @@ type ViewMode = 'preview' | 'source'
 /** 停止输入后多久落盘 */
 const AUTOSAVE_DELAY = 600
 
-export default function Detail({
-  target,
-  statuses,
-  priorities,
-  fontFamily,
-  fontSize,
-  onBack,
-  onUpdated,
-}: Props) {
+export default function Detail({ target, statuses, priorities, onBack, onUpdated }: Props) {
   const req = target.req
   const isProject = target.kind === 'project'
-  const terminalTarget = isProject
-    ? { project: target.project }
-    : { project: target.project, slug: target.slug! }
   const [docs, setDocs] = useState<string[]>([])
   /** 当前打开的文档；空串表示还没定（列表在异步加载）或这个挂载点没有文档 */
   const [activeDoc, setActiveDoc] = useState('')
@@ -72,7 +58,6 @@ export default function Detail({
   const [mode, setMode] = useState<ViewMode>('preview')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [showTerminal, setShowTerminal] = useState(true)
   /** 需求上下文（含工作区列表）。项目页用不到，保持 null */
   const [ctx, setCtx] = useState<ContextPayload | null>(null)
   const [infoOpen, setInfoOpen] = useState(false)
@@ -216,10 +201,7 @@ export default function Detail({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) {
-        // 捕获阶段：终端的 xterm 会在自己身上吃掉按键并阻止冒泡，冒泡阶段轮不到这里。
-        // 但终端里的 Esc 归终端管（claude / vim 都要用），焦点在终端时不抢。
-        const inTerminal = e.target instanceof Element && e.target.closest('.terminal-pane')
-        if (e.key === 'Escape' && !inTerminal) {
+        if (e.key === 'Escape') {
           // 浮窗开着时先关浮窗，不然一次 Esc 既关浮窗又退出详情
           if (infoOpen) {
             setInfoOpen(false)
@@ -229,7 +211,7 @@ export default function Detail({
         }
         return
       }
-      // ⌘[ 是 macOS 的「返回」：终端里 Esc 归 claude / vim，用这个随时退
+      // ⌘[ 是 macOS 的「返回」
       if (e.key === '[') {
         e.preventDefault()
         onBack()
@@ -322,14 +304,6 @@ export default function Detail({
             {infoOpen && <InfoPanel req={req} ctx={ctx} />}
           </div>
         )}
-        <button
-          className={`icon-btn${showTerminal ? ' on' : ''}`}
-          onClick={() => setShowTerminal((v) => !v)}
-          title={showTerminal ? '收起终端' : '展开终端'}
-          aria-label={showTerminal ? '收起终端' : '展开终端'}
-        >
-          <TerminalIcon />
-        </button>
       </header>
 
       {!isProject && req && (
@@ -355,7 +329,7 @@ export default function Detail({
       </div>
       )}
 
-      <div className={`detail-body${showTerminal ? '' : ' no-terminal'}`}>
+      <div className="detail-body">
         <section className="doc-pane">
           <div className="doc-bar">
             <div className="doc-tabs">
@@ -415,10 +389,6 @@ export default function Detail({
             </div>
           )}
         </section>
-
-        {/* 一直挂着：收起只是把它藏起来（.no-terminal 里 display:none），
-            PTY 会话与滚屏内容都留着，再展开就是原来的终端 */}
-        <TerminalPane target={terminalTarget} fontFamily={fontFamily} fontSize={fontSize} />
       </div>
     </div>
   )

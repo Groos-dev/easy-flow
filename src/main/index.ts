@@ -1,11 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron'
 import { join } from 'node:path'
 import type { RunningBoardServer } from '../../server/index.ts'
-import { TerminalManager, type TerminalTarget } from './terminal.ts'
 
 let win: BrowserWindow | null = null
 let boardServer: RunningBoardServer | null = null
-let terminals: TerminalManager | null = null
 
 // 开发时开远程调试端口，便于用 CDP 检查渲染进程（黑屏/白屏排查）。
 // 必须在 app ready 之前设置。端口避开 Chrome 惯用的 9222。
@@ -46,23 +44,6 @@ function registerIpc(): void {
     })
     return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
   })
-
-  // ---------------------------------------------------------------- 终端
-
-  ipcMain.handle(
-    'terminal:create',
-    (event, target: TerminalTarget, opts: { cols?: number; rows?: number } = {}) => {
-      if (!terminals) throw new Error('终端服务未就绪')
-      const publish = (channel: string, payload: unknown) => event.sender.send(channel, payload)
-      return terminals.create(target, publish, opts)
-    },
-  )
-
-  ipcMain.on('terminal:input', (_e, id: string, data: string) => terminals?.write(id, data))
-  ipcMain.on('terminal:resize', (_e, id: string, cols: number, rows: number) =>
-    terminals?.resize(id, cols, rows),
-  )
-  ipcMain.on('terminal:destroy', (_e, id: string) => terminals?.destroy(id))
 }
 
 /**
@@ -139,22 +120,6 @@ async function boot(): Promise<void> {
   registerMenu()
   applyCsp()
   boardServer = await startBoardServer({ port: DEFAULT_PORT })
-
-  // Terminals only need the mount dir. Identity (requirement id / project) is never passed via env:
-  // agents read the id from the requirement dir and hand it to easy-flow explicitly, so terminals
-  // opened outside easy-flow work too. The only env var here is a "this terminal came from the app" marker.
-  terminals = new TerminalManager((target) => {
-    const project = boardServer?.db.listProjects().find((p) => p.slug === target.project)
-    if (!project) return null
-    const req = target.slug ? boardServer?.db.get(target.slug, target.project) : undefined
-    if (target.slug && !req) return null
-    return {
-      cwd: req?.path ?? project.root,
-      env: {
-        EASY_FLOW_SESSION: '1',
-      },
-    }
-  })
 }
 
 async function createWindow(): Promise<void> {
@@ -219,6 +184,5 @@ app.on('activate', () => {
 })
 
 app.on('before-quit', () => {
-  terminals?.destroyAll()
   boardServer?.close()
 })

@@ -3,13 +3,14 @@
 以 markdown 为内容源、SQLite 为状态源的需求看板。
 
 需求目录由 agent 直接在文件系统里建，应用不提供创建入口；应用负责把目录扫进库里、
-让人看见状态、并在需求目录里开一个真终端把 agent 跑起来。
+让人看见状态、读写需求文档。agent 那侧由 CLI 与 skill 承载（见 `skill/SKILL.md`），
+在任意目录都能接活，不依赖这个应用开着。
 
 ## 跑起来
 
 | 命令 | 做什么 |
 | --- | --- |
-| `pnpm dev` | 完整应用：Electron 主进程内嵌服务 + 窗口 + PTY 终端 |
+| `pnpm dev` | 完整应用：Electron 主进程内嵌服务 + 窗口 |
 | `pnpm dev:server` + `pnpm dev:web` | 浏览器开发；Vite 把 `/api` 代理到 `127.0.0.1:3210` |
 | `pnpm test` | 回归测试（`node --test`），重构时的行为基线 |
 | `pnpm typecheck` | 两套 tsconfig：node 侧（server / main / preload / test）、web 侧（renderer） |
@@ -17,7 +18,7 @@
 | `pnpm build` | 三端产物打到 `out/` |
 | `pnpm cli <命令>` | 直接跑 CLI（`pnpm cli --help`）；装好的 shim 是 `easy-flow <命令>` |
 
-数据目录、终端字体等偏好存在应用配置里，**换目录等于换一整套看板数据**（状态在库里，
+数据目录等偏好存在应用配置里，**换目录等于换一整套看板数据**（状态在库里，
 不在 md 里）；设置页可以切、可以重新扫描。
 
 ## 三层
@@ -25,8 +26,8 @@
 | 目录 | 职责 |
 | --- | --- |
 | `server/` | 数据层与 HTTP 层。`db.ts` 是 SQLite 门面（状态的唯一权威），`markdown.ts` 只读文件不持状态，`http.ts` 是 CORS / JSON / 文档读写的零件，`index.ts` 是路由 |
-| `src/main/` | Electron 主进程：起内嵌服务、开窗口、管 PTY 会话（`terminal.ts`） |
-| `src/renderer/` | 渲染层（React）。数据只经 HTTP 拿（开发与打包共用同一套代码）；终端与原生目录选择走 preload 桥的 IPC |
+| `src/main/` | Electron 主进程：起内嵌服务、开窗口、菜单与原生目录选择 |
+| `src/renderer/` | 渲染层（React）。数据只经 HTTP 拿（开发与打包共用同一套代码）；原生目录选择走 preload 桥的 IPC |
 | `server/cli.ts` | 给 agent 与脚本用的命令行（context / project new / req new\|set\|link / wt new\|rm），与 HTTP 层共用同一个数据层 |
 | `skill/SKILL.md` | agent 的接入说明（触发条件、意图→命令对照），由设置页链进各 agent 的 skills 目录 |
 
