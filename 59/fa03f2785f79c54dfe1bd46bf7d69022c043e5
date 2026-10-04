@@ -1,0 +1,19 @@
+skill/SKILL.md
+  s_0213e0f10e625e::t_d82a38227f05c1 4-9,18-41,51-59,76-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "59fa03f2785f79c54dfe1bd46bf7d69022c043e5",
+  "prompts": {},
+  "sessions": {
+    "s_0213e0f10e625e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "90d06ebd-c1e0-4034-a1dc-d54cf1e9638c",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
