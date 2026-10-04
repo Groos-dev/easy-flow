@@ -21,6 +21,8 @@ import { BoardDatabase, normalizeLinkList, normalizeExtLinks } from '../server/d
 import { parseFrontmatter, readDocs, section } from '../server/markdown.ts'
 import { createProjectDir, createRequirementDir, setRequirementId } from '../server/convention.ts'
 import { createBoardApp } from '../server/index.ts'
+import { buildTree, layoutTree, nodeWidth } from '../src/renderer/src/lib/mindmap.ts'
+import type { Requirement } from '../src/renderer/src/lib/types.ts'
 
 // 夹具不该受用户全局 git 配置影响：core.hooksPath 指向 lefthook，每条命令都要跑它，
 // 偶尔会卡上几分钟（还会让随后的 rmSync 撞 ENOTEMPTY）。身份由每条命令显式 -c 传，够用。
@@ -1997,6 +1999,198 @@ describe('HTTP 层', () => {
       r.legacyMcp.map((m: { id: string }) => m.id),
       ['claude', 'codex'],
     )
+  })
+})
+
+// ------------------------------------------------------------------ 导图
+
+describe('导图：建树', () => {
+  const req = (slug: string, title = slug, status = '澄清'): Requirement => ({
+    slug,
+    project: 'p',
+    id: `req-${slug}`,
+    parentId: '',
+    title,
+    status,
+    priority: '',
+    summary: '',
+    repos: [],
+    links: '',
+    feishuTaskLinks: [],
+    codeLinks: [],
+    extLinks: [],
+    docs: [],
+    path: `/tmp/${slug}`,
+    mtime: 0,
+    updated: '',
+  })
+
+  test('扁平需求直接挂在根下，顺序保持', () => {
+    const tree = buildTree([req('a'), req('b'), req('c')])
+    assert.deepEqual(
+      tree.map((n) => n.req.slug),
+      ['a', 'b', 'c'],
+    )
+    assert.deepEqual(tree[0].children, [])
+    assert.equal(tree[0].depth, 1)
+  })
+
+  test('slug 里的层级建出嵌套，深度逐层加一', () => {
+    const tree = buildTree([req('alpha'), req('alpha/gateway'), req('alpha/gateway/adapter')])
+    assert.equal(tree.length, 1)
+    assert.equal(tree[0].children[0].req.slug, 'alpha/gateway')
+    assert.equal(tree[0].children[0].depth, 2)
+    assert.equal(tree[0].children[0].children[0].depth, 3)
+  })
+
+  test('中间层不是需求时，挂到最近的存在祖先', () => {
+    const tree = buildTree([req('alpha'), req('alpha/gateway/adapter')])
+    assert.equal(tree.length, 1)
+    assert.deepEqual(
+      tree[0].children.map((n) => n.req.slug),
+      ['alpha/gateway/adapter'],
+    )
+    assert.equal(tree[0].children[0].depth, 2)
+  })
+
+  test('一个祖先都不存在时当顶层', () => {
+    const tree = buildTree([req('a/b/c')])
+    assert.deepEqual(
+      tree.map((n) => n.req.slug),
+      ['a/b/c'],
+    )
+    assert.equal(tree[0].depth, 1)
+  })
+
+  test('子需求先于父需求出现也认得亲', () => {
+    const tree = buildTree([req('alpha/gateway'), req('alpha')])
+    assert.deepEqual(
+      tree.map((n) => n.req.slug),
+      ['alpha'],
+    )
+    assert.deepEqual(
+      tree[0].children.map((n) => n.req.slug),
+      ['alpha/gateway'],
+    )
+  })
+})
+
+describe('导图：布局', () => {
+  const req = (slug: string, title = slug): Requirement => ({
+    slug,
+    project: 'p',
+    id: `req-${slug}`,
+    parentId: '',
+    title,
+    status: '澄清',
+    priority: '',
+    summary: '',
+    repos: [],
+    links: '',
+    feishuTaskLinks: [],
+    codeLinks: [],
+    extLinks: [],
+    docs: [],
+    path: `/tmp/${slug}`,
+    mtime: 0,
+    updated: '',
+  })
+
+  const find = (l: ReturnType<typeof layoutTree>, slug: string) =>
+    l.nodes.find((n) => n.req.slug === slug)!
+
+  test('顶层需求分列根两侧：前一半在左、其余在右', () => {
+    const l = layoutTree(buildTree([req('a'), req('b'), req('c')]))
+    assert.equal(find(l, 'a').side, 'left')
+    assert.equal(find(l, 'b').side, 'left')
+    assert.equal(find(l, 'c').side, 'right')
+  })
+
+  test('只有一条需求时放右侧', () => {
+    const l = layoutTree(buildTree([req('a')]))
+    assert.equal(find(l, 'a').side, 'right')
+  })
+
+  test('左节点整体在根的左边，右节点整体在根的右边', () => {
+    const l = layoutTree(buildTree([req('a'), req('a/x'), req('b'), req('c'), req('c/x')]))
+    for (const n of l.nodes) {
+      if (n.side === 'left') assert.ok(n.x + n.width <= l.root.x, `${n.req.slug} 应在根左侧`)
+      else assert.ok(n.x >= l.root.x + l.root.width, `${n.req.slug} 应在根右侧`)
+    }
+  })
+
+  test('同一侧同一层的节点竖直方向不重叠', () => {
+    const l = layoutTree(
+      buildTree([
+        req('a'), req('a/x'), req('a/y'),
+        req('b'), req('c'), req('d'),
+        req('d/x'), req('e'), req('e/x'),
+      ]),
+    )
+    for (const side of ['left', 'right'] as const) {
+      const depths = new Set(l.nodes.filter((n) => n.side === side).map((n) => n.depth))
+      for (const depth of depths) {
+        const list = l.nodes
+          .filter((n) => n.side === side && n.depth === depth)
+          .sort((p, q) => p.y - q.y)
+        for (let i = 1; i < list.length; i++) {
+          assert.ok(
+            list[i].y >= list[i - 1].y + list[i - 1].height,
+            `${side} 侧第 ${depth} 层：${list[i].req.slug} 与 ${list[i - 1].req.slug} 重叠`,
+          )
+        }
+      }
+    }
+  })
+
+  test('父节点落在子节点跨度的中心', () => {
+    const l = layoutTree(buildTree([req('a'), req('a/x'), req('a/y')]))
+    const a = find(l, 'a')
+    assert.equal(a.y, (find(l, 'a/x').y + find(l, 'a/y').y) / 2)
+  })
+
+  test('每个节点都连到父节点，顶层连到根', () => {
+    const l = layoutTree(buildTree([req('a'), req('a/x')]))
+    assert.deepEqual(l.edges.map((e) => e.id).sort(), ['a', 'a/x'])
+  })
+
+  test('搜索只留命中节点与它的祖先链', () => {
+    const l = layoutTree(buildTree([req('a'), req('a/x'), req('b')]), {
+      hits: new Set(['a/x']),
+    })
+    assert.deepEqual(l.nodes.map((n) => n.req.slug).sort(), ['a', 'a/x'])
+  })
+
+  test('收起的节点不铺开子需求，并记下藏了几个', () => {
+    const l = layoutTree(buildTree([req('a'), req('a/x'), req('a/y')]), {
+      collapsed: new Set(['a']),
+    })
+    assert.deepEqual(l.nodes.map((n) => n.req.slug), ['a'])
+    assert.equal(find(l, 'a').hidden, 2)
+    assert.equal(find(l, 'a').collapsible, true)
+  })
+
+  test('搜索时忽略收起——搜了就该看见命中在哪', () => {
+    const l = layoutTree(buildTree([req('a'), req('a/x')]), {
+      collapsed: new Set(['a']),
+      hits: new Set(['a/x']),
+    })
+    assert.deepEqual(l.nodes.map((n) => n.req.slug).sort(), ['a', 'a/x'])
+  })
+
+  test('没有需求时只有根', () => {
+    const l = layoutTree([])
+    assert.deepEqual(l.nodes, [])
+    assert.equal(l.edges.length, 0)
+    assert.equal(l.root.width, 148)
+    assert.ok(l.width > 0 && l.height > 0)
+  })
+
+  test('节点宽度按字数估，并夹在 132 到 240 之间', () => {
+    assert.equal(nodeWidth('短'), 132)
+    assert.equal(nodeWidth('这是一个特别特别长的需求标题用来测试上限'), 240)
+    const mid = nodeWidth('中等长度的标题大概这样')
+    assert.ok(mid > 132 && mid < 240, `期望落在区间内，实际 ${mid}`)
   })
 })
 
