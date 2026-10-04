@@ -14,6 +14,7 @@ import {
 import { api } from './lib/api'
 import type { Requirement, Status, Todo, TodoStatus } from './lib/types'
 import BoardSwitcher, { type BoardView } from './components/BoardSwitcher'
+import MindMap from './components/MindMap'
 import Card from './components/Card'
 import Detail from './components/Detail'
 import Settings from './components/Settings'
@@ -62,6 +63,8 @@ export default function App() {
   const [projectName, setProjectName] = useState('')
   /** 侧边栏展开状态 */
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  /** 需求板块里的视图：看板（默认）或导图；待办板块下不适用 */
+  const [reqView, setReqView] = useState<'board' | 'map'>('board')
   /** 详情页挂载点：需求或项目。slugs 用 'project:<slug>' 区分 */
   const [detail, setDetail] = useState<{ project: string; slug: string | null } | null>(null)
   const [priorities, setPriorities] = useState<string[]>([])
@@ -370,6 +373,20 @@ export default function App() {
               )}
 
               <div className="topbar-side right">
+                {/* 导图是需求板块里的一种呈现，待办板块下不摆 */}
+                {view === 'req' && (
+                  <div className="seg">
+                    <button
+                      className={reqView === 'board' ? 'on' : ''}
+                      onClick={() => setReqView('board')}
+                    >
+                      看板
+                    </button>
+                    <button className={reqView === 'map' ? 'on' : ''} onClick={() => setReqView('map')}>
+                      导图
+                    </button>
+                  </div>
+                )}
                 <button className="icon-btn" title="刷新（重扫目录）" aria-label="刷新" onClick={refresh}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="23 4 23 10 17 10" />
@@ -389,7 +406,7 @@ export default function App() {
                 onOpen={setTodoId}
                 onMove={(id, status) => void handleTodoMove(id, status)}
               />
-            ) : (
+            ) : reqView === 'board' ? (
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCorners}
@@ -410,6 +427,15 @@ export default function App() {
                 </div>
                 <DragOverlay>{dragItem ? <Card req={dragItem} overlay /> : null}</DragOverlay>
               </DndContext>
+            ) : (
+              // 导图拿全量 items + hits，祖先链由 layoutTree 自己补：
+              // 喂 filtered 会把命中节点的父需求整条切掉，树就断了
+              <MindMap
+                requirements={items}
+                projectName={projectName || project}
+                hits={hits}
+                onOpen={(slug) => setDetail({ project, slug })}
+              />
             )}
           </div>
         )}
