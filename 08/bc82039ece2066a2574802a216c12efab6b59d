@@ -1,0 +1,19 @@
+README.md
+  s_8a6887babed8b2::t_c50160b97f30e7 8-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "08bc82039ece2066a2574802a216c12efab6b59d",
+  "prompts": {},
+  "sessions": {
+    "s_8a6887babed8b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb7e409e-488f-4abf-9693-ab7fa46b8dbc",
+        "model": "deepseek/deepseek-flash"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
