@@ -6,6 +6,8 @@ import type {
   SettingsPayload,
   SkillPayload,
   SwitchResult,
+  Todo,
+  TodosPayload,
 } from './types'
 
 // 渲染层走 HTTP 访问本地服务，开发与打包共用同一套代码：
@@ -81,6 +83,25 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ slug, name, content, project }),
     }),
+
+  // ------------------------------------------------------------- 待办
+
+  /** 待办是全局的，不分项目 */
+  todos: (): Promise<TodosPayload> => request('/api/todos'),
+
+  updateTodo: (id: string, patch: { status?: string }): Promise<Todo> =>
+    request('/api/todos/update', { method: 'POST', body: JSON.stringify({ id, ...patch }) }),
+
+  /** 读一条待办的 md 原文（内容源在文件里） */
+  todoDoc: (id: string): Promise<{ id: string; path: string; content: string }> =>
+    request(`/api/todos/doc?id=${encodeURIComponent(id)}`),
+
+  saveTodoDoc: (id: string, content: string): Promise<{ id: string; path: string; bytes: number }> =>
+    request('/api/todos/doc', { method: 'POST', body: JSON.stringify({ id, content }) }),
+
+  /** 在访达里打开这条待办的 md */
+  openTodo: (id: string): Promise<{ ok: boolean; path: string }> =>
+    request('/api/todos/open', { method: 'POST', body: JSON.stringify({ id }) }),
 
   // ------------------------------------------------------------- 项目
 

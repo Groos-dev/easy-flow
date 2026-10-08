@@ -91,6 +91,53 @@ export interface BoardData {
   sync: SyncResult
 }
 
+// ------------------------------------------------------------------ 待办
+
+/** 待办的状态即待办看板的列。字面量沿用 todo skill 的取值，不译成中文 */
+export type TodoStatus = 'todo' | 'in_progress' | 'done' | 'cancelled'
+
+/** 状态字面量是给 agent 用的，界面上给人看中文。看板列与详情页共用这一份 */
+export const TODO_STATUS_LABEL: Record<string, string> = {
+  todo: '待办',
+  in_progress: '进行中',
+  done: '已完成',
+  cancelled: '已取消',
+}
+
+/** 与 server/db.ts 的 Todo 对应。内容（标题、摘要）从 md 同步，其余只归库 */
+export interface Todo {
+  id: string
+  title: string
+  status: TodoStatus
+  /** 空串表示没记来源 */
+  source: string
+  session: string
+  /** 仅 feishu 来源：at_me / p2p */
+  channel: string
+  /** 来源人 / 触发者 */
+  origin: string
+  /** 会话、群或上下文名 */
+  chat: string
+  ref: string
+  link: string
+  happened: string
+  summary: string
+  /** md 文件绝对路径 */
+  path: string
+  mtime: number
+  created: string
+  updated: string
+  orphan: boolean
+}
+
+export interface TodosPayload {
+  todos: Todo[]
+  /** 看板列顺序，也就是状态取值顺序 */
+  statuses: TodoStatus[]
+  sources: string[]
+  sync: { added: string[]; updated: string[]; orphaned: string[]; restored: string[] }
+}
+
 // ------------------------------------------------------------------ 项目
 
 export interface Project {
@@ -143,6 +190,8 @@ export interface AgentSkill {
 export interface SkillPayload {
   /** The skill entity and CLI entry inside the repo; null when the environment does not allow it */
   source: string | null
+  /** 仓库 skill 根目录下的 skill 清单 */
+  skills: string[]
   cli: string | null
   problem: string | null
   shim: { path: string; installed: boolean }

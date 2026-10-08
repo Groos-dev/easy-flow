@@ -1,25 +1,28 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api } from '../lib/api'
-import type { ContextPayload, Requirement } from '../lib/types'
+import { TODO_STATUS_LABEL, type ContextPayload, type Requirement, type Todo } from '../lib/types'
 import InfoPanel from './InfoPanel'
 import SelectMenu from './SelectMenu'
 import { CodeIcon, InfoIcon } from './icons'
 
 /**
- * 详情页的两种挂载点：
+ * 详情页的三种挂载点：
  *   requirement —— 需求（含优先级/状态控制）
- *   project     —— 项目（展示并编辑项目总规范，终端开在项目根目录）
+ *   project     —— 项目（展示并编辑项目总规范）
+ *   todo        —— 待办（状态控制 + 一份 md；内容源在文件里，编辑即写回）
  */
 export interface DocTarget {
-  kind: 'requirement' | 'project'
+  kind: 'requirement' | 'project' | 'todo'
   project: string
   /** 仅 kind === 'requirement' 时有值 */
   slug?: string
   title: string
   /** 仅 requirement 有：用于头部展示与编辑 */
   req?: Requirement
+  /** 仅 todo 有 */
+  todo?: Todo
 }
 
 interface Props {
@@ -27,6 +30,8 @@ interface Props {
   /** 由服务端下发的状态枚举，避免这里再维护一份 */
   statuses: string[]
   priorities: string[]
+  /** 待办的状态枚举，同样是服务端下发的 */
+  todoStatuses: string[]
   onBack: () => void
   /** 改了状态后通知看板刷新 */
   onUpdated: () => void
@@ -44,9 +49,11 @@ type ViewMode = 'preview' | 'source'
 /** 停止输入后多久落盘 */
 const AUTOSAVE_DELAY = 600
 
-export default function Detail({ target, statuses, priorities, onBack, onUpdated }: Props) {
+export default function Detail({ target, statuses, priorities, todoStatuses, onBack, onUpdated }: Props) {
   const req = target.req
+  const todo = target.todo
   const isProject = target.kind === 'project'
+  const isTodo = target.kind === 'todo'
   const [docs, setDocs] = useState<string[]>([])
   /** 当前打开的文档；空串表示还没定（列表在异步加载）或这个挂载点没有文档 */
   const [activeDoc, setActiveDoc] = useState('')
@@ -80,18 +87,21 @@ export default function Detail({ target, statuses, priorities, onBack, onUpdated
       ? api.projectConvention(target.project).then((r) => r.content ?? '')
       : null
     projectDoc.current = convention
+    // 待办只有一份 md，文件名就是它的 id；没有标签栏可切，列表是固定的
     const load = convention
       ? convention.then((content) => (content ? ['AGENTS.md'] : []))
-      : api
-          .context(target.slug!, target.project)
-          .then((c) => {
-            // 浮窗要用工作区与链接，顺手存下这次载荷，免得再发一次请求
-            if (alive) setCtx(c)
-            // AGENTS.md / CLAUDE.md 是给 agent 读的指令文件，不是需求文档，不进标签栏
-            return c.requirement.docs
-              .map((d) => d.name)
-              .filter((n) => !/^(AGENTS|CLAUDE)\.md$/i.test(n.split('/').pop() ?? ''))
-          })
+      : isTodo
+        ? Promise.resolve([`${todo!.id}.md`])
+        : api
+            .context(target.slug!, target.project)
+            .then((c) => {
+              // 浮窗要用工作区与链接，顺手存下这次载荷，免得再发一次请求
+              if (alive) setCtx(c)
+              // AGENTS.md / CLAUDE.md 是给 agent 读的指令文件，不是需求文档，不进标签栏
+              return c.requirement.docs
+                .map((d) => d.name)
+                .filter((n) => !/^(AGENTS|CLAUDE)\.md$/i.test(n.split('/').pop() ?? ''))
+            })
     void load
       .then((names) => {
         if (!alive) return
@@ -104,7 +114,7 @@ export default function Detail({ target, statuses, priorities, onBack, onUpdated
     return () => {
       alive = false
     }
-  }, [target.project, target.slug, isProject])
+  }, [target.project, target.slug, isProject, isTodo, todo?.id])
 
   /** 项目页的规范原文：正常走上面那次请求，挂载顺序有变时兜一次新请求 */
   function projectContent(): Promise<string> {
@@ -113,7 +123,7 @@ export default function Detail({ target, statuses, priorities, onBack, onUpdated
 
   const loadDoc = useCallback(async () => {
     // 需求页在文档列表到位前（或这个需求没有文档）没有可打开的文档
-    if (!isProject && !activeDoc) {
+    if (!isProject && !isTodo && !activeDoc) {
       setLoading(false)
       setDraft('')
       draftRef.current = ''
@@ -127,7 +137,9 @@ export default function Detail({ target, statuses, priorities, onBack, onUpdated
     try {
       const res = isProject
         ? { content: await projectContent() }
-        : await api.doc(target.slug!, activeDoc, target.project)
+        : isTodo
+          ? await api.todoDoc(todo!.id)
+          : await api.doc(target.slug!, activeDoc, target.project)
       if (seq !== docSeq.current) return // 已被更新的请求取代
       setDraft(res.content)
       draftRef.current = res.content
@@ -141,7 +153,7 @@ export default function Detail({ target, statuses, priorities, onBack, onUpdated
     } finally {
       if (seq === docSeq.current) setLoading(false)
     }
-  }, [target.project, target.slug, activeDoc, isProject])
+  }, [target.project, target.slug, activeDoc, isProject, isTodo, todo?.id])
 
   useEffect(() => {
     void loadDoc()
@@ -154,6 +166,7 @@ export default function Detail({ target, statuses, priorities, onBack, onUpdated
     setSaveState('saving')
     try {
       if (isProject) await api.saveProjectConvention(target.project, content)
+      else if (isTodo) await api.saveTodoDoc(todo!.id, content)
       else await api.saveDoc(target.slug!, activeDoc, content, target.project)
       savedRef.current = content
       setSaveState('saved')
@@ -161,7 +174,7 @@ export default function Detail({ target, statuses, priorities, onBack, onUpdated
       setSaveState('error')
       setError(`自动保存失败：${(e as Error).message}`)
     }
-  }, [target.project, target.slug, activeDoc, isProject])
+  }, [target.project, target.slug, activeDoc, isProject, isTodo, todo?.id])
 
   // 自动保存：停止输入 AUTOSAVE_DELAY 后落盘
   useEffect(() => {
@@ -240,11 +253,12 @@ export default function Detail({ target, statuses, priorities, onBack, onUpdated
   }, [mode])
 
   async function apply(patch: { status?: string; priority?: string }) {
-    if (!req) return
     setBusy(true)
     setError('')
     try {
-      await api.update(req.slug, patch, target.project)
+      if (isTodo) await api.updateTodo(todo!.id, patch)
+      else if (req) await api.update(req.slug, patch, target.project)
+      else return
       onUpdated()
     } catch (e) {
       // 失败必须让用户看到：之前只有 finally，失败会变成 unhandled rejection
@@ -290,6 +304,11 @@ export default function Detail({ target, statuses, priorities, onBack, onUpdated
             打开目录
           </button>
         )}
+        {isTodo && (
+          <button className="btn" onClick={() => void api.openTodo(todo!.id).catch(() => {})}>
+            打开 md
+          </button>
+        )}
         {!isProject && req && (
           <div className="info-menu" ref={infoRef}>
             <button
@@ -328,6 +347,19 @@ export default function Detail({ target, statuses, priorities, onBack, onUpdated
         />
       </div>
       )}
+
+      {isTodo && todo && (
+        <div className="detail-controls">
+          <SelectMenu
+            value={todo.status}
+            placeholder="未设状态"
+            disabled={busy}
+            options={todoStatuses.map((s) => ({ value: s, label: TODO_STATUS_LABEL[s] ?? s }))}
+            onChange={(s) => void apply({ status: s })}
+          />
+        </div>
+      )}
+      {isTodo && todo && <TodoMeta todo={todo} />}
 
       <div className="detail-body">
         <section className="doc-pane">
@@ -390,6 +422,49 @@ export default function Detail({ target, statuses, priorities, onBack, onUpdated
           )}
         </section>
       </div>
+    </div>
+  )
+}
+
+function MetaRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="meta-row">
+      <span className="meta-key">{label}</span>
+      <span className="meta-value">{children}</span>
+    </div>
+  )
+}
+
+/**
+ * 待办的元数据：只归库的那些字段。内容（标题、摘要、进度）在 md 里，
+ * 详情页正文就是那份 md，这里只列身份与来路——接手时要知道这条是从哪来的。
+ */
+function TodoMeta({ todo }: { todo: Todo }) {
+  const source = [todo.source, todo.channel].filter(Boolean).join(' · ')
+  return (
+    <div className="todo-meta">
+      <MetaRow label="来源">{source || '（未记）'}</MetaRow>
+      {todo.origin && <MetaRow label="来源人">{todo.origin}</MetaRow>}
+      {todo.chat && <MetaRow label="上下文">{todo.chat}</MetaRow>}
+      {todo.session && (
+        <MetaRow label="会话">
+          <span className="mono">{todo.session}</span>
+        </MetaRow>
+      )}
+      {todo.ref && (
+        <MetaRow label="去重键">
+          <span className="mono">{todo.ref}</span>
+        </MetaRow>
+      )}
+      {todo.happened && <MetaRow label="源事件时间">{todo.happened}</MetaRow>}
+      {todo.link && (
+        <MetaRow label="链接">
+          <a href={todo.link} target="_blank" rel="noreferrer">
+            {todo.link}
+          </a>
+        </MetaRow>
+      )}
+      <MetaRow label="时间线">{`入库 ${todo.created} · 更新 ${todo.updated}`}</MetaRow>
     </div>
   )
 }

@@ -12,11 +12,13 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { api } from './lib/api'
-import type { Requirement, Status } from './lib/types'
+import type { Requirement, Status, Todo, TodoStatus } from './lib/types'
+import BoardSwitcher, { type BoardView } from './components/BoardSwitcher'
 import Card from './components/Card'
 import Detail from './components/Detail'
 import Settings from './components/Settings'
 import Sidebar from './components/Sidebar'
+import TodoBoard from './components/TodoBoard'
 
 interface BoardColumnProps {
   status: Status
@@ -52,6 +54,8 @@ function statusOf(over: DragOverEvent['over']): Status | undefined {
 
 export default function App() {
   const [statuses, setStatuses] = useState<Status[]>([])
+  /** 当前看板：需求与待办是平级的两个看板 */
+  const [view, setView] = useState<BoardView>('req')
   /** 当前项目：看板数据按项目隔离 */
   const [project, setProject] = useState('')
   /** 当前项目显示名，取自项目根 AGENTS.md 的 frontmatter；缺省是目录名 */
@@ -62,6 +66,11 @@ export default function App() {
   const [detail, setDetail] = useState<{ project: string; slug: string | null } | null>(null)
   const [priorities, setPriorities] = useState<string[]>([])
   const [items, setItems] = useState<Requirement[]>([])
+  /** 待办：全局的，不分项目 */
+  const [todos, setTodos] = useState<Todo[]>([])
+  const [todoStatuses, setTodoStatuses] = useState<string[]>([])
+  /** 打开的待办详情。只存 id，对象从 todos 里取——改完状态详情页跟着变 */
+  const [todoId, setTodoId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   /** 搜索命中的 slug 集合；null 表示未搜索 */
   const [hits, setHits] = useState<Set<string> | null>(null)
@@ -111,15 +120,28 @@ export default function App() {
     }
   }, [])
 
+  const loadTodos = useCallback(async () => {
+    try {
+      const data = await api.todos()
+      setTodos(data.todos)
+      setTodoStatuses(data.statuses)
+      setError('')
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }, [])
+
   /** 看板与侧边栏一起重拉：agent 建完目录后不用重启应用就能看到 */
   const refresh = useCallback(() => {
     void load()
+    void loadTodos()
     setRefreshSeq((n) => n + 1)
-  }, [load])
+  }, [load, loadTodos])
 
   useEffect(() => {
     void load()
-  }, [load])
+    void loadTodos()
+  }, [load, loadTodos])
 
   // 搜索交给服务端（md 与索引都在那边），防抖 + 序号防乱序
   useEffect(() => {
@@ -182,6 +204,19 @@ export default function App() {
 
   const dragItem = items.find((r) => r.slug === dragSlug) ?? null
 
+  /** 待办拖到别的列：与需求一样先动卡片再落盘，失败回滚 */
+  async function handleTodoMove(id: string, status: string) {
+    const previous = todos
+    setTodos((list) => list.map((t) => (t.id === id ? { ...t, status: status as TodoStatus } : t)))
+    try {
+      const updated = await api.updateTodo(id, { status })
+      setTodos((list) => list.map((t) => (t.id === id ? updated : t)))
+    } catch (err) {
+      setTodos(previous)
+      setError(`移动失败：${(err as Error).message}`)
+    }
+  }
+
   if (loading) return <div className="loading">加载中…</div>
 
   // 详情页挂载点：需求（带 slug）或项目（slug 为 null）
@@ -206,6 +241,14 @@ export default function App() {
               }
             : null
         })()
+    : null
+
+  // 待办详情：对象从列表里取，改完状态详情页跟着变
+  const todoTarget = todoId
+    ? (() => {
+        const item = todos.find((t) => t.id === todoId)
+        return item ? { kind: 'todo' as const, project: '', title: item.title, todo: item } : null
+      })()
     : null
 
   return (
@@ -244,11 +287,17 @@ export default function App() {
           onOpenProjectBoard={() => {
             // Sidebar 内部已调 setActiveProject，这里只需重新拉数据
             setDetail(null)
+            setView('req')
             void load()
           }}
-          onOpenProjectDetail={(slug) => setDetail({ project: slug, slug: null })}
+          onOpenProjectDetail={(slug) => {
+            setDetail({ project: slug, slug: null })
+            setView('req')
+          }}
           onOpenRequirement={(proj, slug) => {
             setDetail({ project: proj, slug })
+            // 从侧边栏点需求就是回到需求看板，别把详情页叠在待办看板上
+            setView('req')
             // 不在当前项目的需求需要单独取，否则详情页会静默退回看板
             const local = items.find((r) => r.slug === slug && r.project === proj)
             setCrossReq(local ?? null)
@@ -265,11 +314,24 @@ export default function App() {
       <main className="main-area">
         {showSettings ? (
           <Settings onBack={() => setShowSettings(false)} onApplied={refresh} />
+        ) : todoTarget ? (
+          <Detail
+            target={todoTarget}
+            statuses={statuses}
+            priorities={priorities}
+            todoStatuses={todoStatuses}
+            onBack={() => {
+              setTodoId(null)
+              refresh()
+            }}
+            onUpdated={() => void loadTodos()}
+          />
         ) : detailTarget ? (
           <Detail
             target={detailTarget}
             statuses={statuses}
             priorities={priorities}
+            todoStatuses={todoStatuses}
             onBack={() => {
               setDetail(null)
               refresh()
@@ -280,28 +342,32 @@ export default function App() {
           <div className="app">
             <div className="topbar">
               <div className="topbar-side">
-                <span className="brand">{projectName || project || 'easy-flow'}</span>
+                {/* 看板切换在左上角：需求与待办是平级的两个看板，都从这儿进 */}
+                <BoardSwitcher value={view} project={projectName || project} onChange={setView} />
                 <span className="count">
-                  {filtered.length} / {items.length}
+                  {view === 'todo' ? todos.length : `${filtered.length} / ${items.length}`}
                 </span>
               </div>
 
-              {/* 搜索框居中，放大镜贴在它左边。两边各占一半，中间才是真的居中 */}
-              <div className="search-box">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="7" />
-                  <line x1="16.5" y1="16.5" x2="21" y2="21" />
-                </svg>
-                <input
-                  className="search-input"
-                  aria-label="搜索需求 / 文档全文"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') setQuery('')
-                  }}
-                />
-              </div>
+              {/* 搜索框居中，放大镜贴在它左边。两边各占一半，中间才是真的居中。
+                  它只搜需求与文档全文，待办看板下不摆（搜不到会让人以为没结果） */}
+              {view === 'req' && (
+                <div className="search-box">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="7" />
+                    <line x1="16.5" y1="16.5" x2="21" y2="21" />
+                  </svg>
+                  <input
+                    className="search-input"
+                    aria-label="搜索需求 / 文档全文"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setQuery('')
+                    }}
+                  />
+                </div>
+              )}
 
               <div className="topbar-side right">
                 <button className="icon-btn" title="刷新（重扫目录）" aria-label="刷新" onClick={refresh}>
@@ -316,26 +382,35 @@ export default function App() {
 
             {error && <div className="notice">{error}</div>}
 
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCorners}
-              onDragStart={({ active }: DragStartEvent) => setDragSlug(String(active.id))}
-              onDragOver={({ over }: DragOverEvent) => setOverStatus(statusOf(over) ?? null)}
-              onDragEnd={(e) => void handleDragEnd(e)}
-            >
-              <div className="board">
-                {statuses.map((status) => (
-                  <ColumnView
-                    key={status}
-                    status={status}
-                    items={byStatus.get(status) ?? []}
-                    onOpen={(slug) => setDetail({ project, slug })}
-                    isOver={overStatus === status}
-                  />
-                ))}
-              </div>
-              <DragOverlay>{dragItem ? <Card req={dragItem} overlay /> : null}</DragOverlay>
-            </DndContext>
+            {view === 'todo' ? (
+              <TodoBoard
+                todos={todos}
+                statuses={todoStatuses}
+                onOpen={setTodoId}
+                onMove={(id, status) => void handleTodoMove(id, status)}
+              />
+            ) : (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCorners}
+                onDragStart={({ active }: DragStartEvent) => setDragSlug(String(active.id))}
+                onDragOver={({ over }: DragOverEvent) => setOverStatus(statusOf(over) ?? null)}
+                onDragEnd={(e) => void handleDragEnd(e)}
+              >
+                <div className="board">
+                  {statuses.map((status) => (
+                    <ColumnView
+                      key={status}
+                      status={status}
+                      items={byStatus.get(status) ?? []}
+                      onOpen={(slug) => setDetail({ project, slug })}
+                      isOver={overStatus === status}
+                    />
+                  ))}
+                </div>
+                <DragOverlay>{dragItem ? <Card req={dragItem} overlay /> : null}</DragOverlay>
+              </DndContext>
+            )}
           </div>
         )}
       </main>
