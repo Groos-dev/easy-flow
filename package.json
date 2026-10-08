@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "electron-vite dev",
+    "app": "node scripts/app.mjs",
     "dev:server": "tsx watch server/dev.ts",
     "cli": "tsx server/cli.ts",
     "dev:web": "vite --config vite.web.config.ts",
