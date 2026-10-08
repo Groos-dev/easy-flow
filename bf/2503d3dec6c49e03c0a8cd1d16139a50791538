@@ -1,0 +1,23 @@
+package.json
+  s_8a6887babed8b2::t_108d48a453a9b4 9
+README.md
+  s_8a6887babed8b2::t_b79b93be9cd541 14
+scripts/app.mjs
+  s_8a6887babed8b2::t_183202e38ae78d 1-230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "bf2503d3dec6c49e03c0a8cd1d16139a50791538",
+  "prompts": {},
+  "sessions": {
+    "s_8a6887babed8b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb7e409e-488f-4abf-9693-ab7fa46b8dbc",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "zengxin <zengx3@trip.com>"
+    }
+  }
+}
