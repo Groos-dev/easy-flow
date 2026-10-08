@@ -7,19 +7,31 @@
  * worktree dirs. Never guessed from cwd or env: a wrong guess writes state onto another
  * requirement, while an unknown id just errors out.
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { configPath, readConfig } from './config.ts'
-import { createProjectDir, createRequirementDir, newWorktreeId } from './convention.ts'
+import {
+  createProjectDir,
+  createRequirementDir,
+  createTodoDoc,
+  newWorktreeId,
+  setTodoSummary,
+  setTodoTitle,
+} from './convention.ts'
 import {
   BoardDatabase,
   PRIORITIES,
   STATUSES,
+  TODO_CHANNELS,
+  TODO_SOURCES,
+  TODO_STATUSES,
   type Priority,
   type Requirement,
   type Status,
+  type Todo,
+  type TodoStatus,
   type Worktree,
 } from './db.ts'
 import { listProjectDirs, parseFrontmatter, readProjectConvention } from './markdown.ts'
@@ -249,6 +261,7 @@ const ROOT_USAGE = `easy-flow：需求看板命令行——终端里认路、建
   easy-flow project new <slug>   新建项目
   easy-flow req new|set|link …   新建需求 / 改状态优先级 / 追加链接
   easy-flow wt new|rm …          开 / 删工作区（git worktree）
+  easy-flow todo new|set|list …  全局待办：记一条 / 改状态 / 看待办
 
 选项：
   --json      输出 JSON（给脚本解析），出错也是 JSON
@@ -294,12 +307,42 @@ id 必须显式传：需求 id 在需求目录 AGENTS.md 的 frontmatter 里，w
   'wt rm': `用法：easy-flow wt rm <wt-id> [--force] [--json]
 
 删目录、git 登记与 easy-flow 记录，分支保留。有未提交改动会拒绝，--force 丢弃后强删。`,
+
+  'todo new': `用法：easy-flow todo new <标题> [--source <feishu|chat|agent|manual>] [--session <会话>]
+       [--channel <at_me|p2p>] [--from <来源人>] [--chat <群/会话名>] [--ref <去重键>]
+       [--link <url>] [--at <yyyy-mm-dd HH:mm>] [--summary <可恢复现场的上下文>] [--status <todo|in_progress>] [--json]
+
+待办是全局的，不挂在项目下。id 按首次入库日自动编号（T-YYYYMMDD-NNN）。
+--summary 要写成"下一个 agent 只看这一条就能接手"：进度、下一步、完成标准、关键 ID、证据入口；
+只写现象的口号不算数。--ref 重复时会报出已有条目，不再新建。`,
+
+  'todo set': `用法：easy-flow todo set <id> [--status <todo|in_progress|done|cancelled>] [--title <标题>]
+       [--summary <上下文>] [--source …] [--session …] [--channel …] [--from …] [--chat …]
+       [--ref …] [--link …] [--at …] [--json]
+
+传了哪个改哪个，都没传会报错。--title / --summary 改的是 md 的内容（改完自动同步回库），
+其余字段只归库。传空串表示清空该字段。`,
+
+  'todo list': `用法：easy-flow todo list [--status <todo|in_progress|done|cancelled>] [--source <…>] [--all] [--limit <n>] [--json]
+
+默认只列未完成的（todo / in_progress）；--all 连已完成的一起列。按最近更新排。`,
+
+  'todo show': `用法：easy-flow todo show <id> [--json]
+
+列出这条待办的元数据、md 文件路径与全文。`,
+
+  'todo import': `用法：easy-flow todo import <目录> [--dry-run] [--json]
+
+把旧 todo 板的按天文件（<目录>/yyyy-mm-dd.md）搬进看板：只搬未完成的（todo / in_progress），
+一条一个 md 写进 <数据目录>/_todos/，元数据入库；已完成的留在原处不动。
+id 与文件原样保留，已入库的跳过，所以重复跑是安全的。`,
 }
 
 const GROUP_USAGE = {
   project: USAGE.project,
   req: [USAGE['req new'], USAGE['req set'], USAGE['req link']].join('\n\n'),
   wt: [USAGE['wt new'], USAGE['wt rm']].join('\n\n'),
+  todo: [USAGE['todo new'], USAGE['todo set'], USAGE['todo list'], USAGE['todo show'], USAGE['todo import']].join('\n\n'),
 }
 
 type OptSpec = Record<string, { type: 'boolean' | 'string'; multiple?: boolean }>
@@ -666,6 +709,345 @@ async function cmdWtRm(argv: string[]): Promise<void> {
   )
 }
 
+// ------------------------------------------------------------------ 待办
+
+/** new 与 set 共用的元数据选项 */
+const TODO_FIELDS = {
+  source: { type: 'string' },
+  session: { type: 'string' },
+  channel: { type: 'string' },
+  from: { type: 'string' },
+  chat: { type: 'string' },
+  ref: { type: 'string' },
+  link: { type: 'string' },
+  at: { type: 'string' },
+} as const
+
+interface TodoPatch {
+  source?: string
+  session?: string
+  channel?: string
+  origin?: string
+  chat?: string
+  ref?: string
+  link?: string
+  happened?: string
+}
+
+/** 把命令行取值收成补丁：没传的字段留 undefined（表示不动），空串表示清空 */
+function todoPatch(values: Record<string, unknown>): TodoPatch {
+  const patch: TodoPatch = {}
+  const put = (key: keyof TodoPatch, value: string | undefined) => {
+    if (value !== undefined) patch[key] = value
+  }
+  const link = str(values.link)?.trim()
+  if (link && !/^https?:\/\//i.test(link)) throw new Error(`Link must start with http(s)://: ${link}`)
+  put('source', str(values.source)?.trim())
+  put('session', str(values.session))
+  put('channel', str(values.channel)?.trim())
+  put('origin', str(values.from))
+  put('chat', str(values.chat))
+  put('ref', str(values.ref)?.trim())
+  put('link', link)
+  put('happened', str(values.at)?.trim())
+  return patch
+}
+
+/** 校验枚举值，报错时列出合法取值——agent 据此就能自己纠正 */
+function oneOf(value: string, valid: readonly string[], what: string): void {
+  if (!valid.includes(value)) throw new Error(`Unknown ${what}: ${value}. Valid: ${valid.join(', ')}`)
+}
+
+function todoLine(t: Todo): string {
+  const who = t.origin || t.chat
+  return `- ${t.id}  ${t.status.padEnd(11)} ${t.source || '—'}  ${t.title}${who ? `（${who}）` : ''}`
+}
+
+// 元数据一行一个，new 与 show 共用
+function todoHead(t: Todo, file: string): string[] {
+  const head = [
+    `待办 id：${t.id}`,
+    `待办：${t.title}`,
+    `状态：${t.status}`,
+    `文件：${file}`,
+    `来源：${t.source || '（未记）'}${t.channel ? ` · ${t.channel}` : ''}`,
+  ]
+  if (t.origin) head.push(`来源人：${t.origin}`)
+  if (t.chat) head.push(`上下文：${t.chat}`)
+  if (t.session) head.push(`会话：${t.session}`)
+  if (t.ref) head.push(`去重键：${t.ref}`)
+  if (t.link) head.push(`链接：${t.link}`)
+  if (t.happened) head.push(`源事件时间：${t.happened}`)
+  head.push(`入库：${t.created} · 更新：${t.updated}`)
+  return head
+}
+
+async function cmdTodoNew(argv: string[]): Promise<void> {
+  const { values, positionals } = parse(argv, {
+    ...TODO_FIELDS,
+    summary: { type: 'string' },
+    status: { type: 'string' },
+  })
+  if (bool(values.help)) return out(USAGE['todo new'])
+
+  const title = required(positionals[0], 'Missing todo title', USAGE['todo new'])
+  const patch = todoPatch(values)
+  const status = (str(values.status)?.trim() || 'todo') as TodoStatus
+  if (patch.source) oneOf(patch.source, TODO_SOURCES, 'source')
+  if (patch.channel) oneOf(patch.channel, TODO_CHANNELS, 'channel')
+  oneOf(status, TODO_STATUSES, 'status')
+
+  const summary = str(values.summary) ?? ''
+  const board = db()
+  board.syncTodos()
+
+  // ref 是去重键：命中已有条目就报出它，让调用方去补内容而不是再建一条
+  if (patch.ref) {
+    const dup = board.todoByRef(patch.ref)
+    if (dup) {
+      throw new Error(
+        `Ref already used by ${dup.id}（${dup.title}）; 要补内容用 easy-flow todo set ${dup.id}`,
+      )
+    }
+  }
+
+  const id = board.nextTodoId()
+  const { file } = createTodoDoc(config.dataDir, id, title, summary)
+  board.addTodo({ id, title, status, summary, path: file, ...patch })
+  // 标题与摘要以 md 为准，同步一次把它们对齐（顺带填上文件时间）
+  board.syncTodos()
+  const todo = board.todoById(id)!
+
+  emit(
+    { ok: true, ...todo },
+    [`已记一条待办`, ...todoHead(todo, file), '', '内容写在这个文件里（摘要 = 交接说明，进度往下续）。'].join('\n'),
+  )
+}
+
+async function cmdTodoSet(argv: string[]): Promise<void> {
+  const { values, positionals } = parse(argv, {
+    ...TODO_FIELDS,
+    status: { type: 'string' },
+    title: { type: 'string' },
+    summary: { type: 'string' },
+  })
+  if (bool(values.help)) return out(USAGE['todo set'])
+
+  const id = required(positionals[0], 'Missing todo id (T-…)', USAGE['todo set'])
+  const patch = todoPatch(values)
+  const status = str(values.status)?.trim()
+  const title = str(values.title)?.trim()
+  const summary = str(values.summary)
+  if (status === undefined && title === undefined && summary === undefined && !Object.keys(patch).length) {
+    throw new UsageError('Pass at least one field to change', USAGE['todo set'])
+  }
+  if (status !== undefined) oneOf(status, TODO_STATUSES, 'status')
+  if (patch.source) oneOf(patch.source, TODO_SOURCES, 'source')
+  if (patch.channel) oneOf(patch.channel, TODO_CHANNELS, 'channel')
+
+  const board = db()
+  board.syncTodos()
+  if (!board.todoById(id)) {
+    throw new Error(`Todo not found: ${id}. id 就是文件名（${join(config.dataDir, '_todos', `${id}.md`)}）`)
+  }
+
+  if (status !== undefined) board.setTodoStatus(id, status as TodoStatus)
+  if (Object.keys(patch).length) board.setTodoFields(id, patch)
+  // 标题与摘要是 md 的内容：改文件，再由同步带回归库
+  if (title !== undefined || summary !== undefined) {
+    const { content } = board.readTodoDoc(id)
+    let next = content
+    if (title !== undefined) next = setTodoTitle(next, title)
+    if (summary !== undefined) next = setTodoSummary(next, summary)
+    board.writeTodoDoc(id, next)
+  }
+
+  const todo = board.todoById(id)!
+  emit({ ok: true, ...todo }, [`待办：${todo.title}（${todo.id}）`, `状态：${todo.status}`].join('\n'))
+}
+
+async function cmdTodoList(argv: string[]): Promise<void> {
+  const { values } = parse(argv, {
+    status: { type: 'string' },
+    source: { type: 'string' },
+    all: { type: 'boolean' },
+    limit: { type: 'string' },
+  })
+  if (bool(values.help)) return out(USAGE['todo list'])
+
+  const status = str(values.status)?.trim()
+  const source = str(values.source)?.trim()
+  if (status !== undefined) oneOf(status, TODO_STATUSES, 'status')
+  if (source !== undefined) oneOf(source, TODO_SOURCES, 'source')
+
+  const board = db()
+  board.syncTodos()
+  const all = board.listTodos()
+  const open = all.filter((t) => t.status === 'todo' || t.status === 'in_progress')
+  let todos = status ? all.filter((t) => t.status === status) : bool(values.all) ? all : open
+  if (source) todos = todos.filter((t) => t.source === source)
+
+  const limit = Number(str(values.limit) ?? '') || 0
+  const shown = limit > 0 ? todos.slice(0, limit) : todos
+  const hidden = todos.length - shown.length
+
+  const blocks = [
+    `${status ? `状态 ${status}` : bool(values.all) ? '全部待办' : '未完成的待办'}（${todos.length}）：`,
+    shown.map(todoLine).join('\n') || '（无）',
+  ]
+  if (hidden > 0) blocks.push(`（还有 ${hidden} 条，--limit 调大或加 --status）`)
+  if (!status && !bool(values.all)) {
+    const rest = all.length - open.length
+    if (rest > 0) blocks.push(`（已完成/已取消 ${rest} 条，--all 看全部）`)
+  }
+
+  emit({ todos: shown, total: todos.length, open: open.length, all: all.length }, blocks.join('\n'))
+}
+
+async function cmdTodoShow(argv: string[]): Promise<void> {
+  const { values, positionals } = parse(argv, {})
+  if (bool(values.help)) return out(USAGE['todo show'])
+
+  const id = required(positionals[0], 'Missing todo id (T-…)', USAGE['todo show'])
+  const board = db()
+  board.syncTodos()
+  const todo = board.todoById(id)
+  if (!todo) throw new Error(`Todo not found: ${id}`)
+  const { path, content } = board.readTodoDoc(id)
+
+  emit(
+    { todo, path, content },
+    [todoHead(todo, path).join('\n'), `## 内容（${path}）\n\n${content.trim()}`].join('\n\n'),
+  )
+}
+
+/** 旧 todo 板的一块：`### T-YYYYMMDD-NNN | status` + 若干 `- key: value` */
+interface LegacyTodo {
+  id: string
+  status: string
+  fields: Record<string, string>
+}
+
+/**
+ * 解析旧 todo 板的按天文件。字段值可能折行，续行并进上一个字段——
+ * 旧文件是手工/agent 写的，不能假设一个字段只占一行。
+ */
+function parseLegacyTodoFile(text: string): LegacyTodo[] {
+  const out: LegacyTodo[] = []
+  let current: LegacyTodo | null = null
+  let lastKey = ''
+  for (const line of text.split('\n')) {
+    const head = /^###\s+(T-\d{8}-\d{3})\s*\|\s*(\S+)\s*$/.exec(line)
+    if (head) {
+      current = { id: head[1], status: head[2], fields: {} }
+      lastKey = ''
+      out.push(current)
+      continue
+    }
+    if (!current) continue
+    const field = /^-\s+([A-Za-z]+):\s*(.*)$/.exec(line)
+    if (field) {
+      lastKey = field[1]
+      current.fields[lastKey] = field[2].trim()
+      continue
+    }
+    if (lastKey && line.trim()) current.fields[lastKey] += ` ${line.trim()}`
+  }
+  return out
+}
+
+async function cmdTodoImport(argv: string[]): Promise<void> {
+  const { values, positionals } = parse(argv, { 'dry-run': { type: 'boolean' } })
+  if (bool(values.help)) return out(USAGE['todo import'])
+
+  const dir = required(positionals[0], 'Missing source dir (the old todo board, e.g. ~/todo)', USAGE['todo import'])
+  if (!existsSync(dir)) throw new Error(`Directory not found: ${dir}`)
+  const files = readdirSync(dir)
+    .filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f))
+    .sort()
+  if (!files.length) throw new Error(`No yyyy-mm-dd.md under ${dir}`)
+
+  const dryRun = bool(values['dry-run'])
+  const board = db()
+  board.syncTodos()
+
+  const created: string[] = []
+  const skipped: string[] = []
+  let finished = 0
+  for (const file of files) {
+    for (const entry of parseLegacyTodoFile(readFileSync(join(dir, file), 'utf8'))) {
+      // 只搬未完成的：已完成的留在原处当历史，进看板只会淹没真正要做的事
+      if (entry.status !== 'todo' && entry.status !== 'in_progress') {
+        finished++
+        continue
+      }
+      if (board.todoById(entry.id)) {
+        skipped.push(entry.id)
+        continue
+      }
+      created.push(entry.id)
+      if (dryRun) continue
+
+      const f = entry.fields
+      const title = f.title || entry.id
+      const summary = f.summary ?? ''
+      const source = f.source ?? ''
+      const { file: doc } = createTodoDoc(config.dataDir, entry.id, title, summary)
+      board.addTodo({
+        id: entry.id,
+        title,
+        status: entry.status as TodoStatus,
+        // 来源只认已知取值：历史文件里可能写过别的，宁可留空也不让导入失败
+        source: (TODO_SOURCES as readonly string[]).includes(source) ? source : '',
+        session: f.session ?? '',
+        channel: f.channel ?? '',
+        origin: f.from ?? '',
+        chat: f.chat ?? '',
+        ref: f.ref ?? '',
+        link: f.link ?? '',
+        happened: f.at ?? '',
+        summary,
+        path: doc,
+        // 保住原来的时间线，别让 14 条历史条目都挤在"刚刚"
+        created: f.updated ?? '',
+        updated: f.updated ?? '',
+      })
+    }
+  }
+
+  emit(
+    {
+      ok: true,
+      dryRun,
+      created,
+      skipped,
+      finished,
+      sourceDir: dir,
+      todosDir: join(config.dataDir, '_todos'),
+    },
+    [
+      dryRun ? `将迁移 ${created.length} 条未完成的待办（--dry-run，没落盘）` : `已迁移 ${created.length} 条未完成的待办`,
+      created.length ? `id：${created.join('、')}` : '',
+      skipped.length ? `已存在跳过 ${skipped.length} 条：${skipped.join('、')}` : '',
+      finished ? `已完成/已取消 ${finished} 条留在原处不动` : '',
+      `待办文件目录：${join(config.dataDir, '_todos')}`,
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  )
+}
+
+async function cmdTodo(action: string | undefined, argv: string[]): Promise<void> {
+  if (action === '--help' || action === '-h') return out(GROUP_USAGE.todo)
+  if (!action) throw new UsageError('todo needs a subcommand: new / set / list / show / import', GROUP_USAGE.todo)
+  if (action === 'new') return cmdTodoNew(argv)
+  if (action === 'set') return cmdTodoSet(argv)
+  if (action === 'list') return cmdTodoList(argv)
+  if (action === 'show') return cmdTodoShow(argv)
+  if (action === 'import') return cmdTodoImport(argv)
+  throw new UsageError(`Unknown subcommand: todo ${action}`, GROUP_USAGE.todo)
+}
+
 async function cmdReq(action: string | undefined, argv: string[]): Promise<void> {
   if (action === '--help' || action === '-h') return out(GROUP_USAGE.req)
   if (!action) throw new UsageError('req needs a subcommand: new / set / link', GROUP_USAGE.req)
@@ -692,6 +1074,7 @@ async function run(argv: string[]): Promise<void> {
   if (group === 'project') return cmdProject(action, rest)
   if (group === 'req') return cmdReq(action, rest)
   if (group === 'wt') return cmdWt(action, rest)
+  if (group === 'todo') return cmdTodo(action, rest)
   throw new UsageError(`Unknown command: ${group}`, ROOT_USAGE)
 }
 

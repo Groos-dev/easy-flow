@@ -12,7 +12,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
-import { listStrayDirs, parseFrontmatter, readProjectConvention } from './markdown.ts'
+import { TODOS_DIR, listStrayDirs, parseFrontmatter, readProjectConvention } from './markdown.ts'
 
 /** 收纳目录。下划线开头，listProjectDirs 不会把它当成项目 */
 export const TEMPLATES_DIR = '_templates'
@@ -271,4 +271,70 @@ export function projectIssues(slug: string, root: string): string[] {
     issues.push(`子目录 ${shown}${more} 不是需求（需 AGENTS.md + requirement.md），不会出现在看板`)
   }
   return issues
+}
+
+// ------------------------------------------------------------------ 待办
+
+/**
+ * 待办 md：一条待办一份，放在 <dataDir>/_todos/<id>.md。
+ * 「摘要」段是可恢复现场的交接说明（同步进库当卡片摘要），「进度」段按时间往下续。
+ * 状态与来源等元数据只存在 easy-flow.db 里，不写进这里。
+ */
+export function renderTodoDoc(title: string, summary = ''): string {
+  return `<!-- easy-flow 待办 · 一条待办一份，元数据（状态、来源、会话、链接）存在 easy-flow.db 里。
+     标题取下面的 H1，看板卡片的摘要取「摘要」段；进度、结论、证据往「进度」段续。 -->
+
+# ${oneLine(title)}
+
+## 摘要
+
+${summary.trim()}
+
+## 进度
+
+`
+}
+
+/** 待办目录（<dataDir>/_todos）。不存在时按需建出来 */
+export function todosDir(dataDir: string): string {
+  return join(dataDir, TODOS_DIR)
+}
+
+/** 建一份待办 md。id 由调用方按首次入库日编号，文件已存在则报错 */
+export function createTodoDoc(
+  dataDir: string,
+  id: string,
+  title: string,
+  summary = '',
+): { file: string } {
+  const dir = todosDir(dataDir)
+  const file = join(dir, `${id}.md`)
+  if (existsSync(file)) throw new Error(`Todo file already exists: ${file}`)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(file, renderTodoDoc(title, summary), 'utf8')
+  return { file }
+}
+
+/** 改写 md 的 H1（待办标题）。没有 H1 就补在最前面 */
+export function setTodoTitle(text: string, title: string): string {
+  const line = `# ${oneLine(title)}`
+  return /^#\s+.+$/m.test(text) ? text.replace(/^#\s+.+$/m, line) : `${line}\n\n${text}`
+}
+
+/** 改写「摘要」段，其余（注释、H1、进度段）原样保留；段不存在就追加到末尾 */
+export function setTodoSummary(text: string, summary: string): string {
+  const lines = text.split('\n')
+  const start = lines.findIndex((l) => /^##\s*摘要\s*$/.test(l))
+  const block = ['## 摘要', '', ...summary.trim().split('\n'), '']
+  if (start === -1) {
+    return `${text.replace(/\s*$/, '')}\n\n${block.join('\n').replace(/\n+$/, '')}\n`
+  }
+  let end = lines.length
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^##\s/.test(lines[i])) {
+      end = i
+      break
+    }
+  }
+  return `${[...lines.slice(0, start), ...block, ...lines.slice(end)].join('\n').replace(/\s*$/, '')}\n`
 }

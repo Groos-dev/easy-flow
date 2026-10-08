@@ -44,6 +44,31 @@ CREATE TABLE IF NOT EXISTS doc (
 );
 
 /*
+ * todo：全局待办。和需求平级，但不受项目划分——一条待办不属于任何项目。
+ * 一条待办一份 md（<dataDir>/_todos/<id>.md）放内容，这张表放元数据；
+ * 与需求同一套分工：md 是"有没有"的事实源，状态只归这里。
+ */
+CREATE TABLE IF NOT EXISTS todo (
+  id       TEXT PRIMARY KEY,
+  title    TEXT NOT NULL,
+  status   TEXT NOT NULL,
+  source   TEXT NOT NULL DEFAULT '',
+  session  TEXT,
+  channel  TEXT,
+  origin   TEXT,
+  chat     TEXT,
+  ref      TEXT,
+  link     TEXT,
+  happened TEXT,
+  summary  TEXT,
+  path     TEXT NOT NULL,
+  mtime    INTEGER NOT NULL DEFAULT 0,
+  created  TEXT,
+  updated  TEXT,
+  orphan   INTEGER NOT NULL DEFAULT 0
+);
+
+/*
  * worktree：需求的工作区。文件系统只能证明它存在，证明不了它属于谁——
  * 需求目录里没有反向指针，所以关系只存在这张表里，创建时必须落库。
  */
@@ -62,6 +87,8 @@ CREATE TABLE IF NOT EXISTS worktree (
 
 CREATE INDEX IF NOT EXISTS idx_doc_scope ON doc(project, slug);
 CREATE INDEX IF NOT EXISTS idx_req_project ON requirement(project);
+CREATE INDEX IF NOT EXISTS idx_todo_status ON todo(status);
+CREATE INDEX IF NOT EXISTS idx_todo_ref ON todo(ref);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wt_path ON worktree(path);
 CREATE INDEX IF NOT EXISTS idx_wt_req ON worktree(req_id);
 `

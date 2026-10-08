@@ -12,8 +12,11 @@ import {
   BoardDatabase,
   STATUSES,
   PRIORITIES,
+  TODO_STATUSES,
+  TODO_SOURCES,
   type Status,
   type Priority,
+  type TodoStatus,
 } from './db.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 import { installSkill, skillPlan } from './skill-install.ts'
@@ -282,6 +285,53 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         if (!existsSync(wt.path)) throw new Error(`Directory no longer exists: ${wt.path}`)
         execFile('open', [wt.path], () => {})
         json(req, res, 200, { ok: true, path: wt.path })
+        return
+      }
+
+      // ----------------------------------------------------------- 待办
+
+      // 待办是全局的，不分项目，所以这里不解析 project
+      if (url.pathname === '/api/todos' && req.method === 'GET') {
+        // 与需求一致：每次读取前同步一次，md 可能被 agent 改过
+        const sync = db.syncTodos()
+        json(req, res, 200, {
+          todos: db.listTodos(),
+          statuses: TODO_STATUSES,
+          sources: TODO_SOURCES,
+          sync,
+        })
+        return
+      }
+
+      if (url.pathname === '/api/todos/update' && req.method === 'POST') {
+        const { id, status } = await readBody(req)
+        const target = String(id)
+        if (!db.todoById(target)) throw new Error(`Todo not found: ${target}`)
+        json(req, res, 200, db.setTodoStatus(target, status as TodoStatus))
+        return
+      }
+
+      // 读一条待办的 md 原文（内容源在文件里）
+      if (url.pathname === '/api/todos/doc' && req.method === 'GET') {
+        const id = url.searchParams.get('id') ?? ''
+        json(req, res, 200, { id, ...db.readTodoDoc(id) })
+        return
+      }
+
+      if (url.pathname === '/api/todos/doc' && req.method === 'POST') {
+        const { id, content } = await readBody(req)
+        json(req, res, 200, { id: String(id), ...db.writeTodoDoc(String(id), String(content ?? '')) })
+        return
+      }
+
+      // 在访达里打开这条待办的 md。路径从库里取，不接受调用方给的路径
+      if (url.pathname === '/api/todos/open' && req.method === 'POST') {
+        const { id } = await readBody(req)
+        const todo = db.todoById(String(id))
+        if (!todo) throw new Error(`Todo not found: ${id}`)
+        if (!existsSync(todo.path)) throw new Error(`File no longer exists: ${todo.path}`)
+        execFile('open', [todo.path], () => {})
+        json(req, res, 200, { ok: true, path: todo.path })
         return
       }
 

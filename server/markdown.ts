@@ -68,6 +68,8 @@ const HEADINGS = {
   summary: ['需求', '需求摘要', '需求概述', '任务范围', 'Requirement summary', 'Summary'],
   repos: ['涉及仓库', '仓库与软链', '仓库映射', '仓库关系', '仓库', 'Repos and symlinks', 'Repos'],
   links: ['链接', '相关链接', '参考链接', '文档索引', 'Doc index', 'Links'],
+  /** 待办 md 的摘要段。与需求分开列：待办没有「需求」段，别名越少越不容易误命中 */
+  todoSummary: ['摘要', '待办', 'Summary'],
 } as const
 
 function firstParagraph(text: string): string {
@@ -293,6 +295,55 @@ export function listStrayDirs(root: string): string[] {
 /** 读取项目级规范文件（约定为项目根目录的 AGENTS.md），不存在则返回 null */
 export function readProjectConvention(projectRoot: string): string | null {
   return readTextOrNull(join(projectRoot, 'AGENTS.md'))
+}
+
+// ------------------------------------------------------------------ 待办
+
+/**
+ * 待办目录：数据目录下的收纳目录。下划线开头，listProjectDirs 不会把它当成项目，
+ * 所以待办与项目/需求在同一份数据目录里共存，互不干扰。
+ */
+export const TODOS_DIR = '_todos'
+
+export interface ParsedTodo {
+  /** 卡片与列表用的标题：md 的 H1 */
+  title: string
+  /** 卡片摘要：md「摘要」段的首段 */
+  summary: string
+}
+
+/** 解析一份待办 md。状态不在这里——状态归 sqlite 管，和需求一个规矩 */
+export function parseTodo(text: string): ParsedTodo {
+  const h1 = /^#\s+(.+)$/m.exec(text)?.[1]?.trim()
+  return {
+    title: h1 || '',
+    summary: firstParagraph(sectionAny(text, HEADINGS.todoSummary)) || fallbackSummary(text),
+  }
+}
+
+export interface TodoFile extends ParsedTodo {
+  /** 文件名去掉 .md 就是待办 id（T-YYYYMMDD-NNN） */
+  id: string
+  file: string
+  mtime: number
+}
+
+/** 列出待办目录下的所有 md。文件名即 id，读不到内容的条目跳过 */
+export function listTodoFiles(dataDir: string): TodoFile[] {
+  const dir = join(dataDir, TODOS_DIR)
+  const out: TodoFile[] = []
+  for (const entry of entries(dir)) {
+    if (!entry.endsWith('.md')) continue
+    const file = join(dir, entry)
+    try {
+      const st = lstatSync(file)
+      if (st.isSymbolicLink() || !st.isFile()) continue
+      out.push({ id: entry.slice(0, -3), file, ...parseTodo(readFileSync(file, 'utf8')), mtime: st.mtimeMs })
+    } catch {
+      /* 读不到的条目当它不存在 */
+    }
+  }
+  return out
 }
 
 /**

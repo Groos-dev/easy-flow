@@ -16,6 +16,7 @@ import { join, dirname } from 'node:path'
 import {
   listProjectDirs,
   listRequirementDirs,
+  listTodoFiles,
   parseRequirement,
   projectDisplayName,
   readProjectConvention,
@@ -39,6 +40,20 @@ export type Status = (typeof STATUSES)[number]
  */
 export const PRIORITIES = ['p0', 'p1', 'p2', 'p3'] as const
 export type Priority = (typeof PRIORITIES)[number]
+
+/**
+ * 待办的状态 = 待办看板的列。字面量沿用全局 todo skill 的取值（英文原样，不译成中文）：
+ * 它要能被 agent 直接贴进命令与文件，也免得历史条目的状态在迁移时改写。
+ */
+export const TODO_STATUSES = ['todo', 'in_progress', 'done', 'cancelled'] as const
+export type TodoStatus = (typeof TODO_STATUSES)[number]
+
+/** 待办来源。feishu 由 feishu-task 识别后委托入库，manual 是用户口头要求记一条 */
+export const TODO_SOURCES = ['feishu', 'chat', 'agent', 'manual'] as const
+export type TodoSource = (typeof TODO_SOURCES)[number]
+
+/** 飞书来源的来路：@我 还是小窗私聊 */
+export const TODO_CHANNELS = ['at_me', 'p2p'] as const
 
 export const DEFAULT_PROJECT_SLUG = 'default'
 
@@ -123,6 +138,60 @@ interface WtRow {
   orphan: number
 }
 
+/**
+ * 一条待办。内容（标题、摘要）与需求一样从 md 同步进来，状态与来源类元数据只归库。
+ */
+export interface Todo {
+  /** 首次入库日编号：T-YYYYMMDD-NNN */
+  id: string
+  title: string
+  status: TodoStatus
+  source: TodoSource | ''
+  /** 来源 agent 会话（如 codex://threads/<id>）。source 为 agent / chat 时必有 */
+  session: string
+  /** 仅 feishu 来源：at_me（@我） / p2p（私聊） */
+  channel: string
+  /** 来源人 / 触发者 */
+  origin: string
+  /** 会话、群或上下文名 */
+  chat: string
+  /** 去重键：feishu 用 message_id，其余用来源稳定 id */
+  ref: string
+  /** 可跳转链接（飞书 thread、MR、页面） */
+  link: string
+  /** 源事件时间（yyyy-mm-dd HH:mm），可空 */
+  happened: string
+  /** 卡片摘要，从 md「摘要」段同步 */
+  summary: string
+  /** md 文件绝对路径 */
+  path: string
+  mtime: number
+  created: string
+  updated: string
+  /** md 没了（被手工删过、或盘不在） */
+  orphan: boolean
+}
+
+interface TodoRow {
+  id: string
+  title: string
+  status: string
+  source: string | null
+  session: string | null
+  channel: string | null
+  origin: string | null
+  chat: string | null
+  ref: string | null
+  link: string | null
+  happened: string | null
+  summary: string | null
+  path: string
+  mtime: number
+  created: string | null
+  updated: string | null
+  orphan: number
+}
+
 interface Row {
   slug: string
   project: string
@@ -149,6 +218,14 @@ function asStatus(value: string | null | undefined): Status | null {
 
 function asPriority(value: string | null | undefined): Priority | null {
   return value && (PRIORITIES as readonly string[]).includes(value) ? (value as Priority) : null
+}
+
+function asTodoStatus(value: string | null | undefined): TodoStatus | null {
+  return value && (TODO_STATUSES as readonly string[]).includes(value) ? (value as TodoStatus) : null
+}
+
+function asTodoSource(value: string | null | undefined): TodoSource | null {
+  return value && (TODO_SOURCES as readonly string[]).includes(value) ? (value as TodoSource) : null
 }
 
 // ------------------------------------------------------------------ 链接
@@ -187,6 +264,21 @@ function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+/**
+ * 待办的时间戳（本机时间，分钟粒度）：同一天里改过哪条，一眼能分出来。
+ * 需求那边是日期粒度，这里多一档是有意的——待办一天里会翻好几次状态。
+ */
+function stamp(): string {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** 本机日期（yyyy-mm-dd）。待办 id 里的日期按本机时区算——人在哪儿，"今天"就是哪天 */
+function localDay(): string {
+  return stamp().slice(0, 10)
+}
+
 /** JSON 列解析。列可能存着 'null'，所以结果要允许 undefined，调用方用 ?? 兜底。 */
 function parseLinks<T>(raw: string | null, fallback: T): T | undefined {
   if (!raw) return fallback
@@ -206,6 +298,29 @@ function toWorktree(row: WtRow): Worktree {
     branch: row.branch,
     path: row.path,
     main: row.main,
+    created: row.created ?? '',
+    updated: row.updated ?? '',
+    orphan: !!row.orphan,
+  }
+}
+
+function toTodo(row: TodoRow): Todo {
+  return {
+    id: row.id,
+    title: row.title,
+    // 非法值回落 todo：宁可让它回到未开始，也不要因为一个脏值让看板少一列
+    status: asTodoStatus(row.status) ?? 'todo',
+    source: asTodoSource(row.source) ?? '',
+    session: row.session ?? '',
+    channel: row.channel ?? '',
+    origin: row.origin ?? '',
+    chat: row.chat ?? '',
+    ref: row.ref ?? '',
+    link: row.link ?? '',
+    happened: row.happened ?? '',
+    summary: row.summary ?? '',
+    path: row.path,
+    mtime: row.mtime,
     created: row.created ?? '',
     updated: row.updated ?? '',
     orphan: !!row.orphan,
@@ -814,5 +929,225 @@ export class BoardDatabase {
   /** 只删记录。目录与 git 登记归 worktree 层处理 */
   removeWorktree(id: string): boolean {
     return this.db.prepare('DELETE FROM worktree WHERE id = ?').run(id).changes > 0
+  }
+
+  // ------------------------------------------------------------- 待办
+
+  /**
+   * 把 <dataDir>/_todos/ 同步进库。与需求同一套规矩：
+   *   md 在、库无 → 新增（status 默认 todo，来源等元数据留空，由调用方补）
+   *   md 在、库有 → 只更新标题/摘要/路径/时间，绝不动 status 与来源
+   *   md 没了    → 标记孤儿，保留可见
+   * 待办是全局的，不分项目，所以这里不看 project 表。
+   */
+  syncTodos(): { added: string[]; updated: string[]; orphaned: string[]; restored: string[] } {
+    const seen = new Set<string>()
+    const added: string[] = []
+    const updated: string[] = []
+    const restored: string[] = []
+
+    const select = this.db.prepare('SELECT id, orphan FROM todo WHERE id = ?')
+    const insert = this.db.prepare(
+      `INSERT INTO todo (id, title, status, source, summary, path, mtime, created, updated, orphan)
+       VALUES (?, ?, 'todo', '', ?, ?, ?, ?, ?, 0)`,
+    )
+    const update = this.db.prepare(
+      'UPDATE todo SET title = ?, summary = ?, path = ?, mtime = ?, orphan = 0 WHERE id = ?',
+    )
+
+    for (const f of listTodoFiles(this.dataDir)) {
+      seen.add(f.id)
+      const existing = select.get(f.id) as { id: string; orphan: number } | undefined
+      if (!existing) {
+        const at = stamp()
+        insert.run(f.id, f.title || f.id, f.summary, f.file, f.mtime, at, at)
+        added.push(f.id)
+      } else {
+        update.run(f.title || f.id, f.summary, f.file, f.mtime, f.id)
+        if (existing.orphan) restored.push(f.id)
+        else updated.push(f.id)
+      }
+    }
+
+    const orphaned: string[] = []
+    const mark = this.db.prepare('UPDATE todo SET orphan = 1 WHERE id = ?')
+    const rows = this.db.prepare('SELECT id, orphan FROM todo').all() as unknown as Array<{
+      id: string
+      orphan: number
+    }>
+    for (const r of rows) {
+      if (!seen.has(r.id) && !r.orphan) {
+        mark.run(r.id)
+        orphaned.push(r.id)
+      }
+    }
+    return { added, updated, orphaned, restored }
+  }
+
+  /** 全部待办，最近动过的在前 */
+  listTodos(): Todo[] {
+    const rows = this.db
+      .prepare('SELECT * FROM todo ORDER BY updated DESC, id DESC')
+      .all() as unknown as TodoRow[]
+    return rows.map(toTodo)
+  }
+
+  todoById(id: string): Todo | undefined {
+    const row = this.db.prepare('SELECT * FROM todo WHERE id = ?').get(id) as unknown as
+      | TodoRow
+      | undefined
+    return row ? toTodo(row) : undefined
+  }
+
+  /** 按去重键反查。feishu 来源的 ref 是 message_id，用它挡住同一消息重复入库 */
+  todoByRef(ref: string): Todo | undefined {
+    const row = this.db.prepare('SELECT * FROM todo WHERE ref = ?').get(ref) as unknown as
+      | TodoRow
+      | undefined
+    return row ? toTodo(row) : undefined
+  }
+
+  /**
+   * 下一个待办 id：按首次入库日编号（T-YYYYMMDD-NNN），当天从 001 递增。
+   * 沿用旧 todo 板的编号法，历史条目搬进来不用换 id。
+   */
+  nextTodoId(): string {
+    const prefix = `T-${localDay().replace(/-/g, '')}-`
+    const row = this.db
+      .prepare('SELECT id FROM todo WHERE id LIKE ? ORDER BY id DESC LIMIT 1')
+      .get(`${prefix}%`) as { id: string } | undefined
+    const last = row ? Number(row.id.slice(prefix.length)) || 0 : 0
+    return `${prefix}${String(last + 1).padStart(3, '0')}`
+  }
+
+  /** 登记一条待办。md 由调用方先落盘（createTodoDoc），这里只管库 */
+  addTodo(input: {
+    id: string
+    title: string
+    status?: TodoStatus
+    source?: string
+    session?: string
+    channel?: string
+    origin?: string
+    chat?: string
+    ref?: string
+    link?: string
+    happened?: string
+    summary?: string
+    path: string
+    mtime?: number
+    /** 迁移历史条目时用它保住原来的时间线；不传就用当前时间 */
+    created?: string
+    updated?: string
+  }): Todo {
+    const status = input.status ?? 'todo'
+    if (!(TODO_STATUSES as readonly string[]).includes(status)) {
+      throw new Error(`Unknown status ${status}. Valid: ${TODO_STATUSES.join(' / ')}`)
+    }
+    if (input.source && !asTodoSource(input.source)) {
+      throw new Error(`Unknown source ${input.source}. Valid: ${TODO_SOURCES.join(' / ')}`)
+    }
+    const at = stamp()
+    this.db
+      .prepare(
+        `INSERT INTO todo
+           (id, title, status, source, session, channel, origin, chat, ref, link, happened,
+            summary, path, mtime, created, updated, orphan)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      )
+      .run(
+        input.id,
+        input.title,
+        status,
+        input.source ?? '',
+        input.session ?? '',
+        input.channel ?? '',
+        input.origin ?? '',
+        input.chat ?? '',
+        input.ref ?? '',
+        input.link ?? '',
+        input.happened ?? '',
+        input.summary ?? '',
+        input.path,
+        input.mtime ?? 0,
+        input.created || at,
+        input.updated || at,
+      )
+    return this.todoById(input.id)!
+  }
+
+  setTodoStatus(id: string, status: TodoStatus): Todo {
+    if (!(TODO_STATUSES as readonly string[]).includes(status)) {
+      throw new Error(`Unknown status ${status}. Valid: ${TODO_STATUSES.join(' / ')}`)
+    }
+    const info = this.db
+      .prepare('UPDATE todo SET status = ?, updated = ? WHERE id = ?')
+      .run(status, stamp(), id)
+    if (info.changes === 0) throw new Error(`Todo not found: ${id}`)
+    return this.todoById(id)!
+  }
+
+  /**
+   * 改只归库的那几个字段（来源、会话、去重键、链接……）。
+   * undefined 表示不动，空串表示清空。标题与摘要是 md 的内容，不从这里改。
+   */
+  setTodoFields(
+    id: string,
+    patch: {
+      source?: string
+      session?: string
+      channel?: string
+      origin?: string
+      chat?: string
+      ref?: string
+      link?: string
+      happened?: string
+    },
+  ): Todo {
+    if (patch.source && !asTodoSource(patch.source)) {
+      throw new Error(`Unknown source ${patch.source}. Valid: ${TODO_SOURCES.join(' / ')}`)
+    }
+    const columns: Record<string, string | undefined> = {
+      source: patch.source,
+      session: patch.session,
+      channel: patch.channel,
+      origin: patch.origin,
+      chat: patch.chat,
+      ref: patch.ref,
+      link: patch.link,
+      happened: patch.happened,
+    }
+    const sets: string[] = []
+    const params: Array<string | null> = []
+    for (const [col, value] of Object.entries(columns)) {
+      if (value === undefined) continue
+      sets.push(`${col} = ?`)
+      params.push(value || null)
+    }
+    if (!sets.length) throw new Error('No fields to update')
+    sets.push('updated = ?')
+    params.push(stamp())
+
+    const info = this.db.prepare(`UPDATE todo SET ${sets.join(', ')} WHERE id = ?`).run(...params, id)
+    if (info.changes === 0) throw new Error(`Todo not found: ${id}`)
+    return this.todoById(id)!
+  }
+
+  /** 读待办 md 原文。路径从库里取，不接受调用方给的路径 */
+  readTodoDoc(id: string): { path: string; content: string } {
+    const todo = this.todoById(id)
+    if (!todo) throw new Error(`Todo not found: ${id}`)
+    const content = readTextOrNull(todo.path)
+    if (content === null) throw new Error(`Cannot read todo file: ${todo.path}`)
+    return { path: todo.path, content }
+  }
+
+  /** 写回 md，不留备份（版本历史交给 git）。写完顺手同步一次，标题与摘要跟着更新 */
+  writeTodoDoc(id: string, content: string): { path: string; bytes: number } {
+    const todo = this.todoById(id)
+    if (!todo) throw new Error(`Todo not found: ${id}`)
+    writeFileSync(todo.path, content, 'utf8')
+    this.syncTodos()
+    return { path: todo.path, bytes: Buffer.byteLength(content, 'utf8') }
   }
 }

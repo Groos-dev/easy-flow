@@ -255,6 +255,118 @@ describe('数据层 · 项目与需求同步', () => {
   })
 })
 
+// ------------------------------------------------------------ 数据层：待办
+
+/** 造一条待办 md（<dataDir>/_todos/<id>.md） */
+function makeTodo(dataDir: string, id: string, title: string, summary = '', progress = ''): string {
+  const dir = join(dataDir, '_todos')
+  mkdirSync(dir, { recursive: true })
+  const file = join(dir, `${id}.md`)
+  writeFileSync(file, `# ${title}\n\n## 摘要\n\n${summary}\n\n## 进度\n\n${progress}\n`, 'utf8')
+  return file
+}
+
+describe('数据层 · 待办同步', () => {
+  test('首次同步识别待办：标题取 H1、摘要取「摘要」段', () => {
+    const dir = fresh((d) => {
+      makeTodo(d, 'T-20260101-001', '统计失败原因分布', '动作：按错误码统计。完成标准：给出占比。')
+    })
+    const db = new BoardDatabase(dir)
+    const sync = db.syncTodos()
+    assert.deepEqual(sync.added, ['T-20260101-001'])
+
+    const t = db.todoById('T-20260101-001')!
+    assert.equal(t.title, '统计失败原因分布')
+    assert.equal(t.summary, '动作：按错误码统计。完成标准：给出占比。')
+    assert.equal(t.status, 'todo', '新条目一律从 todo 起步')
+    assert.equal(t.path, join(dir, '_todos', 'T-20260101-001.md'))
+    db.close()
+  })
+
+  test('★ 同步不覆盖已有状态与来源', () => {
+    const dir = fresh((d) => makeTodo(d, 'T-20260101-001', '原标题', '原摘要'))
+    const db = new BoardDatabase(dir)
+    db.syncTodos()
+    db.setTodoStatus('T-20260101-001', 'in_progress')
+    db.setTodoFields('T-20260101-001', { source: 'chat', session: 'codex://threads/x' })
+
+    // agent 重写了 md：标题与摘要跟着变，状态与来源必须还在
+    makeTodo(dir, 'T-20260101-001', '新标题', '新摘要')
+    db.syncTodos()
+
+    const t = db.todoById('T-20260101-001')!
+    assert.equal(t.title, '新标题')
+    assert.equal(t.summary, '新摘要')
+    assert.equal(t.status, 'in_progress', '状态是库的权威，同步不能动它')
+    assert.equal(t.source, 'chat')
+    assert.equal(t.session, 'codex://threads/x')
+    db.close()
+  })
+
+  test('md 消失 → 标记孤儿；恢复 → 复原', () => {
+    const dir = fresh((d) => makeTodo(d, 'T-20260101-001', '会消失的待办'))
+    const db = new BoardDatabase(dir)
+    db.syncTodos()
+    db.setTodoStatus('T-20260101-001', 'done')
+
+    rmSync(join(dir, '_todos', 'T-20260101-001.md'))
+    const gone = db.syncTodos()
+    assert.deepEqual(gone.orphaned, ['T-20260101-001'])
+    assert.equal(db.todoById('T-20260101-001')!.orphan, true)
+    assert.equal(db.todoById('T-20260101-001')!.status, 'done', '孤儿也要保住状态')
+
+    makeTodo(dir, 'T-20260101-001', '又回来了')
+    const back = db.syncTodos()
+    assert.deepEqual(back.restored, ['T-20260101-001'])
+    assert.equal(db.todoById('T-20260101-001')!.orphan, false)
+    db.close()
+  })
+
+  test('nextTodoId 按当天递增，与需求目录互不干扰', () => {
+    const dir = fresh((d) => {
+      makeReq(d, 'onex', 'alpha', '# alpha\n\n## 需求\n\nA')
+      makeTodo(d, 'T-20200101-009', '历史条目')
+    })
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+    db.syncTodos()
+
+    const first = db.nextTodoId()
+    assert.match(first, /^T-\d{8}-001$/, '当天还没有条目就从 001 起')
+    db.addTodo({ id: first, title: '占位', path: join(dir, '_todos', `${first}.md`) })
+    assert.equal(db.nextTodoId(), first.replace(/001$/, '002'))
+    // 待办不进项目/需求表，也不受项目扫描影响
+    assert.equal(db.listTodos().length, 2)
+    assert.equal(db.listIn('onex').length, 1)
+    db.close()
+  })
+
+  test('ref 去重键可反查；未知状态与来源被拒绝', () => {
+    const dir = fresh((d) => makeTodo(d, 'T-20260101-001', '带 ref 的待办'))
+    const db = new BoardDatabase(dir)
+    db.syncTodos()
+    db.setTodoFields('T-20260101-001', { ref: 'om_x1' })
+    assert.equal(db.todoByRef('om_x1')!.id, 'T-20260101-001')
+    assert.equal(db.todoByRef('om_x2'), undefined)
+
+    assert.throws(() => db.setTodoStatus('T-20260101-001', 'doing' as never), /Unknown status/)
+    assert.throws(() => db.setTodoFields('T-20260101-001', { source: 'mail' }), /Unknown source/)
+    assert.throws(() => db.setTodoStatus('T-不存在', 'done'), /Todo not found/)
+    db.close()
+  })
+
+  test('writeTodoDoc 写回 md 并同步标题摘要回库', () => {
+    const dir = fresh((d) => makeTodo(d, 'T-20260101-001', '原标题', '原摘要'))
+    const db = new BoardDatabase(dir)
+    db.syncTodos()
+    db.writeTodoDoc('T-20260101-001', '# 改过的标题\n\n## 摘要\n\n改过的摘要\n')
+    const t = db.todoById('T-20260101-001')!
+    assert.equal(t.title, '改过的标题')
+    assert.equal(t.summary, '改过的摘要')
+    db.close()
+  })
+})
+
 // ------------------------------------------------------------ 数据层：读写
 
 describe('数据层 · 状态读写', () => {
@@ -954,13 +1066,17 @@ describe('CLI 层', () => {
     assert.match(missing.stderr, /Pass one of --project \/ --parent/)
     // root help lists the command groups; group help lists each subcommand
     const help = cliOk(configFile, ['--help'])
-    for (const c of ['context', 'dir', 'project new', 'req new|set|link', 'wt new|rm']) {
+    for (const c of ['context', 'dir', 'project new', 'req new|set|link', 'wt new|rm', 'todo new|set|list']) {
       assert.ok(help.includes(c), `expected help to list ${c}:\n${help}`)
     }
     const reqHelp = cliOk(configFile, ['req', '--help'])
     for (const c of ['req new', 'req set', 'req link']) assert.ok(reqHelp.includes(c), reqHelp)
     const wtHelp = cliOk(configFile, ['wt', '--help'])
     for (const c of ['wt new', 'wt rm']) assert.ok(wtHelp.includes(c), wtHelp)
+    const todoHelp = cliOk(configFile, ['todo', '--help'])
+    for (const c of ['todo new', 'todo set', 'todo list', 'todo show', 'todo import']) {
+      assert.ok(todoHelp.includes(c), todoHelp)
+    }
 
     const db = new BoardDatabase(dataDir)
     const r = db.get('seat-retry', 'demo')!
@@ -1421,6 +1537,203 @@ describe('CLI 层', () => {
     cliOk(configFile, ['req', 'new', '--help'])
     assert.equal(existsSync(never), false)
   })
+
+  test('todo new 落 md 与库，--json 给全字段', () => {
+    scaffold()
+    const text = cliOk(configFile, [
+      'todo', 'new', '统计 MU 退票失败原因分布',
+      '--source', 'chat',
+      '--session', 'codex://threads/abc',
+      '--from', 'groos',
+      '--chat', 'MU 出票监控',
+      '--ref', 'abc#1',
+      '--link', 'https://example.com/thread',
+      '--at', '2026-09-29 10:44',
+      '--summary', '动作：按错误码统计。完成标准：给出占比。',
+    ])
+    assert.match(text, /已记一条待办/)
+    assert.match(text, /待办 id：T-\d{8}-001/)
+
+    const json = JSON.parse(
+      cliOk(configFile, ['todo', 'new', '第二条', '--source', 'manual', '--json']),
+    )
+    assert.match(json.id, /^T-\d{8}-002$/)
+    assert.equal(json.status, 'todo')
+
+    const db = new BoardDatabase(dataDir)
+    db.syncTodos()
+    const t = db.todoById('T-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-001')!
+    assert.equal(t.title, '统计 MU 退票失败原因分布')
+    assert.equal(t.source, 'chat')
+    assert.equal(t.session, 'codex://threads/abc')
+    assert.equal(t.origin, 'groos')
+    assert.equal(t.chat, 'MU 出票监控')
+    assert.equal(t.ref, 'abc#1')
+    assert.equal(t.link, 'https://example.com/thread')
+    assert.equal(t.happened, '2026-09-29 10:44')
+    assert.equal(t.summary, '动作：按错误码统计。完成标准：给出占比。')
+    // 内容落在 _todos/<id>.md，标题取 H1、摘要取「摘要」段
+    const md = readFileSync(t.path, 'utf8')
+    assert.match(md, /^# 统计 MU 退票失败原因分布$/m)
+    assert.match(md, /## 摘要/)
+    db.close()
+  })
+
+  test('todo new 拒绝重复 ref、未知枚举与非 http 链接', () => {
+    scaffold()
+    cliOk(configFile, ['todo', 'new', '第一条', '--source', 'manual', '--ref', 'dup-1'])
+    const dup = cli(configFile, ['todo', 'new', '重复的', '--source', 'manual', '--ref', 'dup-1'])
+    assert.equal(dup.code, 1)
+    assert.match(dup.stderr, /Ref already used by T-\d{8}-001/)
+
+    const badSource = cli(configFile, ['todo', 'new', 'x', '--source', 'mail'])
+    assert.equal(badSource.code, 1)
+    assert.match(badSource.stderr, /Unknown source: mail/)
+
+    const badStatus = cli(configFile, ['todo', 'new', 'x', '--status', 'doing'])
+    assert.equal(badStatus.code, 1)
+    assert.match(badStatus.stderr, /Unknown status: doing/)
+
+    const badLink = cli(configFile, ['todo', 'new', 'x', '--link', 'ftp://x'])
+    assert.equal(badLink.code, 1)
+    assert.match(badLink.stderr, /must start with http/)
+  })
+
+  test('todo set：状态只改库，标题与摘要改 md', () => {
+    scaffold()
+    cliOk(configFile, ['todo', 'new', '原标题', '--source', 'manual', '--summary', '原摘要'])
+    const id = 'T-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-001'
+
+    assert.match(cliOk(configFile, ['todo', 'set', id, '--status', 'in_progress']), /状态：in_progress/)
+
+    const db = new BoardDatabase(dataDir)
+    db.syncTodos()
+    assert.equal(db.todoById(id)!.status, 'in_progress')
+    // 手改 md 的标题与摘要后再同步，库跟着走；状态不受影响
+    const file = db.todoById(id)!.path
+    writeFileSync(file, '# 手改的标题\n\n## 摘要\n\n手改的摘要\n\n## 进度\n\n- 做了一半\n', 'utf8')
+    db.syncTodos()
+    assert.equal(db.todoById(id)!.title, '手改的标题')
+    assert.equal(db.todoById(id)!.summary, '手改的摘要')
+    assert.equal(db.todoById(id)!.status, 'in_progress')
+    db.close()
+
+    // --summary 改的是 md 的「摘要」段，进度段原样保留
+    cliOk(configFile, ['todo', 'set', id, '--title', '新标题', '--summary', '新摘要'])
+    const md = readFileSync(file, 'utf8')
+    assert.match(md, /^# 新标题$/m)
+    assert.match(md, /新摘要/)
+    assert.match(md, /- 做了一半/, '进度段不该被摘要的改写抹掉')
+
+    const none = cli(configFile, ['todo', 'set', id])
+    assert.equal(none.code, 2, '一个字段都不传是用法错误')
+    assert.match(none.stderr, /Pass at least one field/)
+
+    const missing = cli(configFile, ['todo', 'set', 'T-不存在', '--status', 'done'])
+    assert.equal(missing.code, 1)
+    assert.match(missing.stderr, /Todo not found/)
+  })
+
+  test('todo list 默认只列未完成的，--all 连已完成一起列', () => {
+    scaffold()
+    cliOk(configFile, ['todo', 'new', '还开着的', '--source', 'manual'])
+    cliOk(configFile, ['todo', 'new', '干完了的', '--source', 'manual'])
+    const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    cliOk(configFile, ['todo', 'set', `T-${day}-002`, '--status', 'done'])
+
+    const open = cliOk(configFile, ['todo', 'list'])
+    assert.match(open, /未完成的待办（1）/)
+    assert.match(open, /还开着的/)
+    assert.ok(!open.includes('干完了的'), '默认不列已完成')
+    assert.match(open, /已完成\/已取消 1 条/)
+
+    const all = cliOk(configFile, ['todo', 'list', '--all'])
+    assert.match(all, /全部待办（2）/)
+    assert.match(all, /干完了的/)
+
+    const byStatus = cliOk(configFile, ['todo', 'list', '--status', 'done'])
+    assert.match(byStatus, /状态 done（1）/)
+    assert.match(byStatus, /干完了的/)
+
+    const bad = cli(configFile, ['todo', 'list', '--status', 'doing'])
+    assert.equal(bad.code, 1)
+    assert.match(bad.stderr, /Unknown status/)
+  })
+
+  test('todo show 打出元数据、md 路径与全文', () => {
+    scaffold()
+    cliOk(configFile, ['todo', 'new', '要看的待办', '--source', 'agent', '--session', 'codex://threads/z', '--summary', '动作：看它'])
+    const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const text = cliOk(configFile, ['todo', 'show', `T-${day}-001`])
+    assert.match(text, /待办：要看的待办/)
+    assert.match(text, /状态：todo/)
+    assert.match(text, /会话：codex:\/\/threads\/z/)
+    assert.match(text, /## 内容（.*_todos\/T-\d{8}-001\.md）/)
+    assert.match(text, /动作：看它/)
+
+    const missing = cli(configFile, ['todo', 'show', 'T-不存在'])
+    assert.equal(missing.code, 1)
+    assert.match(missing.stderr, /Todo not found/)
+  })
+
+  test('todo import：只搬未完成的，保留原 id 与时间线，重复跑安全', () => {
+    scaffold()
+    const legacy = join(base, 'legacy')
+    mkdirSync(legacy, { recursive: true })
+    writeFileSync(
+      join(legacy, '2026-09-29.md'),
+      `# 2026-09-29
+
+### T-20260929-001 | todo
+- title: 还开着的旧任务
+- source: chat
+- session: codex://threads/old
+- from: groos
+- chat: 某个会话
+- ref: old#1
+- link: https://example.com/a
+- at: 2026-09-29 10:44
+- summary: 动作：接着做。完成标准：给出结论。
+- updated: 2026-09-29 10:44
+
+### T-20260929-002 | done
+- title: 早就干完了
+- source: manual
+- updated: 2026-09-29 12:00
+
+### T-20260929-003 | cancelled
+- title: 取消了
+- source: manual
+- updated: 2026-09-29 12:30
+`,
+      'utf8',
+    )
+
+    const dry = cliOk(configFile, ['todo', 'import', legacy, '--dry-run'])
+    assert.match(dry, /将迁移 1 条未完成的待办/)
+    assert.equal(existsSync(join(dataDir, '_todos')), false, '--dry-run 不落盘')
+
+    const first = cliOk(configFile, ['todo', 'import', legacy])
+    assert.match(first, /已迁移 1 条未完成的待办/)
+    assert.match(first, /id：T-20260929-001/)
+    assert.match(first, /已完成\/已取消 2 条留在原处不动/)
+
+    const db = new BoardDatabase(dataDir)
+    db.syncTodos()
+    const t = db.todoById('T-20260929-001')!
+    assert.equal(t.title, '还开着的旧任务')
+    assert.equal(t.source, 'chat')
+    assert.equal(t.session, 'codex://threads/old')
+    assert.equal(t.ref, 'old#1')
+    assert.equal(t.updated, '2026-09-29 10:44', '原时间线要保住，不能都挤在刚刚')
+    assert.equal(db.todoById('T-20260929-002'), undefined, '已完成的不搬')
+    assert.equal(db.todoById('T-20260929-003'), undefined, '已取消的也不搬')
+    db.close()
+
+    const again = cliOk(configFile, ['todo', 'import', legacy])
+    assert.match(again, /已迁移 0 条未完成的待办/)
+    assert.match(again, /已存在跳过 1 条/)
+  })
 })
 
 // ---------------------------------------------------------------- HTTP 层
@@ -1477,6 +1790,47 @@ describe('HTTP 层', () => {
     assert.ok(Array.isArray(r.tree))
     const onex = r.tree.find((p: any) => p.slug === 'onex')
     assert.ok(onex && Array.isArray(onex.requirements))
+  })
+
+  test('GET /api/todos 返回待办与枚举，且读取前会同步 md', async () => {
+    makeTodo(dir, 'T-20260101-001', '看板上的待办', '动作：验证契约。')
+    const r = await get('/api/todos')
+    assert.deepEqual(r.statuses, ['todo', 'in_progress', 'done', 'cancelled'])
+    assert.deepEqual(r.sources, ['feishu', 'chat', 'agent', 'manual'])
+    assert.deepEqual(r.sync.added, ['T-20260101-001'])
+    const t = r.todos.find((x: any) => x.id === 'T-20260101-001')
+    assert.equal(t.title, '看板上的待办')
+    assert.equal(t.summary, '动作：验证契约。')
+    assert.equal(t.status, 'todo')
+  })
+
+  test('POST /api/todos/update 改状态并落库，未知状态被拒', async () => {
+    const r = await post('/api/todos/update', { id: 'T-20260101-001', status: 'in_progress' })
+    assert.equal(r.status, 'in_progress')
+    const list = await get('/api/todos')
+    assert.equal(list.todos.find((x: any) => x.id === 'T-20260101-001').status, 'in_progress')
+
+    assert.match((await post('/api/todos/update', { id: 'T-20260101-001', status: 'doing' })).error, /Unknown status/)
+    assert.match((await post('/api/todos/update', { id: 'T-不存在', status: 'done' })).error, /Todo not found/)
+  })
+
+  test('待办文档读写往返', async () => {
+    const before = await get('/api/todos/doc?id=T-20260101-001')
+    assert.match(before.content, /动作：验证契约。/)
+    assert.match(before.path, /_todos\/T-20260101-001\.md$/)
+
+    const saved = await post('/api/todos/doc', {
+      id: 'T-20260101-001',
+      content: '# 改过的标题\n\n## 摘要\n\n改过的摘要\n\n## 进度\n\n- 走了一步\n',
+    })
+    assert.ok(saved.bytes > 0)
+    // 写完顺手同步：标题与摘要跟着回库
+    const list = await get('/api/todos')
+    const t = list.todos.find((x: any) => x.id === 'T-20260101-001')
+    assert.equal(t.title, '改过的标题')
+    assert.equal(t.summary, '改过的摘要')
+
+    assert.match((await get('/api/todos/doc?id=T-不存在')).error, /Todo not found/)
   })
 
   test('POST /api/move 改状态并落库', async () => {
