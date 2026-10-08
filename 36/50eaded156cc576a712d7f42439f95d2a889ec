@@ -1,0 +1,45 @@
+test/core.test.ts
+  s_56ff98ab327057::t_367345a2f31b1e 258-369
+  s_56ff98ab327057::t_cbeac64b332e8f 1659
+  s_56ff98ab327057::t_0da8cdd2c4fcd5 1784-1824
+  s_56ff98ab327057::t_4e84bfc010d925 1069,1076-1079
+  s_56ff98ab327057::t_6eed0edf293b32 1529-1658,1660-1725
+server/db.ts
+  s_56ff98ab327057::t_d34730092be15c 307-329
+  s_56ff98ab327057::t_95ffbf56474e21 55-57
+  s_56ff98ab327057::t_d1918f8f41bd47 933-1038,1042-1072,1075-1152
+  s_56ff98ab327057::t_a20264a1e832ba 1039-1041,1073-1074
+server/index.ts
+  s_56ff98ab327057::t_447368b96cd242 291-337
+  s_56ff98ab327057::t_947051d78138d1 15-16,19
+server/convention.ts
+  s_56ff98ab327057::t_886514058c4239 15,275-339
+server/markdown.ts
+  s_56ff98ab327057::t_886514058c4239 71-72,300-346
+server/schema.ts
+  s_56ff98ab327057::t_886514058c4239 47-70,90-91
+server/cli.ts
+  s_56ff98ab327057::t_a0916bbe8882f1 304-332,339
+  s_56ff98ab327057::t_01e3ba57916287 10,15-22,28-29,33-34
+  s_56ff98ab327057::t_98f53657dd167c 694-747,749-1032
+  s_56ff98ab327057::t_d2f40ea75b6102 748
+  s_56ff98ab327057::t_bfacaa6ede2822 1058
+  s_56ff98ab327057::t_a180ab6be9f6db 27
+  s_56ff98ab327057::t_0f7834f784be9e 263
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "3650eaded156cc576a712d7f42439f95d2a889ec",
+  "prompts": {},
+  "sessions": {
+    "s_56ff98ab327057": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e93d0df5-1746-42ae-b49c-0bf1a221fd0c",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
