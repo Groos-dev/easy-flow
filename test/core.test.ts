@@ -10,7 +10,7 @@
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync, readdirSync, cpSync, realpathSync, lstatSync, readlinkSync } from 'node:fs'
-import { join, basename } from 'node:path'
+import { join, basename, resolve } from 'node:path'
 import { createServer } from 'node:http'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -899,6 +899,10 @@ function cli(
   // identity must come from the caller only; keep leftover env from the test shell out
   delete env.EASY_FLOW_PROJECT
   delete env.EASY_FLOW_REPO_ROOTS
+  // 会话 id 同理：测试机自己可能就开在某个 agent 会话里，别让它替用例答话
+  for (const name of ['CLAUDE_CODE_HOST_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'CURSOR_CONVERSATION_ID']) {
+    delete env[name]
+  }
   Object.assign(env, extraEnv)
   const r = spawnSync(process.execPath, [CLI, ...args], {
     cwd: REPO_ROOT,
@@ -1033,6 +1037,101 @@ describe('数据层 · worktree', () => {
   })
 })
 
+// ------------------------------------------------------------ 数据层：会话
+
+describe('数据层 · 会话', () => {
+  /** 造一条需求，返回它的 id */
+  function seedReq(d: string, slug = 'alpha', project = 'demo'): string {
+    makeReq(d, project, slug, `# ${slug}`, { id: `req-${slug}` })
+    return `req-${slug}`
+  }
+
+  test('登记幂等：agent + 会话 id 是键，created 不变、字段刷新', () => {
+    const d = fresh(() => seedReq(TMP))
+    const db = new BoardDatabase(d)
+    db.syncProjects()
+
+    const first = db.addSession({
+      requirementId: 'req-alpha',
+      agent: 'codex',
+      session: 'th-1',
+      title: '看接口',
+      cwd: '/tmp/a',
+      link: 'codex://threads/th-1',
+    })
+    assert.equal(first.created, first.updated)
+
+    const again = db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: 'th-1', title: '改了标题' })
+    assert.equal(again.created, first.created, 'created 记的是第一次登记')
+    assert.equal(again.title, '改了标题')
+    assert.equal(again.cwd, '', '没传的字段按空刷新，不留旧值')
+    assert.equal(db.listSessions('req-alpha').length, 1)
+    db.close()
+  })
+
+  test('同一个会话改挂到别的需求：还是一条记录，跟着走', () => {
+    const d = fresh(() => {
+      seedReq(TMP, 'alpha')
+      seedReq(TMP, 'beta')
+    })
+    const db = new BoardDatabase(d)
+    db.syncProjects()
+    db.addSession({ requirementId: 'req-alpha', agent: 'claude', session: 'local_x' })
+    db.addSession({ requirementId: 'req-beta', agent: 'claude', session: 'local_x' })
+
+    assert.deepEqual(db.listSessions('req-alpha'), [])
+    assert.equal(db.listSessions('req-beta')[0].session, 'local_x')
+    assert.equal(db.listSessions().length, 1)
+    db.close()
+  })
+
+  test('listSessions 不传需求就是全部，最近更新的在前；removeSession 只删记录', () => {
+    const d = fresh(() => {
+      seedReq(TMP, 'alpha')
+      seedReq(TMP, 'beta')
+    })
+    const db = new BoardDatabase(d)
+    db.syncProjects()
+    db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: 'a' })
+    db.addSession({ requirementId: 'req-beta', agent: 'cursor', session: 'b' })
+    assert.equal(db.listSessions().length, 2)
+
+    assert.equal(db.removeSession('codex', 'a'), true)
+    assert.equal(db.removeSession('codex', 'a'), false, '再删一次就没有了')
+    assert.deepEqual(db.listSessions('req-alpha'), [])
+    assert.equal(db.listSessions().length, 1)
+    db.close()
+  })
+
+  test('未知 agent 与空会话 id 被拒', () => {
+    const d = fresh(() => seedReq(TMP))
+    const db = new BoardDatabase(d)
+    db.syncProjects()
+    assert.throws(
+      () => db.addSession({ requirementId: 'req-alpha', agent: 'gemini' as never, session: 'x' }),
+      /Unknown agent/,
+    )
+    assert.throws(() => db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: '  ' }), /cannot be empty/)
+    db.close()
+  })
+
+  test('删项目连带清掉它名下需求的会话', () => {
+    const d = fresh(() => {
+      seedReq(TMP, 'alpha')
+      seedReq(TMP, 'beta', 'other')
+    })
+    const db = new BoardDatabase(d)
+    db.syncProjects()
+    db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: 'a' })
+    db.addSession({ requirementId: 'req-beta', agent: 'codex', session: 'b' })
+
+    db.deleteProject('demo')
+    assert.equal(db.listSessions('req-alpha').length, 0)
+    assert.equal(db.listSessions('req-beta').length, 1)
+    db.close()
+  })
+})
+
 describe('CLI 层', () => {
   const base = '/tmp/easy-flow-cli-test'
   const dataDir = join(base, 'data')
@@ -1072,7 +1171,7 @@ describe('CLI 层', () => {
       assert.ok(help.includes(c), `expected help to list ${c}:\n${help}`)
     }
     const reqHelp = cliOk(configFile, ['req', '--help'])
-    for (const c of ['req new', 'req set', 'req link']) assert.ok(reqHelp.includes(c), reqHelp)
+    for (const c of ['req new', 'req set', 'req link', 'req session']) assert.ok(reqHelp.includes(c), reqHelp)
     const wtHelp = cliOk(configFile, ['wt', '--help'])
     for (const c of ['wt new', 'wt rm']) assert.ok(wtHelp.includes(c), wtHelp)
     const todoHelp = cliOk(configFile, ['todo', '--help'])
@@ -1468,6 +1567,18 @@ describe('CLI 层', () => {
     assert.match(byWt, new RegExp(`需求 id：${created.id}`))
     assert.match(byWt, /新增 TRUEMAP/)
     assert.match(byWt, /灰度按航司放/)
+    // 会话挂在需求上，工作区视图里也列出来，并标出就在这个目录里干活的那条
+    const wtPath = join(workspace, `${repoName}.feature-x`)
+    cliOk(
+      configFile,
+      ['req', 'session', 'add', created.id, '--agent', 'codex', '--id', 'th-here', '--cwd', wtPath],
+      env,
+    )
+    cliOk(configFile, ['req', 'session', 'add', created.id, '--agent', 'codex', '--id', 'th-elsewhere'], env)
+    const wtCtx = cliOk(configFile, ['context', id], env)
+    assert.match(wtCtx, /## 会话（2）/)
+    assert.match(wtCtx, /th-here（本工作区）/)
+    assert.match(wtCtx, /th-elsewhere {2}\S/)
 
     const byReq = cliOk(configFile, ['context', created.id], env)
     assert.match(byReq, /## worktree（1）/)
@@ -1527,6 +1638,108 @@ describe('CLI 层', () => {
     assert.deepEqual(r.feishuTaskLinks, ['https://project.feishu.cn/x7mm65/story/detail/1'])
     assert.deepEqual(r.extLinks, [{ detail: '设计稿', url: 'https://example.com/design' }])
     db.close()
+  })
+
+  test('req session add：按 agent 取环境变量里的会话 id，并按 agent 推导 deeplink', () => {
+    scaffold()
+    createProjectDir(dataDir, 'demo')
+    const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    // claude 的 desktop（Code 标签页）会话：id 在 CLAUDE_CODE_HOST_SESSION_ID，能推出 deeplink
+    const claude = cliOk(
+      configFile,
+      ['req', 'session', 'add', created.id, '--agent', 'claude', '--title', '实现会话登记'],
+      { CLAUDE_CODE_HOST_SESSION_ID: 'local_31c66ec4' },
+    )
+    assert.match(claude, /已登记会话到需求「标题」/)
+    assert.match(claude, /claude:\/\/claude\.ai\/epitaxy\/local_31c66ec4/)
+
+    const codex = cliOk(configFile, ['req', 'session', 'add', created.id, '--agent', 'codex'], {
+      CODEX_THREAD_ID: 'th-9',
+    })
+    assert.match(codex, /codex:\/\/threads\/th-9/)
+
+    // cursor 没有会话级 deeplink：登记得下，但要说明白
+    assert.match(
+      cliOk(configFile, ['req', 'session', 'add', created.id, '--agent', 'cursor'], {
+        CURSOR_CONVERSATION_ID: 'conv-1',
+      }),
+      /没有会话级 deeplink/,
+    )
+    // 终端里的 claude 会话是裸 uuid：能登记，但没有 deeplink
+    cliOk(configFile, ['req', 'session', 'add', created.id, '--agent', 'claude'], {
+      CLAUDE_CODE_SESSION_ID: '87a7b66c',
+    })
+
+    const db = new BoardDatabase(dataDir)
+    const byKey = Object.fromEntries(db.listSessions(created.id).map((s) => [`${s.agent}:${s.session}`, s]))
+    assert.equal(Object.keys(byKey).length, 4)
+    assert.equal(byKey['claude:local_31c66ec4'].title, '实现会话登记')
+    assert.equal(byKey['claude:local_31c66ec4'].link, 'claude://claude.ai/epitaxy/local_31c66ec4')
+    assert.equal(byKey['codex:th-9'].link, 'codex://threads/th-9')
+    assert.equal(byKey['cursor:conv-1'].link, '')
+    assert.equal(byKey['claude:87a7b66c'].link, '')
+    // --cwd 缺省是命令跑在哪儿
+    assert.equal(byKey['codex:th-9'].cwd, resolve(REPO_ROOT))
+    db.close()
+  })
+
+  test('req session：缺会话 id、未知 agent、重复登记', () => {
+    scaffold()
+    createProjectDir(dataDir, 'demo')
+    const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    // 环境变量一个都没设又不给 --id：点名缺哪个变量，不静默写空
+    const missing = cli(configFile, ['req', 'session', 'add', created.id, '--agent', 'codex'])
+    assert.equal(missing.code, 1)
+    assert.match(missing.stderr, /CODEX_THREAD_ID/)
+
+    assert.match(
+      cliFail(configFile, ['req', 'session', 'add', created.id, '--agent', 'gemini', '--id', 'x']),
+      /Unknown agent/,
+    )
+
+    cliOk(configFile, ['req', 'session', 'add', created.id, '--agent', 'codex', '--id', 'th-1', '--title', '第一版'])
+    cliOk(configFile, ['req', 'session', 'add', created.id, '--agent', 'codex', '--id', 'th-1', '--title', '第二版'])
+    const db = new BoardDatabase(dataDir)
+    const rows = db.listSessions(created.id)
+    assert.equal(rows.length, 1, '同一会话重复登记不长第二条')
+    assert.equal(rows[0].title, '第二版')
+    db.close()
+  })
+
+  test('req session ls / rm：按需求列、按需求分组，context 里带出会话', () => {
+    scaffold()
+    createProjectDir(dataDir, 'demo')
+    const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    assert.match(cliOk(configFile, ['req', 'session', 'ls', created.id]), /还没有登记会话/)
+    cliOk(configFile, ['req', 'session', 'add', created.id, '--agent', 'codex', '--id', 'th-1', '--title', '看接口'])
+
+    assert.match(cliOk(configFile, ['req', 'session', 'ls', created.id]), /codex {2}th-1 {2}看接口/)
+    assert.match(cliOk(configFile, ['req', 'session', 'ls']), /## alpha（req-[0-9a-f]+）/)
+
+    const ctx = cliOk(configFile, ['context', created.id])
+    assert.match(ctx, /## 会话（1）/)
+    assert.match(ctx, /codex:\/\/threads\/th-1/)
+    // 脚本要的那份在 --json 里
+    assert.equal(JSON.parse(cliOk(configFile, ['context', created.id, '--json'])).sessions.length, 1)
+
+    assert.match(
+      cliFail(configFile, ['req', 'session', 'rm', created.id, '--agent', 'codex', '--id', 'th-9']),
+      /Session not found/,
+    )
+    assert.match(cliOk(configFile, ['req', 'session', 'rm', created.id, '--agent', 'codex', '--id', 'th-1']), /已从需求/)
+    assert.equal(JSON.parse(cliOk(configFile, ['context', created.id, '--json'])).sessions.length, 0)
   })
 
   // only commands that really use the db open it; --help / --version must not create a data dir
@@ -1890,6 +2103,26 @@ describe('HTTP 层', () => {
     assert.equal(r.worktrees[0].branch, 'feature-x')
     // 归属只存在库里：记在 alpha 名下，beta 就查不到
     assert.deepEqual((await get('/api/context?slug=beta')).worktrees, [])
+  })
+
+  test('/api/context 带上该需求的会话', async () => {
+    assert.deepEqual((await get('/api/context?slug=beta')).sessions, [])
+
+    app.db.addSession({
+      requirementId: 'req-alpha',
+      agent: 'codex',
+      session: 'th-ctx',
+      title: '看接口',
+      link: 'codex://threads/th-ctx',
+    })
+
+    const r = await get('/api/context?slug=alpha')
+    assert.equal(r.sessions.length, 1)
+    assert.equal(r.sessions[0].agent, 'codex')
+    assert.equal(r.sessions[0].title, '看接口')
+    assert.equal(r.sessions[0].link, 'codex://threads/th-ctx')
+    // 归属只存在库里：记在 alpha 名下，beta 就查不到
+    assert.deepEqual((await get('/api/context?slug=beta')).sessions, [])
   })
 
   test('POST /api/worktree/open 只认库里的记录，目录不在就报错', async () => {

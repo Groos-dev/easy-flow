@@ -85,12 +85,31 @@ CREATE TABLE IF NOT EXISTS worktree (
   orphan   INTEGER NOT NULL DEFAULT 0
 );
 
+/*
+ * session：agent 会话的登记。agent 在需求下开工时把自己的会话写进来，看板据此一键回到现场。
+ * 与 worktree 同一套道理：会话是 agent 应用里的东西，文件系统里没有任何凭据，
+ * 所以「哪条需求上有哪些会话」只存在这张表里。主键是 agent + 会话 id——
+ * 同一个会话重新登记只会刷新字段，不会长出第二条。
+ */
+CREATE TABLE IF NOT EXISTS session (
+  req_id   TEXT NOT NULL,
+  agent    TEXT NOT NULL,
+  session  TEXT NOT NULL,
+  title    TEXT,
+  cwd      TEXT,
+  link     TEXT,
+  created  TEXT,
+  updated  TEXT,
+  PRIMARY KEY (agent, session)
+);
+
 CREATE INDEX IF NOT EXISTS idx_doc_scope ON doc(project, slug);
 CREATE INDEX IF NOT EXISTS idx_req_project ON requirement(project);
 CREATE INDEX IF NOT EXISTS idx_todo_status ON todo(status);
 CREATE INDEX IF NOT EXISTS idx_todo_ref ON todo(ref);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wt_path ON worktree(path);
 CREATE INDEX IF NOT EXISTS idx_wt_req ON worktree(req_id);
+CREATE INDEX IF NOT EXISTS idx_session_req ON session(req_id);
 `
 
 /** 老库升级：补齐后加的列 */

@@ -55,6 +55,13 @@ export type TodoSource = (typeof TODO_SOURCES)[number]
 /** 飞书来源的来路：@我 还是小窗私聊 */
 export const TODO_CHANNELS = ['at_me', 'p2p'] as const
 
+/**
+ * 会话的 agent 清单。取值与 skill 安装的 agent 目录同一套（claude / cursor / codex），
+ * 免得同一个东西在两处叫两个名字。
+ */
+export const SESSION_AGENTS = ['claude', 'codex', 'cursor'] as const
+export type SessionAgent = (typeof SESSION_AGENTS)[number]
+
 export const DEFAULT_PROJECT_SLUG = 'default'
 
 export interface Project {
@@ -136,6 +143,37 @@ interface WtRow {
   created: string | null
   updated: string | null
   orphan: number
+}
+
+/**
+ * 一条 agent 会话的登记。会话 id 是 agent 自己的（claude 的 session uuid、codex 的 thread id、
+ * cursor 的 conversation id），这里只做「哪条需求上有哪些会话」的映射。
+ */
+export interface Session {
+  /** 所属需求的 id */
+  requirementId: string
+  agent: SessionAgent
+  /** agent 原生的会话 id */
+  session: string
+  /** 会话在做什么，agent 自己给的一句话；应用里的标题读不到，只能靠它记 */
+  title: string
+  /** 登记时所在目录，通常就是工作区 */
+  cwd: string
+  /** 在 desktop 应用里打开这个会话的 deeplink；没有则为空串 */
+  link: string
+  created: string
+  updated: string
+}
+
+interface SessionRow {
+  req_id: string
+  agent: string
+  session: string
+  title: string | null
+  cwd: string | null
+  link: string | null
+  created: string | null
+  updated: string | null
 }
 
 /**
@@ -304,6 +342,19 @@ function toWorktree(row: WtRow): Worktree {
   }
 }
 
+function toSession(row: SessionRow): Session {
+  return {
+    requirementId: row.req_id,
+    agent: row.agent as SessionAgent,
+    session: row.session,
+    title: row.title ?? '',
+    cwd: row.cwd ?? '',
+    link: row.link ?? '',
+    created: row.created ?? '',
+    updated: row.updated ?? '',
+  }
+}
+
 function toTodo(row: TodoRow): Todo {
   return {
     id: row.id,
@@ -460,6 +511,13 @@ export class BoardDatabase {
     this.db
       .prepare(
         `DELETE FROM worktree WHERE req_id IN (
+           SELECT id FROM requirement WHERE project = ? AND id IS NOT NULL AND id <> ''
+         )`,
+      )
+      .run(slug)
+    this.db
+      .prepare(
+        `DELETE FROM session WHERE req_id IN (
            SELECT id FROM requirement WHERE project = ? AND id IS NOT NULL AND id <> ''
          )`,
       )
@@ -929,6 +987,75 @@ export class BoardDatabase {
   /** 只删记录。目录与 git 登记归 worktree 层处理 */
   removeWorktree(id: string): boolean {
     return this.db.prepare('DELETE FROM worktree WHERE id = ?').run(id).changes > 0
+  }
+
+  // ------------------------------------------------------------- 会话
+
+  /**
+   * 需求名下的会话；不传则全部。最近登记的在前——同时开着几个 agent 时，
+   * 正在做的那条应该在最上面。需求没 id 时传进来的是空串，表示"它名下不可能有会话"。
+   */
+  listSessions(requirementId?: string): Session[] {
+    const rows = (
+      requirementId === undefined
+        ? this.db.prepare('SELECT * FROM session ORDER BY updated DESC, agent').all()
+        : this.db
+            .prepare('SELECT * FROM session WHERE req_id = ? ORDER BY updated DESC, agent')
+            .all(requirementId)
+    ) as unknown as SessionRow[]
+    return rows.map(toSession)
+  }
+
+  /**
+   * 登记一个会话。agent + 会话 id 是幂等键：同一个会话重新登记只刷新字段，
+   * created 保持第一次的值——它记的是"这个会话什么时候开始做这条需求"。
+   */
+  addSession(input: {
+    requirementId: string
+    agent: SessionAgent
+    session: string
+    title?: string
+    cwd?: string
+    link?: string
+  }): Session {
+    if (!(SESSION_AGENTS as readonly string[]).includes(input.agent)) {
+      throw new Error(`Unknown agent: ${input.agent}. Valid: ${SESSION_AGENTS.join(', ')}`)
+    }
+    if (!input.session.trim()) throw new Error('Session id cannot be empty')
+    const now = stamp()
+    this.db
+      .prepare(
+        `INSERT INTO session (req_id, agent, session, title, cwd, link, created, updated)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(agent, session) DO UPDATE SET
+           req_id = excluded.req_id, title = excluded.title, cwd = excluded.cwd,
+           link = excluded.link, updated = excluded.updated`,
+      )
+      .run(
+        input.requirementId,
+        input.agent,
+        input.session,
+        input.title ?? '',
+        input.cwd ?? '',
+        input.link ?? '',
+        now,
+        now,
+      )
+    return this.sessionBy(input.agent, input.session)!
+  }
+
+  sessionBy(agent: SessionAgent, session: string): Session | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM session WHERE agent = ? AND session = ?')
+      .get(agent, session) as unknown as SessionRow | undefined
+    return row ? toSession(row) : undefined
+  }
+
+  /** 只删记录：会话本身在 agent 应用里，这里动不了它 */
+  removeSession(agent: SessionAgent, session: string): boolean {
+    return this.db
+      .prepare('DELETE FROM session WHERE agent = ? AND session = ?')
+      .run(agent, session).changes > 0
   }
 
   // ------------------------------------------------------------- 待办

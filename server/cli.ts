@@ -23,12 +23,15 @@ import {
 import {
   BoardDatabase,
   PRIORITIES,
+  SESSION_AGENTS,
   STATUSES,
   TODO_CHANNELS,
   TODO_SOURCES,
   TODO_STATUSES,
   type Priority,
   type Requirement,
+  type Session,
+  type SessionAgent,
   type Status,
   type Todo,
   type TodoStatus,
@@ -135,6 +138,38 @@ function worktreeLine(w: Worktree): string {
 }
 
 /**
+ * 各 agent 把自己的会话 id 放在哪个环境变量里。agent 自己跑这条命令时，
+ * 值就在它的环境里——所以 --id 可以不传，由这里代它认领。
+ */
+const SESSION_ENV: Record<SessionAgent, string[]> = {
+  claude: ['CLAUDE_CODE_HOST_SESSION_ID', 'CLAUDE_CODE_SESSION_ID'],
+  codex: ['CODEX_THREAD_ID'],
+  cursor: ['CURSOR_CONVERSATION_ID'],
+}
+
+/**
+ * desktop 应用的会话 deeplink。推导不出来的（终端里的 claude、cursor 的本地会话）返回空串：
+ * 链接格式是各应用自己的事，猜错了比没有更糟；调用方可以用 --link 覆盖。
+ */
+function sessionLink(agent: SessionAgent, session: string): string {
+  if (agent === 'codex') return `codex://threads/${session}`
+  // claude 的 desktop（Code 标签页）会话 id 形如 local_…；终端会话是裸 uuid，desktop 里打不开
+  if (agent === 'claude' && session.startsWith('local_')) {
+    return `claude://claude.ai/epitaxy/${session}`
+  }
+  return ''
+}
+
+/** 会话一行；cwd 命中当前工作区时标出来，一眼看出哪个会话就在这儿干活 */
+function sessionLine(s: Session, cwd = ''): string {
+  const title = s.title ? `  ${s.title}` : ''
+  const here = cwd && s.cwd === cwd ? '（本工作区）' : ''
+  const where = s.cwd ? `  ${s.cwd}` : ''
+  const link = s.link ? `\n  ${s.link}` : ''
+  return `- ${s.agent}  ${s.session}${title}${here}${where}${link}`
+}
+
+/**
  * Requirement body: header lines + project convention + requirement.md + context.md.
  * extraHead adds lines for a worktree hit.
  */
@@ -205,6 +240,12 @@ function requirementLine(r: Requirement): string {
   return `- ${r.id || '（无 id）'}  ${r.slug}  ${r.title}`
 }
 
+/** 会话块：这条需求上登记了哪些 agent 会话。cwd 传当前工作区时，命中它的会话会被标出来 */
+function sessionBlock(sessions: Session[], cwd = ''): string[] {
+  if (!sessions.length) return []
+  return [`## 会话（${sessions.length}）\n${sessions.map((s) => sessionLine(s, cwd)).join('\n')}`]
+}
+
 /**
  * Project view: id / status / title and worktree counts only; bodies need their own call.
  */
@@ -259,7 +300,7 @@ const ROOT_USAGE = `easy-flow：需求看板命令行——终端里认路、建
   easy-flow context <id>         取上下文（id ∈ req-… / wt-… / 项目标识）
   easy-flow dir                  打印数据目录（需求都在哪）
   easy-flow project new <slug>   新建项目
-  easy-flow req new|set|link …   新建需求 / 改状态优先级 / 追加链接
+  easy-flow req new|set|link|session …  新建需求 / 改状态优先级 / 追加链接 / 登记 agent 会话
   easy-flow wt new|rm …          开 / 删工作区（git worktree）
   easy-flow todo new|set|list …  全局待办：记一条 / 改状态 / 看待办
 
@@ -297,6 +338,18 @@ id 必须显式传：需求 id 在需求目录 AGENTS.md 的 frontmatter 里，w
 
 三类链接都可重复传，只增不删：同一字段合并去重，已有链接不会被顶掉。
 --ext 的描述与链接按第一个 = 分隔。`,
+
+  'req session': `用法：easy-flow req session add <req-id> --agent <claude|codex|cursor> [--id <会话 id>] [--title <标题>] [--cwd <目录>] [--link <url>] [--json]
+       easy-flow req session rm <req-id> --agent <…> --id <会话 id> [--json]
+       easy-flow req session ls [<req-id>] [--json]
+
+把 agent 会话登记到需求上（只存库，不写进需求目录），看板据此一键回到那个会话。
+--id 省略时按 agent 从环境变量取：claude → CLAUDE_CODE_HOST_SESSION_ID / CLAUDE_CODE_SESSION_ID，
+codex → CODEX_THREAD_ID，cursor → CURSOR_CONVERSATION_ID；一个都没设就报错，不静默写空。
+--cwd 缺省用当前目录。--link 是 desktop 应用的 deeplink，缺省按 agent 与 id 推导：
+codex → codex://threads/<id>，claude 的 local_ 会话 → claude://claude.ai/epitaxy/<id>；
+cursor 与终端里的 claude 没有会话级 deeplink，只存 id。
+同一个会话重复 add 是幂等的：只刷新 title / cwd / link 与时间，不会长出第二条。`,
 
   'wt new': `用法：easy-flow wt new <req-id> --repo <仓库> --branch <分支> [--base <起点>] [--short <短名>] [--json]
 
@@ -340,7 +393,7 @@ id 与文件原样保留，已入库的跳过，所以重复跑是安全的。`,
 
 const GROUP_USAGE = {
   project: USAGE.project,
-  req: [USAGE['req new'], USAGE['req set'], USAGE['req link']].join('\n\n'),
+  req: [USAGE['req new'], USAGE['req set'], USAGE['req link'], USAGE['req session']].join('\n\n'),
   wt: [USAGE['wt new'], USAGE['wt rm']].join('\n\n'),
   todo: [USAGE['todo new'], USAGE['todo set'], USAGE['todo list'], USAGE['todo show'], USAGE['todo import']].join('\n\n'),
 }
@@ -410,7 +463,13 @@ async function cmdContext(argv: string[]): Promise<void> {
         ? `## 同一需求的其它 worktree\n${siblings.map(worktreeLine).join('\n')}`
         : '## 同一需求的其它 worktree\n（无）',
     )
-    return emit({ kind: 'worktree', worktree: wt, ...view.data, siblings }, view.blocks.join('\n\n'))
+    // 会话挂在需求上，工作区视图里照样列出来，并标出哪个会话就在这个目录里干活
+    const sessions = board.listSessions(req.id)
+    view.blocks.push(...sessionBlock(sessions, wt.path))
+    return emit(
+      { kind: 'worktree', worktree: wt, sessions, ...view.data, siblings },
+      view.blocks.join('\n\n'),
+    )
   }
 
   if (key.startsWith('req-')) {
@@ -427,7 +486,9 @@ async function cmdContext(argv: string[]): Promise<void> {
         ? `## worktree（${wts.length}）\n${wts.map(worktreeLine).join('\n')}`
         : '## worktree（0）\n还没有工作区；要在某个仓库里动手，先 easy-flow wt new 建一个',
     )
-    return emit({ kind: 'requirement', ...view.data, worktrees: wts }, view.blocks.join('\n\n'))
+    const sessions = board.listSessions(req.id)
+    view.blocks.push(...sessionBlock(sessions))
+    return emit({ kind: 'requirement', sessions, ...view.data, worktrees: wts }, view.blocks.join('\n\n'))
   }
 
   const view = projectView(key)
@@ -579,6 +640,120 @@ async function cmdReqLink(argv: string[]): Promise<void> {
       line('扩展链接', next.extLinks.map((l) => `${l.detail} ${l.url}`)),
     ].join('\n'),
   )
+}
+
+/** 登记会话时把 agent 的原生会话 id 认出来：--id 优先，否则按 agent 读它的环境变量 */
+function sessionIdFrom(values: Record<string, unknown>, agent: SessionAgent): string {
+  const explicit = str(values.id)?.trim()
+  if (explicit) return explicit
+  const names = SESSION_ENV[agent]
+  for (const name of names) {
+    const value = process.env[name]?.trim()
+    if (value) return value
+  }
+  throw new Error(
+    `Missing --id, and none of ${names.join(' / ')} is set in this shell. ` +
+      `在 ${agent} 的会话里跑这条命令，或显式 --id <会话 id>`,
+  )
+}
+
+async function cmdReqSessionAdd(argv: string[]): Promise<void> {
+  const { values, positionals } = parse(argv, {
+    agent: { type: 'string' },
+    id: { type: 'string' },
+    title: { type: 'string' },
+    cwd: { type: 'string' },
+    link: { type: 'string' },
+  })
+  if (bool(values.help)) return out(USAGE['req session'])
+
+  const reqId = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req session'])
+  const agent = required(str(values.agent), 'Missing --agent (claude / codex / cursor)', USAGE['req session']) as SessionAgent
+  oneOf(agent, SESSION_AGENTS, 'agent')
+  const session = sessionIdFrom(values, agent)
+  const title = str(values.title)?.trim() ?? ''
+  const cwd = str(values.cwd)?.trim() || process.cwd()
+  const link = str(values.link)?.trim() || sessionLink(agent, session)
+
+  const board = db()
+  board.syncProjects()
+  const req = findById(reqId)
+  const saved = board.addSession({ requirementId: req.id, agent, session, title, cwd, link })
+
+  emit(
+    { ok: true, ...saved },
+    [
+      `已登记会话到需求「${req.title}」（${req.id}）`,
+      sessionLine(saved),
+      saved.link
+        ? '看板详情页点这一行即在 desktop 应用里打开；重复登记只刷新字段。'
+        : '这个 agent 没有会话级 deeplink，看板上只展示与复制会话 id。',
+    ].join('\n'),
+  )
+}
+
+async function cmdReqSessionRm(argv: string[]): Promise<void> {
+  const { values, positionals } = parse(argv, { agent: { type: 'string' }, id: { type: 'string' } })
+  if (bool(values.help)) return out(USAGE['req session'])
+
+  const reqId = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req session'])
+  const agent = required(str(values.agent), 'Missing --agent (claude / codex / cursor)', USAGE['req session']) as SessionAgent
+  oneOf(agent, SESSION_AGENTS, 'agent')
+  const session = required(str(values.id), 'Missing --id (the session id)', USAGE['req session'])
+
+  const board = db()
+  board.syncProjects()
+  const req = findById(reqId)
+  const removed = board.removeSession(agent, session)
+  if (!removed) throw new Error(`Session not found on ${req.id}: ${agent} ${session}`)
+
+  emit(
+    { ok: true, requirementId: req.id, agent, session },
+    `已从需求「${req.title}」摘掉会话 ${agent} ${session}（会话本身没动）`,
+  )
+}
+
+async function cmdReqSessionLs(argv: string[]): Promise<void> {
+  const { values, positionals } = parse(argv, {})
+  if (bool(values.help)) return out(USAGE['req session'])
+
+  const board = db()
+  board.syncProjects()
+  const reqId = str(positionals[0])?.trim()
+  if (!reqId) {
+    const sessions = board.listSessions()
+    const groups = new Map<string, Session[]>()
+    for (const s of sessions) {
+      groups.set(s.requirementId, [...(groups.get(s.requirementId) ?? []), s])
+    }
+    const blocks = [...groups].map(([id, list]) => {
+      const req = board.byId(id)
+      const head = req ? `${req.slug}（${id}）` : `（需求已不在库里：${id}）`
+      return `## ${head}\n${list.map((s) => sessionLine(s)).join('\n')}`
+    })
+    return emit(
+      { sessions, total: sessions.length },
+      blocks.length ? `会话（${sessions.length}）：\n\n${blocks.join('\n\n')}` : '还没有登记过任何会话。',
+    )
+  }
+
+  const req = findById(reqId)
+  const sessions = board.listSessions(req.id)
+  emit(
+    { requirementId: req.id, sessions, total: sessions.length },
+    sessions.length
+      ? `需求「${req.title}」的会话（${sessions.length}）：\n${sessions.map((s) => sessionLine(s)).join('\n')}`
+      : `需求「${req.title}」上还没有登记会话；在会话里跑 easy-flow req session add ${req.id} --agent <claude|codex|cursor>`,
+  )
+}
+
+async function cmdReqSession(action: string | undefined, argv: string[]): Promise<void> {
+  if (action === '--help' || action === '-h') return out(USAGE['req session'])
+  if (!action) throw new UsageError('req session needs a subcommand: add / rm / ls', USAGE['req session'])
+  if (action === 'add') return cmdReqSessionAdd(argv)
+  if (action === 'rm') return cmdReqSessionRm(argv)
+  if (action === 'ls') return cmdReqSessionLs(argv)
+  throw new UsageError(`Unknown subcommand: req session ${action}`, USAGE['req session'])
 }
 
 async function cmdWtNew(argv: string[]): Promise<void> {
@@ -1050,10 +1225,11 @@ async function cmdTodo(action: string | undefined, argv: string[]): Promise<void
 
 async function cmdReq(action: string | undefined, argv: string[]): Promise<void> {
   if (action === '--help' || action === '-h') return out(GROUP_USAGE.req)
-  if (!action) throw new UsageError('req needs a subcommand: new / set / link', GROUP_USAGE.req)
+  if (!action) throw new UsageError('req needs a subcommand: new / set / link / session', GROUP_USAGE.req)
   if (action === 'new') return cmdReqNew(argv)
   if (action === 'set') return cmdReqSet(argv)
   if (action === 'link') return cmdReqLink(argv)
+  if (action === 'session') return cmdReqSession(argv[0], argv.slice(1))
   throw new UsageError(`Unknown subcommand: req ${action}`, GROUP_USAGE.req)
 }
 

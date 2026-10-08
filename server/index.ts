@@ -241,6 +241,8 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
           requirementMd: db.readRequirementMd(slug, project),
           // 归属只存在库里，详情页要展示工作区就得从这儿带出去
           worktrees: db.listWorktrees(ctx.requirement.id),
+          // 同理：会话只归库，详情页的「会话」块靠这一份
+          sessions: db.listSessions(ctx.requirement.id),
         })
         return
       }
