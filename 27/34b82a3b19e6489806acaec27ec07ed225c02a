@@ -1,0 +1,30 @@
+test/core.test.ts
+  s_360cc9ebf8594e::t_287e3fa207aec0 12
+  s_360cc9ebf8594e::t_c08fe658cde1ff 957
+  s_360cc9ebf8594e::t_c324922dc7c3b8 974-984
+server/cli.ts
+  s_360cc9ebf8594e::t_44aeb034690964 324-335
+  s_360cc9ebf8594e::t_81438fbac38e7d 264-268
+  s_360cc9ebf8594e::t_cde5ec75641165 14
+  s_360cc9ebf8594e::t_6842f8508a386d 248
+  s_360cc9ebf8594e::t_d60ce394ceae24 691
+skill/SKILL.md
+  s_360cc9ebf8594e::t_571a0ff1870284 78-80
+  s_360cc9ebf8594e::t_90e4adca0e46a3 65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "2734b82a3b19e6489806acaec27ec07ed225c02a",
+  "prompts": {},
+  "sessions": {
+    "s_360cc9ebf8594e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1890ad87-2308-4444-bf00-8f0698878ca3",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
