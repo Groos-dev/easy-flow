@@ -72,6 +72,9 @@ description: >-
 | 开工作区 | `easy-flow wt new <req-…> --repo <仓库> --branch <分支> [--short <短名>]` |
 | 删工作区 | `easy-flow wt rm <wt-…> [--force]` |
 
+待办（全局 todo）不在这里：它是与需求平级的另一块板，命令是 `easy-flow todo new|set|list|show`，
+规则见 `todo` skill。
+
 ## 常用流程
 
 - **在任意目录接到改动任务**（含仓库主 checkout）：

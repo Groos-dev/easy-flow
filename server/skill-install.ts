@@ -1,10 +1,10 @@
 /**
- * Install easy-flow's skill and CLI into the user's environment (the settings-page entry).
+ * Install easy-flow's skills and CLI into the user's environment (the settings-page entry).
  *
  * Three things get installed:
- *   1. a CLI shim at ~/.local/bin/easy-flow — the commands the skill mentions need a real command
- *   2. skill links for each agent: the entity lives in the repo (same source as the CLI, so the
- *      two cannot drift), ~/.agents/skills/easy-flow points at it, and claude / cursor / codex
+ *   1. a CLI shim at ~/.local/bin/easy-flow — the commands the skills mention need a real command
+ *   2. skill links for each agent: the entities live in the repo (same source as the CLI, so the
+ *      two cannot drift), ~/.agents/skills/<name> points at one, and the claude / cursor / codex
  *      skills dirs link to that again
  *   3. removal of the legacy easy-flow MCP registration — its entry file is gone, and a stale
  *      registration only makes every session error out
@@ -70,8 +70,20 @@ function upfind(...rel: string[]): string {
   throw new Error(`Cannot find ${rel.join('/')}; a packaged build must emit it separately`)
 }
 
-function skillSource(): string {
-  return dirname(upfind('skill', 'SKILL.md'))
+/**
+ * 仓库里要装到各 agent 的 skill。目录名就是 skill 名，一个目录一个 skill。
+ * 都放在同一个根下，装的时候一起链，免得加一个 skill 要改一遍安装逻辑。
+ */
+const SKILLS = ['easy-flow', 'todo'] as const
+
+/** 仓库里的 skill 根目录（<repo>/skill）：找到任一 skill 的 SKILL.md 再往上退两级 */
+function skillRoot(): string {
+  return dirname(dirname(upfind('skill', SKILLS[0], 'SKILL.md')))
+}
+
+/** 某个 skill 在仓库里的实体 */
+function skillSource(name: string): string {
+  return join(skillRoot(), name)
 }
 
 function cliEntry(): string {
@@ -85,13 +97,15 @@ export interface AgentSkill {
   dir: string
   /** Whether the dir exists (skip missing ones — do not create an empty dir for them) */
   available: boolean
-  /** The symlink already points at the right skill entity */
+  /** 这个 agent 下的每个 skill 都已链对 */
   linked: boolean
 }
 
 export interface SkillPlan {
-  /** The skill entity and CLI entry inside the repo; null when the environment does not allow it */
+  /** 仓库里的 skill 根目录与 CLI 入口；环境不允许时为 null */
   source: string | null
+  /** 根目录下的 skill 清单 */
+  skills: string[]
   cli: string | null
   problem: string | null
   shim: { path: string; installed: boolean }
@@ -106,11 +120,9 @@ function shimPath(): string {
   return join(homedir(), '.local', 'bin', NAME)
 }
 
-/**
- * Where the repo's skill entity is mounted under ~/.agents/skills.
- */
-function homeLink(): string {
-  return join(homedir(), '.agents', 'skills', NAME)
+/** 某个 skill 挂到 ~/.agents/skills 下的位置 */
+function homeLink(name: string): string {
+  return join(homedir(), '.agents', 'skills', name)
 }
 
 function agentDirs(): Array<{ id: AgentSkill['id']; label: string; dir: string }> {
@@ -224,21 +236,29 @@ export async function skillPlan(): Promise<SkillPlan> {
   let cli: string | null = null
   let problem: string | null = null
   try {
-    source = skillSource()
+    source = skillRoot()
     cli = cliEntry()
   } catch (err) {
     problem = (err as Error).message
   }
 
-  const home = homeLink()
+  // 一个 agent 算"装好了"，是它下面每个 skill 都链对了
+  const linkedEverywhere = (agentDir: string) =>
+    !!source &&
+    SKILLS.every((name) => {
+      const home = homeLink(name)
+      return linkedTo(join(agentDir, name), home) && linkedTo(home, skillSource(name))
+    })
+
   const agents = agentDirs().map((a) => ({
     ...a,
     available: existsSync(a.dir),
-    linked: !!source && linkedTo(join(a.dir, NAME), home) && linkedTo(home, source),
+    linked: linkedEverywhere(a.dir),
   }))
 
   return {
     source,
+    skills: [...SKILLS],
     cli,
     problem,
     shim: { path: shimPath(), installed: existsSync(shimPath()) },
@@ -281,7 +301,6 @@ async function removeLegacyMcp(): Promise<string[]> {
  * returns what each step did, for the settings page.
  */
 export async function installSkill(): Promise<string[]> {
-  const source = skillSource()
   const cli = cliEntry()
 
   const node = await nodeInfo()
@@ -297,14 +316,25 @@ export async function installSkill(): Promise<string[]> {
   writeFileSync(shim, shimScript(node.path, cli), { mode: 0o755 })
   done.push(`CLI：${shim} → ${node.path} ${cli}`)
 
-  const home = homeLink()
-  ensureLink(home, source)
-  done.push(`skill：${home} → ${source}`)
+  // 一个 skill 装不上不该拖垮其余的：目标位置被用户自己的真目录占着是常见情况
+  // （比如 todo skill 原先手写在 ~/.agents/skills/todo），报出来让人自己处置
+  const link = (what: string, target: string, into: string) => {
+    try {
+      ensureLink(target, into)
+      done.push(`${what}：${target} → ${into}`)
+    } catch (err) {
+      done.push(`${what} 没装上（${(err as Error).message}）`)
+    }
+  }
 
-  for (const a of agentDirs()) {
-    if (!existsSync(a.dir)) continue
-    ensureLink(join(a.dir, NAME), home)
-    done.push(`${a.label}：${join(a.dir, NAME)}`)
+  for (const name of SKILLS) {
+    const source = skillSource(name)
+    const home = homeLink(name)
+    link(`skill ${name}`, home, source)
+    for (const a of agentDirs()) {
+      if (!existsSync(a.dir)) continue
+      link(`${a.label} / ${name}`, join(a.dir, name), home)
+    }
   }
 
   done.push(...(await removeLegacyMcp()))

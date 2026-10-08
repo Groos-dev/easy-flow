@@ -205,8 +205,11 @@ export default function Settings({ onBack, onApplied }: Props) {
               {[
                 `命令   ${skill?.shim.path ?? '—'}`,
                 `skill  ${skill?.source ?? '—'}`,
+                skill?.skills.length ? `       ${skill.skills.join('、')}` : '',
                 skill?.node ? `node   ${skill.node.version}（${skill.node.path}）` : 'node   读不到',
-              ].join('\n')}
+              ]
+                .filter(Boolean)
+                .join('\n')}
             </pre>
 
             <div className="section-label">安装状态</div>
