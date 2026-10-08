@@ -1,0 +1,20 @@
+skill/easy-flow/SKILL.md
+  s_d4488d765a0984::t_b4bfdd6c37b07f 19-25
+  s_d4488d765a0984::t_b5d85a2aed30bb 4-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "a38d241cec3e4ddded63540213f7cbdbd077bc84",
+  "prompts": {},
+  "sessions": {
+    "s_d4488d765a0984": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fc962c1-6e19-4369-b5d9-73f69fab4a7a",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
