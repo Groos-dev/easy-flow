@@ -1,0 +1,35 @@
+README.md
+  s_56ff98ab327057::t_d13dde47cfe3a2 3,6
+  s_56ff98ab327057::t_9877026df56453 32-34
+  s_56ff98ab327057::t_2c4e589a471fb3 42,53-55
+skill/easy-flow/SKILL.md
+  s_56ff98ab327057::t_c17cfd8ea3f3eb 75-77
+skill/todo/SKILL.md
+  s_56ff98ab327057::t_6078b29d6b9356 1-179
+server/skill-install.ts
+  s_56ff98ab327057::t_7f7e66442c2b14 2,5-7
+  s_56ff98ab327057::t_fa6ae7e7b2c05c 73-78,80,82-86,100
+  s_56ff98ab327057::t_73625580b051b3 79,81
+  s_56ff98ab327057::t_68b4e6042fd46a 105,107-108
+  s_56ff98ab327057::t_c7ba1318fbfad4 123-125
+  s_56ff98ab327057::t_da692790b6b53b 239,245-252,256,261
+  s_56ff98ab327057::t_177cd7e2f3b91e 319-328,330-337
+src/renderer/src/components/Settings.tsx
+  s_56ff98ab327057::t_ba2b428d7aec88 208,210-212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "a8efbaad0cb29732512f6058e21acc08b02a5e6c",
+  "prompts": {},
+  "sessions": {
+    "s_56ff98ab327057": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e93d0df5-1746-42ae-b49c-0bf1a221fd0c",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}

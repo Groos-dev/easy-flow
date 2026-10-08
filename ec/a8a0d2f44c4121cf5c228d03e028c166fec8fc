@@ -1,0 +1,53 @@
+src/renderer/src/components/BoardSwitcher.tsx
+  s_56ff98ab327057::t_5e2e09b15d93d7 1-109
+src/renderer/src/lib/types.ts
+  s_56ff98ab327057::t_83426e0a76b556 94-98,107-140
+  s_56ff98ab327057::t_82c6714188b900 99-106
+  s_56ff98ab327057::t_45b20399cd75e8 193-194
+src/renderer/src/App.tsx
+  s_56ff98ab327057::t_1da8dee30f6dcc 15-16,21
+  s_56ff98ab327057::t_9830284b5cf029 57-58,69-73
+  s_56ff98ab327057::t_71ad62aaa773ef 123-133,137,139,143-144
+  s_56ff98ab327057::t_1a41cb5bfff4c1 207-219
+  s_56ff98ab327057::t_2588f7558fed00 246-253
+  s_56ff98ab327057::t_df3f2b3436d063 290,293-296,299-300
+  s_56ff98ab327057::t_ecab9791de9011 317-328,334
+  s_56ff98ab327057::t_b00f0b6a0949ff 345-346,348,352-370,385-413
+src/renderer/src/styles.css
+  s_56ff98ab327057::t_7f3f1f6b49bab2 133-237
+  s_56ff98ab327057::t_9346589100ef74 589-594
+  s_56ff98ab327057::t_2948f515b3a6a4 674-713
+src/renderer/src/components/Detail.tsx
+  s_56ff98ab327057::t_b78e28b301c27d 1
+  s_56ff98ab327057::t_ca20e77029d657 5,11,13-14,17,24-25,33-34,52,54,56
+  s_56ff98ab327057::t_3c47d213a9313e 90,93-104
+  s_56ff98ab327057::t_3a51dc0355c567 117
+  s_56ff98ab327057::t_9eab35765a45c3 126,140-142,156
+  s_56ff98ab327057::t_82c6b460c9d364 169,177
+  s_56ff98ab327057::t_3094354d6ee62e 259-261
+  s_56ff98ab327057::t_9987a6378319be 307-311,351-360
+  s_56ff98ab327057::t_1eb7ca6a59dc8f 362
+  s_56ff98ab327057::t_036e4444c51f45 428-470
+src/renderer/src/components/TodoBoard.tsx
+  s_56ff98ab327057::t_05c9616ed7312e 1-14,16-17,19-150
+  s_56ff98ab327057::t_0c08eda8c3db22 15,18
+src/renderer/src/lib/api.ts
+  s_56ff98ab327057::t_d77d92d0749b8a 9-10
+  s_56ff98ab327057::t_d15fddfd10a5f7 87-105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "eca8a0d2f44c4121cf5c228d03e028c166fec8fc",
+  "prompts": {},
+  "sessions": {
+    "s_56ff98ab327057": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e93d0df5-1746-42ae-b49c-0bf1a221fd0c",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
