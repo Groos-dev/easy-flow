@@ -6,7 +6,8 @@ description: >-
   再开工作区；任务再小、你再确定也一样。
   禁止在仓库主 checkout / 默认分支上直接改，禁止自己 git checkout -b 或手工建 worktree 绕过。
   也用于：取上下文（项目规范 / 需求描述 / context.md / 同名工作区）、新建项目 / 需求 / 子需求、
-  改需求状态与优先级、追加飞书任务 / MR / 扩展链接、开或删工作区、收尾（置 Review、回写 MR）。
+  改需求状态与优先级、追加飞书任务 / MR / 扩展链接、登记 agent 会话（claude code / codex / cursor）、
+  开或删工作区、收尾（置 Review、回写 MR）。
   纯只读查询（看日志、查报文、问代码在哪）不走这里。命令入口 easy-flow，身份只认显式传的 id。
 ---
 
@@ -22,13 +23,15 @@ description: >-
 - 改代码只在工作区里：不在仓库主 checkout、不在默认分支上直接改，也不自己 `git checkout -b`
   或手工建 worktree 绕开 `wt new`
 - 已经在动手才发现没确认归属：停下补，别顺着改下去
+- 开工时顺手把自己的会话登记到需求上（`req session add`）：看板一点就能回到这个会话，
+  换个 agent 接手也知道前面有谁在做。会话 id 不用自己查，`--agent` 传对就行
 
 ## 流程：澄清 → 实现 → Review
 
 | 阶段 | 看板状态 | 做完什么才算过 | 内容落到哪 |
 | --- | --- | --- | --- |
 | 需求澄清 | 澄清 | 站在产品角度讲清：做什么、为什么做、边界、验收边界；定下涉及仓库。讨论前先摸清代码现状，据此检查需求有没有遗漏 | requirement.md、context.md、docs/<短名>/（调研与方案） |
-| 实现 | 执行中 | 开工作区；按方案实现；设计有变随手更新 | 代码在工作区；设计变更 → docs/<短名>/ |
+| 实现 | 执行中 | 开工作区；登记会话；按方案实现；设计有变随手更新 | 代码在工作区；设计变更 → docs/<短名>/ |
 | Review | Review | 开 MR、回写链接、按评审意见改 | `req link <req-…> --mr <url>`；状态置 Review |
 | 合入 | 已完成 | 人为主；agent 被明确告知「已合入」时顺手置 | — |
 
@@ -77,6 +80,8 @@ description: >-
 | 新建子需求 | `easy-flow req new <标题> --parent <req-…> [--slug <目录名>]`（同样入库上板，slug 形如 `parent/child`） |
 | 改状态 / 优先级 | `easy-flow req set <req-…> [--status 澄清\|执行中\|Review\|已完成] [--priority p0..p3]` |
 | 追加链接 | `easy-flow req link <req-…> [--feishu <url>] [--mr <url>] [--ext "<描述>=<url>"]` |
+| 登记自己的会话 | `easy-flow req session add <req-…> --agent <claude\|codex\|cursor> [--title "<在做什么>"]` |
+| 看待办 / 删会话 | `easy-flow req session ls [<req-…>]` / `easy-flow req session rm <req-…> --agent <…> --id <会话 id>` |
 | 开工作区 | `easy-flow wt new <req-…> --repo <仓库> --branch <分支> [--short <短名>]` |
 | 删工作区 | `easy-flow wt rm <wt-…> [--force]` |
 
@@ -93,7 +98,24 @@ description: >-
   3. 开工作区 → `easy-flow wt new <req-…> --repo <仓库> --branch feature-<需求 slug>`
   4. 进工作区后 `easy-flow context <wt-…>` 取上下文，然后动手
 - **进需求目录 / 工作区接活**：先 `easy-flow context <id>`——返回项目规范、需求描述、context.md，
-  加上上层需求 / 子需求与同名工作区清单；再动手。
+  加上上层需求 / 子需求、同名工作区清单与会话；再动手。
+
+## 会话：开工先登记
+
+会话是真正的工作现场（上下文、进度、下一步都在里面），但它只活在 agent 应用里，需求目录里看不到。
+登记到需求上，看板与 `context` 才找得到——过几天回来，点一下就能回到那个会话接着干。
+
+- 一条命令：`easy-flow req session add <req-…> --agent <claude|codex|cursor> --title "<在做什么>"`
+- 会话 id 不用自己查：`--agent` 传对就行，CLI 按 agent 读它注入的环境变量
+  （claude：`CLAUDE_CODE_HOST_SESSION_ID` → `CLAUDE_CODE_SESSION_ID`；codex：`CODEX_THREAD_ID`；
+  cursor：`CURSOR_CONVERSATION_ID`），一个都没设会报错——说明 `--agent` 传错了，或不在会话里
+- `--title` 写一句"在做什么"：应用里的会话标题读不到，看板上就靠这句认人
+- 看板详情页的「会话」块点一下即在 desktop 应用里打开（codex → `codex://threads/<id>`，
+  claude 的 Code 标签页会话 → `claude://claude.ai/epitaxy/<id>`）；cursor 与终端里的 claude
+  没有会话级链接，看板上只能复制 id，回到那个会话要靠应用自己的历史（codex 没装 desktop 时用
+  `codex resume <id>`）
+- 同一会话重复登记只刷新字段；换到别的需求做时重新登记一次，记录跟着走
+- 登记是留个指路牌，不是保活：会话换了、废了，用 `req session rm` 摘掉旧的
 
 ## 约定
 

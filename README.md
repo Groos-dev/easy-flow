@@ -32,7 +32,7 @@
 | `server/` | 数据层与 HTTP 层。`db.ts` 是 SQLite 门面（状态的唯一权威），`markdown.ts` 只读文件不持状态，`http.ts` 是 CORS / JSON / 文档读写的零件，`index.ts` 是路由 |
 | `src/main/` | Electron 主进程：起内嵌服务、开窗口、菜单与原生目录选择 |
 | `src/renderer/` | 渲染层（React）。数据只经 HTTP 拿（开发与打包共用同一套代码）；原生目录选择走 preload 桥的 IPC |
-| `server/cli.ts` | 给 agent 与脚本用的命令行（context / project new / req new\|set\|link / wt new\|rm / todo new\|set\|list\|show\|import），与 HTTP 层共用同一个数据层 |
+| `server/cli.ts` | 给 agent 与脚本用的命令行（context / project new / req new\|set\|link\|session / wt new\|rm / todo new\|set\|list\|show\|import），与 HTTP 层共用同一个数据层 |
 | `skill/easy-flow/SKILL.md` | 需求那侧的接入说明（触发条件、意图→命令对照），由设置页链进各 agent 的 skills 目录 |
 | `skill/todo/SKILL.md` | 待办那侧的接入说明。与需求平级，两个 skill 一起装 |
 
@@ -51,8 +51,11 @@
   一样入库、一样出现在看板上，也能按 id 反查；`slug` 是相对项目根的路径
   （顶层 `alpha`，子需求 `alpha/gateway`），卡片上直接显示这个路径。父子关系另存在
   库里（`parent_id`），需求没 id 时它为空，层级仍能从 slug 看出来
-- **状态**（看板列、优先级、链接）只存在 `easy-flow.db` 里，永远不写进 md：
+- **状态**（看板列、优先级、链接、会话）只存在 `easy-flow.db` 里，永远不写进 md：
   agent 重写需求文档不会把状态弄丢，代价是换数据目录等于换状态
+- **会话**是 agent 登记在需求上的自己的会话（claude code / codex / cursor）：agent 开工时
+  `easy-flow req session add` 一条命令登记，详情页的「会话」块点一下即在 desktop 应用里打开。
+  与状态同理只归库——会话会变、会过期，写进 md 只会被下次重写冲掉
 - **待办**是与需求平级的另一块板：一条一份 md 放在 `_todos/`，文件名就是它的 id
   （`T-YYYYMMDD-NNN`，按首次入库日编号）。同样只从 md 读标题与摘要，状态与来源只归库
 - `_templates/`、`_todos/`（下划线开头的目录）是收纳处，不会被当成项目；模板缺哪个补哪个，
