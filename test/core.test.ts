@@ -9,7 +9,7 @@
  */
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync, cpSync, realpathSync, lstatSync, readlinkSync } from 'node:fs'
+import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync, readdirSync, cpSync, realpathSync, lstatSync, readlinkSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { createServer } from 'node:http'
 import { DatabaseSync } from 'node:sqlite'
@@ -954,7 +954,7 @@ describe('CLI 层', () => {
     assert.match(missing.stderr, /Pass one of --project \/ --parent/)
     // root help lists the command groups; group help lists each subcommand
     const help = cliOk(configFile, ['--help'])
-    for (const c of ['context', 'project new', 'req new|set|link', 'wt new|rm']) {
+    for (const c of ['context', 'dir', 'project new', 'req new|set|link', 'wt new|rm']) {
       assert.ok(help.includes(c), `expected help to list ${c}:\n${help}`)
     }
     const reqHelp = cliOk(configFile, ['req', '--help'])
@@ -969,6 +969,17 @@ describe('CLI 层', () => {
     assert.match(r.id, /^req-/)
     assert.equal(db.listProjects().find((p) => p.slug === 'demo')?.name, '示例项目')
     db.close()
+  })
+
+  test('dir：报数据目录，只读——不开库也不补模板', () => {
+    scaffold()
+    assert.match(cliOk(configFile, ['dir']), new RegExp(`数据目录：${dataDir}`))
+    const data = JSON.parse(cliOk(configFile, ['dir', '--json']))
+    assert.equal(data.dataDir, dataDir)
+    assert.equal(data.configPath, configFile)
+    assert.equal(data.activeProject, '')
+    // 只读的证据：数据目录还是空的（开库会建 easy-flow.db，sync 会补 _templates）
+    assert.deepEqual(readdirSync(dataDir), [])
   })
 
   test('req new --parent：子需求建在父需求下，--project 与 --parent 互斥', () => {

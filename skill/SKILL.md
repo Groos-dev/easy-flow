@@ -62,6 +62,7 @@ description: >-
 
 | 意图 | 命令 |
 | --- | --- |
+| 数据目录在哪（需求都在哪） | `easy-flow dir` |
 | 取上下文（项目 / 需求 / 工作区） | `easy-flow context <id>` |
 | 新建项目 | `easy-flow project new <slug> [--name <显示名>]` |
 | 新建需求 | `easy-flow req new <标题> --project <项目> [--slug <目录名>] [--summary <一句话>]` |
@@ -74,8 +75,9 @@ description: >-
 ## 常用流程
 
 - **在任意目录接到改动任务**（含仓库主 checkout）：
-  1. 先找归属：按当前仓库路径，在 `~/requirements/*/*/requirement.md` 的「涉及仓库」段里找
-     命中的、未完成的需求；命中唯一就用它，命中多个或找不到就问用户
+  1. 先找归属：`easy-flow dir` 取数据目录，在其中递归找 `**/requirement.md`——子需求嵌在需求目录
+     里、层级不限，只扫两层会漏；读「涉及仓库」段匹配当前仓库，挑未完成的。命中唯一就用它，
+     命中多个或找不到就问用户
   2. 还没有需求 → `easy-flow req new <标题> --project <项目> --slug <目录名>`
   3. 开工作区 → `easy-flow wt new <req-…> --repo <仓库> --branch feature-<需求 slug>`
   4. 进工作区后 `easy-flow context <wt-…>` 取上下文，然后动手

@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
-import { readConfig } from './config.ts'
+import { configPath, readConfig } from './config.ts'
 import { createProjectDir, createRequirementDir, newWorktreeId } from './convention.ts'
 import {
   BoardDatabase,
@@ -245,6 +245,7 @@ const ROOT_USAGE = `easy-flow：需求看板命令行——终端里认路、建
 
 用法：
   easy-flow context <id>         取上下文（id ∈ req-… / wt-… / 项目标识）
+  easy-flow dir                  打印数据目录（需求都在哪）
   easy-flow project new <slug>   新建项目
   easy-flow req new|set|link …   新建需求 / 改状态优先级 / 追加链接
   easy-flow wt new|rm …          开 / 删工作区（git worktree）
@@ -259,6 +260,11 @@ const USAGE = {
 
 id 三种都收：req-…（需求）、wt-…（工作区）、项目标识（项目）。
 id 必须显式传：需求 id 在需求目录 AGENTS.md 的 frontmatter 里，worktree id 在它自己的 AGENTS.md 里。`,
+
+  dir: `用法：easy-flow dir [--json]
+
+打印数据目录——需求都在它下面（<数据目录>/<项目>/<需求>/）。
+路径由配置决定，不要写死。--json 另带配置文件路径与当前项目。`,
 
   project: `用法：easy-flow project new <slug> [--name <显示名>] [--json]
 
@@ -314,6 +320,18 @@ function parse(argv: string[], options: OptSpec): { values: Record<string, unkno
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
 const strs = (v: unknown): string[] => (Array.isArray(v) ? (v as string[]) : [])
 const bool = (v: unknown): boolean => v === true
+
+/**
+ * 数据目录从哪来：只读配置，不开库——db 坏了、数据目录还没建，这条命令也该能答。
+ */
+async function cmdDir(argv: string[]): Promise<void> {
+  const { values } = parse(argv, {})
+  if (bool(values.help)) return out(USAGE.dir)
+  emit(
+    { dataDir: config.dataDir, configPath: configPath(), activeProject: config.activeProject },
+    `数据目录：${config.dataDir}\n配置文件：${configPath()}`,
+  )
+}
 
 async function cmdContext(argv: string[]): Promise<void> {
   const { values, positionals } = parse(argv, {})
@@ -670,6 +688,7 @@ async function run(argv: string[]): Promise<void> {
   if (!group || group === '--help' || group === '-h') return out(ROOT_USAGE)
   if (group === '--version' || group === '-v') return out(VERSION)
   if (group === 'context') return cmdContext(argv.slice(1))
+  if (group === 'dir') return cmdDir(argv.slice(1))
   if (group === 'project') return cmdProject(action, rest)
   if (group === 'req') return cmdReq(action, rest)
   if (group === 'wt') return cmdWt(action, rest)
