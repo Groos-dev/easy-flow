@@ -1,0 +1,109 @@
+src/renderer/src/components/Settings.tsx
+  s_56ff98ab327057::t_ba2b428d7aec88 208,210-212
+src/renderer/src/components/Detail.tsx
+  s_56ff98ab327057::t_036e4444c51f45 428-470
+  s_56ff98ab327057::t_9987a6378319be 307-311,351-360
+  s_56ff98ab327057::t_3c47d213a9313e 90,93-104
+  s_56ff98ab327057::t_9eab35765a45c3 126,140-142,156
+  s_56ff98ab327057::t_3a51dc0355c567 117
+  s_56ff98ab327057::t_82c6b460c9d364 169,177
+  s_56ff98ab327057::t_3094354d6ee62e 259-261
+  s_56ff98ab327057::t_1eb7ca6a59dc8f 362
+  s_56ff98ab327057::t_b78e28b301c27d 1
+  s_56ff98ab327057::t_ca20e77029d657 5,11,13-14,17,24-25,33-34,52,54,56
+skill/todo/SKILL.md
+  s_56ff98ab327057::t_6078b29d6b9356 1-179
+server/skill-install.ts
+  s_56ff98ab327057::t_7f7e66442c2b14 2,5-7
+  s_56ff98ab327057::t_73625580b051b3 79,81
+  s_56ff98ab327057::t_68b4e6042fd46a 105,107-108
+  s_56ff98ab327057::t_c7ba1318fbfad4 123-125
+  s_56ff98ab327057::t_177cd7e2f3b91e 319-328,330-337
+  s_56ff98ab327057::t_fa6ae7e7b2c05c 73-78,80,82-86,100
+  s_56ff98ab327057::t_da692790b6b53b 239,245-252,256,261
+README.md
+  s_56ff98ab327057::t_d13dde47cfe3a2 3,6
+  s_56ff98ab327057::t_2c4e589a471fb3 45,56-58
+  s_56ff98ab327057::t_9877026df56453 35-37
+test/core.test.ts
+  s_360cc9ebf8594e::t_287e3fa207aec0 12
+  s_56ff98ab327057::t_367345a2f31b1e 260-371
+  s_360cc9ebf8594e::t_c324922dc7c3b8 1092-1102
+  s_56ff98ab327057::t_0da8cdd2c4fcd5 1797-1837
+  s_56ff98ab327057::t_4e84bfc010d925 1078-1081
+  s_56ff98ab327057::t_6eed0edf293b32 1542-1671,1673-1738
+  s_56ff98ab327057::t_cbeac64b332e8f 1672
+src/renderer/src/styles.css
+  s_56ff98ab327057::t_7f3f1f6b49bab2 139-243
+  s_56ff98ab327057::t_9346589100ef74 595-600
+  s_56ff98ab327057::t_2948f515b3a6a4 680-719
+src/renderer/src/App.tsx
+  s_56ff98ab327057::t_9830284b5cf029 58-59,66-67,72-76
+  s_56ff98ab327057::t_1da8dee30f6dcc 15-16,22
+  s_56ff98ab327057::t_2588f7558fed00 249-256
+  s_56ff98ab327057::t_b00f0b6a0949ff 348-349,351,355-373,376-389,402-409
+  s_56ff98ab327057::t_71ad62aaa773ef 126-136,140,142,146-147
+  s_56ff98ab327057::t_ecab9791de9011 320-331,337
+  s_56ff98ab327057::t_df3f2b3436d063 293,296-299,302-303
+  s_56ff98ab327057::t_1a41cb5bfff4c1 210-222
+server/db.ts
+  s_56ff98ab327057::t_d34730092be15c 307-329
+  s_56ff98ab327057::t_d1918f8f41bd47 933-1038,1042-1072,1075-1152
+  s_56ff98ab327057::t_95ffbf56474e21 55-57
+  s_56ff98ab327057::t_a20264a1e832ba 1039-1041,1073-1074
+src/renderer/src/lib/api.ts
+  s_56ff98ab327057::t_d77d92d0749b8a 9-10
+  s_56ff98ab327057::t_d15fddfd10a5f7 87-105
+src/renderer/src/lib/types.ts
+  s_56ff98ab327057::t_45b20399cd75e8 193-194
+  s_56ff98ab327057::t_83426e0a76b556 94-98,107-140
+  s_56ff98ab327057::t_82c6714188b900 99-106
+server/markdown.ts
+  s_56ff98ab327057::t_886514058c4239 71-72,300-346
+server/convention.ts
+  s_56ff98ab327057::t_886514058c4239 15,275-339
+server/schema.ts
+  s_56ff98ab327057::t_886514058c4239 47-70,90-91
+src/renderer/src/components/BoardSwitcher.tsx
+  s_56ff98ab327057::t_5e2e09b15d93d7 1-109
+server/cli.ts
+  s_360cc9ebf8594e::t_44aeb034690964 367-378
+  s_56ff98ab327057::t_bfacaa6ede2822 1077
+  s_56ff98ab327057::t_a180ab6be9f6db 27
+  s_360cc9ebf8594e::t_81438fbac38e7d 277-281
+  s_56ff98ab327057::t_01e3ba57916287 10,15-22,28-29,33-34
+  s_360cc9ebf8594e::t_6842f8508a386d 260
+  s_56ff98ab327057::t_a0916bbe8882f1 310-338,345
+  s_360cc9ebf8594e::t_cde5ec75641165 14
+  s_360cc9ebf8594e::t_d60ce394ceae24 1073
+  s_56ff98ab327057::t_d2f40ea75b6102 766
+  s_56ff98ab327057::t_98f53657dd167c 712-765,767-1050
+  s_56ff98ab327057::t_0f7834f784be9e 264
+server/index.ts
+  s_56ff98ab327057::t_947051d78138d1 15-16,19
+  s_56ff98ab327057::t_447368b96cd242 291-337
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "c31f97c326b6a5c77522058fb3cb6a9add3aca9f",
+  "prompts": {},
+  "sessions": {
+    "s_360cc9ebf8594e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1890ad87-2308-4444-bf00-8f0698878ca3",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    },
+    "s_56ff98ab327057": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e93d0df5-1746-42ae-b49c-0bf1a221fd0c",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
