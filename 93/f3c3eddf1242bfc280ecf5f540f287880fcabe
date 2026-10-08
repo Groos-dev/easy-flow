@@ -1,0 +1,53 @@
+server/schema.ts
+  s_6ff1d286b38601::t_33d9f4d7f332fc 88-105
+  s_6ff1d286b38601::t_f4f28048826c47 112
+test/core.test.ts
+  s_6ff1d286b38601::t_d0708be9490c83 13
+  s_6ff1d286b38601::t_8b7eab18689703 902-905
+  s_6ff1d286b38601::t_867269976adfa7 1040-1134
+  s_6ff1d286b38601::t_ee078bf3d1d1fa 1174
+  s_6ff1d286b38601::t_aaad3747bc895e 1570-1581
+  s_6ff1d286b38601::t_1bbd97af7237c1 1643-1685,1687-1744
+  s_6ff1d286b38601::t_213869ac2666ca 1686
+  s_6ff1d286b38601::t_021e054a2653d6 2108-2127
+server/db.ts
+  s_6ff1d286b38601::t_9ed6146079df99 58-64
+  s_6ff1d286b38601::t_8a79d7e8bc81e5 149-178
+  s_6ff1d286b38601::t_7b5323d5410acd 345-357
+  s_6ff1d286b38601::t_cba175d426b4f4 518-524
+  s_6ff1d286b38601::t_bae237d01cc07a 992-994,997-1060
+  s_6ff1d286b38601::t_ab5754dc8d9aea 995-996
+server/index.ts
+  s_6ff1d286b38601::t_7e39f311047d8e 244-245
+server/cli.ts
+  s_6ff1d286b38601::t_26a19ce2fd26ac 26,33-34
+  s_6ff1d286b38601::t_90af57f668f202 141-171
+  s_6ff1d286b38601::t_1e6a41f086b0f0 243,245-248
+  s_6ff1d286b38601::t_0856e0dc33a774 244
+  s_6ff1d286b38601::t_12d95944a8e584 303
+  s_6ff1d286b38601::t_c3fc3fd9848107 342-353
+  s_6ff1d286b38601::t_9048c58483b393 396
+  s_6ff1d286b38601::t_bd9567b6f60a85 466-467,469-472
+  s_6ff1d286b38601::t_757dabdca29783 468
+  s_6ff1d286b38601::t_9d6b4b41ae55a1 489,491
+  s_6ff1d286b38601::t_82df530c53765b 490
+  s_6ff1d286b38601::t_139ab33feab3d5 645-683,685-758
+  s_6ff1d286b38601::t_6a8f12b461622e 684
+  s_6ff1d286b38601::t_168ac8102b5bdb 1228,1232
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "93f3c3eddf1242bfc280ecf5f540f287880fcabe",
+  "prompts": {},
+  "sessions": {
+    "s_6ff1d286b38601": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "87a7b66c-21ad-4179-b8fb-5a6ecbbf0ea4",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}

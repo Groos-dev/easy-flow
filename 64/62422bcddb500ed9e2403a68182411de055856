@@ -1,0 +1,27 @@
+README.md
+  s_6ff1d286b38601::t_8925f92345d183 35
+  s_6ff1d286b38601::t_39b7a0080e48fa 54,56-58
+skill/easy-flow/SKILL.md
+  s_6ff1d286b38601::t_afe5faa1099373 9-10
+  s_6ff1d286b38601::t_e3eb65cd00a661 26-27
+  s_6ff1d286b38601::t_9779de5aea902f 34
+  s_6ff1d286b38601::t_8a284f0ecc9750 83-84
+  s_6ff1d286b38601::t_11767810fbf210 101-114,117-118
+  s_6ff1d286b38601::t_a1f047093a6438 115-116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "6462422bcddb500ed9e2403a68182411de055856",
+  "prompts": {},
+  "sessions": {
+    "s_6ff1d286b38601": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "87a7b66c-21ad-4179-b8fb-5a6ecbbf0ea4",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
