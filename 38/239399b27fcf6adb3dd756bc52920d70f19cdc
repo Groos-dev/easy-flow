@@ -1,0 +1,23 @@
+src/renderer/src/lib/types.ts
+  s_6ff1d286b38601::t_22a81bb9f3040f 164-181
+src/renderer/src/components/InfoPanel.tsx
+  s_6ff1d286b38601::t_a90ba0f913063b 87-95
+  s_6ff1d286b38601::t_d3e0d549b78709 96,99,104
+  s_6ff1d286b38601::t_23995aea08d408 190-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "38239399b27fcf6adb3dd756bc52920d70f19cdc",
+  "prompts": {},
+  "sessions": {
+    "s_6ff1d286b38601": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "87a7b66c-21ad-4179-b8fb-5a6ecbbf0ea4",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
