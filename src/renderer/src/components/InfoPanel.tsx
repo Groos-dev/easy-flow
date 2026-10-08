@@ -84,14 +84,24 @@ function OneLine(props: {
 }
 
 /**
- * 头部浮窗：需求的工作区与链接。
+ * 会话的 agent 显示名。取值与 CLI 的 --agent 一致，认不出来的原样显示。
+ */
+const AGENT_LABELS: Record<string, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  cursor: 'Cursor',
+}
+
+/**
+ * 头部浮窗：需求的工作区、会话与链接。
  *
  * 数据全部来自详情页已经拉过的两份载荷（列表里的 Requirement + /api/context），
- * 所以打开它不产生新请求。工作区那段只有服务端知道——归属存在 sqlite 里。
+ * 所以打开它不产生新请求。工作区与会话那段只有服务端知道——归属存在 sqlite 里。
  */
 export default function InfoPanel({ req, ctx }: { req: Requirement; ctx: ContextPayload | null }) {
   const [copied, setCopied] = useState('')
   const worktrees = ctx?.worktrees ?? []
+  const sessions = ctx?.sessions ?? []
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 浮窗随时会被关掉，定时器要跟着一起清，别对已卸载的组件 setState
@@ -172,6 +182,33 @@ export default function InfoPanel({ req, ctx }: { req: Requirement; ctx: Context
                 disabled={w.orphan}
                 onClick={() => void api.openWorktree(w.id).catch(() => {})}
               />
+            </div>
+          ))}
+        </InfoBlock>
+      )}
+
+      {/* 会话：agent 登记在这条需求上的现场。有 deeplink 的点一行就回到那个会话 */}
+      {sessions.length > 0 && (
+        <InfoBlock label="会话" count={sessions.length}>
+          {sessions.map((s) => (
+            <div className="wt" key={`${s.agent}:${s.session}`}>
+              <div className="wt-head">
+                <span className="v">{AGENT_LABELS[s.agent] ?? s.agent}</span>
+                <span className="spacer" />
+                {copyButton(s.session, '会话 id')}
+              </div>
+              {s.title && (
+                <div className="wt-meta">
+                  <OneLine className="" text={s.title} title={s.title} />
+                </div>
+              )}
+              <OneLine
+                className={`mono ${s.link ? 'info-path' : 'info-path disabled'}`}
+                text={s.session}
+                title={s.link ? `在 ${AGENT_LABELS[s.agent] ?? s.agent} 里打开：${s.link}` : s.session}
+                href={s.link || undefined}
+              />
+              {s.cwd && <OneLine className="wt-meta mono" text={s.cwd} title={s.cwd} />}
             </div>
           ))}
         </InfoBlock>

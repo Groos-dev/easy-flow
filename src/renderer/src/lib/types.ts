@@ -161,6 +161,24 @@ export interface ContextPayload {
   requirementMd: string | null
   /** 这个需求名下的工作区 */
   worktrees: Worktree[]
+  /** 这个需求上登记的 agent 会话。只归库，详情页的「会话」块靠它 */
+  sessions: Session[]
+}
+
+/** 一条 agent 会话的登记（claude code / codex / cursor） */
+export interface Session {
+  requirementId: string
+  agent: string
+  /** agent 原生的会话 id */
+  session: string
+  /** 会话在做什么；应用里的标题读不到，是 agent 登记时自己给的 */
+  title: string
+  /** 登记时所在目录，通常就是工作区 */
+  cwd: string
+  /** 在 desktop 应用里打开这个会话的 deeplink；没有则为空串 */
+  link: string
+  created: string
+  updated: string
 }
 
 export interface SwitchResult {
