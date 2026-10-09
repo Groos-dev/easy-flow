@@ -1,0 +1,19 @@
+.claude/settings.json
+  s_657e3953151185::t_fad473dd9545b7 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "0a6d1548c40701ab4aeb8e09414455bc0da77a0b",
+  "prompts": {},
+  "sessions": {
+    "s_657e3953151185": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7d892314-fa85-42b7-a4ba-e6ca4c51911d",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
