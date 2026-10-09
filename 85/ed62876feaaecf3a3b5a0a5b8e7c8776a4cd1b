@@ -1,0 +1,24 @@
+src/renderer/index.html
+  s_f64dbe28ae5ac3::t_c4804b3183f465 6
+README.md
+  s_f64dbe28ae5ac3::t_7a783047fdecec 1-2
+src/main/index.ts
+  s_f64dbe28ae5ac3::t_7339edcfec5a15 1,5-6
+  s_f64dbe28ae5ac3::t_3c65a4cfdf293f 137-139,146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "85ed62876feaaecf3a3b5a0a5b8e7c8776a4cd1b",
+  "prompts": {},
+  "sessions": {
+    "s_f64dbe28ae5ac3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a53951a4-ba87-478e-90f6-dc02bf194bb5",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
