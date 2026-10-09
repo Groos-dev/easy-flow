@@ -1,3 +1,5 @@
+<img src="resources/icon.png" alt="" width="88" align="right" />
+
 # easy-flow
 
 以 markdown 为内容源、SQLite 为状态源的需求看板，外加一块平级的全局待办板。

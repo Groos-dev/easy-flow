@@ -1,6 +1,9 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, session, shell } from 'electron'
 import { join } from 'node:path'
 import type { RunningBoardServer } from '../../server/index.ts'
+
+// 图标放在仓库根的 resources/（electron-vite 的约定），运行时从 out/main 往上两级
+const ICON = join(__dirname, '../../resources/icon.png')
 
 let win: BrowserWindow | null = null
 let boardServer: RunningBoardServer | null = null
@@ -131,12 +134,16 @@ async function createWindow(): Promise<void> {
     return
   }
 
+  // macOS 的开发态 dock 图标是 Electron 自带的，得显式换；其它平台认 BrowserWindow 的 icon
+  if (process.platform === 'darwin') app.dock?.setIcon(nativeImage.createFromPath(ICON))
+
   win = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 900,
     minHeight: 600,
     title: 'easy-flow',
+    icon: ICON,
     titleBarStyle: 'hiddenInset',
     // 显式固定交通灯位置：默认位置随系统浮动，侧边栏开关没法跟它精确对齐
     trafficLightPosition: { x: 16, y: 15 },
