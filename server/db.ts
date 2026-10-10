@@ -62,6 +62,10 @@ export const TODO_CHANNELS = ['at_me', 'p2p'] as const
 export const SESSION_AGENTS = ['claude', 'codex', 'cursor'] as const
 export type SessionAgent = (typeof SESSION_AGENTS)[number]
 
+/** 会话角色：开工登记的 dev；review 会话由 req session review 建，用来复用与展示 */
+export const SESSION_ROLES = ['dev', 'review'] as const
+export type SessionRole = (typeof SESSION_ROLES)[number]
+
 export const DEFAULT_PROJECT_SLUG = 'default'
 
 export interface Project {
@@ -161,6 +165,8 @@ export interface Session {
   agent: SessionAgent
   /** agent 原生的会话 id */
   session: string
+  /** dev（开工登记）还是 review（评审会话） */
+  role: SessionRole
   /** 会话在做什么，agent 自己给的一句话；应用里的标题读不到，只能靠它记 */
   title: string
   /** 登记时所在目录，通常就是工作区 */
@@ -175,6 +181,7 @@ interface SessionRow {
   req_id: string
   agent: string
   session: string
+  role: string | null
   title: string | null
   cwd: string | null
   link: string | null
@@ -382,6 +389,7 @@ function toSession(row: SessionRow): Session {
     requirementId: row.req_id,
     agent: row.agent as SessionAgent,
     session: row.session,
+    role: (row.role as SessionRole) ?? 'dev',
     title: row.title ?? '',
     cwd: row.cwd ?? '',
     link: row.link ?? '',
@@ -1049,6 +1057,7 @@ export class BoardDatabase {
     requirementId: string
     agent: SessionAgent
     session: string
+    role?: SessionRole
     title?: string
     cwd?: string
     link?: string
@@ -1056,20 +1065,25 @@ export class BoardDatabase {
     if (!(SESSION_AGENTS as readonly string[]).includes(input.agent)) {
       throw new Error(`Unknown agent: ${input.agent}. Valid: ${SESSION_AGENTS.join(', ')}`)
     }
+    const role = input.role ?? 'dev'
+    if (!(SESSION_ROLES as readonly string[]).includes(role)) {
+      throw new Error(`Unknown session role: ${role}. Valid: ${SESSION_ROLES.join(', ')}`)
+    }
     if (!input.session.trim()) throw new Error('Session id cannot be empty')
     const now = stamp()
     this.db
       .prepare(
-        `INSERT INTO session (req_id, agent, session, title, cwd, link, created, updated)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO session (req_id, agent, session, role, title, cwd, link, created, updated)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(agent, session) DO UPDATE SET
-           req_id = excluded.req_id, title = excluded.title, cwd = excluded.cwd,
-           link = excluded.link, updated = excluded.updated`,
+           req_id = excluded.req_id, role = excluded.role, title = excluded.title,
+           cwd = excluded.cwd, link = excluded.link, updated = excluded.updated`,
       )
       .run(
         input.requirementId,
         input.agent,
         input.session,
+        role,
         input.title ?? '',
         input.cwd ?? '',
         input.link ?? '',

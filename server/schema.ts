@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS session (
   req_id   TEXT NOT NULL,
   agent    TEXT NOT NULL,
   session  TEXT NOT NULL,
+  role     TEXT NOT NULL DEFAULT 'dev',
   title    TEXT,
   cwd      TEXT,
   link     TEXT,
@@ -141,6 +142,8 @@ function migrate(db: DatabaseSync): void {
   addIfMissing('requirement', 'feishu_task_links', 'feishu_task_links TEXT')
   addIfMissing('requirement', 'code_links', 'code_links TEXT')
   addIfMissing('requirement', 'ext_links', 'ext_links TEXT')
+  // 会话角色：开工登记的 dev，review 会话是 review。老库里的会话都是开工时登记的
+  addIfMissing('session', 'role', `role TEXT NOT NULL DEFAULT 'dev'`)
 }
 
 /** 建表 + 升级，开库时跑一次 */

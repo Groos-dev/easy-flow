@@ -1249,6 +1249,40 @@ describe('数据层 · 会话', () => {
     db.close()
   })
 
+  test('会话角色：缺省 dev，review 会话能单独认出来', () => {
+    const d = fresh(() => seedReq(TMP))
+    const db = new BoardDatabase(d)
+    db.syncProjects()
+
+    assert.equal(
+      db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: 'th-dev' }).role,
+      'dev',
+      '开工登记的会话缺省是 dev',
+    )
+    assert.equal(
+      db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: 'th-review', role: 'review' }).role,
+      'review',
+    )
+    assert.deepEqual(
+      db.listSessions('req-alpha').filter((s) => s.role === 'review').map((s) => s.session),
+      ['th-review'],
+      '复用 review 会话靠这一列认人',
+    )
+
+    // 同一个会话换角色登记是刷新，不会长出第二条
+    assert.equal(
+      db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: 'th-dev', role: 'review' }).role,
+      'review',
+    )
+    assert.equal(db.listSessions('req-alpha').length, 2)
+
+    assert.throws(
+      () => db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: 'x', role: 'nope' as never }),
+      /Unknown session role/,
+    )
+    db.close()
+  })
+
   test('同一个会话改挂到别的需求：还是一条记录，跟着走', () => {
     const d = fresh(() => {
       seedReq(TMP, 'alpha')
@@ -1352,6 +1386,7 @@ describe('CLI 层', () => {
     }
     const reqHelp = cliOk(configFile, ['req', '--help'])
     for (const c of ['req new', 'req set', 'req link', 'req session']) assert.ok(reqHelp.includes(c), reqHelp)
+    assert.ok(cliOk(configFile, ['req', 'session', 'review', '--help']).includes('--handoff'), 'review 的用法要能看到 --handoff')
     const wtHelp = cliOk(configFile, ['wt', '--help'])
     for (const c of ['wt new', 'wt rm']) assert.ok(wtHelp.includes(c), wtHelp)
     const todoHelp = cliOk(configFile, ['todo', '--help'])
@@ -1888,6 +1923,20 @@ describe('CLI 层', () => {
     // --cwd 缺省是命令跑在哪儿
     assert.equal(byKey['codex:th-9'].cwd, resolve(REPO_ROOT))
     db.close()
+  })
+
+  test('req session review：需求名下没有工作区就报错，不去碰 codex', () => {
+    scaffold()
+    createProjectDir(dataDir, 'demo')
+    const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    // 没有工作区时在起 app-server 之前就拦下来：报错要指出下一步，而不是建个空 project
+    const err = cliFail(configFile, ['req', 'session', 'review', created.id])
+    assert.match(err, /没有工作区/)
+    assert.match(err, /wt new/)
   })
 
   test('req session：缺会话 id、未知 agent、重复登记', () => {
