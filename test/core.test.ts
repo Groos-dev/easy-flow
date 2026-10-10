@@ -17,11 +17,12 @@ import { DatabaseSync } from 'node:sqlite'
 import { spawnSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { BoardDatabase, normalizeLinkList, normalizeExtLinks } from '../server/db.ts'
+import { BoardDatabase, normalizeLinkList, normalizeCodeLinks, normalizeExtLinks } from '../server/db.ts'
 import { parseFrontmatter, readDocs, section } from '../server/markdown.ts'
 import { createProjectDir, createRequirementDir, setRequirementId } from '../server/convention.ts'
 import { createBoardApp } from '../server/index.ts'
 import { buildTree, layoutTree, nodeWidth } from '../src/renderer/src/lib/mindmap.ts'
+import { codeLinkLabel } from '../src/renderer/src/lib/links.ts'
 import type { Requirement } from '../src/renderer/src/lib/types.ts'
 
 // 夹具不该受用户全局 git 配置影响：core.hooksPath 指向 lefthook，每条命令都要跑它，
@@ -476,6 +477,22 @@ describe('数据层 · 链接字段', () => {
     assert.throws(() => normalizeExtLinks([{ url: 'https://a.com' }]), /missing a detail/)
   })
 
+  test('normalizeCodeLinks 收别名与老格式，按 url 去重', () => {
+    assert.deepEqual(
+      normalizeCodeLinks([
+        'https://gitlab.com/mr/1',
+        { label: '主流程', url: 'https://gitlab.com/mr/2' },
+        { label: '重复的那条', url: 'https://gitlab.com/mr/1' },
+      ]),
+      [
+        { label: '', url: 'https://gitlab.com/mr/1' },
+        { label: '主流程', url: 'https://gitlab.com/mr/2' },
+      ],
+    )
+    assert.throws(() => normalizeCodeLinks([{ label: 'x', url: 'ftp://a.com' }]), /http/)
+    assert.throws(() => normalizeCodeLinks('str' as never), /array/)
+  })
+
   test('setLinks 部分更新，未传的字段不动', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
     const db = new BoardDatabase(dir)
@@ -486,9 +503,25 @@ describe('数据层 · 链接字段', () => {
 
     const req = db.get('alpha')
     assert.deepEqual(req?.feishuTaskLinks, ['https://feishu.cn/1'])
-    assert.deepEqual(req?.codeLinks, ['https://gitlab.com/mr/1'])
+    assert.deepEqual(req?.codeLinks, [{ label: '', url: 'https://gitlab.com/mr/1' }])
     assert.deepEqual(req?.extLinks, [])
     db.close()
+  })
+
+  test('读库认老格式：字符串数组当成没别名的链接', () => {
+    const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+    db.close()
+
+    const raw = new DatabaseSync(join(dir, 'easy-flow.db'))
+    raw.exec(`update requirement set code_links = '["https://gitlab.com/mr/9"]'`)
+    raw.close()
+
+    const again = new BoardDatabase(dir)
+    again.syncProjects()
+    assert.deepEqual(again.get('alpha')?.codeLinks, [{ label: '', url: 'https://gitlab.com/mr/9' }])
+    again.close()
   })
 
   test('新需求默认空链接数组', () => {
@@ -500,6 +533,33 @@ describe('数据层 · 链接字段', () => {
     assert.deepEqual(req?.codeLinks, [])
     assert.deepEqual(req?.extLinks, [])
     db.close()
+  })
+})
+
+// ------------------------------------------------------ 渲染层：代码链接别名
+
+describe('渲染层 · 代码链接别名', () => {
+  test('显式别名优先', () => {
+    assert.equal(codeLinkLabel({ label: '主流程', url: 'https://gitlab.com/mr/1' }), '主流程')
+  })
+
+  test('GitLab MR 推成 "<仓库> !<iid>"', () => {
+    assert.equal(
+      codeLinkLabel({
+        label: '',
+        url: 'http://git.dev.sh.ctripcorp.com/flight-onex/flight-onex-exchange-router/-/merge_requests/213',
+      }),
+      'flight-onex-exchange-router !213',
+    )
+  })
+
+  test('GitHub PR 推成 "<仓库> #<iid>"', () => {
+    assert.equal(codeLinkLabel({ label: '', url: 'https://github.com/owner/repo/pull/12' }), 'repo #12')
+  })
+
+  test('其余取路径末段，没有路径就用整条 URL', () => {
+    assert.equal(codeLinkLabel({ label: '', url: 'https://example.com/a/b/' }), 'b')
+    assert.equal(codeLinkLabel({ label: '', url: 'https://example.com' }), 'example.com')
   })
 })
 
@@ -1628,13 +1688,36 @@ describe('CLI 层', () => {
     assert.match(more, /代码链接（1）/)
     assert.match(more, /扩展链接（1）/)
 
+    // 别名：--mr "<别名>=<url>"；再传同一条链接但没给别名，旧别名留着
+    assert.match(
+      cliOk(configFile, ['req', 'link', created.id, '--mr', '主流程=https://gitlab.example.com/mr/2']),
+      /代码链接（2）：https:\/\/gitlab\.example\.com\/mr\/1、主流程 https:\/\/gitlab\.example\.com\/mr\/2/,
+    )
+    assert.match(
+      cliOk(configFile, ['req', 'link', created.id, '--mr', 'https://gitlab.example.com/mr/2']),
+      /主流程 https:\/\/gitlab\.example\.com\/mr\/2/,
+    )
+    // 带 query 的纯 URL 不会被当成别名写法拆开
+    assert.match(
+      cliOk(configFile, ['req', 'link', created.id, '--mr', 'https://gitlab.example.com/mr/3?tab=notes']),
+      /代码链接（3）/,
+    )
+    assert.match(
+      cliFail(configFile, ['req', 'link', created.id, '--mr', '别名字段缺链接']),
+      /expects a url or/,
+    )
+
     assert.match(cliFail(configFile, ['req', 'set', created.id]), /Pass at least one of --status/)
 
     const db = new BoardDatabase(dataDir)
     const r = db.byId(created.id)!
     assert.equal(r.status, '执行中')
     assert.equal(r.priority, 'p1')
-    assert.deepEqual(r.codeLinks, ['https://gitlab.example.com/mr/1'])
+    assert.deepEqual(r.codeLinks, [
+      { label: '', url: 'https://gitlab.example.com/mr/1' },
+      { label: '主流程', url: 'https://gitlab.example.com/mr/2' },
+      { label: '', url: 'https://gitlab.example.com/mr/3?tab=notes' },
+    ])
     assert.deepEqual(r.feishuTaskLinks, ['https://project.feishu.cn/x7mm65/story/detail/1'])
     assert.deepEqual(r.extLinks, [{ detail: '设计稿', url: 'https://example.com/design' }])
     db.close()

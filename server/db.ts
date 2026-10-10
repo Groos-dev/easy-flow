@@ -96,7 +96,7 @@ export interface Requirement {
   /** Feishu task (Meego story) links. Written by the CLI; the UI is read-only */
   feishuTaskLinks: string[]
   /** Code links: GitLab MR / GitHub PR etc. Written by the CLI; the UI is read-only */
-  codeLinks: string[]
+  codeLinks: CodeLink[]
   /** 扩展链接：{ detail 描述, url 链接 } */
   extLinks: ExtLink[]
   docs: Array<{ name: string; size: number }>
@@ -108,6 +108,12 @@ export interface Requirement {
 /** 扩展链接：detail 是描述，url 是链接 */
 export interface ExtLink {
   detail: string
+  url: string
+}
+
+/** 代码链接：label 是显示别名，空串表示没给——展示层从 url 推导一个 */
+export interface CodeLink {
+  label: string
   url: string
 }
 
@@ -279,6 +285,35 @@ export function normalizeLinkList(input: unknown): string[] {
     if (!out.includes(url)) out.push(url)
   }
   return out
+}
+
+/**
+ * 代码链接的写侧校验。老数据是纯 URL 字符串，新数据是 { label, url }，两种都收——
+ * 合并旧列表时不会把老条目丢掉。
+ */
+export function normalizeCodeLinks(input: unknown): CodeLink[] {
+  if (!Array.isArray(input)) throw new Error('Link list must be an array')
+  const out: CodeLink[] = []
+  for (const item of input) {
+    const link = toCodeLink(item)
+    if (!link.url) continue
+    if (!/^https?:\/\//i.test(link.url)) throw new Error(`Link must start with http(s)://: ${link.url}`)
+    if (!out.some((l) => l.url === link.url)) out.push(link)
+  }
+  return out
+}
+
+/** 一条代码链接的形状归一：字符串当纯 URL。读侧不校验——写进来时已经校验过 */
+function toCodeLink(item: unknown): CodeLink {
+  const raw = (typeof item === 'string' ? { url: item } : item) as Partial<CodeLink> | null
+  return { label: String(raw?.label ?? '').trim(), url: String(raw?.url ?? '').trim() }
+}
+
+/** 读库里的 code_links 列：老格式（字符串数组）与新格式（对象数组）都认 */
+function readCodeLinks(raw: string | null): CodeLink[] {
+  const list = parseLinks<unknown[]>(raw, [])
+  if (!Array.isArray(list)) return []
+  return list.map(toCodeLink).filter((l) => l.url)
 }
 
 export function normalizeExtLinks(input: unknown): ExtLink[] {
@@ -731,7 +766,7 @@ export class BoardDatabase {
       repos: row.repos ? (JSON.parse(row.repos) as RepoRef[]) : [],
       links: row.links ?? '',
       feishuTaskLinks: parseLinks<string[]>(row.feishu_task_links, []) ?? [],
-      codeLinks: parseLinks<string[]>(row.code_links, []) ?? [],
+      codeLinks: readCodeLinks(row.code_links),
       extLinks: parseLinks<ExtLink[]>(row.ext_links, []) ?? [],
       docs,
       path: row.path,
@@ -901,7 +936,7 @@ export class BoardDatabase {
     }
     if (links.codeLinks !== undefined) {
       sets.push('code_links = ?')
-      params.push(JSON.stringify(normalizeLinkList(links.codeLinks)))
+      params.push(JSON.stringify(normalizeCodeLinks(links.codeLinks)))
     }
     if (links.extLinks !== undefined) {
       sets.push('ext_links = ?')

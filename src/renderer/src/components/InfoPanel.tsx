@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api } from '../lib/api'
+import { codeLinkLabel } from '../lib/links'
 import type { ContextPayload, Requirement } from '../lib/types'
 import { CheckIcon, CopyIcon } from './icons'
 
@@ -138,7 +139,7 @@ export default function InfoPanel({ req, ctx }: { req: Requirement; ctx: Context
 
   const groups = [
     { title: '飞书任务', items: req.feishuTaskLinks.map((url) => ({ label: url, url })) },
-    { title: '代码链接', items: req.codeLinks.map((url) => ({ label: url, url })) },
+    { title: '代码链接', items: req.codeLinks.map((l) => ({ label: codeLinkLabel(l), url: l.url })) },
     { title: '扩展链接', items: req.extLinks.map((l) => ({ label: l.detail, url: l.url })) },
   ].filter((g) => g.items.length)
 

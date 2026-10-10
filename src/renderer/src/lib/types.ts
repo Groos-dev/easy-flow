@@ -17,6 +17,12 @@ export interface DocRef {
   size: number
 }
 
+/** 与 server/db.ts 的 CodeLink 对应。label 是显示别名，空串表示没给，由展示层从 url 推导 */
+export interface CodeLink {
+  label: string
+  url: string
+}
+
 /** 与 server/db.ts 的 Worktree 对应。归属只存在库里，UI 只读 */
 export interface Worktree {
   id: string
@@ -55,7 +61,7 @@ export interface Requirement {
   /** Feishu task links. Written by the CLI; the UI is read-only */
   feishuTaskLinks: string[]
   /** Code links (GitLab MR / GitHub PR). Written by the CLI; the UI is read-only */
-  codeLinks: string[]
+  codeLinks: CodeLink[]
   /** 扩展链接：detail 是描述，url 是链接 */
   extLinks: Array<{ detail: string; url: string }>
   docs: DocRef[]

@@ -28,6 +28,7 @@ import {
   TODO_CHANNELS,
   TODO_SOURCES,
   TODO_STATUSES,
+  type CodeLink,
   type Priority,
   type Requirement,
   type Session,
@@ -334,10 +335,11 @@ id 必须显式传：需求 id 在需求目录 AGENTS.md 的 frontmatter 里，w
 
 传了哪个改哪个，都没传会报错。--priority "" 清空优先级。`,
 
-  'req link': `用法：easy-flow req link <id> [--feishu <url>] [--mr <url>] [--ext "<描述>=<url>"] [--json]
+  'req link': `用法：easy-flow req link <id> [--feishu <url>] [--mr <url>|<别名>=<url>>] [--ext "<描述>=<url>"] [--json]
 
 三类链接都可重复传，只增不删：同一字段合并去重，已有链接不会被顶掉。
---ext 的描述与链接按第一个 = 分隔。`,
+--ext 的描述与链接按第一个 = 分隔；--mr 同理，别名可省——第一个 = 前面带 :// 就整条当 URL。
+同一条链接再传一次只更新别名（这次没给别名就留着旧的）。`,
 
   'req session': `用法：easy-flow req session add <req-id> --agent <claude|codex|cursor> [--id <会话 id>] [--title <标题>] [--cwd <目录>] [--link <url>] [--json]
        easy-flow req session rm <req-id> --agent <…> --id <会话 id> [--json]
@@ -581,6 +583,18 @@ async function cmdReqSet(argv: string[]): Promise<void> {
   )
 }
 
+/**
+ * --mr 收两种写法：纯 URL，或 "<别名>=<url>"。
+ * 第一个 = 前面带 :// 就整条当 URL（协议交给写侧校验），URL 自带的 = 不会被拆成别名。
+ */
+function parseMrArg(item: string): CodeLink {
+  const at = item.indexOf('=')
+  const head = at < 0 ? item : item.slice(0, at)
+  if (head.includes('://')) return { label: '', url: item }
+  if (at < 1) throw new Error(`--mr expects a url or "<别名>=<url>": ${item}`)
+  return { label: item.slice(0, at).trim(), url: item.slice(at + 1).trim() }
+}
+
 async function cmdReqLink(argv: string[]): Promise<void> {
   const { values, positionals } = parse(argv, {
     feishu: { type: 'string', multiple: true },
@@ -591,7 +605,7 @@ async function cmdReqLink(argv: string[]): Promise<void> {
 
   const id = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req link'])
   const feishuTaskLinks = strs(values.feishu)
-  const codeLinks = strs(values.mr)
+  const codeLinks = strs(values.mr).map(parseMrArg)
   const rawExt = strs(values.ext)
   if (!feishuTaskLinks.length && !codeLinks.length && !rawExt.length) {
     throw new UsageError('Pass at least one kind of link (--feishu / --mr / --ext)', USAGE['req link'])
@@ -611,13 +625,19 @@ async function cmdReqLink(argv: string[]): Promise<void> {
   for (const e of extLinks) {
     if (!mergedExt.some((x) => x.url === e.url)) mergedExt.push(e)
   }
+  const mergedCode = req.codeLinks.map((l) => ({ ...l }))
+  for (const l of codeLinks) {
+    const hit = mergedCode.find((x) => x.url === l.url)
+    if (!hit) mergedCode.push(l)
+    else if (l.label) hit.label = l.label
+  }
   const next = board.setLinks(
     req.slug,
     {
       ...(feishuTaskLinks.length
         ? { feishuTaskLinks: [...new Set([...req.feishuTaskLinks, ...feishuTaskLinks])] }
         : {}),
-      ...(codeLinks.length ? { codeLinks: [...new Set([...req.codeLinks, ...codeLinks])] } : {}),
+      ...(codeLinks.length ? { codeLinks: mergedCode } : {}),
       ...(extLinks.length ? { extLinks: mergedExt } : {}),
     },
     req.project,
@@ -636,7 +656,7 @@ async function cmdReqLink(argv: string[]): Promise<void> {
     [
       `需求：${next.title}（${next.id}）`,
       line('飞书任务', next.feishuTaskLinks),
-      line('代码链接', next.codeLinks),
+      line('代码链接', next.codeLinks.map((l) => (l.label ? `${l.label} ${l.url}` : l.url))),
       line('扩展链接', next.extLinks.map((l) => `${l.detail} ${l.url}`)),
     ].join('\n'),
   )
