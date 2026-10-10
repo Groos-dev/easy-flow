@@ -363,6 +363,13 @@ body {
 
 /* ---------------------------------------------------------------- 设置页 */
 
+/* 设置页整页化：侧边栏与左上角开关都不显示。侧边栏只是藏起来、不卸载，
+   返回时它的过滤、展开与滚动位置原样还在 */
+.shell.settings-open .sidebar,
+.shell.settings-open .sidebar-toggle {
+  display: none;
+}
+
 .settings-page {
   display: flex;
   height: 100vh;
@@ -374,9 +381,18 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 46px 10px 12px; /* 顶部让开 macOS 红绿灯 */
+  padding: 0 10px 12px;
   border-right: 1px solid var(--border);
   background: #12151b;
+}
+
+/* 顶部占位兼拖拽区：设置页里侧边栏不显示，它顶部那条拖拽区在这里补上；
+   从红绿灯右侧开始（同 .sidebar-head），别盖住它们 */
+.settings-nav-head {
+  flex: none;
+  height: 46px;
+  margin-left: 112px;
+  -webkit-app-region: drag;
 }
 
 .settings-nav-title {
@@ -385,7 +401,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   padding: 0 10px 8px;
-  /* 拖拽区只给标题这一行：整列设 drag 会在折叠时盖住左上角的侧边栏开关 */
+  /* 标题行也兼作拖拽区 */
   -webkit-app-region: drag;
 }
 

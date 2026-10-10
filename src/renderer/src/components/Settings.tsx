@@ -132,6 +132,8 @@ export default function Settings({ onBack, onApplied }: Props) {
   return (
     <div className="settings-page">
       <aside className="settings-nav">
+        {/* 顶部占位：让开 macOS 红绿灯，同时补上侧边栏消失后的窗口拖拽区 */}
+        <div className="settings-nav-head" />
         <div className="settings-nav-title">设置</div>
         {SECTIONS.map((s) => (
           <button

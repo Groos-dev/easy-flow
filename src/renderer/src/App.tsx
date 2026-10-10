@@ -255,7 +255,9 @@ export default function App() {
     : null
 
   return (
-    <div className={`shell${sidebarOpen ? '' : ' sidebar-collapsed'}`}>
+    <div
+      className={`shell${sidebarOpen ? '' : ' sidebar-collapsed'}${showSettings ? ' settings-open' : ''}`}
+    >
       {/* 侧边栏开关固定在窗口左上角：跟随窗口而不是布局，展开/折叠都在同一位置 */}
       <button
         className="icon-btn sidebar-toggle"
