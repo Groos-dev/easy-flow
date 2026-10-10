@@ -21,8 +21,12 @@ import { BoardDatabase, normalizeLinkList, normalizeCodeLinks, normalizeExtLinks
 import { parseFrontmatter, readDocs, section } from '../server/markdown.ts'
 import { createProjectDir, createRequirementDir, setRequirementId } from '../server/convention.ts'
 import { createBoardApp } from '../server/index.ts'
+import { readConfig, writeConfig } from '../server/config.ts'
 import { buildTree, layoutTree, nodeWidth } from '../src/renderer/src/lib/mindmap.ts'
 import { codeLinkLabel } from '../src/renderer/src/lib/links.ts'
+import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib/shortcut.ts'
+import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
+import { parseStamp, relTime } from '../src/renderer/src/lib/time.ts'
 import type { Requirement } from '../src/renderer/src/lib/types.ts'
 
 // 夹具不该受用户全局 git 配置影响：core.hooksPath 指向 lefthook，每条命令都要跑它，
@@ -560,6 +564,122 @@ describe('渲染层 · 代码链接别名', () => {
   test('其余取路径末段，没有路径就用整条 URL', () => {
     assert.equal(codeLinkLabel({ label: '', url: 'https://example.com/a/b/' }), 'b')
     assert.equal(codeLinkLabel({ label: '', url: 'https://example.com' }), 'example.com')
+  })
+})
+
+describe('配置 · 面板快捷键', () => {
+  test('writeConfig 合并写入：改快捷键不冲掉数据目录，反过来也一样', () => {
+    const d = fresh(() => {})
+    const file = join(d, 'config.json')
+    const prev = process.env.EASY_FLOW_CONFIG
+    process.env.EASY_FLOW_CONFIG = file
+    try {
+      writeConfig({ dataDir: join(d, 'data') })
+      writeConfig({ panelShortcut: 'Command+Shift+K' })
+      assert.equal(readConfig().panelShortcut, 'Command+Shift+K')
+      assert.equal(readConfig().dataDir, join(d, 'data'), '写快捷键不能把数据目录冲掉')
+
+      writeConfig({ dataDir: join(d, 'data2') })
+      assert.equal(readConfig().panelShortcut, 'Command+Shift+K', '改数据目录也不能把快捷键冲掉')
+
+      // 没配过就是空串，由主进程回落到默认
+      writeConfig({ panelShortcut: '' })
+      assert.equal(readConfig().panelShortcut, '')
+    } finally {
+      if (prev === undefined) delete process.env.EASY_FLOW_CONFIG
+      else process.env.EASY_FLOW_CONFIG = prev
+    }
+  })
+})
+
+describe('渲染层 · 列表选中', () => {
+  const KEYS = ['a', 'b', 'b|detail', 'c']
+
+  test('选中的 key 还在就原样用', () => {
+    assert.equal(resolveKey(KEYS, 'b|detail'), 'b|detail')
+    assert.equal(resolveKey(KEYS, 'b'), 'b')
+  })
+
+  test('选中随父需求收起被删：退回父需求那一行，而不是跳回列表头', () => {
+    // b 收起后动作行 'b|detail' 不在列表里了
+    assert.equal(resolveKey(['a', 'b', 'c'], 'b|detail'), 'b')
+  })
+
+  test('父需求也没了（被过滤掉）就落到第一条；空列表给空串', () => {
+    assert.equal(resolveKey(['a', 'c'], 'b|detail'), 'a')
+    assert.equal(resolveKey(['a', 'c'], ''), 'a')
+    assert.equal(resolveKey([], 'b'), '')
+  })
+
+  test('上下移动按当前列表走，到头不动', () => {
+    assert.equal(moveKey(KEYS, 'a', 1), 'b')
+    assert.equal(moveKey(KEYS, 'b', -1), 'a')
+    assert.equal(moveKey(KEYS, 'c', 1), 'c', '最后一条再往下还是它')
+    assert.equal(moveKey(KEYS, 'a', -1), 'a')
+  })
+
+  test('移动前先解析：选中的子行已随父收起时，从父行继续走', () => {
+    assert.equal(moveKey(['a', 'b', 'c'], 'b|detail', 1), 'c')
+    assert.equal(moveKey(['a', 'b', 'c'], 'b|detail', -1), 'a')
+  })
+})
+
+describe('渲染层 · 时间', () => {
+  test('parseStamp 认库里的 "yyyy-mm-dd HH:mm"，认不出给 0', () => {
+    const t = parseStamp('2026-10-10 15:12')
+    const d = new Date(t)
+    assert.equal(d.getFullYear(), 2026)
+    assert.equal(d.getMonth(), 9)
+    assert.equal(d.getDate(), 10)
+    assert.equal(d.getHours(), 15)
+    assert.equal(parseStamp(''), 0)
+    assert.equal(parseStamp('不是时间'), 0)
+  })
+
+  test('relTime 按天给相对说法', () => {
+    const now = Date.now()
+    assert.equal(relTime(now), '今天')
+    assert.equal(relTime(now - 86400000), '昨天')
+    assert.equal(relTime(now - 3 * 86400000), '3 天前')
+    assert.equal(relTime(now - 60 * 86400000), '2 个月前')
+  })
+})
+
+describe('渲染层 · 快捷键', () => {
+  const ev = (key: string, mods: Partial<Record<'meta' | 'ctrl' | 'alt' | 'shift', boolean>> = {}) => ({
+    key,
+    metaKey: !!mods.meta,
+    ctrlKey: !!mods.ctrl,
+    altKey: !!mods.alt,
+    shiftKey: !!mods.shift,
+  })
+
+  test('键盘事件翻成 accelerator：mac 上 meta 是 Command', () => {
+    assert.equal(acceleratorFromEvent(ev('e', { meta: true, shift: true }), 'darwin'), 'Command+Shift+E')
+    assert.equal(acceleratorFromEvent(ev('e', { ctrl: true, shift: true }), 'darwin'), 'Control+Shift+E')
+    assert.equal(acceleratorFromEvent(ev('e', { ctrl: true, shift: true }), 'win32'), 'Control+Shift+E')
+    // 非 mac 的 meta 是 Super，不是 Command
+    assert.equal(acceleratorFromEvent(ev('e', { meta: true }), 'win32'), 'Super+E')
+  })
+
+  test('具名键与功能键进白名单，其它键拒绝', () => {
+    assert.equal(acceleratorFromEvent(ev(' ', { meta: true }), 'darwin'), 'Command+Space')
+    assert.equal(acceleratorFromEvent(ev('ArrowUp', { meta: true }), 'darwin'), 'Command+Up')
+    assert.equal(acceleratorFromEvent(ev('F5', { meta: true }), 'darwin'), 'Command+F5')
+    assert.equal(acceleratorFromEvent(ev('F25', { meta: true }), 'darwin'), '')
+    assert.equal(acceleratorFromEvent(ev('Dead', { meta: true }), 'darwin'), '')
+  })
+
+  test('没有 ⌘ / ⌃ / ⌥ 的组合不接受：只有 Shift 会吃掉日常打字', () => {
+    assert.equal(acceleratorFromEvent(ev('e'), 'darwin'), '')
+    assert.equal(acceleratorFromEvent(ev('e', { shift: true }), 'darwin'), '')
+  })
+
+  test('accelerator 显示成人看的写法', () => {
+    assert.equal(formatAccelerator('CommandOrControl+Shift+E', 'darwin'), '⌘⇧E')
+    assert.equal(formatAccelerator('CommandOrControl+Shift+E', 'win32'), 'Ctrl+Shift+E')
+    assert.equal(formatAccelerator('Control+Alt+ArrowUp', 'darwin'), '⌃⌥↑')
+    assert.equal(formatAccelerator('Control+Alt+ArrowUp', 'win32'), 'Ctrl+Alt+ArrowUp')
   })
 })
 
@@ -2206,6 +2326,14 @@ describe('HTTP 层', () => {
     assert.equal(r.sessions[0].link, 'codex://threads/th-ctx')
     // 归属只存在库里：记在 alpha 名下，beta 就查不到
     assert.deepEqual((await get('/api/context?slug=beta')).sessions, [])
+  })
+
+  test('GET /api/sessions 返回全部会话，带需求归属', async () => {
+    const r = await get('/api/sessions')
+    const one = r.sessions.find((s: any) => s.session === 'th-ctx')
+    assert.equal(one.requirementId, 'req-alpha')
+    assert.equal(one.agent, 'codex')
+    assert.equal(one.link, 'codex://threads/th-ctx')
   })
 
   test('POST /api/worktree/open 只认库里的记录，目录不在就报错', async () => {

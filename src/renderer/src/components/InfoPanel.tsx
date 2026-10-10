@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api } from '../lib/api'
+import { AGENT_LABELS } from '../lib/labels'
 import { codeLinkLabel } from '../lib/links'
 import type { ContextPayload, Requirement } from '../lib/types'
 import { CheckIcon, CopyIcon } from './icons'
@@ -82,15 +83,6 @@ function OneLine(props: {
       {props.text}
     </div>
   )
-}
-
-/**
- * 会话的 agent 显示名。取值与 CLI 的 --agent 一致，认不出来的原样显示。
- */
-const AGENT_LABELS: Record<string, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  cursor: 'Cursor',
 }
 
 /**

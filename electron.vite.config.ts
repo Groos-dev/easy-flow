@@ -31,7 +31,11 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        input: { index: resolve(__dirname, 'src/renderer/index.html') },
+        // mini：呼出式 mini 面板（Electron 专属；web 模式没有全局快捷键与独立小窗）
+        input: {
+          index: resolve(__dirname, 'src/renderer/index.html'),
+          mini: resolve(__dirname, 'src/renderer/mini.html'),
+        },
       },
     },
   },

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { acceleratorFromEvent, formatAccelerator } from '../lib/shortcut'
 import type { SettingsPayload, SkillPayload, SyncResult } from '../lib/types'
 
 interface Props {
@@ -8,10 +9,11 @@ interface Props {
   onApplied: () => void
 }
 
-type SectionId = 'data' | 'skill'
+type SectionId = 'data' | 'shortcut' | 'skill'
 
 const SECTIONS: Array<{ id: SectionId; label: string }> = [
   { id: 'data', label: '数据目录' },
+  { id: 'shortcut', label: '快捷键' },
   { id: 'skill', label: 'CLI 与 Skill' },
 ]
 
@@ -38,6 +40,12 @@ export default function Settings({ onBack, onApplied }: Props) {
   const [skillNotice, setSkillNotice] = useState('')
   const [skillError, setSkillError] = useState('')
 
+  // 呼出快捷键：注册归主进程（globalShortcut 只在那儿），这里只做录制与显示
+  const [hotkey, setHotkey] = useState<{ shortcut: string; fallback: string } | null>(null)
+  const [recording, setRecording] = useState(false)
+  const [hotkeyNotice, setHotkeyNotice] = useState('')
+  const [hotkeyError, setHotkeyError] = useState('')
+
   const loadSettings = useCallback(async () => {
     const s = await api.settings()
     setSettings(s)
@@ -48,14 +56,14 @@ export default function Settings({ onBack, onApplied }: Props) {
     void loadSettings().catch((e: Error) => setError(e.message))
   }, [loadSettings])
 
-  // Esc 返回看板
+  // Esc 返回看板。录制中要让位给「Esc 取消录制」
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onBack()
+      if (e.key === 'Escape' && !recording) onBack()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onBack])
+  }, [onBack, recording])
 
   useEffect(() => {
     if (section !== 'skill') return
@@ -65,8 +73,62 @@ export default function Settings({ onBack, onApplied }: Props) {
       .catch((e: Error) => setSkillError(`读取安装状态失败：${e.message}`))
   }, [section])
 
+  useEffect(() => {
+    if (section !== 'shortcut') return
+    void window.easyFlow
+      ?.getShortcut?.()
+      .then(setHotkey)
+      .catch((e: Error) => setHotkeyError(`读取快捷键失败：${e.message}`))
+  }, [section])
+
   /** Electron 里可拉起原生目录选择器；浏览器开发时退化到手输 */
   const canPick = typeof window.easyFlow?.pickDirectory === 'function'
+  /** 快捷键只对桌面端有意义：web 模式没有全局快捷键，这一节整个不出现 */
+  const canSetShortcut = typeof window.easyFlow?.setShortcut === 'function'
+  const platform = window.easyFlow?.platform ?? ''
+  const sections = SECTIONS.filter((s) => s.id !== 'shortcut' || canSetShortcut)
+
+  /** 改绑：主进程注册不上（多半被占用）时把原因带回来 */
+  const applyShortcut = useCallback(
+    async (accel: string) => {
+      setHotkeyError('')
+      setHotkeyNotice('')
+      const res = await window.easyFlow?.setShortcut?.(accel)
+      if (!res) return
+      setRecording(false)
+      if (res.ok && res.shortcut) {
+        setHotkey((prev) => ({ shortcut: res.shortcut!, fallback: prev?.fallback ?? '' }))
+        setHotkeyNotice(`已改为 ${formatAccelerator(res.shortcut, platform)}`)
+        // 注册成功但没写进配置：也报出来，否则下次启动悄悄回到旧值
+        if (res.error) setHotkeyError(res.error)
+      } else {
+        setHotkeyError(res.error ?? '改绑失败')
+      }
+    },
+    [platform],
+  )
+
+  // 录制：捕获下一个组合键。Esc 取消；认不出的组合留在录制态让人重按
+  useEffect(() => {
+    if (!recording) return
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.key === 'Escape') {
+        setRecording(false)
+        setHotkeyError('')
+        return
+      }
+      const accel = acceleratorFromEvent(e, platform)
+      if (!accel) {
+        setHotkeyError('这个组合不行：要带 ⌘ / ⌃ / ⌥，键用字母、数字或功能键')
+        return
+      }
+      void applyShortcut(accel)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [recording, platform, applyShortcut])
 
   async function pick() {
     const picked = await window.easyFlow?.pickDirectory?.()
@@ -135,7 +197,7 @@ export default function Settings({ onBack, onApplied }: Props) {
         {/* 顶部占位：让开 macOS 红绿灯，同时补上侧边栏消失后的窗口拖拽区 */}
         <div className="settings-nav-head" />
         <div className="settings-nav-title">设置</div>
-        {SECTIONS.map((s) => (
+        {sections.map((s) => (
           <button
             key={s.id}
             className={`settings-nav-item${section === s.id ? ' active' : ''}`}
@@ -191,6 +253,44 @@ export default function Settings({ onBack, onApplied }: Props) {
                   ].join('\n')
                 : '读取中…'}
             </pre>
+          </>
+        )}
+
+        {section === 'shortcut' && (
+          <>
+            <h1>快捷键</h1>
+
+            {hotkeyError && <div className="notice">{hotkeyError}</div>}
+            {hotkeyNotice && <div className="notice ok">{hotkeyNotice}</div>}
+
+            <div className="section-label">呼出面板</div>
+            <div className="row">
+              <button
+                className={`shortcut-key${recording ? ' recording' : ''}`}
+                onClick={() => {
+                  setRecording((v) => !v)
+                  setHotkeyError('')
+                  setHotkeyNotice('')
+                }}
+              >
+                {recording
+                  ? '按下组合键…（Esc 取消）'
+                  : hotkey
+                    ? formatAccelerator(hotkey.shortcut, platform)
+                    : '读取中…'}
+              </button>
+              <button
+                className="btn"
+                disabled={!hotkey || hotkey.shortcut === hotkey.fallback}
+                onClick={() => hotkey && void applyShortcut(hotkey.fallback)}
+              >
+                恢复默认
+              </button>
+            </div>
+            <p className="hint">
+              点上面的键位开始录制，在任意应用里按它呼出 / 收起面板。
+              组合要带 ⌘ / ⌃ / ⌥；被别的应用占用时会改绑失败，换一个再试。
+            </p>
           </>
         )}
 

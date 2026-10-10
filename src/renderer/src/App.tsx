@@ -89,6 +89,42 @@ export default function App() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const searchSeq = useRef(0)
+  /** 待打开的需求只取一次（主窗口刚重建时的那份交接） */
+  const tookPending = useRef(false)
+
+  /**
+   * 打开某条需求的详情页。侧边栏与 mini 面板都走这里：
+   * 不在当前项目的需求要单独取，否则详情页会静默退回看板。
+   */
+  const openRequirement = useCallback(
+    (proj: string, slug: string) => {
+      setDetail({ project: proj, slug })
+      // 从别处点需求就是回到需求看板，别把详情页叠在待办看板上
+      setView('req')
+      const local = items.find((r) => r.slug === slug && r.project === proj)
+      setCrossReq(local ?? null)
+      if (!local) {
+        void api
+          .context(slug, proj)
+          .then((c) => setCrossReq(c.requirement))
+          .catch((e: Error) => setError(e.message))
+      }
+    },
+    [items],
+  )
+
+  // mini 面板点「详情」会发事件过来。窗口刚重建时事件早于订阅，
+  // 所以再主动取一次待打开的需求兜底
+  useEffect(() => {
+    const off = window.easyFlow?.onOpenRequirement?.((p) => openRequirement(p.project, p.slug))
+    if (!tookPending.current) {
+      tookPending.current = true
+      void window.easyFlow?.takePendingOpen?.().then((p) => {
+        if (p) openRequirement(p.project, p.slug)
+      })
+    }
+    return () => off?.()
+  }, [openRequirement])
 
   // Cmd+, 打开设置。Electron 里由应用菜单的加速键触发（见 main/registerMenu），
   // 浏览器开发时没有菜单，这里补一个键盘监听。
@@ -299,20 +335,7 @@ export default function App() {
             setDetail({ project: slug, slug: null })
             setView('req')
           }}
-          onOpenRequirement={(proj, slug) => {
-            setDetail({ project: proj, slug })
-            // 从侧边栏点需求就是回到需求看板，别把详情页叠在待办看板上
-            setView('req')
-            // 不在当前项目的需求需要单独取，否则详情页会静默退回看板
-            const local = items.find((r) => r.slug === slug && r.project === proj)
-            setCrossReq(local ?? null)
-            if (!local) {
-              void api
-                .context(slug, proj)
-                .then((c) => setCrossReq(c.requirement))
-                .catch((e: Error) => setError(e.message))
-            }
-          }}
+          onOpenRequirement={openRequirement}
         />
       )}
 

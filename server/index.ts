@@ -247,6 +247,13 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         return
       }
 
+      // 全部会话（归属在每条的 requirementId 上）：mini 面板一次拉全，
+      // 逐需求拉 context 太碎；排序交给库（最近登记的在前）
+      if (url.pathname === '/api/sessions' && req.method === 'GET') {
+        json(req, res, 200, { sessions: db.listSessions() })
+        return
+      }
+
       // 读需求目录下的某个文档（默认 requirement.md）。路径做了越界校验。
       if (url.pathname === '/api/doc' && req.method === 'GET') {
         const slug = url.searchParams.get('slug') ?? ''

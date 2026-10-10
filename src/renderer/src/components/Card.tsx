@@ -1,21 +1,7 @@
 import { useDraggable } from '@dnd-kit/core'
 import type { Requirement } from '../lib/types'
-
-/** 优先级标签，对应艾森豪威尔四象限 */
-const PRIORITY_LABEL: Record<string, string> = {
-  p0: '重要且紧急（马上做）',
-  p1: '重要不紧急（计划做）',
-  p2: '紧急不重要（授权做）',
-  p3: '不重要不紧急（有空再做）',
-}
-
-function relTime(ms: number): string {
-  const days = Math.floor((Date.now() - ms) / 86400000)
-  if (days <= 0) return '今天'
-  if (days === 1) return '昨天'
-  if (days < 30) return `${days} 天前`
-  return `${Math.floor(days / 30)} 个月前`
-}
+import { PRIORITY_LABEL } from '../lib/labels'
+import { relTime } from '../lib/time'
 
 interface Props {
   req: Requirement

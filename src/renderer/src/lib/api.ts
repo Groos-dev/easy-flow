@@ -3,6 +3,7 @@ import type {
   ContextPayload,
   Project,
   Requirement,
+  Session,
   SettingsPayload,
   SkillPayload,
   SwitchResult,
@@ -60,6 +61,9 @@ export const api = {
       `/api/context?slug=${encodeURIComponent(slug)}` +
         (project ? `&project=${encodeURIComponent(project)}` : ''),
     ),
+
+  /** 全部 agent 会话（需求归属在每条的 requirementId 上）。mini 面板一次拉全 */
+  sessions: (): Promise<{ sessions: Session[] }> => request('/api/sessions'),
 
   /** 读需求目录下的文档（默认 requirement.md） */
   doc: (

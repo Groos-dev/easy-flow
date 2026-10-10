@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, screen, session, shell } from 'electron'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RunningBoardServer } from '../../server/index.ts'
 
@@ -6,6 +7,10 @@ import type { RunningBoardServer } from '../../server/index.ts'
 const ICON = join(__dirname, '../../resources/icon.png')
 
 let win: BrowserWindow | null = null
+/** mini 面板窗（见下方 mini 面板段） */
+let panel: BrowserWindow | null = null
+/** 待主窗口渲染层取走的「打开需求」请求 */
+let pendingOpen: { project: string; slug: string } | null = null
 let boardServer: RunningBoardServer | null = null
 
 // 开发时开远程调试端口，便于用 CDP 检查渲染进程（黑屏/白屏排查）。
@@ -39,6 +44,141 @@ function applyCsp(): void {
   })
 }
 
+// ---------------------------------------------------------------- mini 面板
+
+/**
+ * mini 面板：launcher 式第二窗口。快捷键呼出、失焦即隐、隐藏不销毁——
+ * 跨应用快速回到最近活跃需求的入口（设计见需求 mini-panel 的 design.md）。
+ */
+const PANEL_SIZE = { width: 420, height: 480 }
+
+/** 上次呼出位置存 userData，跨重启生效 */
+function panelPositionFile(): string {
+  return join(process.env.EASY_FLOW_USER_DATA!, 'panel-position.json')
+}
+
+function loadPanelPosition(): { x: number; y: number } | null {
+  try {
+    const pos = JSON.parse(readFileSync(panelPositionFile(), 'utf8'))
+    if (typeof pos?.x === 'number' && typeof pos?.y === 'number') return pos
+  } catch {
+    // 没存过或文件损坏：回落到默认位置
+  }
+  return null
+}
+
+/** 存进文件前校验位置还落在某块屏幕的工作区内；拔了显示器的旧坐标直接作废 */
+function validPanelPosition(
+  pos: { x: number; y: number } | null,
+): { x: number; y: number } | null {
+  if (!pos) return null
+  const inside = screen.getAllDisplays().some(
+    (d) =>
+      pos.x >= d.workArea.x &&
+      pos.x < d.workArea.x + d.workArea.width &&
+      pos.y >= d.workArea.y &&
+      pos.y < d.workArea.y + d.workArea.height,
+  )
+  return inside ? pos : null
+}
+
+function savePanelPosition(): void {
+  if (!panel || panel.isDestroyed()) return
+  try {
+    writeFileSync(panelPositionFile(), JSON.stringify(panel.getPosition()))
+  } catch {
+    // 存不下就算了：位置记忆不是关键路径
+  }
+}
+
+function createPanel(): void {
+  panel = new BrowserWindow({
+    ...PANEL_SIZE,
+    show: false,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    backgroundColor: '#0f1115',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+
+  // 外链走系统浏览器（会话 deeplink、MR 等链接），不在面板窗里开
+  panel.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  // launcher 的关键：焦点一走就藏。隐藏不销毁，再呼秒开
+  panel.on('blur', () => panel?.hide())
+  panel.on('closed', () => {
+    panel = null
+  })
+  // 'moved' 在拖动落定后触发；程序化 setPosition 也会发，无害（存的就是当前值）
+  panel.on('moved', savePanelPosition)
+
+  if (process.env.ELECTRON_RENDERER_URL) {
+    void panel.loadURL(`${process.env.ELECTRON_RENDERER_URL}/mini.html`)
+  } else {
+    void panel.loadFile(join(__dirname, '../renderer/mini.html'))
+  }
+}
+
+function showPanel(): void {
+  if (!panel || panel.isDestroyed()) createPanel()
+  panel!.setAlwaysOnTop(true, 'floating')
+
+  const saved = validPanelPosition(loadPanelPosition())
+  if (saved) {
+    panel!.setPosition(saved.x, saved.y)
+  } else {
+    // 默认位置：鼠标所在屏幕、顶部居中约 20%
+    const cursor = screen.getCursorScreenPoint()
+    const display = screen.getDisplayNearestPoint(cursor)
+    const wa = display.workArea
+    panel!.setPosition(
+      wa.x + Math.round((wa.width - PANEL_SIZE.width) / 2),
+      wa.y + Math.round(wa.height * 0.2),
+    )
+  }
+
+  panel!.show()
+  panel!.focus()
+  // 呼出即聚焦过滤框、顺手重拉数据——上次呼出后 agent 可能又动了看板
+  panel!.webContents.send('easy-flow:panel-shown')
+}
+
+function togglePanel(): void {
+  if (panel && !panel.isDestroyed() && panel.isVisible()) {
+    panel.hide()
+  } else {
+    showPanel()
+  }
+}
+
+/** 默认快捷键。用户改了存在配置里（见设置页的「快捷键」） */
+const DEFAULT_SHORTCUT = 'CommandOrControl+Shift+E'
+/** 当前生效的快捷键，改的时候要先摘掉旧的 */
+let panelShortcut = DEFAULT_SHORTCUT
+
+/**
+ * 换绑快捷键。先注册新的，成功再摘旧的——新组合被别的应用占着时，
+ * 旧的还留在手上，不至于两个都用不了。
+ */
+function rebindShortcut(accel: string): boolean {
+  if (accel === panelShortcut) return true
+  if (!globalShortcut.register(accel, togglePanel)) return false
+  globalShortcut.unregister(panelShortcut)
+  panelShortcut = accel
+  return true
+}
+
 function registerIpc(): void {
   ipcMain.handle('easy-flow:pick-directory', async () => {
     const result = await dialog.showOpenDialog(win ?? undefined!, {
@@ -47,6 +187,50 @@ function registerIpc(): void {
     })
     return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
   })
+
+  // 设置页的「快捷键」：取值与改绑都归主进程（globalShortcut 只在这儿）
+  ipcMain.handle('easy-flow:get-shortcut', () => ({
+    shortcut: panelShortcut,
+    fallback: DEFAULT_SHORTCUT,
+  }))
+
+  ipcMain.handle('easy-flow:set-shortcut', async (_event, accel: string) => {
+    const next = accel.trim()
+    if (!next) return { ok: false, error: '快捷键不能为空' }
+    if (!rebindShortcut(next)) {
+      return { ok: false, error: `${next} 注册不上：多半被别的应用占用了，换一个` }
+    }
+    try {
+      const { writeConfig } = await import('../../server/config.ts')
+      writeConfig({ panelShortcut: next })
+    } catch (e) {
+      // 注册已经生效，只是没记住；下次启动会回到旧值，得说出来
+      return { ok: true, shortcut: next, error: `已生效，但写入配置失败：${(e as Error).message}` }
+    }
+    return { ok: true, shortcut: next }
+  })
+
+  // mini 面板点「详情」：主窗口前置并跳到该需求。主窗口被关过就重建（macOS 常态）
+  ipcMain.handle('easy-flow:open-requirement', async (_event, payload: { project: string; slug: string }) => {
+    if (!win || win.isDestroyed()) {
+      // 新窗口的渲染层订阅可能还没挂上，先存着等它来取（见 take-pending-open）
+      pendingOpen = payload
+      await createWindow()
+    }
+    win!.show()
+    win!.focus()
+    win!.webContents.send('easy-flow:open-requirement', payload)
+  })
+
+  // 渲染层起来时取走待打开的需求：事件早于订阅就会丢，靠这一份兜底
+  ipcMain.handle('easy-flow:take-pending-open', () => {
+    const p = pendingOpen
+    pendingOpen = null
+    return p
+  })
+
+  // mini 面板 Esc 到顶（没展开、没过滤词）时藏起自己
+  ipcMain.on('easy-flow:panel-hide', () => panel?.hide())
 }
 
 /**
@@ -123,6 +307,18 @@ async function boot(): Promise<void> {
   registerMenu()
   applyCsp()
   boardServer = await startBoardServer({ port: DEFAULT_PORT })
+
+  // mini 面板的全局快捷键：取用户改过的，没改过就是默认
+  const { readConfig } = await import('../../server/config.ts')
+  panelShortcut = readConfig().panelShortcut || DEFAULT_SHORTCUT
+  if (!globalShortcut.register(panelShortcut, togglePanel)) {
+    // 被别的应用占用时 register 返回 false。回落到默认，至少还能呼出——
+    // 否则用户改的那个键失效后，面板就再没有入口了
+    console.warn(`[easy-flow] 快捷键 ${panelShortcut} 注册失败：可能被其它应用占用`)
+    if (panelShortcut !== DEFAULT_SHORTCUT && globalShortcut.register(DEFAULT_SHORTCUT, togglePanel)) {
+      panelShortcut = DEFAULT_SHORTCUT
+    }
+  }
 }
 
 async function createWindow(): Promise<void> {
@@ -192,4 +388,8 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   boardServer?.close()
+})
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
 })

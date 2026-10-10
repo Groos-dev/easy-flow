@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import type { Requirement } from '../lib/types'
+import { STATUS_CLASS } from '../lib/labels'
 import { buildTree, layoutTree, type LaidNode } from '../lib/mindmap'
 
 /** 顶层分支的连线颜色，循环取用；刻意避开状态色，免得两种颜色打架 */
 const BRANCH_COLORS = ['#a78bfa', '#f472b6', '#22d3ee', '#eab308', '#fb7185', '#2dd4bf']
-
-/** 状态圆点的配色，与看板列的语义对齐 */
-const STATUS_CLASS: Record<string, string> = {
-  澄清: 's-clarify',
-  执行中: 's-doing',
-  Review: 's-review',
-  已完成: 's-done',
-}
 
 const MIN_ZOOM = 0.4
 const MAX_ZOOM = 2.5
