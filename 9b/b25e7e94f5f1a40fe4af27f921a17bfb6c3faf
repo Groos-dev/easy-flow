@@ -1,0 +1,50 @@
+test/core.test.ts
+  s_acbfacb3e228ba::t_407bb4981071c7 539-565
+  s_acbfacb3e228ba::t_53085bbbe518f0 480-495,506,511-521,523-524
+  s_acbfacb3e228ba::t_8009f4a13caffb 522
+  s_acbfacb3e228ba::t_304c8b31bca9a1 20
+  s_acbfacb3e228ba::t_2c033724fe48e4 1691-1709,1716-1720
+  s_acbfacb3e228ba::t_43332edd457416 25
+skill/easy-flow/SKILL.md
+  s_acbfacb3e228ba::t_45fcddf9662dcb 82
+  s_acbfacb3e228ba::t_fc99f3ab6f5a34 39
+src/renderer/src/lib/types.ts
+  s_acbfacb3e228ba::t_9764c97522a9b0 20-25
+  s_acbfacb3e228ba::t_2493016a886eeb 64
+src/renderer/src/lib/links.ts
+  s_acbfacb3e228ba::t_c8f99de658d6bf 1-19
+server/db.ts
+  s_acbfacb3e228ba::t_9b7676019a2527 290-318
+  s_acbfacb3e228ba::t_ec0d21a8685789 939
+  s_acbfacb3e228ba::t_71a79746da458d 769
+  s_acbfacb3e228ba::t_fd85a4c5ae5b85 114-119
+  s_acbfacb3e228ba::t_8452af47495e80 99
+server/cli.ts
+  s_acbfacb3e228ba::t_e65e4834165750 338,342
+  s_acbfacb3e228ba::t_b95cb29d5ed217 659
+  s_acbfacb3e228ba::t_b6d4766b9b978c 341
+  s_acbfacb3e228ba::t_88f668640cb93e 628-633,640
+  s_acbfacb3e228ba::t_b99fd87c1b32e5 31
+  s_acbfacb3e228ba::t_ca1d691ec2259f 586-589,592-593
+  s_acbfacb3e228ba::t_7b6f23082516b1 608
+  s_acbfacb3e228ba::t_be8b412e127b24 590-591,594-597
+src/renderer/src/components/InfoPanel.tsx
+  s_acbfacb3e228ba::t_f771719fdeafca 142
+  s_acbfacb3e228ba::t_db83f45d12e5d3 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "9bb25e7e94f5f1a40fe4af27f921a17bfb6c3faf",
+  "prompts": {},
+  "sessions": {
+    "s_acbfacb3e228ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2a4e55e1-c130-46c8-a3f6-bfc643cefa7d",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
