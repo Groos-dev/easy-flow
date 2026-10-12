@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import { test, describe } from 'node:test'
-import { AppServer } from '../server/codex.ts'
+import { AppServer, ensureReviewProject } from '../server/codex.ts'
 import { BoardDatabase } from '../server/db.ts'
 import { findLaunchProvider, type LaunchInput } from '../server/launch.ts'
 import {
@@ -42,6 +42,78 @@ describe('Codex 开发会话启动', () => {
     assert.deepEqual(codexDevelopmentProjectRoots(input), [input.worktreePath])
     assert.equal(codexDevelopmentProjectKey(input), 'easy-flow:req-demo:wt-selected')
     assert.notEqual(codexDevelopmentProjectKey(input), 'easy-flow:req-demo')
+  })
+
+  test('review project 仍按需求级幂等键更新全部 roots', async () => {
+    const calls: Array<{ method: string; params: Record<string, unknown> }> = []
+    const server = {
+      async call(method: string, params: Record<string, unknown>) {
+        calls.push({ method, params })
+        return method === 'project/create' ? { project: { id: 'review-project' } } : undefined
+      },
+    } as unknown as AppServer
+    const roots = ['/repo/one', '/repo/two']
+
+    assert.equal(await ensureReviewProject(server, input.requirementId, 'requirement', roots), 'review-project')
+    assert.deepEqual(calls, [
+      {
+        method: 'project/create',
+        params: {
+          idempotencyKey: 'easy-flow:req-demo',
+          name: 'requirement',
+          roots: roots.map((path) => ({ path })),
+        },
+      },
+      { method: 'project/update', params: { projectId: 'review-project', roots: roots.map((path) => ({ path })) } },
+    ])
+  })
+
+  test('开发 project 使用所选工作区 roots 并返回深链', async () => {
+    const calls: Array<{ method: string; params: Record<string, unknown> }> = []
+    const server = {
+      async call(method: string, params: Record<string, unknown>) {
+        calls.push({ method, params })
+        return method === 'project/create' ? { project: { id: 'dev-project' } } : undefined
+      },
+      close() {},
+    } as unknown as AppServer
+    const start = AppServer.start
+    try {
+      AppServer.start = async () => server
+      const url = await codexProvider.build(input, 'start work')
+
+      assert.equal(new URL(url).searchParams.get('projectId'), 'dev-project')
+      assert.equal(new URL(url).searchParams.get('prompt'), 'start work')
+      assert.deepEqual(calls, [
+        {
+          method: 'project/create',
+          params: {
+            idempotencyKey: 'easy-flow:req-demo:wt-selected',
+            name: 'wt-selected',
+            roots: [{ path: input.worktreePath }],
+          },
+        },
+        { method: 'project/update', params: { projectId: 'dev-project', roots: [{ path: input.worktreePath }] } },
+      ])
+    } finally {
+      AppServer.start = start
+    }
+  })
+
+  test('开发 project 响应缺少 id 时报告具体字段路径', async () => {
+    const server = {
+      async call() {
+        return {}
+      },
+      close() {},
+    } as unknown as AppServer
+    const start = AppServer.start
+    try {
+      AppServer.start = async () => server
+      await assert.rejects(async () => codexProvider.build(input, 'prompt'), /app-server 返回里没有 project\.id/)
+    } finally {
+      AppServer.start = start
+    }
   })
 
   test('新开发 thread 默认登记为 dev，不覆盖已有 review thread', () => {
@@ -88,9 +160,12 @@ describe('Codex 开发会话启动', () => {
       await assert.rejects(async () => codexProvider.build(input, 'prompt'), /Codex command not found/)
 
       AppServer.start = async () => {
-        throw new Error('初始化失败')
+        throw new Error('initialize timed out after 60s')
       }
-      await assert.rejects(async () => codexProvider.build(input, 'prompt'), /Codex app-server failed to start/)
+      await assert.rejects(
+        async () => codexProvider.build(input, 'prompt'),
+        /Codex app-server failed to start: initialize timed out after 60s/,
+      )
     } finally {
       AppServer.start = start
     }
@@ -98,6 +173,10 @@ describe('Codex 开发会话启动', () => {
     assert.equal(
       codexAppServerStartError(new Error('找不到 codex 命令：装好 Codex，或让它在 PATH 里再重跑')).message,
       'Codex command not found. Install Codex or add it to PATH.',
+    )
+    assert.equal(
+      codexAppServerStartError(new Error('initialize timed out after 60s')).message,
+      'Codex app-server failed to start: initialize timed out after 60s',
     )
   })
 })
