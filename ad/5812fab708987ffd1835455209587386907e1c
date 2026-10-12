@@ -1,0 +1,23 @@
+test/launch-board.test.ts
+  s_fd2e0b97533d1d::t_e9028a2b026f5f 258,269-271,273
+  s_fd2e0b97533d1d::t_40d4ccaf51aa54 96-101
+server/index.ts
+  s_fd2e0b97533d1d::t_c5cbaf09e2ab50 317-320
+  s_fd2e0b97533d1d::t_7d0fceb061f87f 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "ad5812fab708987ffd1835455209587386907e1c",
+  "prompts": {},
+  "sessions": {
+    "s_fd2e0b97533d1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c1d87a7-9cee-4ea4-9aa9-54a613c471fb",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
