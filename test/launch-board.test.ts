@@ -93,6 +93,12 @@ describe('需求详情页启动会话', () => {
         return 'codex-test://new-session'
       },
     })
+    // claude 也占上：真实 provider 由并行子需求提供，这里只验证看板侧的启动流程
+    registerLaunchProvider({
+      id: 'claude',
+      label: '测试 Claude Code',
+      build: () => 'claude-test://new-session',
+    })
 
     server = createServer((req, res) => void app.handle(req, res))
     await new Promise<void>((resolveListen) => server.listen(0, '127.0.0.1', resolveListen))
@@ -249,7 +255,7 @@ describe('需求详情页启动会话', () => {
     assert.doesNotMatch(feedback.title, /已打开|已创建成功/)
   })
 
-  test('provider 构建失败、无 provider、以及非本需求工作区都不误报打开成功', async () => {
+  test('provider 构建失败、未注册 agent、以及非本需求工作区都不误报打开成功', async () => {
     const before = app.db.listSessions('req-alpha').map((s) => s.session)
     buildError = 'provider build failed'
     const failedBuild = await post('/api/launch', {
@@ -260,12 +266,11 @@ describe('需求详情页启动会话', () => {
     assert.equal(failedBuild.error, 'provider build failed')
     assert.ok(failedBuild.prompt)
 
-    const unavailable = await post('/api/launch', {
-      slug: 'alpha', project: 'demo', worktreeId: 'wt-alpha', agent: 'claude',
+    // 注册表里没有的 agent 直接拒掉，而不是返回一个"打开了"的假象
+    const unsupported = await post('/api/launch', {
+      slug: 'alpha', project: 'demo', worktreeId: 'wt-alpha', agent: 'cursor',
     })
-    assert.equal(unavailable.opened, false)
-    assert.match(unavailable.error, /provider unavailable/i)
-    assert.match(unavailable.prompt, /req-alpha/)
+    assert.match(unsupported.error, /Unknown launch agent/i)
 
     const foreign = await post('/api/launch', {
       slug: 'alpha', project: 'demo', worktreeId: 'wt-beta', agent: 'codex',

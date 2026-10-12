@@ -22,7 +22,7 @@ import { withStatus } from './threads.ts'
 import './launch-claude.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 import { installSkill, skillPlan } from './skill-install.ts'
-import { findLaunchProvider, launchPrompt, launchProviders, type LaunchAgent } from './launch.ts'
+import { findLaunchProvider, launchPrompt, launchProviders } from './launch.ts'
 import './launch-codex.ts'
 import {
   allowOrigin,
@@ -314,10 +314,10 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         const project = resolveProject(db, projectRaw ? String(projectRaw) : null)
         const requirement = db.get(String(slug), project)
         if (!requirement) throw new Error(`Requirement not found: ${slug}`)
-        if (rawAgent !== 'claude' && rawAgent !== 'codex') {
-          throw new Error(`Unknown launch agent: ${rawAgent}`)
-        }
-        const agent: LaunchAgent = rawAgent
+        // 能启动的 agent 就是注册表里有的：没注册的 agent 与拼错的 id 一样，都是不支持
+        const provider = findLaunchProvider(String(rawAgent))
+        if (!provider) throw new Error(`Unknown launch agent: ${rawAgent}`)
+        const agent = provider.id
         const wt = db.worktreeById(String(worktreeId))
         if (!wt) throw new Error(`Worktree not found: ${worktreeId}`)
         if (wt.requirementId !== requirement.id) {
@@ -332,17 +332,6 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
           worktreePath: wt.path,
         }
         const prompt = launchPrompt(input)
-        const provider = findLaunchProvider(agent)
-        if (!provider) {
-          json(req, res, 200, {
-            agent,
-            url: '',
-            prompt,
-            opened: false,
-            error: `Launch provider unavailable: ${agent}`,
-          })
-          return
-        }
 
         let targetUrl = ''
         try {
