@@ -12,7 +12,8 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { api } from './lib/api'
-import type { Project, Requirement, Status, Todo, TodoStatus } from './lib/types'
+import type { Project, Requirement, Session, Status, Todo, TodoStatus } from './lib/types'
+import { badgesOf } from './lib/threads'
 import BoardSwitcher, { type BoardView } from './components/BoardSwitcher'
 import MindMap from './components/MindMap'
 import Card from './components/Card'
@@ -23,6 +24,8 @@ import TodoBoard from './components/TodoBoard'
 interface BoardColumnProps {
   status: Status
   items: Requirement[]
+  /** 需求 id → 它名下的会话。卡片角标按需求取用（每个会话各挂一个） */
+  sessionsByReq: Map<string, Session[]>
   onOpen: (slug: string) => void
   isOver: boolean
   /** 收成窄条（只有「已完成」列会） */
@@ -33,6 +36,7 @@ interface BoardColumnProps {
 function ColumnView({
   status,
   items,
+  sessionsByReq,
   onOpen,
   isOver,
   collapsed,
@@ -77,7 +81,14 @@ function ColumnView({
         {items.length === 0 ? (
           <div className="empty">—</div>
         ) : (
-          items.map((r) => <Card key={r.slug} req={r} onOpen={onOpen} />)
+          items.map((r) => (
+            <Card
+              key={r.slug}
+              req={r}
+              sessions={badgesOf(sessionsByReq.get(r.id) ?? [])}
+              onOpen={onOpen}
+            />
+          ))
         )}
       </div>
     </div>
@@ -95,6 +106,9 @@ const DONE_STATUS: Status = '已完成'
 
 /** 同列内按优先级排：p0 在前，没设优先级的排最后 */
 const PRIORITY_RANK: Record<string, number> = { p0: 0, p1: 1, p2: 2, p3: 3 }
+
+/** 未读事件的轮询间隔。够快让人察觉，又不至于把看板变成每秒一次的扫描 */
+const SESSION_POLL_MS = 20_000
 
 export default function App() {
   const [statuses, setStatuses] = useState<Status[]>([])
@@ -114,6 +128,8 @@ export default function App() {
   const [detail, setDetail] = useState<{ project: string; slug: string | null } | null>(null)
   const [priorities, setPriorities] = useState<string[]>([])
   const [items, setItems] = useState<Requirement[]>([])
+  /** 全部会话（含实时状态）。卡片角标与详情页的「会话」块共用 */
+  const [sessions, setSessions] = useState<Session[]>([])
   /** 待办：全局的，不分项目 */
   const [todos, setTodos] = useState<Todo[]>([])
   const [todoStatuses, setTodoStatuses] = useState<string[]>([])
@@ -220,18 +236,61 @@ export default function App() {
     }
   }, [])
 
-  /** 看板、待办与项目列表一起重拉：agent 建完目录后不用重启应用就能看到 */
+  /**
+   * 会话状态读不到不该让看板报错——角标本来就只是提示，少了它看板照常能用。
+   * 所以这里失败不写全局 error，只把上次的数据留着。
+   */
+  const loadSessions = useCallback(async () => {
+    try {
+      const data = await api.sessions()
+      setSessions(data.sessions)
+    } catch {
+      /* 读不到就维持现状 */
+    }
+  }, [])
+
+  /**
+   * 未读事件靠轮询浮上来：agent 跑完一轮时人在别处，不轮询就只能等他手动刷新——
+   * 那就不叫「感知到」了。窗口在后台时不拉（那时也没人看）。
+   */
+  useEffect(() => {
+    const tick = () => {
+      if (!document.hidden) void loadSessions()
+    }
+    const timer = setInterval(tick, SESSION_POLL_MS)
+    // 切回窗口立刻补一次，别让人盯着过期数据等下一轮
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', tick)
+    }
+  }, [loadSessions])
+
+  /** 看板、待办、项目列表与会话一起重拉：agent 建完目录后不用重启应用就能看到 */
   const refresh = useCallback(() => {
     void load()
     void loadTodos()
     void loadProjects()
-  }, [load, loadTodos, loadProjects])
+    void loadSessions()
+  }, [load, loadTodos, loadProjects, loadSessions])
 
   useEffect(() => {
     void load()
     void loadTodos()
     void loadProjects()
-  }, [load, loadTodos, loadProjects])
+    void loadSessions()
+  }, [load, loadTodos, loadProjects, loadSessions])
+
+  /** 需求 id → 名下的会话。需求没有 id 时不可能有会话，取不到正好 */
+  const sessionsByReq = useMemo(() => {
+    const map = new Map<string, Session[]>()
+    for (const s of sessions) {
+      const list = map.get(s.requirementId)
+      if (list) list.push(s)
+      else map.set(s.requirementId, [s])
+    }
+    return map
+  }, [sessions])
 
   /** 切项目：写回 activeProject，再把看板换成新项目的数据 */
   async function switchProject(slug: string) {
@@ -470,6 +529,7 @@ export default function App() {
                       key={status}
                       status={status}
                       items={byStatus.get(status) ?? []}
+                      sessionsByReq={sessionsByReq}
                       onOpen={(slug) => setDetail({ project, slug })}
                       isOver={overStatus === status}
                       collapsed={status === DONE_STATUS && !doneOpen}

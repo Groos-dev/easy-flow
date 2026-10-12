@@ -18,6 +18,7 @@ import {
   type Priority,
   type TodoStatus,
 } from './db.ts'
+import { withStatus } from './threads.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 import { installSkill, skillPlan } from './skill-install.ts'
 import {
@@ -241,8 +242,8 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
           requirementMd: db.readRequirementMd(slug, project),
           // 归属只存在库里，详情页要展示工作区就得从这儿带出去
           worktrees: db.listWorktrees(ctx.requirement.id),
-          // 同理：会话只归库，详情页的「会话」块靠这一份
-          sessions: db.listSessions(ctx.requirement.id),
+          // 同理：会话只归库，详情页的「会话」块靠这一份；状态是读 agent 应用的落盘文件得来的
+          sessions: withStatus(db.listSessions(ctx.requirement.id)),
           // 挂在这条需求上的待办（立项时由 todo 侧登记）。同样是只归库的关系
           todos: db.listTodos(ctx.requirement.id),
         })
@@ -252,7 +253,7 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
       // 全部会话（归属在每条的 requirementId 上）：mini 面板一次拉全，
       // 逐需求拉 context 太碎；排序交给库（最近登记的在前）
       if (url.pathname === '/api/sessions' && req.method === 'GET') {
-        json(req, res, 200, { sessions: db.listSessions() })
+        json(req, res, 200, { sessions: withStatus(db.listSessions()) })
         return
       }
 

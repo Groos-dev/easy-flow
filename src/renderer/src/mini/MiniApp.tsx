@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
-import { AGENT_LABELS, STATUS_CLASS } from '../lib/labels'
+import { AGENT_LABELS, STATUS_CLASS, THREAD_STATE_CLASS } from '../lib/labels'
 import { codeLinkLabel } from '../lib/links'
 import { relTime, parseStamp } from '../lib/time'
 import { moveKey, resolveKey } from '../lib/selection'
+import { badgesOf } from '../lib/threads'
 import type { Requirement, Session } from '../lib/types'
 import { AgentIcon } from '../components/icons'
 
@@ -278,7 +279,10 @@ export default function MiniApp() {
         {/* 行上统一 preventDefault：点击不能把焦点从过滤框带走，键盘流要接着能用 */}
         {blocks.map((b) => {
           const on = selKey === b.key
-          const last = b.sessions[0]
+          // 有值得看的会话就挂它（角标亮状态点），否则退回最近登记的那条——那是「上次在这儿干活」的现场。
+          // mini 面板一行只放得下一个 badge，所以取最急的那条；看板卡片上是每个会话各挂一个
+          const attention = badgesOf(b.sessions)[0]
+          const last = attention ?? b.sessions[0]
           return (
             <div key={b.key} className="mini-block">
               <div
@@ -306,6 +310,10 @@ export default function MiniApp() {
                       openSession(last)
                     }}
                   >
+                    {/* 状态点只在「有值得看的东西」时亮：跑完了没看、卡住了、出错了 */}
+                    {attention && (
+                      <span className={`thread-dot ${THREAD_STATE_CLASS[attention.status.state] ?? ''}`} />
+                    )}
                     <AgentIcon agent={last.agent} />
                   </span>
                 )}

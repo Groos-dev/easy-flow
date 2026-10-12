@@ -175,6 +175,22 @@ export interface ContextPayload {
   todos: Todo[]
 }
 
+/** 会话的实时状态。字面量与 server/threads.ts 的 THREAD_STATES 一致 */
+export type ThreadState = 'running' | 'done' | 'blocked' | 'failed' | 'unknown'
+
+/** 与 server/threads.ts 的 SessionStatus 对应。服务端读 agent 应用的落盘文件得来 */
+export interface SessionStatus {
+  state: ThreadState
+  /** 有你看过之后的新内容 */
+  fresh: boolean
+  /** 需要人介入时，要人回答的那句话原文；其余为空串 */
+  needsAction: string
+  /** 状态时间（yyyy-mm-dd HH:mm）；读不到为空串 */
+  at: string
+  /** 判据出处 */
+  detail: string
+}
+
 /** 一条 agent 会话的登记（claude code / codex / cursor） */
 export interface Session {
   requirementId: string
@@ -189,6 +205,7 @@ export interface Session {
   link: string
   created: string
   updated: string
+  status: SessionStatus
 }
 
 export interface SwitchResult {

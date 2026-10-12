@@ -614,6 +614,91 @@ body {
   margin-left: auto;
 }
 
+/* --------------------------------------------------- 会话状态（角标与详情） */
+
+/* 状态点：配色沿用看板那四个色，失败用 p0 的红 */
+.thread-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--status-clarify);
+}
+
+.thread-dot.t-running {
+  background: var(--status-doing);
+}
+
+.thread-dot.t-done {
+  background: var(--status-done);
+}
+
+.thread-dot.t-blocked {
+  background: var(--status-review);
+}
+
+.thread-dot.t-failed {
+  background: #ff5c5c;
+}
+
+/* 一条需求可能挂着好几个会话，各挂各的角标：同时开着几个 agent 时，
+   要能一眼看出是哪个在等你。放不下就换行，别把卡片撑宽 */
+.thread-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* 卡片角标：压在标题下面一行。做成按钮是因为它点一下直接跳回会话——
+   卡片本身的点击是开详情，两者不是一件事 */
+.thread-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #232830;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+button.thread-badge:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* 没有 deeplink 的会话：只报状态，不给一个点了没反应的按钮 */
+.thread-badge.off {
+  opacity: 0.7;
+}
+
+/* 详情页会话块里那行状态文案 */
+.thread-state {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* 未读标记：角标亮就是因为这个，读过了它会消失 */
+.thread-unread {
+  padding: 0 5px;
+  border-radius: 8px;
+  background: #2f3a4a;
+  color: #8fb4ff;
+  font-size: 10px;
+}
+
+/* 需要人介入的那句话原文 */
+.thread-need {
+  margin-top: 3px;
+  color: #e8b48a;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 /* ---------------------------------------------------------------- 详情 */
 
 .section-label {
@@ -1611,6 +1696,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   width: 20px;
   height: 18px;
   border: 1px solid var(--border);
@@ -1618,6 +1704,12 @@ body {
   background: var(--card);
   color: var(--text-dim);
   font-size: 10px;
+}
+
+/* 挂了状态点就放宽一点，别把 agent 图标挤扁 */
+.mini-badge:has(.thread-dot) {
+  width: auto;
+  padding: 0 5px;
 }
 
 .mini-badge:not(.off):hover {

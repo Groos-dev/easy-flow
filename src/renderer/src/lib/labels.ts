@@ -17,3 +17,22 @@ export const STATUS_CLASS: Record<string, string> = {
   Review: 's-review',
   已完成: 's-done',
 }
+
+/**
+ * 会话实时状态的文案与配色。配色沿用看板那四个色，失败用 p0 的红。
+ * unknown 不给配色——它不该出现在角标上，只该在详情页里说明为什么读不到。
+ */
+export const THREAD_STATE_LABEL: Record<string, string> = {
+  running: '正在跑',
+  done: '已完成待看',
+  blocked: '需要人介入',
+  failed: '失败',
+  unknown: '读不到状态',
+}
+
+export const THREAD_STATE_CLASS: Record<string, string> = {
+  running: 't-running',
+  done: 't-done',
+  blocked: 't-blocked',
+  failed: 't-failed',
+}

@@ -58,6 +58,10 @@
 - **会话**是 agent 登记在需求上的自己的会话（claude code / codex / cursor）：agent 开工时
   `easy-flow req session add` 一条命令登记，详情页的「会话」块点一下即在 desktop 应用里打开。
   与状态同理只归库——会话会变、会过期，写进 md 只会被下次重写冲掉
+- **会话的实时状态**（正在跑 / 已完成待看 / 需要人介入 / 失败）不在库里，是每次读看板时从 agent
+  应用自己的落盘文件现读的，只读、不写回；读不到就是 `unknown`，不猜。卡片上的角标只在值得看时
+  亮（卡住了、跑完了没看、正在跑），点一下直接回到那个会话。依据见
+  `~/requirements/easy-flow/thread-status/docs/easy-flow/research.md`
 - **待办**是与需求平级的另一块板：一条一份 md 放在 `_todos/`，文件名就是它的 id
   （`T-YYYYMMDD-NNN`，按首次入库日编号）。同样只从 md 读标题与摘要，状态与来源只归库
 - **待办与需求**靠 todo 侧的一个指针相连（`easy-flow todo set <id> --req <req-…>`）：立项后回填，
