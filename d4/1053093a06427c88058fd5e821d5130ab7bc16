@@ -1,0 +1,28 @@
+test/launch-codex.test.ts
+  s_4441edbedd16a8::t_af9dd2c7e2cbc0 6,11,82-87,89-92,94-97
+  s_4441edbedd16a8::t_4be5a268deca6c 1-5,7,9-10,12-24,29-66,71-81,98-103
+  s_4441edbedd16a8::t_97b57aa929a8d8 8,25-28
+  s_4441edbedd16a8::t_fbc1dfebdab00c 67-70
+  s_4441edbedd16a8::t_2b77e00d906d77 88,93
+server/index.ts
+  s_4441edbedd16a8::t_7a38a691dfdb84 24
+server/launch-codex.ts
+  s_4441edbedd16a8::t_7a38a691dfdb84 1-23,26-43,45-61
+  s_4441edbedd16a8::t_fbc1dfebdab00c 24-25,44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "d41053093a06427c88058fd5e821d5130ab7bc16",
+  "prompts": {},
+  "sessions": {
+    "s_4441edbedd16a8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12f22-005f-72f1-b1ba-46dff6e840ec",
+        "model": "gpt-6-luna-2026-09-22[1M]"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
