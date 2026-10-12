@@ -11,6 +11,7 @@ import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync, readdirSync, cpSync, realpathSync, lstatSync, readlinkSync } from 'node:fs'
 import { join, basename, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
 import { createServer } from 'node:http'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -35,7 +36,9 @@ import type { Requirement, Session } from '../src/renderer/src/lib/types.ts'
 // 偶尔会卡上几分钟（还会让随后的 rmSync 撞 ENOTEMPTY）。身份由每条命令显式 -c 传，够用。
 process.env.GIT_CONFIG_GLOBAL = '/dev/null'
 
-const TMP = '/tmp/easy-flow-test'
+// 固定一个路径，多个 worktree 并行跑测试时会互相删对方的夹具（fresh 每次清空它）。
+// 按 cwd 派生：每个工作区一份，同工作区内仍是同一目录。
+const TMP = process.env.EASY_FLOW_TEST_TMP ?? join(tmpdir(), `easy-flow-test-${basename(process.cwd())}`)
 
 /** 造一个需求目录 */
 function makeReq(
