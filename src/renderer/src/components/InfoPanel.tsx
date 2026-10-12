@@ -6,6 +6,7 @@ import { codeLinkLabel } from '../lib/links'
 import { isEventState } from '../lib/threads'
 import { TODO_STATUS_LABEL, type ContextPayload, type Requirement } from '../lib/types'
 import { CopyButton, InfoBlock, OneLine } from './InfoBits'
+import LaunchSession from './LaunchSession'
 
 /**
  * 需求详情页的头部浮窗：目录、工作区、会话、关联待办与链接。零件见 InfoBits，与待办的 TodoPanel 共用。
@@ -79,57 +80,57 @@ export default function InfoPanel({
         </InfoBlock>
       )}
 
-      {/* 会话：agent 登记在这条需求上的现场。有 deeplink 的点一行就回到那个会话 */}
-      {sessions.length > 0 && (
-        <InfoBlock label="会话" count={sessions.length}>
-          {sessions.map((s) => {
-            // 已读的事件不再占位：卡片角标已经消失，这里再挂一行「需要人介入」只会让人
-            // 以为还没处理。正在跑不是事件、unknown 是读不到，都照常显示。
-            const showState = !isEventState(s.status.state) || s.status.fresh
-            return (
-              <div className="wt" key={`${s.agent}:${s.session}`}>
-                <div className="wt-head">
-                  <span className="v">{AGENT_LABELS[s.agent] ?? s.agent}</span>
-                  {showState && (
-                    <>
-                      {/* 状态是读 agent 应用的落盘文件得来的，hover 看判据出处 */}
-                      <span
-                        className={`thread-dot ${THREAD_STATE_CLASS[s.status.state] ?? ''}`}
-                        title={`${s.status.detail}${s.status.at ? ` · ${s.status.at}` : ''}`}
-                      />
-                      <span className="thread-state">
-                        {THREAD_STATE_LABEL[s.status.state] ?? s.status.state}
-                      </span>
-                      {/* 未读才是角标亮的原因；这里标出来，好让人对上卡片上的那个 */}
-                      {s.status.fresh && (
-                        <span className="thread-unread">未读</span>
-                      )}
-                    </>
-                  )}
-                  <span className="spacer" />
-                  <CopyButton text={s.session} label="会话 id" />
-                </div>
-                {/* 需要人介入时把那句话原文摆出来——看板上就能答，不用先进应用 */}
-                {showState && s.status.needsAction && (
-                  <OneLine className="thread-need" text={s.status.needsAction} title={s.status.needsAction} />
+      {/* 新会话入口与已有会话放在一起，工作区选择和登记结果都能就近核对 */}
+      <InfoBlock label="会话" count={sessions.length}>
+        <LaunchSession req={req} worktrees={worktrees} />
+        {/* 有 deeplink 的点一行就回到原会话；新会话入口不碰已有回跳 */}
+        {sessions.map((s) => {
+          // 已读的事件不再占位：卡片角标已经消失，这里再挂一行「需要人介入」只会让人
+          // 以为还没处理。正在跑不是事件、unknown 是读不到，都照常显示。
+          const showState = !isEventState(s.status.state) || s.status.fresh
+          return (
+            <div className="wt" key={`${s.agent}:${s.session}`}>
+              <div className="wt-head">
+                <span className="v">{AGENT_LABELS[s.agent] ?? s.agent}</span>
+                {showState && (
+                  <>
+                    {/* 状态是读 agent 应用的落盘文件得来的，hover 看判据出处 */}
+                    <span
+                      className={`thread-dot ${THREAD_STATE_CLASS[s.status.state] ?? ''}`}
+                      title={`${s.status.detail}${s.status.at ? ` · ${s.status.at}` : ''}`}
+                    />
+                    <span className="thread-state">
+                      {THREAD_STATE_LABEL[s.status.state] ?? s.status.state}
+                    </span>
+                    {/* 未读才是角标亮的原因；这里标出来，好让人对上卡片上的那个 */}
+                    {s.status.fresh && (
+                      <span className="thread-unread">未读</span>
+                    )}
+                  </>
                 )}
-                {s.title && (
-                  <div className="wt-meta">
-                    <OneLine className="" text={s.title} title={s.title} />
-                  </div>
-                )}
-                <OneLine
-                  className={`mono ${s.link ? 'info-path' : 'info-path disabled'}`}
-                  text={s.session}
-                  title={s.link ? `在 ${AGENT_LABELS[s.agent] ?? s.agent} 里打开：${s.link}` : s.session}
-                  href={s.link || undefined}
-                />
-                {s.cwd && <OneLine className="wt-meta mono" text={s.cwd} title={s.cwd} />}
+                <span className="spacer" />
+                <CopyButton text={s.session} label="会话 id" />
               </div>
-            )
-          })}
-        </InfoBlock>
-      )}
+              {/* 需要人介入时把那句话原文摆出来——看板上就能答，不用先进应用 */}
+              {showState && s.status.needsAction && (
+                <OneLine className="thread-need" text={s.status.needsAction} title={s.status.needsAction} />
+              )}
+              {s.title && (
+                <div className="wt-meta">
+                  <OneLine className="" text={s.title} title={s.title} />
+                </div>
+              )}
+              <OneLine
+                className={`mono ${s.link ? 'info-path' : 'info-path disabled'}`}
+                text={s.session}
+                title={s.link ? `在 ${AGENT_LABELS[s.agent] ?? s.agent} 里打开：${s.link}` : s.session}
+                href={s.link || undefined}
+              />
+              {s.cwd && <OneLine className="wt-meta mono" text={s.cwd} title={s.cwd} />}
+            </div>
+          )
+        })}
+      </InfoBlock>
 
       {/* 关联待办：立项时在 todo 侧登记的指针反查出来的。只列未完成的，颜色区分状态 */}
       {openTodos.length > 0 && (

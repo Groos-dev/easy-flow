@@ -163,6 +163,21 @@ export interface Project {
 
 // ------------------------------------------------------------------ 载荷
 
+export type LaunchAgent = 'claude' | 'codex'
+
+export interface LaunchProviderInfo {
+  id: LaunchAgent
+  label: string
+}
+
+export interface LaunchResult {
+  agent: LaunchAgent
+  url: string
+  prompt: string
+  opened: boolean
+  error?: string
+}
+
 export interface ContextPayload {
   requirement: Requirement
   docs: Array<{ name: string; content: string }>

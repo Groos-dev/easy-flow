@@ -21,6 +21,7 @@ import {
 import { withStatus } from './threads.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 import { installSkill, skillPlan } from './skill-install.ts'
+import { findLaunchProvider, launchPrompt, launchProviders, type LaunchAgent } from './launch.ts'
 import {
   allowOrigin,
   json,
@@ -116,6 +117,13 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
     try {
       if (url.pathname === '/api/health') {
         json(req, res, 200, { ok: true, dataDir: currentDir, db: db.file })
+        return
+      }
+
+      if (url.pathname === '/api/launch/providers' && req.method === 'GET') {
+        json(req, res, 200, {
+          providers: launchProviders().map(({ id, label }) => ({ id, label })),
+        })
         return
       }
 
@@ -295,6 +303,64 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         const target = db.get(String(slug), project)
         if (target) execFile('open', [target.path], () => {})
         json(req, res, 200, { ok: true })
+        return
+      }
+
+      // URL 由已注册的 provider 组装；会话登记留给新会话首轮自己完成
+      if (url.pathname === '/api/launch' && req.method === 'POST') {
+        const { slug, project: projectRaw, worktreeId, agent: rawAgent } = await readBody(req)
+        const project = resolveProject(db, projectRaw ? String(projectRaw) : null)
+        const requirement = db.get(String(slug), project)
+        if (!requirement) throw new Error(`Requirement not found: ${slug}`)
+        if (rawAgent !== 'claude' && rawAgent !== 'codex') {
+          throw new Error(`Unknown launch agent: ${rawAgent}`)
+        }
+        const agent: LaunchAgent = rawAgent
+        const wt = db.worktreeById(String(worktreeId))
+        if (!wt) throw new Error(`Worktree not found: ${worktreeId}`)
+        if (wt.requirementId !== requirement.id) {
+          throw new Error(`Worktree does not belong to requirement: ${worktreeId}`)
+        }
+        if (!existsSync(wt.path)) throw new Error(`Directory no longer exists: ${wt.path}`)
+
+        const input = {
+          agent,
+          requirementId: requirement.id,
+          worktreeId: wt.id,
+          worktreePath: wt.path,
+        }
+        const prompt = launchPrompt(input)
+        const provider = findLaunchProvider(agent)
+        if (!provider) {
+          json(req, res, 200, {
+            agent,
+            url: '',
+            prompt,
+            opened: false,
+            error: `Launch provider unavailable: ${agent}`,
+          })
+          return
+        }
+
+        let targetUrl = ''
+        try {
+          targetUrl = await provider.build(input, prompt)
+          await new Promise<void>((resolve, reject) => {
+            execFile('open', [targetUrl], (error, _stdout, stderr) => {
+              if (error) reject(new Error(stderr.trim() || error.message))
+              else resolve()
+            })
+          })
+          json(req, res, 200, { agent, url: targetUrl, prompt, opened: true })
+        } catch (error) {
+          json(req, res, 200, {
+            agent,
+            url: targetUrl,
+            prompt,
+            opened: false,
+            error: (error as Error).message,
+          })
+        }
         return
       }
 

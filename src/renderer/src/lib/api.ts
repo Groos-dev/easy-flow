@@ -1,6 +1,9 @@
 import type {
   BoardData,
   ContextPayload,
+  LaunchAgent,
+  LaunchProviderInfo,
+  LaunchResult,
   Project,
   Requirement,
   Session,
@@ -142,6 +145,17 @@ export const api = {
   /** 在 Finder 里打开某个工作区的目录 */
   openWorktree: (id: string): Promise<{ ok: boolean; path: string }> =>
     request('/api/worktree/open', { method: 'POST', body: JSON.stringify({ id }) }),
+
+  launchProviders: (): Promise<{ providers: LaunchProviderInfo[] }> =>
+    request('/api/launch/providers'),
+
+  launch: (input: {
+    slug: string
+    project: string
+    worktreeId: string
+    agent: LaunchAgent
+  }): Promise<LaunchResult> =>
+    request('/api/launch', { method: 'POST', body: JSON.stringify(input) }),
 
   settings: (): Promise<SettingsPayload> => request('/api/settings'),
 

@@ -59,6 +59,6 @@ export function launchPrompt(input: LaunchInput): string {
     `在 easy-flow 需求 ${input.requirementId} 的工作区 ${input.worktreeId} 上开始工作。`,
     '',
     `先运行 easy-flow context ${input.worktreeId} 读项目规范、需求内容与状态，再动手。`,
-    `开工后把当前会话登记到这条需求：easy-flow req session add ${input.requirementId} --agent ${input.agent} --title "<一句话说明在做什么>"`,
+    `发送首条消息、当前会话 ID 已产生后，在这个工作区运行 easy-flow req session add ${input.requirementId} --agent ${input.agent} --title "<一句话说明在做什么>"`,
   ].join('\n')
 }
