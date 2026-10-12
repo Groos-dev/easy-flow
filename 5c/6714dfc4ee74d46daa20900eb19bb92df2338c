@@ -1,0 +1,23 @@
+server/index.ts
+  s_74aab90bb2df95::t_84e217e578bc89 22
+server/launch-claude.ts
+  s_74aab90bb2df95::t_84e217e578bc89 1-22
+test/launch-claude.test.ts
+  s_74aab90bb2df95::t_b359d59a5c59fa 1-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "5c6714dfc4ee74d46daa20900eb19bb92df2338c",
+  "prompts": {},
+  "sessions": {
+    "s_74aab90bb2df95": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12f21-fefd-7182-b780-61c3bc02b0b5",
+        "model": "gpt-6-luna-2026-09-22[1M]"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
