@@ -1139,7 +1139,8 @@ function cliFail(configFile: string, args: string[], extraEnv: Record<string, st
   return r.stderr
 }
 
-const GIT_TMP = '/tmp/easy-flow-git-test'
+// 与 TMP 同源：固定路径会让并行跑测试的两个工作区互删夹具
+const GIT_TMP = `${TMP}-git`
 
 /**
  * 造一个真仓库当夹具。worktree 至少要有一个 commit 才建得出来，
@@ -1379,7 +1380,7 @@ describe('数据层 · 会话', () => {
 })
 
 describe('CLI 层', () => {
-  const base = '/tmp/easy-flow-cli-test'
+  const base = `${TMP}-cli`
   const dataDir = join(base, 'data')
   const configFile = join(base, 'config.json')
 
