@@ -101,6 +101,8 @@ export default function App() {
       setDetail({ project: proj, slug })
       // 从别处点需求就是回到需求看板，别把详情页叠在待办看板上
       setView('req')
+      // 待办详情上也有跳需求的入口：那一层要摘掉，否则详情页被它盖着
+      setTodoId(null)
       const local = items.find((r) => r.slug === slug && r.project === proj)
       setCrossReq(local ?? null)
       if (!local) {
@@ -353,6 +355,8 @@ export default function App() {
               refresh()
             }}
             onUpdated={() => void loadTodos()}
+            onOpenTodo={setTodoId}
+            onOpenRequirement={openRequirement}
           />
         ) : detailTarget ? (
           <Detail
@@ -365,6 +369,8 @@ export default function App() {
               refresh()
             }}
             onUpdated={refresh}
+            onOpenTodo={setTodoId}
+            onOpenRequirement={openRequirement}
           />
         ) : (
           <div className="app">

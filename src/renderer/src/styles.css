@@ -693,49 +693,6 @@ body {
   background: #12151b;
 }
 
-/* 待办的元数据：只归库的那些字段。内容在正文那份 md 里，这里只列身份与来路 */
-.todo-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  background: #12151b;
-  color: var(--text-dim);
-  font-size: 12px;
-}
-
-.meta-row {
-  display: flex;
-  gap: 8px;
-  min-width: 0;
-}
-
-.meta-key {
-  flex: none;
-  width: 72px;
-  color: var(--text-faint);
-}
-
-.meta-value {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.meta-value a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.meta-value a:hover {
-  text-decoration: underline;
-}
-
-
-
-
 .detail-body {
   flex: 1;
   display: grid;
@@ -1491,6 +1448,22 @@ body {
 
 .wt-meta {
   color: var(--text-faint);
+}
+
+/* 关联待办的状态点：只出现未完成的两种（待办 / 进行中），颜色沿用导图那组状态色 */
+.todo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.todo-dot[data-status='todo'] {
+  background: var(--status-clarify);
+}
+
+.todo-dot[data-status='in_progress'] {
+  background: var(--status-doing);
 }
 
 /* requirement.md 的「链接」段原文：它可能是表格，也可能是 bullet */

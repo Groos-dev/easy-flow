@@ -243,6 +243,8 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
           worktrees: db.listWorktrees(ctx.requirement.id),
           // 同理：会话只归库，详情页的「会话」块靠这一份
           sessions: db.listSessions(ctx.requirement.id),
+          // 挂在这条需求上的待办（立项时由 todo 侧登记）。同样是只归库的关系
+          todos: db.listTodos(ctx.requirement.id),
         })
         return
       }
@@ -251,6 +253,15 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
       // 逐需求拉 context 太碎；排序交给库（最近登记的在前）
       if (url.pathname === '/api/sessions' && req.method === 'GET') {
         json(req, res, 200, { sessions: db.listSessions() })
+        return
+      }
+
+      // 按需求 id 取单条。待办详情页的「需求」那行只有 id，靠它换成可跳转的需求
+      if (url.pathname === '/api/requirement' && req.method === 'GET') {
+        const id = url.searchParams.get('id') ?? ''
+        const target = db.byId(id)
+        if (!target) throw new Error(`Requirement not found: ${id}`)
+        json(req, res, 200, target)
         return
       }
 
@@ -330,17 +341,6 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
       if (url.pathname === '/api/todos/doc' && req.method === 'POST') {
         const { id, content } = await readBody(req)
         json(req, res, 200, { id: String(id), ...db.writeTodoDoc(String(id), String(content ?? '')) })
-        return
-      }
-
-      // 在访达里打开这条待办的 md。路径从库里取，不接受调用方给的路径
-      if (url.pathname === '/api/todos/open' && req.method === 'POST') {
-        const { id } = await readBody(req)
-        const todo = db.todoById(String(id))
-        if (!todo) throw new Error(`Todo not found: ${id}`)
-        if (!existsSync(todo.path)) throw new Error(`File no longer exists: ${todo.path}`)
-        execFile('open', [todo.path], () => {})
-        json(req, res, 200, { ok: true, path: todo.path })
         return
       }
 

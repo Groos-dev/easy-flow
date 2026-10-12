@@ -383,22 +383,25 @@ cursor 与终端里的 claude 没有会话级 deeplink，只存 id。
 
   'todo new': `用法：easy-flow todo new <标题> [--source <feishu|chat|agent|manual>] [--session <会话>]
        [--channel <at_me|p2p>] [--from <来源人>] [--chat <群/会话名>] [--ref <去重键>]
-       [--link <url>] [--at <yyyy-mm-dd HH:mm>] [--summary <可恢复现场的上下文>] [--status <todo|in_progress>] [--json]
+       [--req <req-…>] [--link <url>] [--at <yyyy-mm-dd HH:mm>] [--summary <可恢复现场的上下文>]
+       [--status <todo|in_progress>] [--json]
 
 待办是全局的，不挂在项目下。id 按首次入库日自动编号（T-YYYYMMDD-NNN）。
 --summary 要写成"下一个 agent 只看这一条就能接手"：进度、下一步、完成标准、关键 ID、证据入口；
-只写现象的口号不算数。--ref 重复时会报出已有条目，不再新建。`,
+只写现象的口号不算数。--ref 重复时会报出已有条目，不再新建。
+--req 指向立项后的需求，需求详情页据此列出这条待办。`,
 
   'todo set': `用法：easy-flow todo set <id> [--status <todo|in_progress|done|cancelled>] [--title <标题>]
        [--summary <上下文>] [--source …] [--session …] [--channel …] [--from …] [--chat …]
-       [--ref …] [--link …] [--at …] [--json]
+       [--ref …] [--req <req-…>] [--link …] [--at …] [--json]
 
 传了哪个改哪个，都没传会报错。--title / --summary 改的是 md 的内容（改完自动同步回库），
 其余字段只归库。传空串表示清空该字段。`,
 
-  'todo list': `用法：easy-flow todo list [--status <todo|in_progress|done|cancelled>] [--source <…>] [--all] [--limit <n>] [--json]
+  'todo list': `用法：easy-flow todo list [--status <todo|in_progress|done|cancelled>] [--source <…>] [--req <req-…>] [--all] [--limit <n>] [--json]
 
-默认只列未完成的（todo / in_progress）；--all 连已完成的一起列。按最近更新排。`,
+默认只列未完成的（todo / in_progress）；--all 连已完成的一起列。按最近更新排。
+--req 只看挂在这条需求上的。`,
 
   'todo show': `用法：easy-flow todo show <id> [--json]
 
@@ -1050,6 +1053,7 @@ const TODO_FIELDS = {
   from: { type: 'string' },
   chat: { type: 'string' },
   ref: { type: 'string' },
+  req: { type: 'string' },
   link: { type: 'string' },
   at: { type: 'string' },
 } as const
@@ -1061,6 +1065,7 @@ interface TodoPatch {
   origin?: string
   chat?: string
   ref?: string
+  requirementId?: string
   link?: string
   happened?: string
 }
@@ -1079,6 +1084,7 @@ function todoPatch(values: Record<string, unknown>): TodoPatch {
   put('origin', str(values.from))
   put('chat', str(values.chat))
   put('ref', str(values.ref)?.trim())
+  put('requirementId', str(values.req)?.trim())
   put('link', link)
   put('happened', str(values.at)?.trim())
   return patch
@@ -1087,6 +1093,11 @@ function todoPatch(values: Record<string, unknown>): TodoPatch {
 /** 校验枚举值，报错时列出合法取值——agent 据此就能自己纠正 */
 function oneOf(value: string, valid: readonly string[], what: string): void {
   if (!valid.includes(value)) throw new Error(`Unknown ${what}: ${value}. Valid: ${valid.join(', ')}`)
+}
+
+/** --req 只收真实存在的需求 id：写错了需求详情页只会一直空着，不如当场报错 */
+function checkTodoReq(board: BoardDatabase, req: string | undefined): void {
+  if (req && !board.byId(req)) throw new Error(`Requirement not found: ${req}`)
 }
 
 function todoLine(t: Todo): string {
@@ -1107,6 +1118,7 @@ function todoHead(t: Todo, file: string): string[] {
   if (t.chat) head.push(`上下文：${t.chat}`)
   if (t.session) head.push(`会话：${t.session}`)
   if (t.ref) head.push(`去重键：${t.ref}`)
+  if (t.requirementId) head.push(`需求：${t.requirementId}`)
   if (t.link) head.push(`链接：${t.link}`)
   if (t.happened) head.push(`源事件时间：${t.happened}`)
   head.push(`入库：${t.created} · 更新：${t.updated}`)
@@ -1131,6 +1143,7 @@ async function cmdTodoNew(argv: string[]): Promise<void> {
   const summary = str(values.summary) ?? ''
   const board = db()
   board.syncTodos()
+  checkTodoReq(board, patch.requirementId)
 
   // ref 是去重键：命中已有条目就报出它，让调用方去补内容而不是再建一条
   if (patch.ref) {
@@ -1178,6 +1191,7 @@ async function cmdTodoSet(argv: string[]): Promise<void> {
 
   const board = db()
   board.syncTodos()
+  checkTodoReq(board, patch.requirementId)
   if (!board.todoById(id)) {
     throw new Error(`Todo not found: ${id}. id 就是文件名（${join(config.dataDir, '_todos', `${id}.md`)}）`)
   }
@@ -1201,6 +1215,7 @@ async function cmdTodoList(argv: string[]): Promise<void> {
   const { values } = parse(argv, {
     status: { type: 'string' },
     source: { type: 'string' },
+    req: { type: 'string' },
     all: { type: 'boolean' },
     limit: { type: 'string' },
   })
@@ -1208,12 +1223,14 @@ async function cmdTodoList(argv: string[]): Promise<void> {
 
   const status = str(values.status)?.trim()
   const source = str(values.source)?.trim()
+  const req = str(values.req)?.trim()
   if (status !== undefined) oneOf(status, TODO_STATUSES, 'status')
   if (source !== undefined) oneOf(source, TODO_SOURCES, 'source')
 
   const board = db()
   board.syncTodos()
-  const all = board.listTodos()
+  checkTodoReq(board, req)
+  const all = board.listTodos(req || undefined)
   const open = all.filter((t) => t.status === 'todo' || t.status === 'in_progress')
   let todos = status ? all.filter((t) => t.status === status) : bool(values.all) ? all : open
   if (source) todos = todos.filter((t) => t.source === source)
@@ -1222,12 +1239,13 @@ async function cmdTodoList(argv: string[]): Promise<void> {
   const shown = limit > 0 ? todos.slice(0, limit) : todos
   const hidden = todos.length - shown.length
 
+  const scope = req ? `需求 ${req} 的` : ''
   const blocks = [
-    `${status ? `状态 ${status}` : bool(values.all) ? '全部待办' : '未完成的待办'}（${todos.length}）：`,
+    `${status ? `状态 ${status}` : bool(values.all) ? `${scope}全部待办` : `${scope}未完成的待办`}（${todos.length}）：`,
     shown.map(todoLine).join('\n') || '（无）',
   ]
   if (hidden > 0) blocks.push(`（还有 ${hidden} 条，--limit 调大或加 --status）`)
-  if (!status && !bool(values.all)) {
+  if (!status && !bool(values.all) && !req) {
     const rest = all.length - open.length
     if (rest > 0) blocks.push(`（已完成/已取消 ${rest} 条，--all 看全部）`)
   }

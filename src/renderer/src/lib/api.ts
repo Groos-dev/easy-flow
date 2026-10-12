@@ -65,6 +65,10 @@ export const api = {
   /** 全部 agent 会话（需求归属在每条的 requirementId 上）。mini 面板一次拉全 */
   sessions: (): Promise<{ sessions: Session[] }> => request('/api/sessions'),
 
+  /** 按需求 id 取单条。待办详情页的「需求」那行只有 id，靠它换成可跳转的需求 */
+  requirementById: (id: string): Promise<Requirement> =>
+    request(`/api/requirement?id=${encodeURIComponent(id)}`),
+
   /** 读需求目录下的文档（默认 requirement.md） */
   doc: (
     slug: string,
@@ -102,10 +106,6 @@ export const api = {
 
   saveTodoDoc: (id: string, content: string): Promise<{ id: string; path: string; bytes: number }> =>
     request('/api/todos/doc', { method: 'POST', body: JSON.stringify({ id, content }) }),
-
-  /** 在访达里打开这条待办的 md */
-  openTodo: (id: string): Promise<{ ok: boolean; path: string }> =>
-    request('/api/todos/open', { method: 'POST', body: JSON.stringify({ id }) }),
 
   // ------------------------------------------------------------- 项目
 

@@ -1,133 +1,31 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api } from '../lib/api'
 import { AGENT_LABELS } from '../lib/labels'
 import { codeLinkLabel } from '../lib/links'
-import type { ContextPayload, Requirement } from '../lib/types'
-import { CheckIcon, CopyIcon } from './icons'
+import { TODO_STATUS_LABEL, type ContextPayload, type Requirement } from '../lib/types'
+import { CopyButton, InfoBlock, OneLine } from './InfoBits'
 
 /**
- * 浮窗里的一段：标题行点一下收起/展开，右边跟一个计数。
- * 默认展开——浮窗的作用就是一眼看到东西，收起是内容多了之后的减法。
- */
-function InfoBlock({
-  label,
-  count,
-  children,
-}: {
-  label: string
-  count?: number
-  children: ReactNode
-}) {
-  const [open, setOpen] = useState(true)
-  return (
-    <section className="info-block">
-      <button className="info-block-head" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <span className="info-block-label">{label}</span>
-        {count !== undefined && <span className="info-count">· {count}</span>}
-        <svg
-          className={`info-caret${open ? ' open' : ''}`}
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="9 6 15 12 9 18" />
-        </svg>
-      </button>
-      {open && <div className="info-block-body">{children}</div>}
-    </section>
-  )
-}
-
-/**
- * 长文本一律占一行：放不下就截断成省略号，完整内容挂在 title 上，
- * 悬停时由系统提示给出（原生行为，够用且不额外占地方）。
- * 传了 href 就当外链渲染（新窗口打开），传了 onClick 就是可点的一行。
- */
-function OneLine(props: {
-  text: string
-  className: string
-  title?: string
-  href?: string
-  disabled?: boolean
-  onClick?: () => void
-}) {
-  const cls = `line ${props.className}${props.disabled ? ' disabled' : ''}`
-
-  if (props.href) {
-    return (
-      <a className={cls} href={props.href} target="_blank" rel="noreferrer" title={props.title}>
-        {props.text}
-      </a>
-    )
-  }
-
-  const clickable = !!props.onClick && !props.disabled
-  return (
-    <div
-      className={cls}
-      title={props.title}
-      role={clickable ? 'button' : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      onClick={clickable ? props.onClick : undefined}
-      onKeyDown={(e) => {
-        if (clickable && e.key === 'Enter') props.onClick?.()
-      }}
-    >
-      {props.text}
-    </div>
-  )
-}
-
-/**
- * 头部浮窗：需求的工作区、会话与链接。
+ * 需求详情页的头部浮窗：目录、工作区、会话、关联待办与链接。零件见 InfoBits，与待办的 TodoPanel 共用。
  *
  * 数据全部来自详情页已经拉过的两份载荷（列表里的 Requirement + /api/context），
- * 所以打开它不产生新请求。工作区与会话那段只有服务端知道——归属存在 sqlite 里。
+ * 所以打开它不产生新请求。工作区、会话与关联待办只有服务端知道——关系存在 sqlite 里。
  */
-export default function InfoPanel({ req, ctx }: { req: Requirement; ctx: ContextPayload | null }) {
-  const [copied, setCopied] = useState('')
+export default function InfoPanel({
+  req,
+  ctx,
+  onOpenTodo,
+}: {
+  req: Requirement
+  ctx: ContextPayload | null
+  /** 点一条关联待办即在详情页打开它 */
+  onOpenTodo: (id: string) => void
+}) {
   const worktrees = ctx?.worktrees ?? []
   const sessions = ctx?.sessions ?? []
-  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // 浮窗随时会被关掉，定时器要跟着一起清，别对已卸载的组件 setState
-  useEffect(() => {
-    return () => {
-      if (copiedTimer.current) clearTimeout(copiedTimer.current)
-    }
-  }, [])
-
-  /** 复制到剪贴板。失败就什么也不说，别谎报"已复制" */
-  function copy(text: string) {
-    navigator.clipboard
-      ?.writeText(text)
-      .then(() => {
-        setCopied(text)
-        // 连点两下时后一次要重新计时，否则第一下的定时器会提前把勾收掉
-        if (copiedTimer.current) clearTimeout(copiedTimer.current)
-        copiedTimer.current = setTimeout(() => setCopied(''), 1200)
-      })
-      .catch(() => {})
-  }
-
-  /** 复制按钮：图标按钮，复制成功后短暂变勾 */
-  const copyButton = (text: string, label: string) => (
-    <button
-      className="info-action"
-      onClick={() => copy(text)}
-      title={`复制${label}`}
-      aria-label={`复制${label}`}
-    >
-      {copied === text ? <CheckIcon /> : <CopyIcon />}
-    </button>
-  )
+  // 只列未完成的：已完成 / 已取消的不占版面
+  const openTodos = (ctx?.todos ?? []).filter((t) => t.status === 'todo' || t.status === 'in_progress')
 
   const groups = [
     { title: '飞书任务', items: req.feishuTaskLinks.map((url) => ({ label: url, url })) },
@@ -150,7 +48,7 @@ export default function InfoPanel({ req, ctx }: { req: Requirement; ctx: Context
             title={req.path}
             onClick={() => void api.open(req.slug, req.project).catch(() => {})}
           />
-          {copyButton(req.path, '路径')}
+          <CopyButton text={req.path} label="路径" />
         </div>
       </InfoBlock>
 
@@ -163,7 +61,7 @@ export default function InfoPanel({ req, ctx }: { req: Requirement; ctx: Context
                 <span className="v mono">{w.repo}</span>
                 {w.orphan && <span className="wt-orphan">目录已失联</span>}
                 <span className="spacer" />
-                {copyButton(w.path, '路径')}
+                <CopyButton text={w.path} label="路径" />
               </div>
               <div className="wt-meta">
                 <OneLine className="mono" text={w.branch} title={w.branch} />
@@ -188,7 +86,7 @@ export default function InfoPanel({ req, ctx }: { req: Requirement; ctx: Context
               <div className="wt-head">
                 <span className="v">{AGENT_LABELS[s.agent] ?? s.agent}</span>
                 <span className="spacer" />
-                {copyButton(s.session, '会话 id')}
+                <CopyButton text={s.session} label="会话 id" />
               </div>
               {s.title && (
                 <div className="wt-meta">
@@ -204,6 +102,26 @@ export default function InfoPanel({ req, ctx }: { req: Requirement; ctx: Context
               {s.cwd && <OneLine className="wt-meta mono" text={s.cwd} title={s.cwd} />}
             </div>
           ))}
+        </InfoBlock>
+      )}
+
+      {/* 关联待办：立项时在 todo 侧登记的指针反查出来的。只列未完成的，颜色区分状态 */}
+      {openTodos.length > 0 && (
+        <InfoBlock label="关联待办" count={openTodos.length}>
+          {openTodos.map((t) => {
+            const label = TODO_STATUS_LABEL[t.status] ?? t.status
+            return (
+              <div className="wt" key={t.id}>
+                <div className="wt-head">
+                  <span className="todo-dot" data-status={t.status} title={label} />
+                  <span className="v">{label}</span>
+                  <span className="spacer" />
+                  <span className="wt-meta mono">{t.id}</span>
+                </div>
+                <OneLine className="" text={t.title} title={t.title} onClick={() => onOpenTodo(t.id)} />
+              </div>
+            )
+          })}
         </InfoBlock>
       )}
 

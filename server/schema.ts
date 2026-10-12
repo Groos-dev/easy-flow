@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS doc (
  * todo：全局待办。和需求平级，但不受项目划分——一条待办不属于任何项目。
  * 一条待办一份 md（<dataDir>/_todos/<id>.md）放内容，这张表放元数据；
  * 与需求同一套分工：md 是"有没有"的事实源，状态只归这里。
+ * req_id 是唯一一处与需求的关系：立项后指过去，需求侧的反查块靠它查，不另存反向列表。
  */
 CREATE TABLE IF NOT EXISTS todo (
   id       TEXT PRIMARY KEY,
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS todo (
   origin   TEXT,
   chat     TEXT,
   ref      TEXT,
+  req_id   TEXT,
   link     TEXT,
   happened TEXT,
   summary  TEXT,
@@ -108,6 +110,7 @@ CREATE INDEX IF NOT EXISTS idx_doc_scope ON doc(project, slug);
 CREATE INDEX IF NOT EXISTS idx_req_project ON requirement(project);
 CREATE INDEX IF NOT EXISTS idx_todo_status ON todo(status);
 CREATE INDEX IF NOT EXISTS idx_todo_ref ON todo(ref);
+CREATE INDEX IF NOT EXISTS idx_todo_req ON todo(req_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wt_path ON worktree(path);
 CREATE INDEX IF NOT EXISTS idx_wt_req ON worktree(req_id);
 CREATE INDEX IF NOT EXISTS idx_session_req ON session(req_id);

@@ -362,6 +362,32 @@ describe('数据层 · 待办同步', () => {
     db.close()
   })
 
+  test('★ 需求指针：可挂可清，反查只出这条需求的，同步不动它', () => {
+    const dir = fresh((d) => {
+      makeTodo(d, 'T-20260101-001', '挂需求的待办')
+      makeTodo(d, 'T-20260101-002', '没挂的待办')
+    })
+    const db = new BoardDatabase(dir)
+    db.syncTodos()
+    assert.equal(db.todoById('T-20260101-001')!.requirementId, '', '新条目没挂需求')
+
+    db.setTodoFields('T-20260101-001', { requirementId: 'req-alpha' })
+    assert.equal(db.todoById('T-20260101-001')!.requirementId, 'req-alpha')
+    assert.deepEqual(db.listTodos('req-alpha').map((t) => t.id), ['T-20260101-001'])
+    assert.deepEqual(db.listTodos('req-beta'), [])
+    assert.equal(db.listTodos().length, 2, '不带参数仍是全部')
+
+    // md 被重写后再同步：标题跟着变，指针不动——与状态同一套规矩
+    makeTodo(dir, 'T-20260101-001', '改过标题的待办')
+    db.syncTodos()
+    assert.equal(db.todoById('T-20260101-001')!.title, '改过标题的待办')
+    assert.equal(db.todoById('T-20260101-001')!.requirementId, 'req-alpha')
+
+    db.setTodoFields('T-20260101-001', { requirementId: '' })
+    assert.equal(db.todoById('T-20260101-001')!.requirementId, '', '空串表示摘掉指针')
+    db.close()
+  })
+
   test('writeTodoDoc 写回 md 并同步标题摘要回库', () => {
     const dir = fresh((d) => makeTodo(d, 'T-20260101-001', '原标题', '原摘要'))
     const db = new BoardDatabase(dir)
@@ -2127,6 +2153,38 @@ describe('CLI 层', () => {
     assert.match(bad.stderr, /Unknown status/)
   })
 
+  test('todo set --req 挂需求，todo list --req 反查', () => {
+    scaffold()
+    cliOk(configFile, ['project', 'new', 'demo', '--name', '示例项目'])
+    const created = cliOk(configFile, [
+      'req', 'new', '支持 1A 重试', '--project', 'demo', '--slug', 'seat-retry',
+    ])
+    const reqId = /需求 id：(req-\w+)/.exec(created)![1]
+
+    cliOk(configFile, ['todo', 'new', '挂上去的待办', '--source', 'manual'])
+    cliOk(configFile, ['todo', 'new', '没挂的待办', '--source', 'manual'])
+    const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const id = `T-${day}-001`
+
+    cliOk(configFile, ['todo', 'set', id, '--req', reqId])
+    assert.match(cliOk(configFile, ['todo', 'show', id]), new RegExp(`需求：${reqId}`))
+    const linked = cliOk(configFile, ['todo', 'list', '--req', reqId])
+    assert.match(linked, new RegExp(`需求 ${reqId} 的未完成的待办（1）`))
+    assert.match(linked, /挂上去的待办/)
+    assert.ok(!linked.includes('没挂的待办'))
+    assert.equal(JSON.parse(cliOk(configFile, ['todo', 'list', '--req', reqId, '--json'])).total, 1)
+
+    // 需求 id 写错当场报错，不留一个永远查不到东西的指针
+    const badReq = cli(configFile, ['todo', 'set', id, '--req', 'req-nope'])
+    assert.equal(badReq.code, 1)
+    assert.match(badReq.stderr, /Requirement not found: req-nope/)
+    assert.match(cli(configFile, ['todo', 'list', '--req', 'req-nope']).stderr, /Requirement not found/)
+
+    // 空串摘掉指针
+    cliOk(configFile, ['todo', 'set', id, '--req', ''])
+    assert.match(cliOk(configFile, ['todo', 'list', '--req', reqId]), /（无）/)
+  })
+
   test('todo show 打出元数据、md 路径与全文', () => {
     scaffold()
     cliOk(configFile, ['todo', 'new', '要看的待办', '--source', 'agent', '--session', 'codex://threads/z', '--summary', '动作：看它'])
@@ -2383,6 +2441,27 @@ describe('HTTP 层', () => {
     assert.equal(one.requirementId, 'req-alpha')
     assert.equal(one.agent, 'codex')
     assert.equal(one.link, 'codex://threads/th-ctx')
+  })
+
+  test('/api/context 带上该需求的关联待办', async () => {
+    assert.deepEqual((await get('/api/context?slug=beta')).todos, [])
+
+    makeTodo(dir, 'T-20260201-001', '挂在 alpha 下的待办')
+    await get('/api/todos') // 读取时同步，md 才进库
+    app.db.setTodoFields('T-20260201-001', { requirementId: 'req-alpha' })
+
+    const r = await get('/api/context?slug=alpha')
+    assert.equal(r.todos.length, 1)
+    assert.equal(r.todos[0].id, 'T-20260201-001')
+    assert.equal(r.todos[0].requirementId, 'req-alpha')
+    // 指针只存在 todo 一侧：挂给 alpha 的，beta 就查不到
+    assert.deepEqual((await get('/api/context?slug=beta')).todos, [])
+  })
+
+  test('GET /api/requirement 按 id 取单条', async () => {
+    const r = await get('/api/requirement?id=req-alpha')
+    assert.equal(r.slug, 'alpha')
+    assert.match((await get('/api/requirement?id=req-nope')).error, /Requirement not found/)
   })
 
   test('POST /api/worktree/open 只认库里的记录，目录不在就报错', async () => {

@@ -125,6 +125,8 @@ export interface Todo {
   /** 会话、群或上下文名 */
   chat: string
   ref: string
+  /** 立项后的所属需求 id（req-…）。空串表示还没挂 */
+  requirementId: string
   link: string
   happened: string
   summary: string
@@ -169,6 +171,8 @@ export interface ContextPayload {
   worktrees: Worktree[]
   /** 这个需求上登记的 agent 会话。只归库，详情页的「会话」块靠它 */
   sessions: Session[]
+  /** 挂在这条需求上的待办（todo 侧存指针）。只归库，详情页的「关联待办」块靠它 */
+  todos: Todo[]
 }
 
 /** 一条 agent 会话的登记（claude code / codex / cursor） */

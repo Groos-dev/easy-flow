@@ -208,6 +208,8 @@ export interface Todo {
   chat: string
   /** 去重键：feishu 用 message_id，其余用来源稳定 id */
   ref: string
+  /** 立项后的所属需求 id（req-…）。空串表示还没挂 */
+  requirementId: string
   /** 可跳转链接（飞书 thread、MR、页面） */
   link: string
   /** 源事件时间（yyyy-mm-dd HH:mm），可空 */
@@ -233,6 +235,7 @@ interface TodoRow {
   origin: string | null
   chat: string | null
   ref: string | null
+  req_id: string | null
   link: string | null
   happened: string | null
   summary: string | null
@@ -410,6 +413,7 @@ function toTodo(row: TodoRow): Todo {
     origin: row.origin ?? '',
     chat: row.chat ?? '',
     ref: row.ref ?? '',
+    requirementId: row.req_id ?? '',
     link: row.link ?? '',
     happened: row.happened ?? '',
     summary: row.summary ?? '',
@@ -1160,11 +1164,16 @@ export class BoardDatabase {
     return { added, updated, orphaned, restored }
   }
 
-  /** 全部待办，最近动过的在前 */
-  listTodos(): Todo[] {
-    const rows = this.db
-      .prepare('SELECT * FROM todo ORDER BY updated DESC, id DESC')
-      .all() as unknown as TodoRow[]
+  /** 全部待办，最近动过的在前。给了 requirementId 就只列挂在这条需求上的 */
+  listTodos(requirementId?: string): Todo[] {
+    const rows =
+      requirementId === undefined
+        ? (this.db
+            .prepare('SELECT * FROM todo ORDER BY updated DESC, id DESC')
+            .all() as unknown as TodoRow[])
+        : (this.db
+            .prepare('SELECT * FROM todo WHERE req_id = ? ORDER BY updated DESC, id DESC')
+            .all(requirementId) as unknown as TodoRow[])
     return rows.map(toTodo)
   }
 
@@ -1207,6 +1216,7 @@ export class BoardDatabase {
     origin?: string
     chat?: string
     ref?: string
+    requirementId?: string
     link?: string
     happened?: string
     summary?: string
@@ -1227,9 +1237,9 @@ export class BoardDatabase {
     this.db
       .prepare(
         `INSERT INTO todo
-           (id, title, status, source, session, channel, origin, chat, ref, link, happened,
+           (id, title, status, source, session, channel, origin, chat, ref, req_id, link, happened,
             summary, path, mtime, created, updated, orphan)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       )
       .run(
         input.id,
@@ -1241,6 +1251,7 @@ export class BoardDatabase {
         input.origin ?? '',
         input.chat ?? '',
         input.ref ?? '',
+        input.requirementId ?? '',
         input.link ?? '',
         input.happened ?? '',
         input.summary ?? '',
@@ -1276,6 +1287,7 @@ export class BoardDatabase {
       origin?: string
       chat?: string
       ref?: string
+      requirementId?: string
       link?: string
       happened?: string
     },
@@ -1290,6 +1302,7 @@ export class BoardDatabase {
       origin: patch.origin,
       chat: patch.chat,
       ref: patch.ref,
+      req_id: patch.requirementId,
       link: patch.link,
       happened: patch.happened,
     }

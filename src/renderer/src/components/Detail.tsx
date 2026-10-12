@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api } from '../lib/api'
 import { TODO_STATUS_LABEL, type ContextPayload, type Requirement, type Todo } from '../lib/types'
 import InfoPanel from './InfoPanel'
 import SelectMenu from './SelectMenu'
+import TodoPanel from './TodoPanel'
 import { CodeIcon, InfoIcon } from './icons'
 
 /**
@@ -35,6 +36,10 @@ interface Props {
   onBack: () => void
   /** 改了状态后通知看板刷新 */
   onUpdated: () => void
+  /** 需求页的「关联待办」块：点一条即在详情页打开它 */
+  onOpenTodo: (id: string) => void
+  /** 待办页浮窗的「需求」段：点一下跳到它挂的需求 */
+  onOpenRequirement: (project: string, slug: string) => void
 }
 
 const PRIORITY_DESC: Record<string, string> = {
@@ -49,7 +54,16 @@ type ViewMode = 'preview' | 'source'
 /** 停止输入后多久落盘 */
 const AUTOSAVE_DELAY = 600
 
-export default function Detail({ target, statuses, priorities, todoStatuses, onBack, onUpdated }: Props) {
+export default function Detail({
+  target,
+  statuses,
+  priorities,
+  todoStatuses,
+  onBack,
+  onUpdated,
+  onOpenTodo,
+  onOpenRequirement,
+}: Props) {
   const req = target.req
   const todo = target.todo
   const isProject = target.kind === 'project'
@@ -67,6 +81,8 @@ export default function Detail({ target, statuses, priorities, todoStatuses, onB
   const [error, setError] = useState('')
   /** 需求上下文（含工作区列表）。项目页用不到，保持 null */
   const [ctx, setCtx] = useState<ContextPayload | null>(null)
+  /** 待办挂的需求：待办上只有 id，标题与跳转目标要按它换回来 */
+  const [todoReq, setTodoReq] = useState<Requirement | null>(null)
   const [infoOpen, setInfoOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -82,6 +98,9 @@ export default function Detail({ target, statuses, priorities, todoStatuses, onB
   useEffect(() => {
     let alive = true
     if (isProject) setCtx(null)
+    // 换挂载点就收掉浮窗：详情页之间是同一个组件实例，状态会跟着走，
+    // 不然从需求点进待办后，第一下 Esc 会被"关掉浮窗"吃掉
+    setInfoOpen(false)
     // 项目页的规范原文在这里先发起，文档列表与正文共用这一次
     const convention = isProject
       ? api.projectConvention(target.project).then((r) => r.content ?? '')
@@ -120,6 +139,23 @@ export default function Detail({ target, statuses, priorities, todoStatuses, onB
   function projectContent(): Promise<string> {
     return projectDoc.current ?? api.projectConvention(target.project).then((r) => r.content ?? '')
   }
+
+  // 待办挂的需求：查不到（需求被删了）就只显示 id，不给一个点不开的链接
+  useEffect(() => {
+    const id = todo?.requirementId
+    setTodoReq(null)
+    if (!id) return
+    let alive = true
+    api
+      .requirementById(id)
+      .then((r) => {
+        if (alive) setTodoReq(r)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [todo?.requirementId])
 
   const loadDoc = useCallback(async () => {
     // 需求页在文档列表到位前（或这个需求没有文档）没有可打开的文档
@@ -304,23 +340,21 @@ export default function Detail({ target, statuses, priorities, todoStatuses, onB
             打开目录
           </button>
         )}
-        {isTodo && (
-          <button className="btn" onClick={() => void api.openTodo(todo!.id).catch(() => {})}>
-            打开 md
-          </button>
-        )}
-        {!isProject && req && (
+        {!isProject && (req || todo) && (
           <div className="info-menu" ref={infoRef}>
             <button
               className={`icon-btn${infoOpen ? ' on' : ''}`}
               onClick={() => setInfoOpen((v) => !v)}
-              title="需求信息与链接"
+              title={req ? '需求信息与链接' : '待办信息'}
               aria-haspopup="dialog"
               aria-expanded={infoOpen}
             >
               <InfoIcon />
             </button>
-            {infoOpen && <InfoPanel req={req} ctx={ctx} />}
+            {infoOpen && req && <InfoPanel req={req} ctx={ctx} onOpenTodo={onOpenTodo} />}
+            {infoOpen && !req && todo && (
+              <TodoPanel todo={todo} req={todoReq} onOpenRequirement={onOpenRequirement} />
+            )}
           </div>
         )}
       </header>
@@ -359,7 +393,6 @@ export default function Detail({ target, statuses, priorities, todoStatuses, onB
           />
         </div>
       )}
-      {isTodo && todo && <TodoMeta todo={todo} />}
 
       <div className="detail-body">
         <section className="doc-pane">
@@ -422,49 +455,6 @@ export default function Detail({ target, statuses, priorities, todoStatuses, onB
           )}
         </section>
       </div>
-    </div>
-  )
-}
-
-function MetaRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="meta-row">
-      <span className="meta-key">{label}</span>
-      <span className="meta-value">{children}</span>
-    </div>
-  )
-}
-
-/**
- * 待办的元数据：只归库的那些字段。内容（标题、摘要、进度）在 md 里，
- * 详情页正文就是那份 md，这里只列身份与来路——接手时要知道这条是从哪来的。
- */
-function TodoMeta({ todo }: { todo: Todo }) {
-  const source = [todo.source, todo.channel].filter(Boolean).join(' · ')
-  return (
-    <div className="todo-meta">
-      <MetaRow label="来源">{source || '（未记）'}</MetaRow>
-      {todo.origin && <MetaRow label="来源人">{todo.origin}</MetaRow>}
-      {todo.chat && <MetaRow label="上下文">{todo.chat}</MetaRow>}
-      {todo.session && (
-        <MetaRow label="会话">
-          <span className="mono">{todo.session}</span>
-        </MetaRow>
-      )}
-      {todo.ref && (
-        <MetaRow label="去重键">
-          <span className="mono">{todo.ref}</span>
-        </MetaRow>
-      )}
-      {todo.happened && <MetaRow label="源事件时间">{todo.happened}</MetaRow>}
-      {todo.link && (
-        <MetaRow label="链接">
-          <a href={todo.link} target="_blank" rel="noreferrer">
-            {todo.link}
-          </a>
-        </MetaRow>
-      )}
-      <MetaRow label="时间线">{`入库 ${todo.created} · 更新 ${todo.updated}`}</MetaRow>
     </div>
   )
 }

@@ -28,7 +28,8 @@ description: >-
 | 读一条（含 md 全文与文件路径） | `easy-flow todo show <id>` |
 | 改状态 | `easy-flow todo set <id> --status <todo\|in_progress\|done\|cancelled>` |
 | 改标题 / 补上下文 | `easy-flow todo set <id> [--title <标题>] [--summary <上下文>]` |
-| 补来源类字段 | `easy-flow todo set <id> [--link <url>] [--session …] [--ref …] …` |
+| 补来源类字段 | `easy-flow todo set <id> [--link <url>] [--session …] [--ref …] [--req <req-…>] …` |
+| 反查某需求下的待办 | `easy-flow todo list --req <req-…>` |
 
 `todo list` 默认只列未完成的；`--all` 连已完成一起列。加 `--json` 给脚本解析。
 
@@ -43,6 +44,7 @@ description: >-
 | `channel` | 仅 feishu：`at_me` / `p2p` |
 | `from` / `chat` | 来源人、会话或群名 |
 | `ref` | 去重键：feishu 用 message_id，其余用来源稳定 id。重复时 `todo new` 会报出已有条目 |
+| `req` | 立项后挂的需求 id（`req-…`）。需求详情页的「关联待办」块据此列出未完成的那些 |
 | `link` | 可跳转链接（飞书 thread、MR、页面） |
 | `at` | 源事件时间 `yyyy-mm-dd HH:mm` |
 | `summary` | 可恢复现场的上下文，见下节 |
@@ -158,6 +160,17 @@ easy-flow todo set <id> --summary "<补上的现场>"
 2. 有 `session` → 先回到该 agent 会话读上下文；有飞书 `link` → 拉 thread 恢复证据；再执行 summary 里的动作
 3. summary 写了「勿再跑 X」→ 遵守，除非用户推翻结论
 4. 开工时置 `in_progress`；做完置 `done`，并在 md 的进度段补一行结果要点
+
+### F. 立项（与需求对接）
+
+同一件工作在立项前后会换板：待办记入口与跟进，需求记交付。两边靠 todo 侧的一个指针相连。
+
+- 待办立项成需求后（`easy-flow req new` 建完），回来把指针补上：
+  `easy-flow todo set <id> --req <req-…>`。此后那条需求的详情页会列出它。
+- 需求收尾时反过来：`easy-flow todo list --req <req-…>` 找回未完成的源待办，一并置 `done`。
+- 指针只存 todo 一侧，需求侧不存列表——登记动作永远发生在待办这边，别去需求文档里
+  维护待办清单（写进 md 也查不出来，下次重写就没了）。
+- 一条需求常由多条待办汇入（多条 todo 挂同一个 `req-…`）；反过来一条待办只挂一条需求。
 
 ## Compose with
 
