@@ -1,0 +1,20 @@
+test/core.test.ts
+  s_fd2e0b97533d1d::t_6feb19dbfc051e 1383
+  s_fd2e0b97533d1d::t_10d80092efe1c7 1142-1143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "2493c8924434043e9c68987c9c49909c8d96b5ea",
+  "prompts": {},
+  "sessions": {
+    "s_fd2e0b97533d1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c1d87a7-9cee-4ea4-9aa9-54a613c471fb",
+        "model": "unknown"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
