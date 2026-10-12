@@ -1,0 +1,20 @@
+test/core.test.ts
+  s_fd2e0b97533d1d::t_28493da32b0b16 39-41
+  s_fd2e0b97533d1d::t_756fbaa5fb1b7c 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "81fa8af99281ac1294b8786b2281cdf35f74d02d",
+  "prompts": {},
+  "sessions": {
+    "s_fd2e0b97533d1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c1d87a7-9cee-4ea4-9aa9-54a613c471fb",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
