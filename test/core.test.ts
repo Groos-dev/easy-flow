@@ -2069,6 +2069,7 @@ describe('CLI 层', () => {
     const md = readFileSync(t.path, 'utf8')
     assert.match(md, /^# 统计 MU 退票失败原因分布$/m)
     assert.match(md, /## 摘要/)
+    assert.ok(md.startsWith('# '), '正文直接以 H1 开头，不塞说明性注释')
     db.close()
   })
 

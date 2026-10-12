@@ -80,10 +80,7 @@ function requirementAgents(id: string): string {
 
 /** requirement.md：需求描述，卡片标题与摘要的来源。身份不在这里 */
 function requirementDesc(title: string, summary: string): string {
-  return `<!-- easy-flow 需求 · 需求描述：看板标题取下面的 H1，摘要取「需求」段，验收段写做到什么算完成。
-     上下文（背景、约束、决策）写同目录的 context.md，更长的方案放 docs/。 -->
-
-# ${oneLine(title)}
+  return `# ${oneLine(title)}
 
 ## 需求
 
@@ -103,11 +100,7 @@ ${summary}
 }
 
 /** context.md：需求的上下文。一开始只是骨架，边做边补 */
-const REQUIREMENT_CONTEXT_TEMPLATE = `<!-- easy-flow 需求 · 上下文：需求描述之外的补充——背景、约束、相关的人与系统、决策依据。
-     不记进度：进度从看板状态与工作区里的代码就能推出来，写在这里只会过期。
-     身份与目录约定见同目录 AGENTS.md，需求描述见 requirement.md。 -->
-
-## 背景
+const REQUIREMENT_CONTEXT_TEMPLATE = `## 背景
 
 ## 约束
 
@@ -279,12 +272,12 @@ export function projectIssues(slug: string, root: string): string[] {
  * 待办 md：一条待办一份，放在 <dataDir>/_todos/<id>.md。
  * 「摘要」段是可恢复现场的交接说明（同步进库当卡片摘要），「进度」段按时间往下续。
  * 状态与来源等元数据只存在 easy-flow.db 里，不写进这里。
+ *
+ * 不往正文里塞说明性注释：这份 md 是给人看的文档（应用里直接渲染），
+ * 格式约定写在 todo skill 里，正文只留内容。
  */
 export function renderTodoDoc(title: string, summary = ''): string {
-  return `<!-- easy-flow 待办 · 一条待办一份，元数据（状态、来源、会话、链接）存在 easy-flow.db 里。
-     标题取下面的 H1，看板卡片的摘要取「摘要」段；进度、结论、证据往「进度」段续。 -->
-
-# ${oneLine(title)}
+  return `# ${oneLine(title)}
 
 ## 摘要
 
@@ -321,7 +314,7 @@ export function setTodoTitle(text: string, title: string): string {
   return /^#\s+.+$/m.test(text) ? text.replace(/^#\s+.+$/m, line) : `${line}\n\n${text}`
 }
 
-/** 改写「摘要」段，其余（注释、H1、进度段）原样保留；段不存在就追加到末尾 */
+/** 改写「摘要」段，其余（H1、进度段等）原样保留；段不存在就追加到末尾 */
 export function setTodoSummary(text: string, summary: string): string {
   const lines = text.split('\n')
   const start = lines.findIndex((l) => /^##\s*摘要\s*$/.test(l))
