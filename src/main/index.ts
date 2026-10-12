@@ -109,6 +109,11 @@ function createPanel(): void {
     },
   })
 
+  // 跟随当前 Space：默认行为把窗口钉在创建时所在的桌面，呼出时反把人拽回主窗口那屏。
+  // skipTransformProcessType 不能省——不传时 Electron 会为 visibleOnFullScreen 调 dock.hide()，
+  // 把带 Dock 图标的主窗口应用的图标吞掉
+  panel.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
+
   // 外链走系统浏览器（会话 deeplink、MR 等链接），不在面板窗里开
   panel.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
