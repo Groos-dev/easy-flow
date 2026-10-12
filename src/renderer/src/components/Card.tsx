@@ -1,6 +1,5 @@
 import { useDraggable } from '@dnd-kit/core'
 import type { Requirement } from '../lib/types'
-import { PRIORITY_LABEL } from '../lib/labels'
 import { relTime } from '../lib/time'
 
 interface Props {
@@ -30,12 +29,6 @@ export default function Card({ req, onOpen, overlay = false }: Props) {
       {...attributes}
     >
       <div className="card-top">
-        {req.priority && (
-          <span
-            className={`prio ${req.priority}`}
-            title={`${req.priority.toUpperCase()} ${PRIORITY_LABEL[req.priority] ?? ''}`}
-          />
-        )}
         <span className="card-title">{req.title}</span>
       </div>
       <div className="card-slug">{req.slug}</div>

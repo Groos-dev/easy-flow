@@ -346,7 +346,7 @@ async function createWindow(): Promise<void> {
     title: 'easy-flow',
     icon: ICON,
     titleBarStyle: 'hiddenInset',
-    // 显式固定交通灯位置：默认位置随系统浮动，侧边栏开关没法跟它精确对齐
+    // 显式固定交通灯位置：默认位置随系统浮动，顶栏左侧的留白没法跟它对齐
     trafficLightPosition: { x: 16, y: 15 },
     backgroundColor: '#0f1115',
     webPreferences: {

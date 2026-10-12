@@ -17,11 +17,3 @@ export const STATUS_CLASS: Record<string, string> = {
   Review: 's-review',
   已完成: 's-done',
 }
-
-/** 优先级标签，对应艾森豪威尔四象限 */
-export const PRIORITY_LABEL: Record<string, string> = {
-  p0: '重要且紧急（马上做）',
-  p1: '重要不紧急（计划做）',
-  p2: '紧急不重要（授权做）',
-  p3: '不重要不紧急（有空再做）',
-}

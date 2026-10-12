@@ -109,7 +109,10 @@ export const api = {
 
   // ------------------------------------------------------------- 项目
 
-  /** 侧边栏树：所有项目 + 各自需求，一次拉全 */
+  /** 项目列表：顶栏的项目 chip 行用它。只要项目本身，不拉各自的需求 */
+  projects: (): Promise<{ projects: Project[]; active: string }> => request('/api/projects'),
+
+  /** 所有项目 + 各自需求，一次拉全（mini 面板用） */
   tree: (): Promise<{ tree: Array<Project & { requirements: Requirement[] }>; active: string }> =>
     request('/api/tree'),
 

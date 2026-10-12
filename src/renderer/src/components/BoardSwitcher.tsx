@@ -14,12 +14,9 @@ const BOARDS: Array<{ value: BoardView; label: string; hint: string }> = [
  */
 export default function BoardSwitcher({
   value,
-  /** 当前项目的显示名，只在需求看板下有值，作为副标题显示 */
-  project,
   onChange,
 }: {
   value: BoardView
-  project: string
   onChange: (v: BoardView) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -53,7 +50,6 @@ export default function BoardSwitcher({
         onClick={() => setOpen((v) => !v)}
       >
         <span className="board-switch-label">{current.label}</span>
-        {value === 'req' && project && <span className="board-switch-sub">{project}</span>}
         <svg
           width="11"
           height="11"

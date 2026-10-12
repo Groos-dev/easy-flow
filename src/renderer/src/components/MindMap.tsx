@@ -14,8 +14,8 @@ interface Props {
   requirements: Requirement[]
   /** 项目显示名，画在根节点上 */
   projectName: string
-  /** 搜索命中集合；null 表示没在搜索 */
-  hits: Set<string> | null
+  /** 搜索命中集合；不传表示没在搜索。当前没有搜索入口，留给以后的搜索面板 */
+  hits?: Set<string> | null
   onOpen: (slug: string) => void
 }
 
@@ -157,7 +157,7 @@ export default function MindMap({ requirements, projectName, hits, onOpen }: Pro
   // 没需求、或搜了但什么都没命中，都只是一句话的事，不必铺画布
   const blank =
     requirements.length === 0
-      ? '这个项目下还没有需求。让 agent 建一个，或从侧边栏换个项目。'
+      ? '这个项目下还没有需求。让 agent 建一个，或从顶栏换个项目。'
       : hits && layout.nodes.length === 0
         ? '没有命中的需求。'
         : ''

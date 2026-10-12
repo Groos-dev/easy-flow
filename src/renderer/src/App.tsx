@@ -12,13 +12,12 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { api } from './lib/api'
-import type { Requirement, Status, Todo, TodoStatus } from './lib/types'
+import type { Project, Requirement, Status, Todo, TodoStatus } from './lib/types'
 import BoardSwitcher, { type BoardView } from './components/BoardSwitcher'
 import MindMap from './components/MindMap'
 import Card from './components/Card'
 import Detail from './components/Detail'
 import Settings from './components/Settings'
-import Sidebar from './components/Sidebar'
 import TodoBoard from './components/TodoBoard'
 
 interface BoardColumnProps {
@@ -26,15 +25,53 @@ interface BoardColumnProps {
   items: Requirement[]
   onOpen: (slug: string) => void
   isOver: boolean
+  /** 收成窄条（只有「已完成」列会） */
+  collapsed: boolean
+  onToggleCollapsed: () => void
 }
 
-function ColumnView({ status, items, onOpen, isOver }: BoardColumnProps) {
+function ColumnView({
+  status,
+  items,
+  onOpen,
+  isOver,
+  collapsed,
+  onToggleCollapsed,
+}: BoardColumnProps) {
   const { setNodeRef } = useDroppable({ id: status, data: { status } })
+
+  if (collapsed) {
+    // 窄条也接拖拽：把卡片拖到它上面就是移进这一列
+    return (
+      <div
+        ref={setNodeRef}
+        className={`column collapsed${isOver ? ' over' : ''}`}
+        onClick={onToggleCollapsed}
+        title={`展开「${status}」（${items.length}）`}
+      >
+        <span className="column-fold-name">{status}</span>
+        <span className="n">{items.length}</span>
+      </div>
+    )
+  }
+
+  // 「已完成」列的列头整行是收起入口：与折叠条对称，不必去找那个小图标
+  const foldable = status === DONE_STATUS
+
   return (
     <div ref={setNodeRef} className={`column${isOver ? ' over' : ''}`}>
-      <div className="column-head">
+      <div
+        className={`column-head${foldable ? ' foldable' : ''}`}
+        onClick={foldable ? onToggleCollapsed : undefined}
+        title={foldable ? '收成窄条' : undefined}
+      >
         <span>{status}</span>
         <span className="n">{items.length}</span>
+        {foldable && (
+          <svg className="column-fold-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="13 6 19 12 13 18" />
+          </svg>
+        )}
       </div>
       <div className="column-body">
         {items.length === 0 ? (
@@ -53,6 +90,12 @@ function statusOf(over: DragOverEvent['over']): Status | undefined {
   return data?.status
 }
 
+/** 这一列默认收成窄条：历史只增不减，全铺开会把活跃三列挤窄 */
+const DONE_STATUS: Status = '已完成'
+
+/** 同列内按优先级排：p0 在前，没设优先级的排最后 */
+const PRIORITY_RANK: Record<string, number> = { p0: 0, p1: 1, p2: 2, p3: 3 }
+
 export default function App() {
   const [statuses, setStatuses] = useState<Status[]>([])
   /** 当前看板：需求与待办是平级的两个看板 */
@@ -61,8 +104,10 @@ export default function App() {
   const [project, setProject] = useState('')
   /** 当前项目显示名，取自项目根 AGENTS.md 的 frontmatter；缺省是目录名 */
   const [projectName, setProjectName] = useState('')
-  /** 侧边栏展开状态 */
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  /** 项目列表：顶栏的 chip 行用它。agent 在文件系统里建完目录后靠刷新带出来 */
+  const [projects, setProjects] = useState<Project[]>([])
+  /** 「已完成」列是否展开。默认收成窄条 */
+  const [doneOpen, setDoneOpen] = useState(false)
   /** 需求板块里的视图：看板（默认）或导图；待办板块下不适用 */
   const [reqView, setReqView] = useState<'board' | 'map'>('board')
   /** 详情页挂载点：需求或项目。slugs 用 'project:<slug>' 区分 */
@@ -74,26 +119,20 @@ export default function App() {
   const [todoStatuses, setTodoStatuses] = useState<string[]>([])
   /** 打开的待办详情。只存 id，对象从 todos 里取——改完状态详情页跟着变 */
   const [todoId, setTodoId] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
-  /** 搜索命中的 slug 集合；null 表示未搜索 */
-  const [hits, setHits] = useState<Set<string> | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
   const [dragSlug, setDragSlug] = useState<string | null>(null)
-  /** 侧边栏可能点开非当前项目的需求，这里单独持有 */
+  /** mini 面板可能点开非当前项目的需求，这里单独持有 */
   const [crossReq, setCrossReq] = useState<Requirement | null>(null)
   const [overStatus, setOverStatus] = useState<Status | null>(null)
-  /** 每加一就重拉侧边栏树。agent 在文件系统里建完目录后靠它刷新 */
-  const [refreshSeq, setRefreshSeq] = useState(0)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
-  const searchSeq = useRef(0)
   /** 待打开的需求只取一次（主窗口刚重建时的那份交接） */
   const tookPending = useRef(false)
 
   /**
-   * 打开某条需求的详情页。侧边栏与 mini 面板都走这里：
+   * 打开某条需求的详情页。mini 面板与详情页里的跳转都走这里：
    * 不在当前项目的需求要单独取，否则详情页会静默退回看板。
    */
   const openRequirement = useCallback(
@@ -172,53 +211,59 @@ export default function App() {
     }
   }, [])
 
-  /** 看板与侧边栏一起重拉：agent 建完目录后不用重启应用就能看到 */
+  const loadProjects = useCallback(async () => {
+    try {
+      const data = await api.projects()
+      setProjects(data.projects)
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }, [])
+
+  /** 看板、待办与项目列表一起重拉：agent 建完目录后不用重启应用就能看到 */
   const refresh = useCallback(() => {
     void load()
     void loadTodos()
-    setRefreshSeq((n) => n + 1)
-  }, [load, loadTodos])
+    void loadProjects()
+  }, [load, loadTodos, loadProjects])
 
   useEffect(() => {
     void load()
     void loadTodos()
-  }, [load, loadTodos])
+    void loadProjects()
+  }, [load, loadTodos, loadProjects])
 
-  // 搜索交给服务端（md 与索引都在那边），防抖 + 序号防乱序
-  useEffect(() => {
-    const q = query.trim()
-    if (!q) {
-      setHits(null)
+  /** 切项目：写回 activeProject，再把看板换成新项目的数据 */
+  async function switchProject(slug: string) {
+    if (slug === project) {
+      setDetail(null)
       return
     }
-    const seq = ++searchSeq.current
-    const timer = setTimeout(async () => {
-      try {
-        const res = await api.search(q)
-        if (seq === searchSeq.current) setHits(new Set(res.requirements.map((r) => r.slug)))
-      } catch (err) {
-        if (seq === searchSeq.current) setError((err as Error).message)
-      }
-    }, 220)
-    return () => clearTimeout(timer)
-  }, [query])
-
-  const filtered = useMemo(
-    () => (hits ? items.filter((r) => hits.has(r.slug)) : items),
-    [items, hits],
-  )
+    try {
+      await api.setActiveProject(slug)
+      setDetail(null)
+      await load()
+      await loadProjects()
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
 
   const byStatus = useMemo(() => {
     const map = new Map<Status, Requirement[]>(
       (statuses ?? []).map((s) => [s, []]),
     )
-    for (const r of filtered) {
+    for (const r of items) {
       const st = (r.status ?? '澄清') as Status
       if (!map.has(st)) map.set(st, [])
       map.get(st)!.push(r)
     }
+    // 优先级只在列内体现：排前面就是更该做，不再上色。同档保持原顺序
+    for (const list of map.values()) {
+      list.sort((a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9))
+    }
     return map
-  }, [filtered, statuses])
+  }, [items, statuses])
 
   async function handleDragEnd({ active, over }: DragEndEvent) {
     setDragSlug(null)
@@ -266,7 +311,7 @@ export default function App() {
       ? { kind: 'project' as const, project: detail.project, title: (detail.project === project && projectName) || detail.project }
       : (() => {
           // 必须同时匹配项目：不同项目可能存在同名 slug。
-          // 当前项目里找不到时用 crossReq（侧边栏可点开别的项目的需求）。
+          // 当前项目里找不到时用 crossReq（mini 面板可点开别的项目的需求）。
           const item =
             items.find((r) => r.slug === detail.slug && r.project === detail.project) ??
             (crossReq?.slug === detail.slug && crossReq.project === detail.project
@@ -293,21 +338,7 @@ export default function App() {
     : null
 
   return (
-    <div
-      className={`shell${sidebarOpen ? '' : ' sidebar-collapsed'}${showSettings ? ' settings-open' : ''}`}
-    >
-      {/* 侧边栏开关固定在窗口左上角：跟随窗口而不是布局，展开/折叠都在同一位置 */}
-      <button
-        className="icon-btn sidebar-toggle"
-        onClick={() => setSidebarOpen((v) => !v)}
-        title={sidebarOpen ? '收起侧边栏' : '展开侧边栏'}
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <line x1="9" y1="3" x2="9" y2="21" />
-        </svg>
-      </button>
-
+    <div className={`shell${showSettings ? ' settings-open' : ''}`}>
       {/* 设置入口固定在窗口左下角：跟着窗口而不是布局，看板与详情页都在同一位置 */}
       {!showSettings && (
         <button
@@ -321,24 +352,6 @@ export default function App() {
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
         </button>
-      )}
-
-      {sidebarOpen && (
-        <Sidebar
-          selected={detail}
-          refreshKey={refreshSeq}
-          onOpenProjectBoard={() => {
-            // Sidebar 内部已调 setActiveProject，这里只需重新拉数据
-            setDetail(null)
-            setView('req')
-            void load()
-          }}
-          onOpenProjectDetail={(slug) => {
-            setDetail({ project: slug, slug: null })
-            setView('req')
-          }}
-          onOpenRequirement={openRequirement}
-        />
       )}
 
       <main className="main-area">
@@ -377,31 +390,37 @@ export default function App() {
             <div className="topbar">
               <div className="topbar-side">
                 {/* 看板切换在左上角：需求与待办是平级的两个看板，都从这儿进 */}
-                <BoardSwitcher value={view} project={projectName || project} onChange={setView} />
-                <span className="count">
-                  {view === 'todo' ? todos.length : `${filtered.length} / ${items.length}`}
-                </span>
+                <BoardSwitcher value={view} onChange={setView} />
+                {/* 项目切换：chip 常驻可见，点一下直接切；项目多了横向滚动 */}
+                {view === 'req' && (
+                  <>
+                    <div className="proj-chips">
+                      {projects.map((p) => (
+                        <button
+                          key={p.slug}
+                          className={`proj-chip${p.slug === project ? ' on' : ''}`}
+                          title={p.root}
+                          onClick={() => void switchProject(p.slug)}
+                        >
+                          {p.name || p.slug}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className="icon-btn"
+                      title="项目详情（总规范）"
+                      aria-label="项目详情"
+                      onClick={() => setDetail({ project, slug: null })}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="9" />
+                        <line x1="12" y1="11" x2="12" y2="16" />
+                        <line x1="12" y1="8" x2="12" y2="8" />
+                      </svg>
+                    </button>
+                  </>
+                )}
               </div>
-
-              {/* 搜索框居中，放大镜贴在它左边。两边各占一半，中间才是真的居中。
-                  它只搜需求与文档全文，待办看板下不摆（搜不到会让人以为没结果） */}
-              {view === 'req' && (
-                <div className="search-box">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="11" cy="11" r="7" />
-                    <line x1="16.5" y1="16.5" x2="21" y2="21" />
-                  </svg>
-                  <input
-                    className="search-input"
-                    aria-label="搜索需求 / 文档全文"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') setQuery('')
-                    }}
-                  />
-                </div>
-              )}
 
               <div className="topbar-side right">
                 {/* 导图是需求板块里的一种呈现，待办板块下不摆 */}
@@ -453,18 +472,17 @@ export default function App() {
                       items={byStatus.get(status) ?? []}
                       onOpen={(slug) => setDetail({ project, slug })}
                       isOver={overStatus === status}
+                      collapsed={status === DONE_STATUS && !doneOpen}
+                      onToggleCollapsed={() => setDoneOpen((v) => !v)}
                     />
                   ))}
                 </div>
                 <DragOverlay>{dragItem ? <Card req={dragItem} overlay /> : null}</DragOverlay>
               </DndContext>
             ) : (
-              // 导图拿全量 items + hits，祖先链由 layoutTree 自己补：
-              // 喂 filtered 会把命中节点的父需求整条切掉，树就断了
               <MindMap
                 requirements={items}
                 projectName={projectName || project}
-                hits={hits}
                 onOpen={(slug) => setDetail({ project, slug })}
               />
             )}

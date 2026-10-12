@@ -22,6 +22,18 @@
   box-sizing: border-box;
 }
 
+/*
+ * 原生滚动条在这套暗色主题里很扎眼，而且是常驻的。
+ * 只藏外观：滚轮、触控板与键盘滚动都照常，可滚的内容也不受影响。
+ */
+* {
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -40,7 +52,7 @@ body {
 /* ---------------------------------------------------------------- 顶栏 */
 
 /*
- * 高度写死、内容垂直居中：折叠时顶栏内容要与 macOS 交通灯对齐（交通灯中心 y=21），
+ * 高度写死、内容垂直居中：顶栏内容要与 macOS 交通灯对齐（交通灯中心 y=21），
  * 靠 padding 撑高会随最高元素（搜索框）变化而偏。
  */
 .topbar {
@@ -48,7 +60,8 @@ body {
   align-items: center;
   gap: 12px;
   height: 42px;
-  padding: 0 16px;
+  /* 左边让开 macOS 红绿灯：没有侧边栏了，顶栏整条从窗口最左边开始 */
+  padding: 0 16px 0 112px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -57,9 +70,8 @@ body {
 }
 
 /*
- * 两侧各占一半，夹在中间的搜索框才是真的居中。
- * 这两块兼作窗口拖拽区——不能整条 topbar 设 drag：折叠时它从窗口最左边开始，
- * 会盖住固定在左上角的侧边栏开关，而 drag 区域会把落在其上的点击当作拖窗口吞掉。
+ * 左块吃掉剩余宽度：项目 chip 多时靠它伸展 + 滚动，右块按内容宽。
+ * 两块兼作窗口拖拽区，里面的按钮要显式让开（见下一条）。
  */
 .topbar-side {
   flex: 1;
@@ -76,64 +88,8 @@ body {
 }
 
 .topbar-side.right {
+  flex: none;
   justify-content: flex-end;
-}
-
-/* 搜索框：放大镜贴在输入框左边，输入框本身不要边框 */
-.search-box {
-  /* 能缩：窗口窄到放不下时让位，硬撑会把两侧挤没 */
-  flex: 0 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-  background: var(--column);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-faint);
-}
-
-.search-box:focus-within {
-  border-color: var(--accent);
-}
-
-.search-input {
-  width: 240px;
-  min-width: 0;
-  padding: 5px 0;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-size: 13px;
-  outline: none;
-}
-
-/* 侧边栏折叠时顶栏顶到窗口左边，整条让开 macOS 红绿灯与开关按钮 */
-.shell.sidebar-collapsed .topbar {
-  padding-left: 112px;
-}
-
-/*
- * 侧边栏开关。固定跟随窗口而不是布局——展开/折叠都在同一位置，
- * 否则它会在「顶栏左侧」和「侧边栏头部」之间跳。
- */
-.sidebar-toggle {
-  position: fixed;
-  top: 10px;
-  left: 80px;
-  z-index: 20;
-  -webkit-app-region: no-drag;
-}
-
-.brand {
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  /* 窗口窄时先截断项目名：两侧各占一半，撑破了会把中间的搜索框挤偏 */
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ------------------------------------------------------- 看板切换 */
@@ -173,14 +129,6 @@ body {
 
 .board-switch-label {
   flex: none;
-}
-
-.board-switch-sub {
-  color: var(--text-faint);
-  font-weight: 400;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 观感沿用 .select-list：同一套底色与投影 */
@@ -241,13 +189,44 @@ body {
   color: var(--accent);
 }
 
-.count {
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
-
 .spacer {
   flex: 1;
+}
+
+/* 项目 chip：常驻可见，点一下直接切。项目多了横向滚动，不换行 */
+.proj-chips {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.proj-chip {
+  flex: none;
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  /* 顶栏那半是拖拽区，chip 得自己让开才能点 */
+  -webkit-app-region: no-drag;
+}
+
+.proj-chip:hover {
+  color: var(--text);
+  background: var(--column);
+}
+
+.proj-chip.on {
+  color: var(--text);
+  background: #1b2536;
+  border-color: #2b3a55;
 }
 
 .search {
@@ -333,6 +312,55 @@ body {
   overflow-y: auto;
 }
 
+/* 「已完成」列的窄条形态：只留竖排列名与数量，点一下展开 */
+.column.collapsed {
+  flex: none;
+  width: 34px;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 0;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.column.collapsed:hover {
+  border-color: #333b47;
+  color: var(--text);
+}
+
+.column.collapsed .n {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 窄条放不下横排的列名，竖着写 */
+.column-fold-name {
+  writing-mode: vertical-rl;
+  letter-spacing: 2px;
+}
+
+/* 「已完成」列的列头整行是收起入口，与折叠条对称 */
+.column-head.foldable {
+  cursor: pointer;
+}
+
+.column-head.foldable:hover {
+  color: var(--text);
+}
+
+.column-fold-caret {
+  margin-left: auto;
+  flex: none;
+  color: var(--text-faint);
+}
+
+.column-head.foldable:hover .column-fold-caret {
+  color: var(--text);
+}
+
 .empty {
   padding: 16px 8px;
   color: var(--text-faint);
@@ -363,13 +391,6 @@ body {
 
 /* ---------------------------------------------------------------- 设置页 */
 
-/* 设置页整页化：侧边栏与左上角开关都不显示。侧边栏只是藏起来、不卸载，
-   返回时它的过滤、展开与滚动位置原样还在 */
-.shell.settings-open .sidebar,
-.shell.settings-open .sidebar-toggle {
-  display: none;
-}
-
 .settings-page {
   display: flex;
   height: 100vh;
@@ -386,8 +407,7 @@ body {
   background: #12151b;
 }
 
-/* 顶部占位兼拖拽区：设置页里侧边栏不显示，它顶部那条拖拽区在这里补上；
-   从红绿灯右侧开始（同 .sidebar-head），别盖住它们 */
+/* 顶部占位兼拖拽区：从红绿灯右侧开始（同 .topbar），别盖住它们 */
 .settings-nav-head {
   flex: none;
   height: 46px;
@@ -535,30 +555,6 @@ body {
   align-items: center;
   gap: 6px;
   margin-bottom: 5px;
-}
-
-.prio {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex: none;
-  /* 悬停时可点开查看含义（title 属性） */
-  cursor: help;
-}
-
-/* 优先级四档 = 艾森豪威尔四象限 */
-.prio.p0 {
-  background: #ff5c5c; /* 重要且紧急 — 马上做 */
-}
-.prio.p1 {
-  background: #ff9f43; /* 重要不紧急 — 计划做 */
-}
-.prio.p2 {
-  background: #ffd93d; /* 紧急不重要 — 授权做 */
-}
-/* 原 low 用 #5c6470，与暗色背景几乎同色，等于看不见 */
-.prio.p3 {
-  background: #6f7b8c; /* 都不 — 有空再做 */
 }
 
 .card-title {
@@ -1017,164 +1013,6 @@ body {
   color: var(--text);
   background: var(--column);
   border-color: var(--border);
-}
-
-/* ---------------------------------------------------------- 左侧边栏 */
-
-.sidebar {
-  width: 268px;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  background: #12151b;
-  border-right: 1px solid var(--border);
-}
-
-/* 纯占位：让开 macOS 红绿灯与固定在那个位置的侧边栏开关，这片区域兼作窗口拖拽区 */
-.sidebar-head {
-  flex: none;
-  height: 46px;
-  /* 从开关右侧开始：drag 区域会吞掉落在其上的点击，盖住按钮就点不动了 */
-  margin-left: 112px;
-  -webkit-app-region: drag;
-}
-
-.sidebar-search {
-  padding: 0 10px 8px;
-}
-
-.sidebar-tree {
-  flex: 1;
-  overflow-y: auto;
-  /* 底部留出固定在左下角的设置齿轮：不留的话列表滚到底会被它盖住 */
-  padding: 4px 8px 56px;
-}
-
-/* ------------------------------------------------------------ 树形结构 */
-
-.tree-project {
-  margin-bottom: 1px;
-}
-
-.tree-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  width: 100%;
-  padding: 5px 6px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-dim);
-  font-family: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-  text-align: left;
-}
-
-.tree-row:hover {
-  background: var(--column);
-  color: var(--text);
-}
-
-.tree-row.project.active {
-  color: var(--text);
-  background: #1b2536;
-}
-
-.tree-caret {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  flex: none;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-}
-
-.tree-caret svg {
-  transition: transform 0.12s;
-}
-
-.tree-label {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-
-.tree-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tree-count {
-  margin-left: auto;
-  flex: none;
-  color: var(--text-faint);
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-}
-
-/* 目录不合规范的角标；具体问题在 title 里 */
-.tree-warn {
-  flex: none;
-  margin-left: 5px;
-  color: #e0b062;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: help;
-}
-
-.tree-action {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  flex: none;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-}
-
-.tree-row.project:hover .tree-action {
-  display: flex;
-}
-
-.tree-action:hover {
-  color: var(--accent);
-  background: var(--bg);
-}
-
-.tree-children {
-  padding-left: 22px;
-}
-
-.tree-row.requirement {
-  font-size: 12px;
-  color: var(--text-faint);
-}
-
-.tree-row.requirement.selected {
-  color: var(--text);
-  background: #1b2536;
 }
 
 /* ------------------------------------------------- 详情页的取值选择器 */
