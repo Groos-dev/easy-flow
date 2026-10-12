@@ -19,6 +19,7 @@ import {
   type TodoStatus,
 } from './db.ts'
 import { withStatus } from './threads.ts'
+import './launch-claude.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 import { installSkill, skillPlan } from './skill-install.ts'
 import {
