@@ -28,6 +28,7 @@ import {
   newWorktreeId,
   setTodoSummary,
   setTodoTitle,
+  titleIsSlug,
 } from './convention.ts'
 import {
   BoardDatabase,
@@ -338,7 +339,8 @@ id 必须显式传：需求 id 在需求目录 AGENTS.md 的 frontmatter 里，w
 
 --parent 建子需求：目录嵌在父需求里，结构同普通需求。子需求一样入库、一样出现在看板上，
 也能按 id 反查；层级可以往下续，slug 是相对项目根的路径（如 parent/child）。
-中文标题推不出目录名，需要显式给 --slug。`,
+中文标题推不出目录名，需要显式给 --slug。
+标题要写成短句说清「在做什么」，不能等于目录名——看板上它是卡片上唯一能扫的东西。`,
 
   'req set': `用法：easy-flow req set <id> [--status <澄清|执行中|Review|已完成>] [--priority <p0|p1|p2|p3|"">] [--json]
 
@@ -549,6 +551,12 @@ async function cmdReqNew(argv: string[]): Promise<void> {
   if (!parentId && !project) throw new UsageError('Pass one of --project / --parent', USAGE['req new'])
 
   const slug = str(values.slug)?.trim() || deriveSlug(title)
+  if (titleIsSlug(title, slug)) {
+    throw new UsageError(
+      `Title repeats the directory name, which tells nobody what the requirement does: ${title}. Write it as a short phrase instead — what it does, and where or why.`,
+      USAGE['req new'],
+    )
+  }
   const summary = str(values.summary) ?? ''
 
   let created: { dir: string; id: string }

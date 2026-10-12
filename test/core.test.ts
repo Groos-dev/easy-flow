@@ -816,7 +816,8 @@ describe('数据层 · 项目与规范', () => {
       recursive: true,
     })
     const desc = join(dir, 'onex', 'from-template', 'requirement.md')
-    writeFileSync(desc, readFileSync(desc, 'utf8').replace('# 需求标题', '# 抄模板建的需求'), 'utf8')
+    // 占位文案本身会变，这里只认「H1 那一行」
+    writeFileSync(desc, readFileSync(desc, 'utf8').replace(/^# .*$/m, '# 抄模板建的需求'), 'utf8')
     db.syncProjects()
 
     const r = db.list().find((x) => x.slug === 'from-template')!
@@ -1456,6 +1457,28 @@ describe('CLI 层', () => {
     const both = cli(configFile, ['req', 'new', '两个都给', '--project', 'demo', '--parent', parent.id])
     assert.equal(both.code, 2)
     assert.match(both.stderr, /not both/)
+  })
+
+  test('req new 拦掉等于目录名的标题：那是把目录名当标题写，等于没说做什么', () => {
+    scaffold()
+    cliOk(configFile, ['project', 'new', 'demo'])
+
+    const bad = cli(configFile, ['req', 'new', 'tf-meal-migration', '--project', 'demo'])
+    assert.equal(bad.code, 2)
+    assert.match(bad.stderr, /repeats the directory name/)
+    // 拒绝发生在落盘之前：项目目录里还是只有它自己的 AGENTS.md
+    assert.deepEqual(readdirSync(join(dataDir, 'demo')), ['AGENTS.md'])
+
+    // 说清「在做什么」就放行，目录名照旧可以是个 slug
+    const ok = JSON.parse(
+      cliOk(configFile, ['req', 'new', 'TF 餐食迁移到新链路', '--project', 'demo', '--slug', 'tf-meal-migration', '--json']),
+    )
+    assert.equal(ok.slug, 'tf-meal-migration')
+
+    // 子需求走同一套校验
+    const sub = cli(configFile, ['req', 'new', 'tf-meal-migration', '--parent', ok.id])
+    assert.equal(sub.code, 2)
+    assert.match(sub.stderr, /repeats the directory name/)
   })
 
   test('--json：成功打数据可串联，失败也是 JSON 且退出码语义分明', () => {

@@ -30,6 +30,17 @@ function oneLine(text: string): string {
 }
 
 /**
+ * 标题是不是把目录名原样抄了一遍。
+ *
+ * 看板卡片上能扫的只有标题，抄目录名等于没说「在做什么」——建需求时拦掉这一类。
+ * 只逐字比，不做大小写与连字符的归一：英文短句标题推出来的目录名天然带连字符，
+ * 一并归一的话「Retry seat issue on 1A timeout」这种正当标题也会被误伤。
+ */
+export function titleIsSlug(title: string, slug: string): boolean {
+  return title.trim() === slug
+}
+
+/**
  * 项目规范正文。seed 版多一句"怎么用模板"的说明——
  * 那是给要复制它的人看的，真实项目里只会显得莫名其妙。
  */
@@ -109,7 +120,7 @@ const REQUIREMENT_CONTEXT_TEMPLATE = `## 背景
 
 const PLACEHOLDER_SUMMARY = '一句话说清要做什么、为什么。'
 
-const REQUIREMENT_DESC_TEMPLATE = requirementDesc('需求标题', PLACEHOLDER_SUMMARY)
+const REQUIREMENT_DESC_TEMPLATE = requirementDesc('这条需求在做什么（短句，别写目录名）', PLACEHOLDER_SUMMARY)
 
 /** 补上 context.md 脚手架：缺才写，已有不动 */
 export function ensureRequirementContext(dir: string): boolean {
