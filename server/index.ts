@@ -21,6 +21,7 @@ import {
 import { withStatus } from './threads.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 import { installSkill, skillPlan } from './skill-install.ts'
+import './launch-codex.ts'
 import {
   allowOrigin,
   json,
