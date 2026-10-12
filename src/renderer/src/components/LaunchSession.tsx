@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import type { LaunchAgent, LaunchProviderInfo, LaunchResult, Requirement, Worktree } from '../lib/types'
 import LaunchSessionForm from './LaunchSessionForm'
@@ -15,10 +15,20 @@ export default function LaunchSession({ req, worktrees }: { req: Requirement; wo
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<LaunchResult | null>(null)
   const [requestError, setRequestError] = useState('')
+  const requestSequence = useRef(0)
+
+  useEffect(() => () => { requestSequence.current += 1 }, [])
 
   useEffect(() => {
-    setWorktreeId((current) => launchWorktreeSelection(worktrees, current).selectedId)
-  }, [worktrees])
+    const selected = launchWorktreeSelection(worktrees, worktreeId).selectedId
+    if (selected !== worktreeId) {
+      requestSequence.current += 1
+      setWorktreeId(selected)
+      setBusy(false)
+      setResult(null)
+      setRequestError('')
+    }
+  }, [worktrees, worktreeId])
 
   useEffect(() => {
     if (!open || providersLoaded) return
@@ -45,21 +55,41 @@ export default function LaunchSession({ req, worktrees }: { req: Requirement; wo
 
   async function launch() {
     if (!worktreeId || !agent || busy) return
+    const sequence = ++requestSequence.current
+    const selectedWorktreeId = worktreeId
+    const selectedAgent = agent
     setBusy(true)
     setResult(null)
     setRequestError('')
     try {
-      setResult(await api.launch({
+      const target = await api.launch({
         slug: req.slug,
         project: req.project,
-        worktreeId,
-        agent,
-      }))
+        worktreeId: selectedWorktreeId,
+        agent: selectedAgent,
+      })
+      if (sequence === requestSequence.current) setResult(target)
     } catch (error) {
-      setRequestError((error as Error).message)
+      if (sequence === requestSequence.current) setRequestError((error as Error).message)
     } finally {
-      setBusy(false)
+      if (sequence === requestSequence.current) setBusy(false)
     }
+  }
+
+  function changeWorktree(id: string) {
+    requestSequence.current += 1
+    setWorktreeId(id)
+    setBusy(false)
+    setResult(null)
+    setRequestError('')
+  }
+
+  function changeAgent(id: LaunchAgent) {
+    requestSequence.current += 1
+    setAgent(id)
+    setBusy(false)
+    setResult(null)
+    setRequestError('')
   }
 
   return (
@@ -79,8 +109,8 @@ export default function LaunchSession({ req, worktrees }: { req: Requirement; wo
           requestError={requestError}
           busy={busy}
           result={result}
-          onWorktreeChange={(id) => { setWorktreeId(id); setResult(null) }}
-          onAgentChange={(id) => { setAgent(id); setResult(null) }}
+          onWorktreeChange={changeWorktree}
+          onAgentChange={changeAgent}
           onLaunch={() => void launch()}
         />
       )}

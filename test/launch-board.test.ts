@@ -1,11 +1,14 @@
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { fileURLToPath } from 'node:url'
+import { createServer as createViteServer } from 'vite'
 import { createBoardApp } from '../server/index.ts'
 import { launchPrompt, launchProviders, registerLaunchProvider, type LaunchInput } from '../server/launch.ts'
 import { launchResultFeedback, launchWorktreeSelection, worktreeCreationCommand } from '../src/renderer/src/lib/launch.ts'
@@ -157,7 +160,7 @@ describe('需求详情页启动会话', () => {
         one: render({ worktrees: [one], worktreeId: 'wt-one' }),
         multiple: render({ worktrees: [one, two] }),
         empty: render({ worktrees: [] }),
-        failure: render({ worktrees: [one], worktreeId: 'wt-one', result: { agent: 'codex', url: '', prompt: 'easy-flow context wt-one', opened: false, error: 'handler unavailable' } }),
+        failure: render({ worktrees: [one], worktreeId: 'wt-one', result: { agent: 'codex', url: 'codex-test://new-session', prompt: 'easy-flow context wt-one', opened: false, error: 'handler unavailable' } }),
       }))
     `
     const rendered = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '--eval', renderScript], {
@@ -168,6 +171,7 @@ describe('需求详情页启动会话', () => {
     assert.equal(rendered.status, 0, rendered.stderr)
     const markup = JSON.parse(rendered.stdout)
     assert.match(markup.one, /easy-flow · feature-one/)
+    assert.match(markup.one, /type="button" class="select-trigger"/)
     assert.match(markup.multiple, /选择工作区/)
     assert.match(markup.multiple, /launch-submit" type="submit" disabled=""/)
     assert.match(markup.empty, /easy-flow wt new req-alpha/)
@@ -176,7 +180,72 @@ describe('需求详情页启动会话', () => {
     assert.match(markup.failure, /easy-flow context wt-one/)
     assert.match(markup.failure, /aria-label="复制提示词"/)
     assert.match(markup.failure, /easy-flow req session add req-alpha --agent codex/)
+    assert.match(markup.failure, /手动重试打开会话草稿/)
+    assert.match(markup.failure, /href="codex-test:\/\/new-session"/)
     assert.doesNotMatch(markup.failure, /已创建成功/)
+    const selectMenu = readFileSync(join(repoRoot, 'src/renderer/src/components/SelectMenu.tsx'), 'utf8')
+    assert.equal((selectMenu.match(/type="button"/g) ?? []).length, 2)
+  })
+
+  test('api.launch 将 HTTP 200 的启动失败保留为结果，并且 ctx 未加载时不显示启动入口', async () => {
+    const vite = await createViteServer({
+      configFile: false,
+      root: repoRoot,
+      server: { middlewareMode: true },
+      appType: 'custom',
+      logLevel: 'error',
+    })
+    const previousFetch = globalThis.fetch
+    const previousOpenFail = process.env.EASY_FLOW_TEST_OPEN_FAIL
+    try {
+      const { api } = await vite.ssrLoadModule('/src/renderer/src/lib/api.ts') as {
+        api: { launch(input: { slug: string; project: string; worktreeId: string; agent: 'codex' }): Promise<any> }
+      }
+      globalThis.fetch = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        const path = new URL(String(input), base)
+        return previousFetch(new URL(`${path.pathname}${path.search}`, base), init)
+      }) as typeof fetch
+      process.env.EASY_FLOW_TEST_OPEN_FAIL = '1'
+      const result = await api.launch({ slug: 'alpha', project: 'demo', worktreeId: 'wt-alpha', agent: 'codex' })
+      assert.equal(result.opened, false)
+      assert.match(result.error, /handler unavailable|42/)
+      assert.match(result.prompt, /easy-flow context wt-alpha/)
+      const { default: LaunchSessionForm } = await vite.ssrLoadModule('/src/renderer/src/components/LaunchSessionForm.tsx') as {
+        default: any
+      }
+      const formHtml = renderToStaticMarkup(createElement(LaunchSessionForm, {
+        requirementId: 'req-alpha', worktrees: [worktree('wt-alpha', 'feature-alpha')],
+        providers: [{ id: 'codex', label: 'Codex' }], worktreeId: 'wt-alpha', agent: 'codex',
+        loading: false, providerError: '', requestError: '', busy: false, result,
+        onWorktreeChange: () => {}, onAgentChange: () => {}, onLaunch: () => {},
+      }))
+      assert.match(formHtml, /handler unavailable/)
+      assert.match(formHtml, /easy-flow context wt-alpha/)
+      assert.match(formHtml, /aria-label="复制提示词"/)
+      assert.match(formHtml, /easy-flow req session add req-alpha --agent codex/)
+      await assert.rejects(
+        api.launch({ slug: 'alpha', project: 'demo', worktreeId: 'wt-beta', agent: 'codex' }),
+        /does not belong to requirement/,
+      )
+
+      const { default: InfoPanel } = await vite.ssrLoadModule('/src/renderer/src/components/InfoPanel.tsx') as {
+        default: any
+      }
+      const html = renderToStaticMarkup(createElement(InfoPanel, {
+        req: {
+          slug: 'alpha', project: 'demo', id: 'req-alpha', title: 'alpha', path: '',
+          feishuTaskLinks: [], codeLinks: [], extLinks: [], links: '',
+        },
+        ctx: null,
+        onOpenTodo: () => {},
+      }) as never)
+      assert.doesNotMatch(html, /新建 Agent 会话|wt new req-alpha/)
+    } finally {
+      globalThis.fetch = previousFetch
+      if (previousOpenFail === undefined) delete process.env.EASY_FLOW_TEST_OPEN_FAIL
+      else process.env.EASY_FLOW_TEST_OPEN_FAIL = previousOpenFail
+      await vite.close()
+    }
   })
 
   test('POST launch 从需求关联记录取路径，打开草稿但不预登记会话', async () => {

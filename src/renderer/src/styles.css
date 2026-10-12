@@ -1875,3 +1875,12 @@ button.thread-badge:hover {
   font: 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
   white-space: pre-wrap;
 }
+
+.launch-retry {
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.launch-retry:hover {
+  text-decoration: underline;
+}

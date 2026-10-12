@@ -52,6 +52,7 @@ export default function SelectMenu({
   return (
     <div className="select-menu" ref={boxRef}>
       <button
+        type="button"
         className="select-trigger"
         disabled={disabled}
         title={hint}
@@ -80,6 +81,7 @@ export default function SelectMenu({
         <div className="select-list" role="listbox">
           {options.map((o) => (
             <button
+              type="button"
               key={o.value}
               className={`select-item${o.value === value ? ' active' : ''}`}
               role="option"

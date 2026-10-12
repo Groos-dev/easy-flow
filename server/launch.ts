@@ -22,15 +22,6 @@ export interface LaunchInput {
   worktreePath: string
 }
 
-/** 启动结果：要打开的链接 + 给用户复制的提示词 */
-export interface LaunchTarget {
-  agent: LaunchAgent
-  /** 新会话 deeplink */
-  url: string
-  /** 预填给新会话的提示词；也是「复制提示词」降级路径的内容 */
-  prompt: string
-}
-
 export interface LaunchProvider {
   id: LaunchAgent
   label: string

@@ -20,7 +20,11 @@ import type {
 const BASE: string =
   import.meta.env.VITE_API_BASE ?? (import.meta.env.DEV ? '' : 'http://127.0.0.1:3210')
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  options?: RequestInit,
+  { errorIsResult = false }: { errorIsResult?: boolean } = {},
+): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'content-type': 'application/json' },
     ...options,
@@ -35,7 +39,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   const data = JSON.parse(text) as T & { error?: string }
-  if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
+  if (!res.ok || (!errorIsResult && data.error)) throw new Error(data.error ?? `HTTP ${res.status}`)
   return data
 }
 
@@ -149,13 +153,14 @@ export const api = {
   launchProviders: (): Promise<{ providers: LaunchProviderInfo[] }> =>
     request('/api/launch/providers'),
 
+  /** 启动失败仍是带 prompt 的结果；仅 HTTP 非 2xx 进入 request 错误通道。 */
   launch: (input: {
     slug: string
     project: string
     worktreeId: string
     agent: LaunchAgent
   }): Promise<LaunchResult> =>
-    request('/api/launch', { method: 'POST', body: JSON.stringify(input) }),
+    request('/api/launch', { method: 'POST', body: JSON.stringify(input) }, { errorIsResult: true }),
 
   settings: (): Promise<SettingsPayload> => request('/api/settings'),
 

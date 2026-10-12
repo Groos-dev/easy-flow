@@ -21,6 +21,8 @@ export function worktreeCreationCommand(requirementId: string): string {
 export function launchResultFeedback(requirementId: string, result: LaunchResult) {
   return {
     role: result.opened ? 'status' as const : 'alert' as const,
+    opened: result.opened,
+    url: result.url,
     title: result.opened
       ? '已打开待发送的新会话草稿；尚未登记会话。'
       : `启动失败：${result.error || '未知错误'}`,

@@ -98,6 +98,11 @@ export default function LaunchSessionForm({
         <div className={feedback.role === 'status' ? 'launch-result' : 'launch-error'} role={feedback.role}>
           <p>{feedback.title}</p>
           <p>{feedback.detail}</p>
+          {!feedback.opened && feedback.url && (
+            <a className="launch-retry" href={feedback.url} target="_blank" rel="noreferrer">
+              手动重试打开会话草稿
+            </a>
+          )}
           {feedback.prompt && (
             <div className="launch-prompt">
               <pre>{feedback.prompt}</pre>
