@@ -1,0 +1,47 @@
+server/index.ts
+  s_ac1bcd89ffa698::t_4c64f5ca78810a 24,123-129,309-363
+src/renderer/src/lib/api.ts
+  s_ac1bcd89ffa698::t_4c64f5ca78810a 4-6,149-158
+src/renderer/src/components/LaunchSession.tsx
+  s_ac1bcd89ffa698::t_4c64f5ca78810a 1-3,6-12,14-19,21-77,80-89
+  s_ac1bcd89ffa698::t_65ef5f91d05c1e 4-5,13,20
+  s_ac1bcd89ffa698::t_5475a2b0ad5dcb 78-79
+src/renderer/src/components/LaunchSessionForm.tsx
+  s_ac1bcd89ffa698::t_5475a2b0ad5dcb 2,4,14-15,28-29,38,53,72-73,95,97-101,103-104,108
+  s_ac1bcd89ffa698::t_65ef5f91d05c1e 36
+  s_ac1bcd89ffa698::t_4c64f5ca78810a 1,3,5-13,16-27,30-35,37,39-52,54-71,74-94,96,102,105-107,109-113
+server/launch.ts
+  s_ac1bcd89ffa698::t_4c64f5ca78810a 62
+test/launch-board.test.ts
+  s_ac1bcd89ffa698::t_65ef5f91d05c1e 3,122,127,130-134,164,166,180,194,204,215,236
+  s_ac1bcd89ffa698::t_70ee2e7a9543d9 159-162
+  s_ac1bcd89ffa698::t_9e77df87ddbce0 1-2,4-10,12-121,123-126,128-129,136-158,163,165,167-179,181-193,195-203,212-214,216-235,237-238
+  s_ac1bcd89ffa698::t_5475a2b0ad5dcb 11,135,205-211
+src/renderer/src/styles.css
+  s_ac1bcd89ffa698::t_70ee2e7a9543d9 1846-1849
+  s_ac1bcd89ffa698::t_4c64f5ca78810a 1787-1845,1850-1877
+src/renderer/src/lib/launch.ts
+  s_ac1bcd89ffa698::t_65ef5f91d05c1e 2-13,32-33
+  s_ac1bcd89ffa698::t_5475a2b0ad5dcb 1,14-31
+src/renderer/src/lib/types.ts
+  s_ac1bcd89ffa698::t_4c64f5ca78810a 166-180
+src/renderer/src/components/InfoPanel.tsx
+  s_ac1bcd89ffa698::t_70ee2e7a9543d9 88-109,111-112,114-132
+  s_ac1bcd89ffa698::t_4c64f5ca78810a 9,83-87,133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "609806ceb9ae8081045310e028d21d7f8dd827e6",
+  "prompts": {},
+  "sessions": {
+    "s_ac1bcd89ffa698": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12f22-038d-7050-a2e6-709f31101761",
+        "model": "gpt-6-luna-2026-09-22[1M]"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
