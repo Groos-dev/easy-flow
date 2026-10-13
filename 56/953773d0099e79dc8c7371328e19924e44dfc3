@@ -1,0 +1,21 @@
+src/main/index.ts
+  s_fd2e0b97533d1d::t_2ebb945fb05300 309-310
+server/codex.ts
+  s_fd2e0b97533d1d::t_254214247ae05e 14-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "56953773d0099e79dc8c7371328e19924e44dfc3",
+  "prompts": {},
+  "sessions": {
+    "s_fd2e0b97533d1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c1d87a7-9cee-4ea4-9aa9-54a613c471fb",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
