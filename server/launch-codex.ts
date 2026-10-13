@@ -1,11 +1,6 @@
 import type { AppServer } from './codex.ts'
 import { registerLaunchProvider, type LaunchInput, type LaunchProvider } from './launch.ts'
 
-/** 一条需求一个 project：与 review 会话共用同一个键，靠会话的 role 区分 */
-export function codexProjectKey(input: LaunchInput): string {
-  return `easy-flow:${input.requirementId}`
-}
-
 /** project 的 roots：该需求名下全部可用工作区，开发会话因此在整条需求范围内都能读写 */
 export function codexProjectRoots(input: LaunchInput): string[] {
   return input.requirementWorktreePaths

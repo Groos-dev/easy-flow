@@ -1,4 +1,9 @@
-import type { LaunchResult, Worktree } from './types'
+import type { LaunchAgent, LaunchResult, Worktree } from './types'
+
+/** Claude 的 deeplink 只能带一个工作目录，必须选一个工作区；Codex 按需求建 project，不用选 */
+export function launchNeedsWorktree(agent: LaunchAgent | ''): boolean {
+  return agent === 'claude'
+}
 
 /** 只有可用 worktree 才能启动；唯一项直选，多项留空要求用户明确选择。 */
 export function launchWorktreeSelection(worktrees: Worktree[], selectedId = ''): {

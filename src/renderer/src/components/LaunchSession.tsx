@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import type { LaunchAgent, LaunchProviderInfo, LaunchResult, Requirement, Worktree } from '../lib/types'
 import LaunchSessionForm from './LaunchSessionForm'
-import { launchWorktreeSelection } from '../lib/launch'
+import { launchNeedsWorktree, launchWorktreeSelection } from '../lib/launch'
 
 export default function LaunchSession({ req, worktrees }: { req: Requirement; worktrees: Worktree[] }) {
   const [open, setOpen] = useState(false)
@@ -56,7 +56,7 @@ export default function LaunchSession({ req, worktrees }: { req: Requirement; wo
   async function launch() {
     if (!agent || busy) return
     // Claude 必须带一个工作区；Codex 不选，服务端按需求把全部工作区收进 project
-    const needsWorktree = agent === 'claude'
+    const needsWorktree = launchNeedsWorktree(agent)
     if (needsWorktree && !worktreeId) return
     const sequence = ++requestSequence.current
     const selectedWorktreeId = needsWorktree ? worktreeId : ''

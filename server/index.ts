@@ -321,6 +321,8 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         // Claude 的 deeplink 只能带一个工作目录，必须指定；Codex 按需求建 project、roots 收全部工作区
         let wt: ReturnType<typeof db.worktreeById>
         if (agent === 'claude') {
+          // Claude 的 deeplink 只能带一个工作目录，没有工作区就无从启动
+          if (!worktreeId) throw new Error('Claude Code needs a worktree: its deeplink carries a single folder')
           wt = db.worktreeById(String(worktreeId))
           if (!wt) throw new Error(`Worktree not found: ${worktreeId}`)
           if (wt.requirementId !== requirement.id) {

@@ -9,7 +9,6 @@ import { findLaunchProvider, type LaunchInput } from '../server/launch.ts'
 import {
   codexAppServerStartError,
   codexProvider,
-  codexProjectKey,
   codexProjectRoots,
   codexLaunchUrl,
 } from '../server/launch-codex.ts'
@@ -39,8 +38,7 @@ describe('Codex 开发会话启动', () => {
     assert.equal(url.searchParams.get('prompt'), prompt)
   })
 
-  test('一条需求一个 project：开发与 review 共用需求级键，roots 收全部工作区', () => {
-    assert.equal(codexProjectKey(input), 'easy-flow:req-demo')
+  test('一条需求一个 project：roots 收全部工作区（键由 ensureRequirementProject 拼）', () => {
     assert.deepEqual(codexProjectRoots(input), input.requirementWorktreePaths)
   })
 

@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react'
 import { CopyButton } from './InfoBits'
 import SelectMenu from './SelectMenu'
-import { launchResultFeedback, launchWorktreeSelection, worktreeCreationCommand } from '../lib/launch'
+import { launchNeedsWorktree, launchResultFeedback, launchWorktreeSelection, worktreeCreationCommand } from '../lib/launch'
 import type { LaunchAgent, LaunchProviderInfo, LaunchResult, Worktree } from '../lib/types'
 
 export default function LaunchSessionForm({
@@ -37,7 +37,7 @@ export default function LaunchSessionForm({
   const orphaned = worktrees.filter((w) => w.orphan)
   const feedback = result ? launchResultFeedback(requirementId, result) : null
   // Claude 的 deeplink 只能带一个工作目录，必须选；Codex 按需求建 project、roots 收全部工作区，不用选
-  const needsWorktree = agent === 'claude'
+  const needsWorktree = launchNeedsWorktree(agent)
   const canLaunch = !!agent && (!needsWorktree || !!worktreeId) && !busy
 
   function submit(event: FormEvent) {

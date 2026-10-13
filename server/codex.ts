@@ -6,7 +6,7 @@
  * 得等它跑完（或把命令放到后台跑，进程活着就不会断）。
  *
  * 两条容易踩的规矩：
- *   - review 按需求复用 project，开发按 worktree 隔离 project；不同幂等键避免 roots 互相覆盖，project id 不存库
+ *   - 一条需求一个 project（`easy-flow:<reqId>`，review 与开发会话共用同一个），project id 不存库
  *   - thread/start 不继承 project 的 roots，必须显式传 runtimeWorkspaceRoots，否则多仓库落空
  */
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -195,31 +195,22 @@ export class AppServer {
 }
 
 /**
- * 需求级 project：幂等键命中就复用，不再刷 roots——roots 只在首次创建时按当时的工作区定下。
- * 每次刷会覆盖掉人在 Codex 里对 project 的调整，而开发会话本来只需要「复用同一个 project」。
+ * 需求级 project：review 与开发会话共用（键 `easy-flow:<reqId>`）。
+ * 幂等键命中就复用，不再刷 roots——roots 只在首次创建时按当时的工作区定下，每次刷会覆盖掉
+ * 人在 Codex 里对 project 的调整，而开发会话本来只需要「复用同一个 project」。
  */
-export async function ensureCodexProject(
-  server: AppServer,
-  idempotencyKey: string,
-  name: string,
-  roots: string[],
-): Promise<string> {
-  const created = await server.call('project/create', {
-    idempotencyKey,
-    name,
-    roots: roots.map((path) => ({ path })),
-  })
-  return pick<string>(created, ['project', 'id'])
-}
-
-/** 一条需求一个 project：review 与开发会话共用（键 `easy-flow:<reqId>`）。 */
-export function ensureRequirementProject(
+export async function ensureRequirementProject(
   server: AppServer,
   requirementId: string,
   name: string,
   roots: string[],
 ): Promise<string> {
-  return ensureCodexProject(server, `easy-flow:${requirementId}`, name, roots)
+  const created = await server.call('project/create', {
+    idempotencyKey: `easy-flow:${requirementId}`,
+    name,
+    roots: roots.map((path) => ({ path })),
+  })
+  return pick<string>(created, ['project', 'id'])
 }
 
 /**

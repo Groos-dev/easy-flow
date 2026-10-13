@@ -46,8 +46,14 @@ export function findLaunchProvider(id: string): LaunchProvider | undefined {
   return providers.get(id as LaunchAgent)
 }
 
+/** 新会话把自己登记回需求的那条命令；提示词里那句与失败降级给用户手动执行的是同一条 */
+export function sessionAddCommand(requirementId: string, agent: LaunchAgent): string {
+  return `easy-flow req session add ${requirementId} --agent ${agent} --title "<一句话说明在做什么>"`
+}
+
 /** 预填提示词：只带身份与下一步动作，实时内容由新会话自己用 easy-flow context 拉 */
 export function launchPrompt(input: LaunchInput): string {
+  const register = sessionAddCommand(input.requirementId, input.agent)
   // Codex 的新会话收整条需求（project 含全部工作区），所以按需求取上下文；
   // Claude 的会话只有一个工作目录，按工作区取
   if (input.agent === 'codex') {
@@ -55,13 +61,13 @@ export function launchPrompt(input: LaunchInput): string {
       `在 easy-flow 需求 ${input.requirementId} 上开始工作。`,
       '',
       `先运行 easy-flow context ${input.requirementId} 读项目规范、需求内容、工作区与状态，再动手。`,
-      `发送首条消息、当前会话 ID 已产生后，运行 easy-flow req session add ${input.requirementId} --agent codex --title "<一句话说明在做什么>"`,
+      `发送首条消息、当前会话 ID 已产生后，运行 ${register}`,
     ].join('\n')
   }
   return [
     `在 easy-flow 需求 ${input.requirementId} 的工作区 ${input.worktreeId} 上开始工作。`,
     '',
     `先运行 easy-flow context ${input.worktreeId} 读项目规范、需求内容与状态，再动手。`,
-    `发送首条消息、当前会话 ID 已产生后，在这个工作区运行 easy-flow req session add ${input.requirementId} --agent ${input.agent} --title "<一句话说明在做什么>"`,
+    `发送首条消息、当前会话 ID 已产生后，在这个工作区运行 ${register}`,
   ].join('\n')
 }
