@@ -306,6 +306,8 @@ async function boot(): Promise<void> {
   //   ESM 的 import 是静态提升的，所以这里用动态 import。
   process.env.EASY_FLOW_USER_DATA = app.getPath('userData')
   process.env.EASY_FLOW_CONFIG = join(app.getPath('userData'), 'config.json')
+  // server 侧读不到 package.json（被单独打包成 chunk），版本号由这里注入
+  process.env.EASY_FLOW_VERSION = app.getVersion()
   const { startBoardServer, DEFAULT_PORT } = await import('../../server/index.ts')
 
   registerIpc()

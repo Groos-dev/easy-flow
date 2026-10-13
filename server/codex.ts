@@ -10,9 +10,14 @@
  *   - thread/start 不继承 project 的 roots，必须显式传 runtimeWorkspaceRoots，否则多仓库落空
  */
 import { spawn, type ChildProcess } from 'node:child_process'
-import { createRequire } from 'node:module'
 
-const VERSION = createRequire(import.meta.url)('../package.json').version as string
+/**
+ * 报给 app-server 的 clientInfo 版本。不能从 package.json 读：这个模块在 Electron 主进程里
+ * 会被打成 out/main/chunks 下的独立 chunk，`import.meta.url` 随之改变、相对路径解析不到仓库根的
+ * package.json（源码跑（tsx）能读到，构建产物读不到——只在打包后才炸）。由 Electron 主进程
+ * 用 app.getVersion() 注入；CLI 场景拿不到就用占位值，这个字段只作标识、不影响协议。
+ */
+const VERSION = process.env.EASY_FLOW_VERSION ?? '0.0.0'
 
 /** 建 project / thread 这类单次调用的等待上限 */
 const CALL_TIMEOUT_MS = 60_000
