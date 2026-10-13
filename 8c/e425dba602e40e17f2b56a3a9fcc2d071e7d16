@@ -1,0 +1,55 @@
+server/launch.ts
+  s_fd2e0b97533d1d::t_9c46f30ea7d4b4 51-60
+  s_fd2e0b97533d1d::t_af513b7d15a46c 19,21,23-24
+src/renderer/src/components/LaunchSession.tsx
+  s_fd2e0b97533d1d::t_4d14afd78932e9 57-60,62
+test/launch-codex.test.ts
+  s_fd2e0b97533d1d::t_a745125e8f6dfd 6,12-13,20-22,42-44,52,57,72,77,86,88,92,130
+  s_fd2e0b97533d1d::t_5faf2a615e6c0c 47,58-59
+server/launch-codex.ts
+  s_fd2e0b97533d1d::t_2ed94879d8c972 4-6,9-11,34,38,45,47-49
+test/launch-claude.test.ts
+  s_fd2e0b97533d1d::t_6e748c51f9dfda 11
+test/launch-board.test.ts
+  s_fd2e0b97533d1d::t_025b2fe1a1d343 160-162
+  s_fd2e0b97533d1d::t_f0d8a3691c810c 178-180
+  s_fd2e0b97533d1d::t_68f6366677ee94 227
+  s_fd2e0b97533d1d::t_d1a8eec5f756c5 231
+  s_fd2e0b97533d1d::t_5320373847430e 321
+  s_fd2e0b97533d1d::t_1965d7fc281e3f 350,352
+  s_fd2e0b97533d1d::t_f17c1e63312220 206
+  s_fd2e0b97533d1d::t_1e4d7b4adb2d69 216
+  s_fd2e0b97533d1d::t_d3e2232b1943da 263,267-269
+server/codex.ts
+  s_fd2e0b97533d1d::t_3defebbb803468 197-200,210,212,215
+  s_fd2e0b97533d1d::t_86f5404eeaf7b2 216,225-233,235,237-241
+server/index.ts
+  s_fd2e0b97533d1d::t_d67ba16b070e7a 321,323-336,342-344
+  s_fd2e0b97533d1d::t_f88b2cdc585de2 322
+src/renderer/src/components/LaunchSessionForm.tsx
+  s_fd2e0b97533d1d::t_884a1024aca26e 77-94
+  s_fd2e0b97533d1d::t_183d47e19957b9 39-41,45
+test/launch.test.ts
+  s_fd2e0b97533d1d::t_f2fd962ac4aaab 20
+  s_fd2e0b97533d1d::t_72b2136bb83471 34-41
+server/cli.ts
+  s_fd2e0b97533d1d::t_90c8296cfaa705 18
+  s_fd2e0b97533d1d::t_16fdc68fa6b5f8 828-834
+  s_fd2e0b97533d1d::t_f63bd2ae4cf21f 811
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "8ce425dba602e40e17f2b56a3a9fcc2d071e7d16",
+  "prompts": {},
+  "sessions": {
+    "s_fd2e0b97533d1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c1d87a7-9cee-4ea4-9aa9-54a613c471fb",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
