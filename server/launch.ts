@@ -16,10 +16,12 @@ export interface LaunchInput {
   agent: LaunchAgent
   /** 需求 id（req-…） */
   requirementId: string
-  /** 选中的工作区 id（wt-…） */
+  /** Claude 用：用户选中的工作区（它的 deeplink 只能带一个目录）；Codex 不选，为空串 */
   worktreeId: string
-  /** 工作区目录；deeplink 的工作目录就是它 */
+  /** 工作区目录；Claude deeplink 的工作目录就是它 */
   worktreePath: string
+  /** Codex 用：需求名下全部可用工作区路径——一条需求一个 project，roots 收这些 */
+  requirementWorktreePaths: string[]
 }
 
 export interface LaunchProvider {
@@ -46,6 +48,16 @@ export function findLaunchProvider(id: string): LaunchProvider | undefined {
 
 /** 预填提示词：只带身份与下一步动作，实时内容由新会话自己用 easy-flow context 拉 */
 export function launchPrompt(input: LaunchInput): string {
+  // Codex 的新会话收整条需求（project 含全部工作区），所以按需求取上下文；
+  // Claude 的会话只有一个工作目录，按工作区取
+  if (input.agent === 'codex') {
+    return [
+      `在 easy-flow 需求 ${input.requirementId} 上开始工作。`,
+      '',
+      `先运行 easy-flow context ${input.requirementId} 读项目规范、需求内容、工作区与状态，再动手。`,
+      `发送首条消息、当前会话 ID 已产生后，运行 easy-flow req session add ${input.requirementId} --agent codex --title "<一句话说明在做什么>"`,
+    ].join('\n')
+  }
   return [
     `在 easy-flow 需求 ${input.requirementId} 的工作区 ${input.worktreeId} 上开始工作。`,
     '',

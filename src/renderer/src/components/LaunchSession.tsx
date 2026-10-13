@@ -54,9 +54,12 @@ export default function LaunchSession({ req, worktrees }: { req: Requirement; wo
   }, [open, providersLoaded])
 
   async function launch() {
-    if (!worktreeId || !agent || busy) return
+    if (!agent || busy) return
+    // Claude 必须带一个工作区；Codex 不选，服务端按需求把全部工作区收进 project
+    const needsWorktree = agent === 'claude'
+    if (needsWorktree && !worktreeId) return
     const sequence = ++requestSequence.current
-    const selectedWorktreeId = worktreeId
+    const selectedWorktreeId = needsWorktree ? worktreeId : ''
     const selectedAgent = agent
     setBusy(true)
     setResult(null)

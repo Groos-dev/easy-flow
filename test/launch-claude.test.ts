@@ -8,6 +8,7 @@ const input: LaunchInput = {
   requirementId: 'req-abc123',
   worktreeId: 'wt-xyz789',
   worktreePath: '/Users/groos/repo/Claude worktree #1?x=1&y=2',
+  requirementWorktreePaths: ['/Users/groos/repo/Claude worktree #1?x=1&y=2'],
 }
 
 describe('Claude Code 启动链接', () => {

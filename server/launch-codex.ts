@@ -1,12 +1,14 @@
 import type { AppServer } from './codex.ts'
 import { registerLaunchProvider, type LaunchInput, type LaunchProvider } from './launch.ts'
 
-export function codexDevelopmentProjectKey(input: LaunchInput): string {
-  return `easy-flow:${input.requirementId}:${input.worktreeId}`
+/** 一条需求一个 project：与 review 会话共用同一个键，靠会话的 role 区分 */
+export function codexProjectKey(input: LaunchInput): string {
+  return `easy-flow:${input.requirementId}`
 }
 
-export function codexDevelopmentProjectRoots(input: LaunchInput): string[] {
-  return [input.worktreePath]
+/** project 的 roots：该需求名下全部可用工作区，开发会话因此在整条需求范围内都能读写 */
+export function codexProjectRoots(input: LaunchInput): string[] {
+  return input.requirementWorktreePaths
 }
 
 export function codexLaunchUrl(projectId: string, prompt: string): string {
@@ -29,23 +31,22 @@ export const codexProvider: LaunchProvider = {
     // 动态载入 app-server 客户端：它顶层按自身文件位置读 package.json，静态 import 会把这段
     // 打进 Electron 主进程 bundle，使启动阶段就去 require 一个构建产物里不存在的路径。
     let server: AppServer
-    let ensureCodexProject: typeof import('./codex.ts').ensureCodexProject
+    let ensureRequirementProject: typeof import('./codex.ts').ensureRequirementProject
     try {
       const codex = await import('./codex.ts')
       const { AppServer } = codex
-      ensureCodexProject = codex.ensureCodexProject
+      ensureRequirementProject = codex.ensureRequirementProject
       server = await AppServer.start()
     } catch (error) {
       throw codexAppServerStartError(error)
     }
 
     try {
-      // 新会话从 project roots 选择工作目录，开发 project 只刷选中的 worktree，避免覆盖 review 的 roots。
-      const projectId = await ensureCodexProject(
+      const projectId = await ensureRequirementProject(
         server,
-        codexDevelopmentProjectKey(input),
-        input.worktreeId,
-        codexDevelopmentProjectRoots(input),
+        input.requirementId,
+        input.requirementId,
+        codexProjectRoots(input),
       )
       return codexLaunchUrl(projectId, prompt)
     } finally {

@@ -318,18 +318,30 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         const provider = findLaunchProvider(String(rawAgent))
         if (!provider) throw new Error(`Unknown launch agent: ${rawAgent}`)
         const agent = provider.id
-        const wt = db.worktreeById(String(worktreeId))
-        if (!wt) throw new Error(`Worktree not found: ${worktreeId}`)
-        if (wt.requirementId !== requirement.id) {
-          throw new Error(`Worktree does not belong to requirement: ${worktreeId}`)
+        // Claude 的 deeplink 只能带一个工作目录，必须指定；Codex 按需求建 project、roots 收全部工作区
+        let wt: ReturnType<typeof db.worktreeById>
+        if (agent === 'claude') {
+          wt = db.worktreeById(String(worktreeId))
+          if (!wt) throw new Error(`Worktree not found: ${worktreeId}`)
+          if (wt.requirementId !== requirement.id) {
+            throw new Error(`Worktree does not belong to requirement: ${worktreeId}`)
+          }
+          if (!existsSync(wt.path)) throw new Error(`Directory no longer exists: ${wt.path}`)
         }
-        if (!existsSync(wt.path)) throw new Error(`Directory no longer exists: ${wt.path}`)
+        const requirementWorktreePaths = db
+          .listWorktrees(requirement.id)
+          .filter((w) => !w.orphan)
+          .map((w) => w.path)
+        if (!requirementWorktreePaths.length) {
+          throw new Error(`No available worktree for requirement: ${requirement.id}`)
+        }
 
         const input = {
           agent,
           requirementId: requirement.id,
-          worktreeId: wt.id,
-          worktreePath: wt.path,
+          worktreeId: wt?.id ?? '',
+          worktreePath: wt?.path ?? '',
+          requirementWorktreePaths,
         }
         const prompt = launchPrompt(input)
 

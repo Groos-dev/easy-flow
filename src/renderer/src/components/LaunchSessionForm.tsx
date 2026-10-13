@@ -36,10 +36,13 @@ export default function LaunchSessionForm({
   const { available } = launchWorktreeSelection(worktrees, worktreeId)
   const orphaned = worktrees.filter((w) => w.orphan)
   const feedback = result ? launchResultFeedback(requirementId, result) : null
+  // Claude 的 deeplink 只能带一个工作目录，必须选；Codex 按需求建 project、roots 收全部工作区，不用选
+  const needsWorktree = agent === 'claude'
+  const canLaunch = !!agent && (!needsWorktree || !!worktreeId) && !busy
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    if (worktreeId && agent && !busy) onLaunch()
+    if (canLaunch) onLaunch()
   }
 
   return (
@@ -54,19 +57,6 @@ export default function LaunchSessionForm({
         </div>
       ) : (
         <form onSubmit={submit}>
-          <div className="launch-select-row">
-            <span>工作区</span>
-            <SelectMenu
-              value={worktreeId}
-              placeholder="选择工作区"
-              disabled={available.length === 1}
-              options={available.map((w) => ({ value: w.id, label: `${w.repo} · ${w.branch}` }))}
-              onChange={onWorktreeChange}
-            />
-          </div>
-          {orphaned.length > 0 && (
-            <p className="launch-help">不可用工作区（目录已失联）：{orphaned.map((w) => `${w.repo} · ${w.branch}`).join('、')}</p>
-          )}
           {loading ? (
             <p className="launch-help">正在读取可用 Agent…</p>
           ) : providerError ? (
@@ -84,7 +74,24 @@ export default function LaunchSessionForm({
                   onChange={(value) => onAgentChange(value as LaunchAgent)}
                 />
               </div>
-              <button className="btn primary launch-submit" type="submit" disabled={!worktreeId || !agent || busy}>
+              {needsWorktree ? (
+                <div className="launch-select-row">
+                  <span>工作区</span>
+                  <SelectMenu
+                    value={worktreeId}
+                    placeholder="选择工作区"
+                    disabled={available.length === 1}
+                    options={available.map((w) => ({ value: w.id, label: `${w.repo} · ${w.branch}` }))}
+                    onChange={onWorktreeChange}
+                  />
+                </div>
+              ) : agent === 'codex' ? (
+                <p className="launch-help">Codex 的新会话按需求建 project，会带上全部 {available.length} 个工作区，不用选。</p>
+              ) : null}
+              {orphaned.length > 0 && (
+                <p className="launch-help">不可用工作区（目录已失联）：{orphaned.map((w) => `${w.repo} · ${w.branch}`).join('、')}</p>
+              )}
+              <button className="btn primary launch-submit" type="submit" disabled={!canLaunch}>
                 {busy ? '正在打开…' : '打开新会话草稿'}
               </button>
             </>

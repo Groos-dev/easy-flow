@@ -157,8 +157,9 @@ describe('需求详情页启动会话', () => {
       const two = { ...one, id: 'wt-two', branch: 'feature-two' }
       const render = (props) => renderToStaticMarkup(createElement(Form, { ...base, ...props }))
       console.log(JSON.stringify({
-        one: render({ worktrees: [one], worktreeId: 'wt-one' }),
-        multiple: render({ worktrees: [one, two] }),
+        one: render({ worktrees: [one], worktreeId: 'wt-one', agent: 'claude' }),
+        multiple: render({ worktrees: [one, two], agent: 'claude' }),
+        codex: render({ worktrees: [one, two] }),
         empty: render({ worktrees: [] }),
         failure: render({ worktrees: [one], worktreeId: 'wt-one', result: { agent: 'codex', url: 'codex-test://new-session', prompt: 'easy-flow context wt-one', opened: false, error: 'handler unavailable' } }),
       }))
@@ -174,6 +175,9 @@ describe('需求详情页启动会话', () => {
     assert.match(markup.one, /type="button" class="select-trigger"/)
     assert.match(markup.multiple, /选择工作区/)
     assert.match(markup.multiple, /launch-submit" type="submit" disabled=""/)
+    // Codex 按需求建 project、收全部工作区，不出现工作区选择
+    assert.match(markup.codex, /不用选/)
+    assert.doesNotMatch(markup.codex, /选择工作区/)
     assert.match(markup.empty, /easy-flow wt new req-alpha/)
     assert.match(markup.failure, /role="alert"/)
     assert.match(markup.failure, /handler unavailable/)
@@ -199,7 +203,7 @@ describe('需求详情页启动会话', () => {
     const previousOpenFail = process.env.EASY_FLOW_TEST_OPEN_FAIL
     try {
       const { api } = await vite.ssrLoadModule('/src/renderer/src/lib/api.ts') as {
-        api: { launch(input: { slug: string; project: string; worktreeId: string; agent: 'codex' }): Promise<any> }
+        api: { launch(input: { slug: string; project: string; worktreeId: string; agent: 'codex' | 'claude' }): Promise<any> }
       }
       globalThis.fetch = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
         const path = new URL(String(input), base)
@@ -209,7 +213,7 @@ describe('需求详情页启动会话', () => {
       const result = await api.launch({ slug: 'alpha', project: 'demo', worktreeId: 'wt-alpha', agent: 'codex' })
       assert.equal(result.opened, false)
       assert.match(result.error, /handler unavailable|42/)
-      assert.match(result.prompt, /easy-flow context wt-alpha/)
+      assert.match(result.prompt, /easy-flow context req-alpha/)
       const { default: LaunchSessionForm } = await vite.ssrLoadModule('/src/renderer/src/components/LaunchSessionForm.tsx') as {
         default: any
       }
@@ -220,11 +224,11 @@ describe('需求详情页启动会话', () => {
         onWorktreeChange: () => {}, onAgentChange: () => {}, onLaunch: () => {},
       }))
       assert.match(formHtml, /handler unavailable/)
-      assert.match(formHtml, /easy-flow context wt-alpha/)
+      assert.match(formHtml, /easy-flow context req-alpha/)
       assert.match(formHtml, /aria-label="复制提示词"/)
       assert.match(formHtml, /easy-flow req session add req-alpha --agent codex/)
       await assert.rejects(
-        api.launch({ slug: 'alpha', project: 'demo', worktreeId: 'wt-beta', agent: 'codex' }),
+        api.launch({ slug: 'alpha', project: 'demo', worktreeId: 'wt-beta', agent: 'claude' }),
         /does not belong to requirement/,
       )
 
@@ -256,11 +260,13 @@ describe('需求详情页启动会话', () => {
       agent: 'codex',
       worktreePath: '/tmp/untrusted',
     })
+    // Codex 不绑单个工作区：需求名下全部可用工作区进 project roots
     const input: LaunchInput = {
       agent: 'codex',
       requirementId: 'req-alpha',
-      worktreeId: 'wt-alpha',
-      worktreePath,
+      worktreeId: '',
+      worktreePath: '',
+      requirementWorktreePaths: [worktreePath],
     }
     assert.deepEqual(builtInput, input)
     assert.equal(builtPrompt, launchPrompt(input))
@@ -312,7 +318,7 @@ describe('需求详情页启动会话', () => {
     delete process.env.EASY_FLOW_TEST_OPEN_FAIL
     assert.equal(result.opened, false)
     assert.match(result.error, /handler unavailable|42/)
-    assert.match(result.prompt, /easy-flow context wt-alpha/)
+    assert.match(result.prompt, /easy-flow context req-alpha/)
     assert.match(result.prompt, /easy-flow req session add req-alpha --agent codex/)
     assert.deepEqual(app.db.listSessions('req-alpha').map((s) => s.session), before)
     const feedback = launchResultFeedback('req-alpha', result)
@@ -341,8 +347,9 @@ describe('需求详情页启动会话', () => {
     })
     assert.match(unsupported.error, /Unknown launch agent/i)
 
+    // 跨需求的工作区只在 Claude 那条路上拦（它必须指定一个工作目录）
     const foreign = await post('/api/launch', {
-      slug: 'alpha', project: 'demo', worktreeId: 'wt-beta', agent: 'codex',
+      slug: 'alpha', project: 'demo', worktreeId: 'wt-beta', agent: 'claude',
     })
     assert.match(foreign.error, /belong|requirement|Worktree/i)
     assert.deepEqual(app.db.listSessions('req-alpha').map((s) => s.session), before)

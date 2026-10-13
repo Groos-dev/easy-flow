@@ -15,7 +15,7 @@ import { parseArgs } from 'node:util'
 import { configPath, readConfig } from './config.ts'
 import {
   AppServer,
-  ensureReviewProject,
+  ensureRequirementProject,
   latestThread,
   resumeThread,
   sendPrompt,
@@ -808,7 +808,7 @@ async function cmdReqSessionReview(argv: string[]): Promise<void> {
 
   const server = await AppServer.start()
   try {
-    const projectId = await ensureReviewProject(server, req.id, req.slug, roots)
+    const projectId = await ensureRequirementProject(server, req.id, req.slug, roots)
 
     if (bool(values.handoff)) {
       const url = `codex://threads/new?projectId=${projectId}&prompt=${encodeURIComponent(prompt)}`
@@ -825,10 +825,13 @@ async function cmdReqSessionReview(argv: string[]): Promise<void> {
 
     // 三步定会话：库里登记过的 review 会话 → 认领 project 下最新的一条（--handoff 之后人发出去的）
     // → 都没有才新建。已有的会话要先 resume 才发得动
-    const registered = board
-      .listSessions(req.id)
-      .find((s) => s.agent === 'codex' && s.role === 'review')
-    const existing = registered?.session ?? (await latestThread(server, projectId))
+    const sessions = board.listSessions(req.id)
+    const registered = sessions.find((s) => s.agent === 'codex' && s.role === 'review')
+    // 开发会话与 review 共用这个 project：认领时跳过它们，别把开发会话当 review 会话 resume
+    const devThreads = new Set(
+      sessions.filter((s) => s.agent === 'codex' && s.role === 'dev').map((s) => s.session),
+    )
+    const existing = registered?.session ?? (await latestThread(server, projectId, devThreads))
     if (existing) await resumeThread(server, existing, roots[0], roots)
     const threadId = existing ?? (await startReviewThread(server, projectId, roots[0], roots))
 

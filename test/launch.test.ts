@@ -17,6 +17,7 @@ const input: LaunchInput = {
   requirementId: 'req-abc123',
   worktreeId: 'wt-xyz789',
   worktreePath: '/Users/groos/repo/demo.feature-x',
+  requirementWorktreePaths: ['/Users/groos/repo/demo.feature-x'],
 }
 
 describe('启动交接', () => {
@@ -28,6 +29,14 @@ describe('启动交接', () => {
     assert.match(prompt, /easy-flow req session add req-abc123 --agent claude/)
     // 不把整份文档快照塞进提示词
     assert.ok(prompt.length < 400)
+  })
+
+  test('Codex 的提示词按需求取上下文——它的会话收整条需求，不绑单个工作区', () => {
+    const prompt = launchPrompt({ ...input, agent: 'codex', worktreeId: '', worktreePath: '' })
+    assert.match(prompt, /req-abc123/)
+    assert.match(prompt, /easy-flow context req-abc123/)
+    assert.match(prompt, /easy-flow req session add req-abc123 --agent codex/)
+    assert.doesNotMatch(prompt, /wt-xyz789/)
   })
 
   test('注册过的 provider 能被查到，没注册的返回 undefined', () => {

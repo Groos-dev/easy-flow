@@ -194,26 +194,26 @@ export class AppServer {
   }
 }
 
-/** 幂等键命中时 create 不会应用新 roots，因此建完后仍要显式更新。 */
+/**
+ * 需求级 project：幂等键命中就复用，不再刷 roots——roots 只在首次创建时按当时的工作区定下。
+ * 每次刷会覆盖掉人在 Codex 里对 project 的调整，而开发会话本来只需要「复用同一个 project」。
+ */
 export async function ensureCodexProject(
   server: AppServer,
   idempotencyKey: string,
   name: string,
   roots: string[],
 ): Promise<string> {
-  const projectRoots = roots.map((path) => ({ path }))
   const created = await server.call('project/create', {
     idempotencyKey,
     name,
-    roots: projectRoots,
+    roots: roots.map((path) => ({ path })),
   })
-  const projectId = pick<string>(created, ['project', 'id'])
-  await server.call('project/update', { projectId, roots: projectRoots })
-  return projectId
+  return pick<string>(created, ['project', 'id'])
 }
 
-/** review 需跨调用复用需求级 project，并在每次运行后刷新全部工作区 roots。 */
-export function ensureReviewProject(
+/** 一条需求一个 project：review 与开发会话共用（键 `easy-flow:<reqId>`）。 */
+export function ensureRequirementProject(
   server: AppServer,
   requirementId: string,
   name: string,
@@ -222,13 +222,23 @@ export function ensureReviewProject(
   return ensureCodexProject(server, `easy-flow:${requirementId}`, name, roots)
 }
 
-/** project 下最新的一条 thread；没有则 null。用来认领人手动发出去的那条 */
-export async function latestThread(server: AppServer, projectId: string): Promise<string | null> {
+/**
+ * project 下最新的一条 thread；没有则 null。用来认领人手动发出去的那条。
+ * 开发会话与 review 同处一个 project，认领时要跳过已登记为开发会话的 thread，否则会认错。
+ */
+export async function latestThread(
+  server: AppServer,
+  projectId: string,
+  exclude: ReadonlySet<string> = new Set(),
+): Promise<string | null> {
   // 取值是 snake_case——协议文档里写的 camelCase 会被拒
-  const listed = await server.call('thread/list', { projectId, limit: 1, sortKey: 'recency_at' })
+  const listed = await server.call('thread/list', { projectId, limit: 20, sortKey: 'recency_at' })
   const data = pick<unknown[]>(listed, ['data'])
-  if (!data.length) return null
-  return pick<string>(data[0], ['id'])
+  for (const thread of data) {
+    const id = pick<string>(thread, ['id'])
+    if (!exclude.has(id)) return id
+  }
+  return null
 }
 
 /** 建一个 thread：cwd 定主工作区，runtimeWorkspaceRoots 把全部工作区带上 */

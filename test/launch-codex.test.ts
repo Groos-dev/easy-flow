@@ -3,22 +3,23 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import { test, describe } from 'node:test'
-import { AppServer, ensureReviewProject } from '../server/codex.ts'
+import { AppServer, ensureRequirementProject } from '../server/codex.ts'
 import { BoardDatabase } from '../server/db.ts'
 import { findLaunchProvider, type LaunchInput } from '../server/launch.ts'
 import {
   codexAppServerStartError,
   codexProvider,
-  codexDevelopmentProjectKey,
-  codexDevelopmentProjectRoots,
+  codexProjectKey,
+  codexProjectRoots,
   codexLaunchUrl,
 } from '../server/launch-codex.ts'
 
 const input: LaunchInput = {
   agent: 'codex',
   requirementId: 'req-demo',
-  worktreeId: 'wt-selected',
-  worktreePath: '/Users/groos/repo/demo.feature-x',
+  worktreeId: '',
+  worktreePath: '',
+  requirementWorktreePaths: ['/Users/groos/repo/demo.feature-x', '/Users/groos/repo/demo.feature-y'],
 }
 
 describe('Codex 开发会话启动', () => {
@@ -38,23 +39,24 @@ describe('Codex 开发会话启动', () => {
     assert.equal(url.searchParams.get('prompt'), prompt)
   })
 
-  test('开发 project 只包含所选工作区，幂等键与 review project 分开', () => {
-    assert.deepEqual(codexDevelopmentProjectRoots(input), [input.worktreePath])
-    assert.equal(codexDevelopmentProjectKey(input), 'easy-flow:req-demo:wt-selected')
-    assert.notEqual(codexDevelopmentProjectKey(input), 'easy-flow:req-demo')
+  test('一条需求一个 project：开发与 review 共用需求级键，roots 收全部工作区', () => {
+    assert.equal(codexProjectKey(input), 'easy-flow:req-demo')
+    assert.deepEqual(codexProjectRoots(input), input.requirementWorktreePaths)
   })
 
-  test('review project 仍按需求级幂等键更新全部 roots', async () => {
+  test('需求级 project 只在创建时指定 roots', async () => {
     const calls: Array<{ method: string; params: Record<string, unknown> }> = []
     const server = {
       async call(method: string, params: Record<string, unknown>) {
         calls.push({ method, params })
-        return method === 'project/create' ? { project: { id: 'review-project' } } : undefined
+        return method === 'project/create' ? { project: { id: 'requirement-project' } } : undefined
       },
     } as unknown as AppServer
     const roots = ['/repo/one', '/repo/two']
 
-    assert.equal(await ensureReviewProject(server, input.requirementId, 'requirement', roots), 'review-project')
+    assert.equal(await ensureRequirementProject(server, input.requirementId, 'requirement', roots), 'requirement-project')
+    // 复用已有 project 时不再刷 roots（幂等键命中时 create 本身就忽略新 roots），
+    // 免得覆盖掉人在 Codex 里对 project 的调整
     assert.deepEqual(calls, [
       {
         method: 'project/create',
@@ -64,16 +66,15 @@ describe('Codex 开发会话启动', () => {
           roots: roots.map((path) => ({ path })),
         },
       },
-      { method: 'project/update', params: { projectId: 'review-project', roots: roots.map((path) => ({ path })) } },
     ])
   })
 
-  test('开发 project 使用所选工作区 roots 并返回深链', async () => {
+  test('开发会话用需求级 project（全部工作区 roots）并返回深链', async () => {
     const calls: Array<{ method: string; params: Record<string, unknown> }> = []
     const server = {
       async call(method: string, params: Record<string, unknown>) {
         calls.push({ method, params })
-        return method === 'project/create' ? { project: { id: 'dev-project' } } : undefined
+        return method === 'project/create' ? { project: { id: 'requirement-project' } } : undefined
       },
       close() {},
     } as unknown as AppServer
@@ -82,18 +83,14 @@ describe('Codex 开发会话启动', () => {
       AppServer.start = async () => server
       const url = await codexProvider.build(input, 'start work')
 
-      assert.equal(new URL(url).searchParams.get('projectId'), 'dev-project')
+      assert.equal(new URL(url).searchParams.get('projectId'), 'requirement-project')
       assert.equal(new URL(url).searchParams.get('prompt'), 'start work')
+      const roots = input.requirementWorktreePaths.map((path) => ({ path }))
       assert.deepEqual(calls, [
         {
           method: 'project/create',
-          params: {
-            idempotencyKey: 'easy-flow:req-demo:wt-selected',
-            name: 'wt-selected',
-            roots: [{ path: input.worktreePath }],
-          },
+          params: { idempotencyKey: 'easy-flow:req-demo', name: 'req-demo', roots },
         },
-        { method: 'project/update', params: { projectId: 'dev-project', roots: [{ path: input.worktreePath }] } },
       ])
     } finally {
       AppServer.start = start
@@ -130,7 +127,7 @@ describe('Codex 开发会话启动', () => {
         requirementId: input.requirementId,
         agent: 'codex',
         session: 'new-dev-thread',
-        cwd: input.worktreePath,
+        cwd: input.requirementWorktreePaths[0],
       })
 
       assert.equal(dev.role, 'dev')
