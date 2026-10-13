@@ -1,0 +1,34 @@
+src/renderer/src/lib/launch.ts
+  s_fd2e0b97533d1d::t_5810c8bc104c5b 1-6
+server/codex.ts
+  s_fd2e0b97533d1d::t_14de2170e81f43 9
+  s_fd2e0b97533d1d::t_97223e35fe6325 198-200,202,204,209
+src/renderer/src/components/LaunchSession.tsx
+  s_fd2e0b97533d1d::t_ca7ffeaa678a51 5
+  s_fd2e0b97533d1d::t_46ef23ea405cc6 59
+test/launch-codex.test.ts
+  s_fd2e0b97533d1d::t_1583adc49ee8c0 41
+src/renderer/src/components/LaunchSessionForm.tsx
+  s_fd2e0b97533d1d::t_cc09ab2e09e486 4
+  s_fd2e0b97533d1d::t_bc3e92de73370d 40
+server/launch.ts
+  s_fd2e0b97533d1d::t_7f82a43127ea03 49-53,56,64,71
+server/index.ts
+  s_fd2e0b97533d1d::t_a4ae5ab468670c 324-325
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "f346e7ae30f46ecde82e99a1d69d1827c6ade709",
+  "prompts": {},
+  "sessions": {
+    "s_fd2e0b97533d1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c1d87a7-9cee-4ea4-9aa9-54a613c471fb",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
