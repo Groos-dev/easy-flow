@@ -3570,7 +3570,7 @@ describe('pet：一行 pet 的排布', () => {
       link: '',
       created: '',
       updated: '',
-      status: { state, fresh, needsAction: '', at: '', detail: '' },
+      status: { state, activity: '', fresh, needsAction: '', at: '', detail: '' },
     }
   }
   // 五个都挂得上角标的会话：两条在跑 + 一条卡住 + 跑完没看 + 失败

@@ -71,6 +71,7 @@ function sess(
   }
   const status: SessionStatus = {
     state,
+    activity: '',
     fresh: opts.fresh ?? true,
     needsAction: opts.needsAction ?? '',
     at: opts.at ?? '',

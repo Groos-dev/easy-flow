@@ -23,7 +23,7 @@ function sess(agent: string, state: Session['status']['state'], fresh: boolean, 
     link,
     created: '',
     updated: '',
-    status: { state, fresh, needsAction: '', at: '', detail: '' },
+    status: { state, activity: '', fresh, needsAction: '', at: '', detail: '' },
   }
 }
 
