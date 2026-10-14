@@ -29,7 +29,7 @@ import { codeLinkLabel } from '../src/renderer/src/lib/links.ts'
 import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib/shortcut.ts'
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
-import { childStatsOf } from '../src/renderer/src/lib/children.ts'
+import { childStatsOf, childrenOf } from '../src/renderer/src/lib/children.ts'
 import { parseStamp, relTime } from '../src/renderer/src/lib/time.ts'
 import type { Requirement, Session } from '../src/renderer/src/lib/types.ts'
 
@@ -746,6 +746,46 @@ describe('渲染层 · 子需求完成度', () => {
       req('parent/a', 'req-a', 'req-p', 'Review'),
     ])
     assert.deepEqual(stats.get('req-p'), { total: 1, done: 0 })
+  })
+})
+
+describe('渲染层 · 子需求清单', () => {
+  const req = (slug: string, id: string, parentId: string, status: string): Requirement =>
+    ({ slug, id, parentId, status }) as Requirement
+
+  test('按父需求 id 归并出直接子需求，孙需求不越级', () => {
+    const map = childrenOf([
+      req('parent', 'req-p', '', '执行中'),
+      req('parent/a', 'req-a', 'req-p', '已完成'),
+      req('parent/b', 'req-b', 'req-p', 'Review'),
+      req('parent/b/grand', 'req-g', 'req-b', '已完成'),
+    ])
+    assert.deepEqual(
+      map.get('req-p')?.map((r) => r.slug),
+      ['parent/b', 'parent/a'],
+    )
+    assert.deepEqual(
+      map.get('req-b')?.map((r) => r.slug),
+      ['parent/b/grand'],
+    )
+  })
+
+  test('未完成的排前面，同档保持原顺序', () => {
+    const map = childrenOf([
+      req('parent/a', 'req-a', 'req-p', '已完成'),
+      req('parent/b', 'req-b', 'req-p', '澄清'),
+      req('parent/c', 'req-c', 'req-p', '已完成'),
+      req('parent/d', 'req-d', 'req-p', '执行中'),
+    ])
+    assert.deepEqual(
+      map.get('req-p')?.map((r) => r.slug),
+      ['parent/b', 'parent/d', 'parent/a', 'parent/c'],
+    )
+  })
+
+  test('没有子需求的需求不在表里', () => {
+    const map = childrenOf([req('alpha', 'req-a', '', '执行中')])
+    assert.equal(map.size, 0)
   })
 })
 

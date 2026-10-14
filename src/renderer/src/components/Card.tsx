@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import type { ChildStat, Requirement, Session } from '../lib/types'
+import { STATUS_CLASS } from '../lib/labels'
 import { badgesOf, isEventState } from '../lib/threads'
 import { relTime } from '../lib/time'
 import ThreadBadge from './ThreadBadge'
@@ -12,11 +13,17 @@ interface Props {
   sessions?: Session[]
   /** 有子需求才传：卡片默认收成一行窄条，点一下铺开 */
   childStat?: ChildStat
+  /** 直接子需求，铺开后列出来。子需求散在别的列，这是父卡片上唯一通往它们的路 */
+  kids?: Requirement[]
+  /** 点某条子需求：由看板负责滚过去并高亮，卡片自己不认路 */
+  onJumpChild?: (slug: string) => void
+  /** 刚被跳过来的那条：闪一下，好让人在满屏卡片里认出落点 */
+  flash?: boolean
   onOpen?: (slug: string) => void
   overlay?: boolean
 }
 
-export default function Card({ req, sessions, childStat, onOpen, overlay = false }: Props) {
+export default function Card({ req, sessions, childStat, kids, onJumpChild, flash, onOpen, overlay = false }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: req.slug,
     data: { type: 'card', slug: req.slug, status: req.status },
@@ -49,9 +56,10 @@ export default function Card({ req, sessions, childStat, onOpen, overlay = false
     <div
       ref={setNodeRef}
       style={style}
+      data-slug={req.slug}
       className={`card${folded ? ' folded' : ''}${isDragging ? ' dragging' : ''}${
         need ? ' needs-you' : unread ? ' unread' : ''
-      }`}
+      }${flash ? ' flash' : ''}`}
       onClick={() => (folded ? setOpen(true) : !overlay && onOpen?.(req.slug))}
       title={folded ? '展开' : undefined}
       {...listeners}
@@ -100,6 +108,27 @@ export default function Card({ req, sessions, childStat, onOpen, overlay = false
       {!folded && (
         <>
           {req.summary && <div className="card-summary">{req.summary}</div>}
+          {/* 子需求清单：卡片上那行 1/3 只说还剩几块，这里说它们分别是什么、在哪一列 */}
+          {kids && kids.length > 0 && (
+            <div className="card-kids-list">
+              {kids.map((k) => (
+                <div
+                  key={k.slug}
+                  className="kid"
+                  title={`跳到「${k.title}」`}
+                  onClick={(e) => {
+                    // 卡片自己的点击是开详情，子需求那一下不能被它吃掉
+                    e.stopPropagation()
+                    onJumpChild?.(k.slug)
+                  }}
+                >
+                  <span className={`dot ${STATUS_CLASS[k.status] ?? 's-clarify'}`} />
+                  <span className="kid-title">{k.title}</span>
+                  <span className="kid-status">{k.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
           {/* 页脚只留日期：slug 是命令行的句柄，仓库是「涉及仓库」表里的短名，
               两样在看板上都扫不出信息——详情浮窗与需求文档里有 */}
           <div className="card-foot">

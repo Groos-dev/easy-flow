@@ -12,7 +12,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { api } from './lib/api'
-import { DONE_STATUS, childStatsOf } from './lib/children'
+import { DONE_STATUS, childStatsOf, childrenOf } from './lib/children'
 import type { ChildStat, Project, Requirement, Session, Status, Todo, TodoStatus } from './lib/types'
 import BoardSwitcher, { type BoardView } from './components/BoardSwitcher'
 import MindMap from './components/MindMap'
@@ -37,6 +37,12 @@ interface BoardColumnProps {
   sessionsByReq: Map<string, Session[]>
   /** 父需求 id → 子需求完成度。没有子需求的需求不在表里 */
   childStats: Map<string, ChildStat>
+  /** 父需求 id → 直接子需求。铺开的父卡片靠它把子需求列出来 */
+  childrenByParent: Map<string, Requirement[]>
+  /** 点父卡片上的子需求：滚到它在版面上的卡片 */
+  onJumpChild: (slug: string) => void
+  /** 刚跳过去的那条，闪一下 */
+  flashSlug: string | null
   onOpen: (slug: string) => void
   isOver: boolean
   /** 收成窄条（只有「已完成」列会） */
@@ -49,6 +55,9 @@ function ColumnView({
   items,
   sessionsByReq,
   childStats,
+  childrenByParent,
+  onJumpChild,
+  flashSlug,
   onOpen,
   isOver,
   collapsed,
@@ -99,6 +108,9 @@ function ColumnView({
               req={r}
               sessions={sessionsByReq.get(r.id) ?? []}
               childStat={childStats.get(r.id)}
+              kids={childrenByParent.get(r.id)}
+              onJumpChild={onJumpChild}
+              flash={flashSlug === r.slug}
               onOpen={onOpen}
             />
           ))
@@ -132,6 +144,10 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([])
   /** 「已完成」列是否展开。默认收成窄条：历史只增不减，全铺开会把活跃三列挤窄 */
   const [doneOpen, setDoneOpen] = useState(false)
+  /** 从父卡片点过来的那条子需求：等它在版面上出现再滚过去 */
+  const [pendingJump, setPendingJump] = useState<string | null>(null)
+  /** 刚跳到的卡片：闪一下，好在一屏卡片里认出落点 */
+  const [flashSlug, setFlashSlug] = useState<string | null>(null)
   /** 需求板块里的视图：看板（默认）或导图；待办板块下不适用 */
   const [reqView, setReqView] = useState<'board' | 'map'>('board')
   /** 详情页挂载点：需求或项目。slugs 用 'project:<slug>' 区分 */
@@ -397,6 +413,47 @@ export default function App() {
    */
   const childStats = useMemo(() => childStatsOf(items), [items])
 
+  /** 同上，铺开的父卡片要把子需求本身列出来：知道还剩几块，也得知道它们在哪 */
+  const childrenByParent = useMemo(() => childrenOf(items), [items])
+
+  /**
+   * 从父卡片点过来的那条子需求。等它出现在版面上再滚过去——子需求可能落在
+   * 收起的「已完成」列里，或者被搜索筛掉，那样这一轮还找不到它。
+   */
+  useEffect(() => {
+    if (!pendingJump) return
+    const el = document.querySelector(`.card[data-slug="${pendingJump}"]`)
+    if (!el) {
+      // 被筛选挡掉了：点它就是要过去，先把筛选清掉，下一轮再滚
+      if (hits) {
+        setQuery('')
+        setHits(null)
+        return
+      }
+      setPendingJump(null)
+      return
+    }
+    // 直接跳，不用 smooth：平滑滚动在预览环境里根本不滚（scrollTop 不动），
+    // 落到哪儿由卡片闪一下告诉人
+    el.scrollIntoView({ block: 'center' })
+    setFlashSlug(pendingJump)
+    setPendingJump(null)
+  }, [pendingJump, hits])
+
+  /** 落点闪一下就好：它是「到了」的提示，不是常驻标记 */
+  useEffect(() => {
+    if (!flashSlug) return
+    const timer = setTimeout(() => setFlashSlug(null), 1400)
+    return () => clearTimeout(timer)
+  }, [flashSlug])
+
+  /** 点父卡片上的子需求：先把它所在的那一列铺开，滚动交给上面的 effect */
+  function jumpToChild(slug: string) {
+    const child = items.find((r) => r.slug === slug)
+    if (child?.status === DONE_STATUS && !doneOpen) setDoneOpen(true)
+    setPendingJump(slug)
+  }
+
   async function handleDragEnd({ active, over }: DragEndEvent) {
     setDragSlug(null)
     setOverStatus(null)
@@ -634,6 +691,9 @@ export default function App() {
                       items={byStatus.get(status) ?? []}
                       sessionsByReq={sessionsByReq}
                       childStats={childStats}
+                      childrenByParent={childrenByParent}
+                      onJumpChild={jumpToChild}
+                      flashSlug={flashSlug}
                       onOpen={(slug) => setDetail({ project, slug })}
                       isOver={overStatus === status}
                       collapsed={status === DONE_STATUS && !doneOpen}
