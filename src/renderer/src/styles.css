@@ -417,6 +417,210 @@ body {
   line-height: 1.6;
 }
 
+/* ---------------------------------------------------------------- 下一步 */
+
+/*
+ * 看板按状态分组，但状态不是优先级——它答不了「我现在该动哪个」。这一块把 agent 状态与
+ * 需求停多久揉成一个排名，每条带一句理由：没有理由的推荐是个黑盒，人不会信。
+ * 两级：现在就得动（.now）/ 有空再看（.soon），用左边那条色带区分。
+ */
+.next {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-self: center;
+  width: 100%;
+  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+}
+
+.next-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.next-group-head {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 2px;
+}
+
+.next-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+}
+
+.next-row.now {
+  border-color: #4a3a28;
+  box-shadow: inset 3px 0 0 var(--status-review);
+}
+
+.next-row.soon {
+  border-color: #2b3a55;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.next-rank {
+  flex: none;
+  width: 18px;
+  padding-top: 1px;
+  color: var(--text-faint);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* 有会话信号时摆 agent 的品牌 mark，没有就摆一枚需求状态点 */
+.next-agent {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  color: var(--text-dim);
+}
+
+.next-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  margin-top: 5px;
+  background: var(--status-clarify);
+}
+
+.next-dot.s-doing {
+  background: var(--status-doing);
+}
+
+.next-dot.s-review {
+  background: var(--status-review);
+}
+
+.next-dot.s-done {
+  background: var(--status-done);
+}
+
+.next-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.next-why {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.next-row.now .next-why {
+  color: var(--status-review);
+}
+
+.next-title {
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.next-detail {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.next-detail.hot {
+  color: #e8b48a;
+}
+
+.next-action {
+  flex: none;
+  align-self: center;
+}
+
+/* 需求状态的小药丸：跟「为什么推它」并排时，一眼看出是需求状态、不是会话状态 */
+.next-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--column);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.next-chip .next-dot {
+  width: 6px;
+  height: 6px;
+  margin-top: 0;
+}
+
+.btn-go {
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--column);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-go:hover {
+  color: var(--text);
+  border-color: #38404c;
+}
+
+.next-row.now .btn-go {
+  border-color: var(--status-review);
+  color: var(--text);
+}
+
+/* 刷新失败但手里还有上一次的排名：照旧显示，但顶部一条红字说清这是旧的 */
+.next-error {
+  padding: 10px 12px;
+  border: 1px solid #4a2b2b;
+  border-radius: 8px;
+  background: #2a1f1f;
+  color: #ffb4b4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 没有可推的时候明说一句，不是空列表——空列表分不清「没事」和「没算出来」 */
+.next-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--text-faint);
+  font-size: 13px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.next-empty.bad {
+  color: var(--fail, #ff5c5c);
+}
+
 /* ---------------------------------------------------------------- 卡片 */
 
 .card {
@@ -829,55 +1033,152 @@ body {
   background: #ff5c5c;
 }
 
-/* 一条需求可能挂着好几个会话，各挂各的角标：同时开着几个 agent 时，
-   要能一眼看出是哪个在等你。放不下就换行，别把卡片撑宽 */
-.thread-badges {
+/* --------------------------------------------------- agent pet（卡上一会话一只） */
+
+/* 两轴分开：身体色（素材上的 CSS filter）归 agent，姿势 + 光环归状态。
+   44px 是草稿量出来的下限——再小表情就看不出了 */
+.pets {
   display: flex;
   flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.pet {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 14px;
+  background: #232830;
+  border: 1px solid var(--border);
+}
+
+/* 素材走 <img>：每张 SVG 自带 <style> 与 @keyframes，内联会让同名的 keyframes 互相覆盖 */
+.pet img {
+  width: 38px;
+  height: 38px;
+  display: block;
+  transform-origin: 50% 88%;
+}
+
+/* 事件边框只给「没读过」的那三档：读过就没了，pet 本身留着（它是回到会话的入口） */
+.pet.event.s-blocked {
+  border-color: var(--status-review);
+}
+
+.pet.event.s-done {
+  border-color: var(--status-done);
+}
+
+.pet.event.s-failed {
+  border-color: #ff5c5c;
+}
+
+/* 失败整体暗一档：这是姿势本身的样子，不跟事件走 */
+.pet.s-failed {
+  opacity: 0.85;
+}
+
+/* 静止/下线：整个人淡下去，不抢眼 */
+.pet.s-idle {
+  opacity: 0.42;
+}
+
+/* 有 deeplink 的才可点：没有的只报状态，不给一个点了没反应的按钮 */
+button.pet {
+  cursor: pointer;
+}
+
+button.pet:hover {
+  border-color: var(--accent);
+}
+
+@keyframes pet-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 159, 67, 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba(255, 159, 67, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 159, 67, 0); }
+}
+
+@keyframes pet-pop {
+  0% { transform: translateY(4px) scale(0.6); opacity: 0; }
+  55% { transform: translateY(-5px) scale(1.14, 0.92); opacity: 1; }
+  75% { transform: translateY(0) scale(0.96, 1.06); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+
+@keyframes pet-shake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  20% { transform: translateX(-2.5px) rotate(-6deg); }
+  60% { transform: translateX(2.5px) rotate(6deg); }
+}
+
+/* 干活 / 思考的轻动来自素材自带的动效，宿主不再另写一份——
+   要停就换 *.still.svg，见 Pet.tsx 的 prefers-reduced-motion */
+
+/* 只有「等你」那圈脉冲算抢注意力：同组里只让最急的一只脉冲（.focus 由 PetRow 选出）；
+   读过的事件连它一起消失 */
+.pet.event.focus.s-blocked {
+  animation: pet-pulse 2.2s ease-out infinite;
+}
+
+/* done / failed 是一次性事件：只响一下，读过就不再响。转常驻就成噪音了，所以与 focus 无关 */
+.pet.event.s-done img {
+  animation: pet-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.pet.event.s-failed img {
+  animation: pet-shake 0.36s ease-in-out 2;
+}
+
+/* 系统级降级：桌宠可以不管，看板必须管 */
+@media (prefers-reduced-motion: reduce) {
+  .pet,
+  .pet img {
+    animation: none !important;
+  }
+}
+
+/* 超过四只的收成一个占位：卡片内容宽约 310px，再多就挤了 */
+.pet-more {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  border: 1px dashed var(--border);
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 折叠的父需求窄条塞不下 44px：收成小号，只当「一眼看出谁在等 / 点一下跳回去」的入口，
+   表情细节让位给紧凑 */
+.pets.compact {
   gap: 4px;
   margin-top: 4px;
 }
 
-/* 卡片角标：压在标题下面一行。做成按钮是因为它点一下直接跳回会话——
-   卡片本身的点击是开详情，两者不是一件事 */
-/* 卡片角标：agent 图标 + 状态点，点一下直接跳回会话——卡片本身的点击是开详情，
-   两者不是一件事。图标比写 agent 名省一半宽度，一行挂得下更多会话 */
-.thread-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #232830;
-  color: var(--text-dim);
-  font-size: 11px;
-  font-family: inherit;
-  line-height: 1;
+.pet.compact {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
 }
 
-button.thread-badge:hover {
-  border-color: var(--accent);
-  color: var(--text);
+.pet.compact img {
+  width: 21px;
+  height: 21px;
 }
 
-/* 「有事件」的徽标另加一圈状态色边框：角标本身只说明「值得看」，正在跑也算，
-   这一圈把真要人消费的（卡住 / 跑完没看 / 失败）挑出来 */
-.thread-badge.event.t-blocked {
-  border-color: var(--status-review);
-}
-
-.thread-badge.event.t-failed {
-  border-color: #ff5c5c;
-}
-
-.thread-badge.event.t-done {
-  border-color: var(--status-done);
-}
-
-/* 没有 deeplink 的会话：只报状态，不给一个点了没反应的按钮 */
-.thread-badge.off {
-  opacity: 0.7;
+.pet-more.compact {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  font-size: 10px;
 }
 
 /* 详情页会话块里那行状态文案 */

@@ -199,9 +199,14 @@ export interface ContextPayload {
 /** 会话的实时状态。字面量与 server/threads.ts 的 THREAD_STATES 一致 */
 export type ThreadState = 'running' | 'done' | 'blocked' | 'failed' | 'unknown'
 
-/** 与 server/threads.ts 的 SessionStatus 对应。服务端读 agent 应用的落盘文件得来 */
+/** 细粒度活动。字面量与 server/hook.ts 的 SESSION_ACTIVITIES 一致 */
+export type SessionActivity = 'idle' | 'thinking' | 'working'
+
+/** 与 server/threads.ts 的 SessionStatus 对应。hook 驱动优先，落盘兜底 */
 export interface SessionStatus {
   state: ThreadState
+  /** 细粒度活动；落盘兜底路径为空串 */
+  activity: SessionActivity | ''
   /** 有你看过之后的新内容 */
   fresh: boolean
   /** 需要人介入时，要人回答的那句话原文；其余为空串 */
@@ -229,6 +234,28 @@ export interface Session {
   status: SessionStatus
 }
 
+/**
+ * 「下一步该动哪个」的一条推荐。名次与理由都由服务端算好（见 server/next-up.ts），
+ * 渲染层只负责展示与跳转——理由要「说人话」，那套措辞留在服务端一处。
+ */
+export interface NextUpItem {
+  slug: string
+  project: string
+  title: string
+  /** 需求状态，界面上并排摆一枚小药丸 */
+  status: string
+  /** 两级：现在就得动 / 有空再看 */
+  level: 'now' | 'soon'
+  /** 命中的档位，1 最硬、4 最软 */
+  tier: number
+  /** 一句话理由，中文 */
+  reason: string
+  /** 第二行的补充；没有则空串 */
+  detail: string
+  /** 命中的会话；没有会话信号时是 null，据此决定回会话还是开需求 */
+  session: { agent: string; link: string } | null
+}
+
 export interface SwitchResult {
   dataDir: string
   dbFile: string
@@ -251,6 +278,28 @@ export interface AgentSkill {
   dir: string
   available: boolean
   linked: boolean
+}
+
+export type HookAgentId = 'claude' | 'codex'
+
+/** 与 server/hook-install.ts 的 HookAgentStatus 对应。status 一律读真文件得出 */
+export interface HookAgentStatus {
+  id: HookAgentId
+  label: string
+  /** 用户级配置文件 */
+  file: string
+  installed: boolean
+  /** 装了几个事件 */
+  events: number
+  /** 指向的地址与端口 */
+  url: string
+  /** 读文件出的问题；正常为空串 */
+  problem: string
+}
+
+export interface HookPlan {
+  port: number
+  agents: HookAgentStatus[]
 }
 
 export interface SkillPayload {

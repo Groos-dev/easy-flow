@@ -1,9 +1,11 @@
 import type {
   BoardData,
   ContextPayload,
+  HookPlan,
   LaunchAgent,
   LaunchProviderInfo,
   LaunchResult,
+  NextUpItem,
   Project,
   Requirement,
   Session,
@@ -71,6 +73,12 @@ export const api = {
 
   /** 全部 agent 会话（需求归属在每条的 requirementId 上）。mini 面板一次拉全 */
   sessions: (): Promise<{ sessions: Session[] }> => request('/api/sessions'),
+
+  /**
+   * 「下一步该动哪个」的排名。名次与理由由服务端算——它要会话实时状态，
+   * 渲染层拿不到同一份，所以不在这儿重算。
+   */
+  nextUp: (): Promise<{ items: NextUpItem[] }> => request('/api/next-up'),
 
   /** 按需求 id 取单条。待办详情页的「需求」那行只有 id，靠它换成可跳转的需求 */
   requirementById: (id: string): Promise<Requirement> =>
@@ -174,4 +182,15 @@ export const api = {
 
   installSkill: (): Promise<SkillPayload & { installed: string[] }> =>
     request('/api/skill/install', { method: 'POST' }),
+
+  // ------------------------------------------------------------- Agent hook
+
+  /** 两个 agent 的 hook 安装状态。读的是真文件 */
+  hooks: (): Promise<HookPlan> => request('/api/hooks'),
+
+  installHooks: (): Promise<HookPlan & { installed: string[] }> =>
+    request('/api/hooks/install', { method: 'POST' }),
+
+  uninstallHooks: (): Promise<HookPlan & { removed: string[] }> =>
+    request('/api/hooks/uninstall', { method: 'POST' }),
 }

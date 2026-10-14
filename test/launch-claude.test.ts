@@ -41,8 +41,11 @@ describe('Claude Code 启动链接', () => {
     assert.equal(parsed.searchParams.get('folder'), null)
   })
 
-  test('provider 在没有工作区的需求上生成不带 folder 的链接', () => {
-    const url = claudeProvider.build({ ...input, worktreeId: '', worktreePath: '', requirementWorktreePaths: [] }, 'prompt')
+  test('provider 在没有工作区的需求上生成不带 folder 的链接', async () => {
+    const url = await claudeProvider.build(
+      { ...input, worktreeId: '', worktreePath: '', requirementWorktreePaths: [] },
+      'prompt',
+    )
 
     assert.equal(new URL(url).searchParams.get('folder'), null)
   })

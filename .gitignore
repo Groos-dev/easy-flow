@@ -7,6 +7,9 @@ dist-types/
 *.log
 .DS_Store
 
+# clawd 素材的原始拷贝（All Rights Reserved，只本地自用）：只留生成物，别提交也别推远端
+.pet-src/
+
 # 预览工具的工作区配置：存的是各 worktree 的绝对路径与端口，只对本机有意义。
 # 同目录的 settings.json 是团队共用的，仍然跟踪。
 .claude/launch.json

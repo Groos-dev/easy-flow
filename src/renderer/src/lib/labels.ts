@@ -30,6 +30,12 @@ export const THREAD_STATE_LABEL: Record<string, string> = {
   unknown: '读不到状态',
 }
 
+/** 「下一步」两级的分组标题 */
+export const NEXT_UP_LEVEL_LABEL: Record<string, string> = {
+  now: '现在就得动',
+  soon: '有空再看',
+}
+
 export const THREAD_STATE_CLASS: Record<string, string> = {
   running: 't-running',
   done: 't-done',

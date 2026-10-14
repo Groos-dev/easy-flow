@@ -2,14 +2,14 @@ import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import type { ChildStat, Requirement, Session } from '../lib/types'
 import { STATUS_CLASS } from '../lib/labels'
-import { badgesOf, isEventState } from '../lib/threads'
+import { isEventState } from '../lib/threads'
 import { relTime } from '../lib/time'
-import ThreadBadge from './ThreadBadge'
+import { PetRow } from './Pet'
 
 interface Props {
   req: Requirement
-  /** 这条需求名下的全部会话。挂不挂角标由这里自己按 badgesOf 判——卡片的待处理状态
-   *  要比角标宽一点（读过但没回答的 blocked 也算），拿不到全量就漏掉那种 */
+  /** 这条需求名下的全部会话。挂不挂 pet 由 PetRow 自己按 badgesOf 判——卡片的待处理
+   *  状态要比角标宽一点（读过但没回答的 blocked 也算），拿不到全量就漏掉那种 */
   sessions?: Session[]
   /** 有子需求才传：卡片默认收成一行窄条，点一下铺开 */
   childStat?: ChildStat
@@ -50,7 +50,6 @@ export default function Card({ req, sessions, childStat, kids, onJumpChild, flas
   const blocked = all.find((s) => s.status.state === 'blocked' && s.status.fresh)
   const need = blocked?.status.needsAction ?? ''
   const unread = !blocked && all.some((s) => isEventState(s.status.state) && s.status.fresh)
-  const badges = badgesOf(all)
 
   return (
     <div
@@ -96,15 +95,10 @@ export default function Card({ req, sessions, childStat, kids, onJumpChild, flas
       </div>
       {/* 收窄也照挂：父需求名下常有自己的会话，收窄不该把信号一起收掉 */}
       {!overlay && need && <div className="card-need">{need}</div>}
-      {/* 每个会话各挂一个角标：一眼看出这条需求名下哪个 agent 跑完了、哪个卡住了。
-          拖拽浮层里不挂——那一层只负责跟手，不是给人读的 */}
-      {!overlay && badges.length > 0 && (
-        <div className="thread-badges">
-          {badges.map((s) => (
-            <ThreadBadge key={`${s.agent}:${s.session}`} session={s} />
-          ))}
-        </div>
-      )}
+      {/* 每个会话一只 pet：姿势看出哪个 agent 在等你、哪个跑完了。
+          收窄的父需求窄条也挂，只是收成小号——pet 是卡上唯一能直接跳回会话的入口，
+          不能逼人先展开；拖拽浮层只负责跟手，那一层不挂 */}
+      {!overlay && <PetRow sessions={all} compact={folded} />}
       {!folded && (
         <>
           {req.summary && <div className="card-summary">{req.summary}</div>}

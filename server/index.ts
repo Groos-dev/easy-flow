@@ -19,9 +19,12 @@ import {
   type TodoStatus,
 } from './db.ts'
 import { withStatus } from './threads.ts'
+import { hookStore } from './hook.ts'
+import { rankNextUp } from './next-up.ts'
 import './launch-claude.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 import { installSkill, skillPlan } from './skill-install.ts'
+import { hookPlan, installHooks, uninstallHooks } from './hook-install.ts'
 import { findLaunchProvider, launchPrompt, launchProviders } from './launch.ts'
 import './launch-codex.ts'
 import {
@@ -46,6 +49,8 @@ const NO_CHANGES = {
 export interface BoardAppOptions {
   /** 数据目录；不传则读配置 */
   dataDir?: string
+  /** 服务监听端口。设置页装 hook 时要把地址与端口写进配置，所以得知道真实端口 */
+  port?: number
 }
 
 export interface BoardApp {
@@ -78,7 +83,7 @@ function removeProjectData(db: BoardDatabase, slug: string): void {
   }
 }
 
-export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
+export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions = {}): BoardApp {
   const initial = readConfig()
   let currentDir = dataDir ?? initial.dataDir
   let db = new BoardDatabase(currentDir, initial.activeProject)
@@ -119,6 +124,24 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
     try {
       if (url.pathname === '/api/health') {
         json(req, res, 200, { ok: true, dataDir: currentDir, db: db.file })
+        return
+      }
+
+      // agent 的 hook 往这儿推事件（Claude 原生 http hook / Codex 的转发脚本）。
+      // 这是被人推的入口，不是给人看的接口：认不出的都吞掉，永远回 200，别呛回 agent。
+      if (url.pathname === '/api/hook' && req.method === 'POST') {
+        let payload: Record<string, unknown> = {}
+        try {
+          payload = await readBody(req)
+        } catch {
+          /* 报文不是合法 JSON：当没收到，照常回 200 */
+        }
+        // 两条管道共用一个入口，得认出来源：claude 的原生 http hook 带不了额外字段（缺省 claude），
+        // codex 的转发脚本用 ?agent=codex 或报文里带 agent
+        const fromQuery = url.searchParams.get('agent')
+        const fromBody = typeof payload.agent === 'string' && payload.agent ? payload.agent : ''
+        hookStore.record(payload, { agent: fromQuery || fromBody || 'claude' })
+        json(req, res, 200, { ok: true })
         return
       }
 
@@ -264,6 +287,16 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
       // 逐需求拉 context 太碎；排序交给库（最近登记的在前）
       if (url.pathname === '/api/sessions' && req.method === 'GET') {
         json(req, res, 200, { sessions: withStatus(db.listSessions()) })
+        return
+      }
+
+      // 「下一步该动哪个」：服务端揉好信号、给每条配一句理由，前端只负责展示与跳转。
+      // 只看当前项目——看板是按项目隔离的。会话按归属过滤，别把别的项目的信号串进来
+      if (url.pathname === '/api/next-up' && req.method === 'GET') {
+        const requirements = db.list()
+        const ids = new Set(requirements.map((r) => r.id))
+        const sessions = withStatus(db.listSessions()).filter((s) => ids.has(s.requirementId))
+        json(req, res, 200, { items: rankNextUp(requirements, sessions) })
         return
       }
 
@@ -474,6 +507,26 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         return
       }
 
+      // --------------------------------------------------- Agent hook
+
+      // hook 装进了 agent 的用户级配置，所以这里读写的是 ~/.claude/settings.json / ~/.codex/hooks.json
+      if (url.pathname === '/api/hooks' && req.method === 'GET') {
+        json(req, res, 200, hookPlan({ port }))
+        return
+      }
+
+      if (url.pathname === '/api/hooks/install' && req.method === 'POST') {
+        const installed = installHooks({ port })
+        json(req, res, 200, { installed, ...hookPlan({ port }) })
+        return
+      }
+
+      if (url.pathname === '/api/hooks/uninstall' && req.method === 'POST') {
+        const removed = uninstallHooks()
+        json(req, res, 200, { removed, ...hookPlan({ port }) })
+        return
+      }
+
       json(req, res, 404, { error: 'not found' })
     } catch (err) {
       json(req, res, 400, { error: (err as Error).message })
@@ -510,7 +563,7 @@ export function startBoardServer({
   dataDir,
   host = '127.0.0.1',
 }: StartOptions = {}): Promise<RunningBoardServer> {
-  const app = createBoardApp({ dataDir })
+  const app = createBoardApp({ dataDir, port })
   const server = createServer((req, res) => void app.handle(req, res))
   return new Promise((resolve, reject) => {
     server.once('error', reject)
