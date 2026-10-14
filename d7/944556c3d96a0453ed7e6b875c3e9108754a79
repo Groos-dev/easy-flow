@@ -1,0 +1,42 @@
+test/next-up.test.ts
+  s_96bf2edccbe84b::t_e7ff3aa3de6b7f 74
+src/renderer/src/App.tsx
+  s_96bf2edccbe84b::t_ef999a87b5bb69 231-233,235
+  s_96bf2edccbe84b::t_b564ecf41c09fb 645-646
+src/renderer/src/components/Card.tsx
+  s_96bf2edccbe84b::t_82e5cf51b32527 5,7,11-12
+  s_96bf2edccbe84b::t_8bc2142ce1a809 99-100
+  s_96bf2edccbe84b::t_318c769208eb52 101
+src/renderer/src/styles.css
+  s_96bf2edccbe84b::t_d220a65cd97110 1050-1055,1057,1060-1065,1068-1069,1073-1077,1081-1125,1128-1163
+test/core.test.ts
+  s_96bf2edccbe84b::t_0bedaec4294a89 3739
+test/launch-claude.test.ts
+  s_9b1798a9c5727b::t_a5a12840ed3958 44-48
+test/pet-card.test.ts
+  s_96bf2edccbe84b::t_b91b4be9ff1b29 26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "d7944556c3d96a0453ed7e6b875c3e9108754a79",
+  "prompts": {},
+  "sessions": {
+    "s_96bf2edccbe84b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eeecd158-1664-4fd6-953c-533c382deb31",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    },
+    "s_9b1798a9c5727b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8d3a12ea-c7a4-48b8-af0e-1771d5d714a8",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
