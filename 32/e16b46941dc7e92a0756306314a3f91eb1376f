@@ -1,0 +1,34 @@
+test/pet-card.test.ts
+  s_4f3df8523ab80f::t_c6e516ffc3bc4f 100,103
+  s_4f3df8523ab80f::t_873ec70a7c93e7 159
+  s_4f3df8523ab80f::t_24df19f2bcb3e1 92,97-99,101-102
+src/renderer/src/lib/pets.ts
+  s_4f3df8523ab80f::t_c541418de53d59 60,67-70,72,77,87-92
+  s_4f3df8523ab80f::t_a090900bc8b427 101-102
+  s_4f3df8523ab80f::t_138873dd6f4872 121-122,126,133-135,144
+src/renderer/src/components/Pet.tsx
+  s_4f3df8523ab80f::t_ae75d7b16f8e35 74,82-83
+  s_4f3df8523ab80f::t_aca064185344d8 30-31,42,52,60
+  s_4f3df8523ab80f::t_2a362cac353708 112,127,132
+  s_4f3df8523ab80f::t_9fa9f575c1ca6c 96,100
+test/core.test.ts
+  s_4f3df8523ab80f::t_f4589992465d0e 34
+  s_4f3df8523ab80f::t_2e643ba81e2b3a 3661-3680
+  s_4f3df8523ab80f::t_d96f7098c2a9e9 3786,3789-3790,3794-3800,3806-3809
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "32e16b46941dc7e92a0756306314a3f91eb1376f",
+  "prompts": {},
+  "sessions": {
+    "s_4f3df8523ab80f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "04f57851-e9a5-45b1-9bba-a3971bb01c46",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
