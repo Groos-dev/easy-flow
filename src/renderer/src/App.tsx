@@ -12,7 +12,8 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { api } from './lib/api'
-import type { Project, Requirement, Session, Status, Todo, TodoStatus } from './lib/types'
+import { DONE_STATUS, childStatsOf } from './lib/children'
+import type { ChildStat, Project, Requirement, Session, Status, Todo, TodoStatus } from './lib/types'
 import { badgesOf } from './lib/threads'
 import BoardSwitcher, { type BoardView } from './components/BoardSwitcher'
 import MindMap from './components/MindMap'
@@ -26,6 +27,8 @@ interface BoardColumnProps {
   items: Requirement[]
   /** 需求 id → 它名下的会话。卡片角标按需求取用（每个会话各挂一个） */
   sessionsByReq: Map<string, Session[]>
+  /** 父需求 id → 子需求完成度。没有子需求的需求不在表里 */
+  childStats: Map<string, ChildStat>
   onOpen: (slug: string) => void
   isOver: boolean
   /** 收成窄条（只有「已完成」列会） */
@@ -37,6 +40,7 @@ function ColumnView({
   status,
   items,
   sessionsByReq,
+  childStats,
   onOpen,
   isOver,
   collapsed,
@@ -86,6 +90,7 @@ function ColumnView({
               key={r.slug}
               req={r}
               sessions={badgesOf(sessionsByReq.get(r.id) ?? [])}
+              childStat={childStats.get(r.id)}
               onOpen={onOpen}
             />
           ))
@@ -100,9 +105,6 @@ function statusOf(over: DragOverEvent['over']): Status | undefined {
   const data = over?.data.current as { status?: Status } | undefined
   return data?.status
 }
-
-/** 这一列默认收成窄条：历史只增不减，全铺开会把活跃三列挤窄 */
-const DONE_STATUS: Status = '已完成'
 
 /** 同列内按优先级排：p0 在前，没设优先级的排最后 */
 const PRIORITY_RANK: Record<string, number> = { p0: 0, p1: 1, p2: 2, p3: 3 }
@@ -120,7 +122,7 @@ export default function App() {
   const [projectName, setProjectName] = useState('')
   /** 项目列表：顶栏的 chip 行用它。agent 在文件系统里建完目录后靠刷新带出来 */
   const [projects, setProjects] = useState<Project[]>([])
-  /** 「已完成」列是否展开。默认收成窄条 */
+  /** 「已完成」列是否展开。默认收成窄条：历史只增不减，全铺开会把活跃三列挤窄 */
   const [doneOpen, setDoneOpen] = useState(false)
   /** 需求板块里的视图：看板（默认）或导图；待办板块下不适用 */
   const [reqView, setReqView] = useState<'board' | 'map'>('board')
@@ -323,6 +325,12 @@ export default function App() {
     }
     return map
   }, [items, statuses])
+
+  /**
+   * 父需求的子需求完成度。父子在版面上散在各列（`byStatus` 只按状态分列），
+   * 卡片上这一行是唯一能看出「这串活还剩几块」的地方。
+   */
+  const childStats = useMemo(() => childStatsOf(items), [items])
 
   async function handleDragEnd({ active, over }: DragEndEvent) {
     setDragSlug(null)
@@ -530,6 +538,7 @@ export default function App() {
                       status={status}
                       items={byStatus.get(status) ?? []}
                       sessionsByReq={sessionsByReq}
+                      childStats={childStats}
                       onOpen={(slug) => setDetail({ project, slug })}
                       isOver={overStatus === status}
                       collapsed={status === DONE_STATUS && !doneOpen}

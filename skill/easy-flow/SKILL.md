@@ -40,6 +40,8 @@ description: >-
 
 - 澄清阶段只谈产品：做什么、为什么、边界与验收，不碰实现细节与技术名词
 - 收尾时点：改动提交或开出 MR 之后——先 `easy-flow req set <req-…> --status Review`，有 MR 就 `easy-flow req link <req-…> --mr <url>`（多条 MR 用 `--mr "<别名>=<url>"` 区分，看板只显示别名）
+- **父需求不跟着子需求自动收尾**：子需求全完成时 `req set` 与 `context` 会提一句，但收不收自己判——
+  父需求自己可能还有整体验收，替它改状态等于把它谎报成完成
 - 涉及多个仓库时，收尾顺手建一个 Codex review 会话：`easy-flow req session review <req-…>`。
   它把这条需求名下全部工作区收进一个 Codex project，发一轮评审提示词，并挂到需求上——
   人在看板「会话」块点一下就能在 Codex 里按仓库逐个看 diff。这一轮是跑完才返回的，别让工具超时掐掉它

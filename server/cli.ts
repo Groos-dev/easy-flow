@@ -220,7 +220,15 @@ function requirementView(req: Requirement, extraHead: string[] = []) {
   if (contextMd) blocks.push(`## 上下文（context.md）\n\n${contextMd.trim()}`)
   const children = board.children(req.id)
   if (children.length) {
-    blocks.push(`## 子需求（${children.length}）\n${children.map(requirementLine).join('\n')}`)
+    // 子需求带状态：接手父需求时，「这串活还剩几块」是决定先干什么的第一件事。
+    // 全完成就再点一句——父需求不会自己回头看子需求，这一步只能在这里说
+    const tip =
+      allDone(children) && req.status !== '已完成'
+        ? `\n\n子需求已全部完成——这条需求自己没有别的活就一并收尾：easy-flow req set ${req.id} --status 已完成`
+        : ''
+    blocks.push(
+      `## 子需求（${children.length}）\n${children.map((r) => `${requirementLine(r)}  ${r.status}`).join('\n')}${tip}`,
+    )
   }
 
   const data = {
@@ -604,12 +612,42 @@ async function cmdReqSet(argv: string[]): Promise<void> {
   if (status !== undefined) next = board.setStatus(req.slug, status as Status, req.project)
   if (priority !== undefined) next = board.setPriority(req.slug, priority as Priority, req.project)
 
+  // 刚收掉最后一个子需求时提一句父需求，但不替它改状态——父需求自己可能还有整体验收
+  const hint = status === '已完成' && req.status !== '已完成' ? parentHint(board, next) : ''
+
   emit(
-    { ok: true, id: next.id, title: next.title, status: next.status, priority: next.priority },
+    {
+      ok: true,
+      id: next.id,
+      title: next.title,
+      status: next.status,
+      priority: next.priority,
+      parentHint: hint || undefined,
+    },
     `需求：${next.title}（${next.id}）\n状态：${next.status}${
       next.priority ? ` · 优先级：${next.priority}` : ''
-    }`,
+    }${hint ? `\n${hint}` : ''}`,
   )
+}
+
+/**
+ * 子需求全完成时回头看一眼父需求：只提示，不动父需求的状态。
+ * 父需求自己可能还有整体验收——它不是一个纯归集点，自动跟着关等于把它谎报成完成，
+ * 收不收由人看着办。
+ */
+function parentHint(board: BoardDatabase, child: Requirement): string {
+  if (!child.parentId) return ''
+  // siblings 按 parent_id 查，必然含 child 自己，不会是空数组
+  const siblings = board.children(child.parentId)
+  if (!allDone(siblings)) return ''
+  const parent = board.byId(child.parentId)
+  if (!parent || parent.status === '已完成') return ''
+  return `父需求「${parent.title}」的 ${siblings.length} 个子需求已全部完成——它自己没有别的活就一并收尾：easy-flow req set ${parent.id} --status 已完成`
+}
+
+/** 这批需求是不是都到了终态。「全完成」只有这一处定义，`req set` 与 `context` 共用 */
+function allDone(reqs: Requirement[]): boolean {
+  return reqs.every((r) => r.status === '已完成')
 }
 
 /**

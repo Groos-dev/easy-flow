@@ -29,6 +29,7 @@ import { codeLinkLabel } from '../src/renderer/src/lib/links.ts'
 import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib/shortcut.ts'
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
+import { childStatsOf } from '../src/renderer/src/lib/children.ts'
 import { parseStamp, relTime } from '../src/renderer/src/lib/time.ts'
 import type { Requirement, Session } from '../src/renderer/src/lib/types.ts'
 
@@ -711,6 +712,39 @@ describe('渲染层 · 快捷键', () => {
     assert.equal(formatAccelerator('CommandOrControl+Shift+E', 'win32'), 'Ctrl+Shift+E')
     assert.equal(formatAccelerator('Control+Alt+ArrowUp', 'darwin'), '⌃⌥↑')
     assert.equal(formatAccelerator('Control+Alt+ArrowUp', 'win32'), 'Ctrl+Alt+ArrowUp')
+  })
+})
+
+// ------------------------------------------------------------ 渲染层：父子
+
+describe('渲染层 · 子需求完成度', () => {
+  const req = (slug: string, id: string, parentId: string, status: string): Requirement =>
+    ({ slug, id, parentId, status }) as Requirement
+
+  test('按父需求 id 归并，只数直接子需求', () => {
+    const stats = childStatsOf([
+      req('parent', 'req-p', '', '执行中'),
+      req('parent/a', 'req-a', 'req-p', '已完成'),
+      req('parent/b', 'req-b', 'req-p', 'Review'),
+      req('parent/b/grand', 'req-g', 'req-b', '已完成'),
+    ])
+    // 孙需求算在中间那层头上，不越级加到 parent
+    assert.deepEqual(stats.get('req-p'), { total: 2, done: 1 })
+    assert.deepEqual(stats.get('req-b'), { total: 1, done: 1 })
+  })
+
+  test('没有子需求的需求不在表里，卡片据此决定收不收窄', () => {
+    const stats = childStatsOf([req('alpha', 'req-a', '', '执行中')])
+    assert.equal(stats.has('req-a'), false)
+    assert.equal(stats.size, 0)
+  })
+
+  test('终态只有「已完成」算完成', () => {
+    const stats = childStatsOf([
+      req('parent', 'req-p', '', '执行中'),
+      req('parent/a', 'req-a', 'req-p', 'Review'),
+    ])
+    assert.deepEqual(stats.get('req-p'), { total: 1, done: 0 })
   })
 })
 
@@ -1565,10 +1599,22 @@ describe('CLI 层', () => {
     assert.match(childCtx, /## 父需求描述/)
     assert.match(childCtx, /先灰度 5%/)
 
-    // 父需求：列出名下子需求
+    // 父需求：列出名下子需求，每行带状态——接手父需求时先看「这串活还剩几块」
     const parentCtx = cliOk(configFile, ['context', parent.id])
     assert.match(parentCtx, /## 子需求（1）/)
-    assert.match(parentCtx, /seatmap\/gateway/)
+    assert.match(parentCtx, /seatmap\/gateway {2}网关改造 {2}澄清/)
+    assert.doesNotMatch(parentCtx, /已全部完成/)
+
+    // 子需求全完成就点一句收尾；父需求自己已是终态时不再点
+    cliOk(configFile, ['req', 'set', sub.id, '--status', '已完成'])
+    const doneCtx = cliOk(configFile, ['context', parent.id])
+    assert.match(doneCtx, /seatmap\/gateway {2}网关改造 {2}已完成/)
+    assert.match(
+      doneCtx,
+      new RegExp(`子需求已全部完成——这条需求自己没有别的活就一并收尾：easy-flow req set ${parent.id} --status 已完成`),
+    )
+    cliOk(configFile, ['req', 'set', parent.id, '--status', '已完成'])
+    assert.doesNotMatch(cliOk(configFile, ['context', parent.id]), /已全部完成/)
   })
 
     scaffold()
@@ -1930,6 +1976,31 @@ describe('CLI 层', () => {
     ])
     assert.deepEqual(r.feishuTaskLinks, ['https://project.feishu.cn/x7mm65/story/detail/1'])
     assert.deepEqual(r.extLinks, [{ detail: '设计稿', url: 'https://example.com/design' }])
+    db.close()
+  })
+
+  test('子需求全完成时提一句父需求，但不动它的状态', () => {
+    scaffold()
+    createProjectDir(dataDir, 'demo')
+    const parent = createRequirementDir(join(dataDir, 'demo'), 'parent', '父需求')
+    const a = createRequirementDir(parent.dir, 'a', '子需求 A')
+    const b = createRequirementDir(parent.dir, 'b', '子需求 B')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    // 还剩一个没完成：不提示
+    assert.doesNotMatch(cliOk(configFile, ['req', 'set', a.id, '--status', '已完成']), /已全部完成/)
+    assert.match(cliOk(configFile, ['req', 'set', b.id, '--status', 'Review']), /状态：Review/)
+
+    // 最后一个也完成：提示指向父需求，并给出收尾命令
+    const last = cliOk(configFile, ['req', 'set', b.id, '--status', '已完成'])
+    assert.match(last, /父需求「父需求」的 2 个子需求已全部完成/)
+    assert.match(last, new RegExp(`easy-flow req set ${parent.id} --status 已完成`))
+
+    // 提示只是提示：父需求的状态一个字没动
+    const db = new BoardDatabase(dataDir)
+    assert.equal(db.byId(parent.id)!.status, '澄清')
     db.close()
   })
 

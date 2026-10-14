@@ -389,6 +389,36 @@ body {
   opacity: 0.4;
 }
 
+/* 父需求收成一行：只留标题与子需求完成度，点一下才铺开。与「已完成」列同一套收窄语言 */
+.card.folded {
+  padding: 7px 10px;
+}
+
+.card.folded .card-title {
+  -webkit-line-clamp: 1;
+}
+
+.card.folded .card-top {
+  margin-bottom: 0;
+}
+
+.card-fold-caret {
+  flex: none;
+  color: var(--text-faint);
+}
+
+.card:hover .card-fold-caret {
+  color: var(--text);
+}
+
+.card-kids {
+  margin-left: auto;
+  flex: none;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 /* ---------------------------------------------------------------- 设置页 */
 
 .settings-page {

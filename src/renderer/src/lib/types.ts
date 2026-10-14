@@ -75,6 +75,12 @@ export interface Requirement {
   sync?: SyncResult
 }
 
+/** 父需求卡片上的子需求完成度 */
+export interface ChildStat {
+  total: number
+  done: number
+}
+
 export interface SyncResult {
   added: string[]
   updated: string[]
