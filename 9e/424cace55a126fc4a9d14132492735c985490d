@@ -1,0 +1,51 @@
+src/renderer/src/App.tsx
+  s_b9cb3eb5b1c484::t_9ab9fec0ce3c94 329-332,334
+  s_b9cb3eb5b1c484::t_9b942abfe6266c 541
+  s_b9cb3eb5b1c484::t_a25e54d35c14e6 15
+  s_b9cb3eb5b1c484::t_225c5c463cd306 125
+  s_b9cb3eb5b1c484::t_2ea953cccc3f2e 333
+  s_b9cb3eb5b1c484::t_40bff61a181f80 93
+  s_b9cb3eb5b1c484::t_eac15dcb79cd4d 30-31,43
+  s_b9cb3eb5b1c484::t_67e01045b6db9e 16
+test/core.test.ts
+  s_b9cb3eb5b1c484::t_1dc01edc87a65a 715-747
+  s_b9cb3eb5b1c484::t_8b7cc6fde8a43c 1978-2002
+  s_b9cb3eb5b1c484::t_bc01274e033f0d 1598,1601-1613
+  s_b9cb3eb5b1c484::t_bb090e2c7150ed 31
+src/renderer/src/lib/children.ts
+  s_b9cb3eb5b1c484::t_ccbe92ce947782 1-6,8-25
+  s_b9cb3eb5b1c484::t_f6cd4d7798161f 7
+server/cli.ts
+  s_b9cb3eb5b1c484::t_18843aa76d569a 223-225,227-231
+  s_b9cb3eb5b1c484::t_17d2ce5de5618f 635-636
+  s_b9cb3eb5b1c484::t_6fcf337ff0ebd5 640,642,646-650
+  s_b9cb3eb5b1c484::t_7508d1f4e2d5e5 615-617,619-626,629,633-634,637-639,641,643-645
+  s_b9cb3eb5b1c484::t_ecb55a9507d38d 226
+src/renderer/src/lib/types.ts
+  s_b9cb3eb5b1c484::t_b6c9834f1367f0 78-83
+src/renderer/src/components/Card.tsx
+  s_b9cb3eb5b1c484::t_9b08157fe22e15 46,48-63
+  s_b9cb3eb5b1c484::t_666078ae076a39 1,3,11-12,17,24,27-30,39-41,47,64-66,68-72,75-76,84-99
+  s_b9cb3eb5b1c484::t_61bdf150df48f0 25-26
+skill/easy-flow/SKILL.md
+  s_b9cb3eb5b1c484::t_5788805fb0e6bf 43-44
+src/renderer/src/styles.css
+  s_b9cb3eb5b1c484::t_1ee852c39b1f4d 401-404
+  s_b9cb3eb5b1c484::t_bccba5c946bba7 392-400,405-421
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "9e424cace55a126fc4a9d14132492735c985490d",
+  "prompts": {},
+  "sessions": {
+    "s_b9cb3eb5b1c484": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c58af3d0-f443-4e50-b87a-9cc9e1844d6a",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
