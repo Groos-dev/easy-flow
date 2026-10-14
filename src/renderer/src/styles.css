@@ -417,6 +417,199 @@ body {
   line-height: 1.6;
 }
 
+/* ---------------------------------------------------------------- 下一步 */
+
+/*
+ * 看板按状态分组，但状态不是优先级——它答不了「我现在该动哪个」。这一块把 agent 状态与
+ * 需求停多久揉成一个排名，每条带一句理由：没有理由的推荐是个黑盒，人不会信。
+ * 两级：现在就得动（.now）/ 有空再看（.soon），用左边那条色带区分。
+ */
+.next {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-self: center;
+  width: 100%;
+  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+}
+
+.next-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.next-group-head {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 2px;
+}
+
+.next-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+}
+
+.next-row.now {
+  border-color: #4a3a28;
+  box-shadow: inset 3px 0 0 var(--status-review);
+}
+
+.next-row.soon {
+  border-color: #2b3a55;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.next-rank {
+  flex: none;
+  width: 18px;
+  padding-top: 1px;
+  color: var(--text-faint);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* 有会话信号时摆 agent 的品牌 mark，没有就摆一枚需求状态点 */
+.next-agent {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  color: var(--text-dim);
+}
+
+.next-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  margin-top: 5px;
+  background: var(--status-clarify);
+}
+
+.next-dot.s-doing {
+  background: var(--status-doing);
+}
+
+.next-dot.s-review {
+  background: var(--status-review);
+}
+
+.next-dot.s-done {
+  background: var(--status-done);
+}
+
+.next-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.next-why {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.next-row.now .next-why {
+  color: var(--status-review);
+}
+
+.next-title {
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.next-detail {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.next-detail.hot {
+  color: #e8b48a;
+}
+
+.next-action {
+  flex: none;
+  align-self: center;
+}
+
+/* 需求状态的小药丸：跟「为什么推它」并排时，一眼看出是需求状态、不是会话状态 */
+.next-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--column);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.next-chip .next-dot {
+  width: 6px;
+  height: 6px;
+  margin-top: 0;
+}
+
+.btn-go {
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--column);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-go:hover {
+  color: var(--text);
+  border-color: #38404c;
+}
+
+.next-row.now .btn-go {
+  border-color: var(--status-review);
+  color: var(--text);
+}
+
+/* 没有可推的时候明说一句，不是空列表——空列表分不清「没事」和「没算出来」 */
+.next-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--text-faint);
+  font-size: 13px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.next-empty.bad {
+  color: var(--fail, #ff5c5c);
+}
+
 /* ---------------------------------------------------------------- 卡片 */
 
 .card {
