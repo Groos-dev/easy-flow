@@ -117,10 +117,12 @@ describe('PetRow 渲染', () => {
     assert.doesNotMatch(html, /<svg/)
   })
 
-  test('Codex 走 <object> 加载 cloudling（脚本驱动，<img> 会禁脚本只剩静止的云）', () => {
+  test('Codex 走内联 <svg>（脚本驱动，<img> 会禁脚本、<object> 的文档画布又不透明）', () => {
     const html = render(createElement(PetRow, { sessions: [sess('codex', 'blocked', true)] }))
-    assert.match(html, /<object[^>]+data="pets\/cloudling-notification\.svg"/)
+    // 素材由挂载时的 effect 插进去（那半截脚本得等元素进文档才跑），静态渲染只剩这个挂载点
+    assert.match(html, /class="pet-art"/)
     assert.doesNotMatch(html, /<img/)
+    assert.doesNotMatch(html, /<object/)
   })
 
   test('折叠卡换 mini 素材', () => {

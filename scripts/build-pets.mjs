@@ -9,10 +9,12 @@
  *   2) 另出 *.still.svg：往自带 <style> 里注入 `* { animation: none !important }` 停掉动画，
  *      再把「基础 opacity: 0、只靠 keyframes 显形」的装饰按文件置为可见——冻结后它们会永久消失。
  *
- * - cloudling（Codex）：clawd-on-desk 的 cloudling 主题，走 <object>。27/28 个文件是脚本驱动
- *   （约 5.8KB 的 requestAnimationFrame + setAttribute），<img> 会禁脚本 → 一朵静止的云，所以
- *   Codex 那一档必须用 <object>。这里同样重设 viewBox；*.still.svg 不剥脚本、只放行首帧——
- *   眼睛的 d/fill/stroke 是 JS 画的，整段剥掉会剩一朵没有表情的云。
+ * - cloudling（Codex）：clawd-on-desk 的 cloudling 主题，**内联进宿主 DOM**，构建期落成一个 TS 模块。
+ *   27/28 个文件是脚本驱动（约 5.8KB 的 requestAnimationFrame + setAttribute），<img> 会禁脚本 →
+ *   一朵静止的云；而走 <object> 的话，object 文档的画布在 Chromium 里恒为不透明（background:
+ *   transparent 实测无效），暗色卡片上就是一块白方块。内联的 SVG 是普通元素，背景天然透明、
+ *   跟着主题走，所以这里只重设 viewBox，把结果写进 src/renderer/src/lib/pet-cloudling-art.ts。
+ *   同文档里 id 会撞，实例级改写见 pet-art.ts 的 scopeCloudling。
  *
  * BBOX 用 headless Chrome 的 getBBox 量出（clawd 含 CSS 隐藏层；cloudling 去掉透明底 rect）。
  * top 是给动画外扩额外留的顶部空间——只有 clawd-error 的烟雾会飘到包围盒上方。
@@ -27,6 +29,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = join(ROOT, '.pet-src')
 const OUT = join(ROOT, 'src/renderer/public/pets')
+const CLOUDLING_MODULE = join(ROOT, 'src/renderer/src/lib/pet-cloudling-art.ts')
 
 const CLAWD_HEADER = `<!--
   来源：clawd-on-desk（https://github.com/rullerzhou-afk/clawd-on-desk）assets/svg/，默认主题 themes/clawd。
@@ -35,12 +38,16 @@ const CLAWD_HEADER = `<!--
 -->
 `
 
-const CLOUDLING_HEADER = `<!--
-  来源：clawd-on-desk（https://github.com/rullerzhou-afk/clawd-on-desk）themes/cloudling（作者 stlabslogo）。
-  许可：All Rights Reserved，仅授权用于 Clawd on Desk 应用本身。本仓库属本地自用，勿 push 到远端。
-  完整许可见 .pet-src/LICENSE.clawd，由 scripts/build-pets.mjs 生成。
-  脚本驱动（requestAnimationFrame），渲染走 <object>；*.still.svg 只放行首帧（不改脚本内部），见 scripts/build-pets.mjs。
--->
+const CLOUDLING_MODULE_HEADER = `/**
+ * 生成文件，勿手改——由 scripts/build-pets.mjs 从 .pet-src/cloudling 生成。
+ *
+ * 来源：clawd-on-desk（https://github.com/rullerzhou-afk/clawd-on-desk）themes/cloudling（作者 stlabslogo）。
+ * 许可：All Rights Reserved，仅授权用于 Clawd on Desk 应用本身。本仓库属本地自用，勿 push 到远端。
+ * 完整许可见 .pet-src/LICENSE.clawd。
+ *
+ * 键是素材文件名，值是处理过 viewBox 的整份 SVG 原文（含驱动动画的 <script>）。
+ * 内联渲染、实例级 id 改写见 src/renderer/src/lib/pet-art.ts。
+ */
 `
 
 // ---------------------------------------------------------------------------
@@ -89,7 +96,7 @@ const STILL_RULE = `
       * { animation: none !important; }
 `
 // ---------------------------------------------------------------------------
-// cloudling（<object>）
+// cloudling（内联 <svg>）
 // ---------------------------------------------------------------------------
 
 // 六档大图 + 折叠卡 mini；failed 复用 mini-alert（cloudling 的 mini 组里没有单独的失败版）。
@@ -111,23 +118,6 @@ const CLOUDLING_SRC = join(SRC, 'cloudling')
 // 取 theme.json 的 marginBox（中心 12,12、边长 28）当公共取景框，云宝刚好填满。
 const CLOUDLING_VIEWBOX = '-2 -2 28 28'
 const CLOUDLING_SIDE = 28
-
-// cloudling 的 *.still.svg 不剥脚本、只给脚本套一道「只放行首帧」的闸：眼睛的 d/fill/stroke 是 JS 画的，
-// 剥掉脚本会剩一朵没有表情的云（idle / thinking / error 例外，其余五档都会变空）。首帧里表情与姿态已就位，
-// 放行一帧后不再调度，macOS 的 prefers-reduced-motion 只拿到一张不动的图。
-const CLOUDLING_STILL_SHIM = `<script type="application/ecmascript"><![CDATA[
-/* still（prefers-reduced-motion）：只放行首帧，之后不再 requestAnimationFrame */
-(function () {
-  var raf = window.requestAnimationFrame.bind(window);
-  var used = false;
-  window.requestAnimationFrame = function (cb) {
-    if (used) return 0;
-    used = true;
-    return raf(cb);
-  };
-})();
-]]></script>
-`
 
 /**
  * 包围盒 + 留白 → 方形 viewBox 字符串。
@@ -171,6 +161,8 @@ for (const { name, bbox, top } of CLAWD_ART) {
 }
 
 // ---- cloudling ----
+// 不落地 SVG 文件：它只以「内联进宿主 DOM」的形态出现，所以直接写进 TS 模块
+const cloudlingArt = []
 for (const name of CLOUDLING_ART) {
   const src = join(CLOUDLING_SRC, name)
   if (!existsSync(src)) {
@@ -182,7 +174,7 @@ for (const name of CLOUDLING_ART) {
     console.error(`${name} 缺 viewBox 或 <script>，结构变了，人工确认再生成`)
     process.exit(1)
   }
-  // 重设根 <svg> 的取景框与尺寸；still 版在下面另加「只放行首帧」的闸
+  // 重设根 <svg> 的取景框与尺寸；尺寸只是兜底，内联后由 CSS 定
   const body = raw
     .replace(/<svg\b[^>]*>/, (tag) =>
       tag
@@ -190,8 +182,11 @@ for (const name of CLOUDLING_ART) {
         .replace(/\swidth="[^"]*"/, ` width="${CLOUDLING_SIDE}"`)
         .replace(/\sheight="[^"]*"/, ` height="${CLOUDLING_SIDE}"`),
     )
-  writeFileSync(join(OUT, name), CLOUDLING_HEADER + body)
-  writeFileSync(join(OUT, name.replace(/\.svg$/, '.still.svg')), CLOUDLING_HEADER + body.replace(/<script\b/, CLOUDLING_STILL_SHIM + '<script'))
+  cloudlingArt.push(`  ${JSON.stringify(name)}: ${JSON.stringify(body)},`)
 }
+writeFileSync(
+  CLOUDLING_MODULE,
+  `${CLOUDLING_MODULE_HEADER}export const CLOUDLING_SVG: Record<string, string> = {\n${cloudlingArt.join('\n')}\n}\n`,
+)
 
-console.log(`生成 clawd ${CLAWD_ART.length} 份 + cloudling ${CLOUDLING_ART.length} 份（各含静态版）到 ${OUT}`)
+console.log(`生成 clawd ${CLAWD_ART.length} 份（含静态版）到 ${OUT}；cloudling ${CLOUDLING_ART.length} 份到 ${CLOUDLING_MODULE}`)

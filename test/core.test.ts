@@ -31,8 +31,9 @@ import { codeLinkLabel } from '../src/renderer/src/lib/links.ts'
 import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib/shortcut.ts'
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
-import { PET_STATES, PET_RANK, MAX_PETS, focusIndex, petStateOf, petLabelOf, planPetRow } from '../src/renderer/src/lib/pets.ts'
-import { petArt } from '../src/renderer/src/lib/pet-art.ts'
+import { PET_STATES, PET_RANK, MAX_PETS, focusIndex, petStateOf, petLabelOf, planPetRow, type PetState } from '../src/renderer/src/lib/pets.ts'
+import { petArt, scopeCloudling } from '../src/renderer/src/lib/pet-art.ts'
+import { CLOUDLING_SVG } from '../src/renderer/src/lib/pet-cloudling-art.ts'
 import { childStatsOf, childrenOf } from '../src/renderer/src/lib/children.ts'
 import { parseStamp, relTime } from '../src/renderer/src/lib/time.ts'
 import type { Requirement, Session } from '../src/renderer/src/lib/types.ts'
@@ -3713,60 +3714,144 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
   const art = { compact: false, still: false }
   const PETS_DIR = join(REPO_ROOT, 'src/renderer/public/pets')
 
+  /** 走 <img> 的素材：拿它的 src，顺带钉住通道 */
+  const imgSrc = (agent: string, state: PetState, opt = art) => {
+    const got = petArt(agent, state, opt)
+    assert.equal(got.channel, 'img')
+    return got.channel === 'img' ? got.src : ''
+  }
+
+  /** 云宝内联：拿它那份 SVG 原文，顺带钉住通道 */
+  const cloudlingSvg = (state: PetState, opt = art) => {
+    const got = petArt('codex', state, opt)
+    assert.equal(got.channel, 'inline')
+    return got.channel === 'inline' ? got.svg : ''
+  }
+
   test('Claude 用 clawd，走 <img>：六档大图各一张', () => {
-    assert.deepEqual(petArt('claude', 'idle', art), { src: 'pets/clawd-idle-follow.svg', channel: 'img' })
-    assert.equal(petArt('claude', 'thinking', art).src, 'pets/clawd-working-thinking.svg')
-    assert.equal(petArt('claude', 'working', art).src, 'pets/clawd-working-typing.svg')
-    assert.equal(petArt('claude', 'blocked', art).src, 'pets/clawd-notification.svg')
-    assert.equal(petArt('claude', 'done', art).src, 'pets/clawd-happy.svg')
-    assert.equal(petArt('claude', 'failed', art).src, 'pets/clawd-error.svg')
+    assert.equal(imgSrc('claude', 'idle'), 'pets/clawd-idle-follow.svg')
+    assert.equal(imgSrc('claude', 'thinking'), 'pets/clawd-working-thinking.svg')
+    assert.equal(imgSrc('claude', 'working'), 'pets/clawd-working-typing.svg')
+    assert.equal(imgSrc('claude', 'blocked'), 'pets/clawd-notification.svg')
+    assert.equal(imgSrc('claude', 'done'), 'pets/clawd-happy.svg')
+    assert.equal(imgSrc('claude', 'failed'), 'pets/clawd-error.svg')
   })
 
-  test('Codex 用 cloudling，走 <object>：六档各一张', () => {
-    assert.deepEqual(petArt('codex', 'idle', art), { src: 'pets/cloudling-idle.svg', channel: 'object' })
-    assert.equal(petArt('codex', 'thinking', art).src, 'pets/cloudling-thinking.svg')
-    assert.equal(petArt('codex', 'working', art).src, 'pets/cloudling-typing.svg')
-    assert.equal(petArt('codex', 'blocked', art).src, 'pets/cloudling-notification.svg')
-    assert.equal(petArt('codex', 'done', art).src, 'pets/cloudling-attention.svg')
-    assert.equal(petArt('codex', 'failed', art).src, 'pets/cloudling-error.svg')
+  test('Codex 用 cloudling，内联成 <svg>：六档各一张、互不重样', () => {
+    const files: Record<PetState, string> = {
+      idle: 'cloudling-idle.svg',
+      thinking: 'cloudling-thinking.svg',
+      working: 'cloudling-typing.svg',
+      blocked: 'cloudling-notification.svg',
+      done: 'cloudling-attention.svg',
+      failed: 'cloudling-error.svg',
+    }
+    for (const state of PET_STATES) {
+      assert.equal(cloudlingSvg(state), CLOUDLING_SVG[files[state]], state)
+    }
+    assert.equal(new Set(PET_STATES.map((s) => cloudlingSvg(s))).size, PET_STATES.length)
   })
 
   test('认不出的 agent 落到 clawd（默认那只），不染不动', () => {
-    assert.deepEqual(petArt('cursor', 'done', art), petArt('claude', 'done', art))
+    assert.equal(imgSrc('cursor', 'done'), imgSrc('claude', 'done'))
     assert.equal(petArt('some-new-agent', 'done', art).channel, 'img')
   })
 
   test('折叠卡换 mini 组（两套都有，failed 复用 alert）', () => {
     const mini = { compact: true, still: false }
-    assert.equal(petArt('claude', 'idle', mini).src, 'pets/clawd-mini-idle.svg')
-    assert.equal(petArt('claude', 'blocked', mini).src, 'pets/clawd-mini-alert.svg')
-    assert.equal(petArt('claude', 'done', mini).src, 'pets/clawd-mini-happy.svg')
-    assert.equal(petArt('claude', 'failed', mini).src, 'pets/clawd-mini-alert.svg')
-    assert.equal(petArt('codex', 'idle', mini).src, 'pets/cloudling-mini-idle.svg')
-    assert.equal(petArt('codex', 'working', mini).src, 'pets/cloudling-mini-typing.svg')
-    assert.equal(petArt('codex', 'done', mini).src, 'pets/cloudling-mini-happy.svg')
-    assert.equal(petArt('codex', 'failed', mini).src, 'pets/cloudling-mini-alert.svg')
+    assert.equal(imgSrc('claude', 'idle', mini), 'pets/clawd-mini-idle.svg')
+    assert.equal(imgSrc('claude', 'blocked', mini), 'pets/clawd-mini-alert.svg')
+    assert.equal(imgSrc('claude', 'done', mini), 'pets/clawd-mini-happy.svg')
+    assert.equal(imgSrc('claude', 'failed', mini), 'pets/clawd-mini-alert.svg')
+    assert.equal(cloudlingSvg('idle', mini), CLOUDLING_SVG['cloudling-mini-idle.svg'])
+    assert.equal(cloudlingSvg('working', mini), CLOUDLING_SVG['cloudling-mini-typing.svg'])
+    assert.equal(cloudlingSvg('done', mini), CLOUDLING_SVG['cloudling-mini-happy.svg'])
+    assert.equal(cloudlingSvg('failed', mini), CLOUDLING_SVG['cloudling-mini-alert.svg'])
   })
 
-  test('reduced-motion 换静态版（大图与 mini 都要有）', () => {
-    assert.equal(petArt('claude', 'done', { compact: false, still: true }).src, 'pets/clawd-happy.still.svg')
-    assert.equal(petArt('claude', 'done', { compact: true, still: true }).src, 'pets/clawd-mini-happy.still.svg')
-    assert.equal(petArt('codex', 'failed', { compact: false, still: true }).src, 'pets/cloudling-error.still.svg')
-    assert.equal(petArt('codex', 'blocked', { compact: true, still: true }).src, 'pets/cloudling-mini-alert.still.svg')
+  test('reduced-motion：clawd 换静态版；云宝内联，由挂载时只放行首帧', () => {
+    const still = { compact: false, still: true }
+    assert.equal(imgSrc('claude', 'done', still), 'pets/clawd-happy.still.svg')
+    assert.equal(imgSrc('claude', 'done', { compact: true, still: true }), 'pets/clawd-mini-happy.still.svg')
+    assert.equal(cloudlingSvg('failed', still), cloudlingSvg('failed'))
+    assert.equal(cloudlingSvg('blocked', { compact: true, still: true }), cloudlingSvg('blocked', { compact: true, still: false }))
   })
 
-  test('映射到的素材都真的落在 public/pets 里（生成物没漏）', () => {
-    for (const agent of ['claude', 'codex', 'cursor']) {
+  test('走 <img> 的素材都真的落在 public/pets 里（生成物没漏）', () => {
+    for (const agent of ['claude', 'cursor']) {
       for (const state of PET_STATES) {
         for (const compact of [false, true]) {
           for (const still of [false, true]) {
-            const { src } = petArt(agent, state, { compact, still })
+            const src = imgSrc(agent, state, { compact, still })
             const rel = src.replace(/^pets\//, '')
             assert.ok(existsSync(join(PETS_DIR, rel)), `${agent}/${state} compact=${compact} still=${still} → ${src}`)
           }
         }
       }
     }
+  })
+
+  test('内联的云宝：11 档都在、都带脚本、都是收紧过的取景框', () => {
+    assert.equal(Object.keys(CLOUDLING_SVG).length, 11)
+    for (const [file, svg] of Object.entries(CLOUDLING_SVG)) {
+      assert.match(svg, /^<svg /, file)
+      assert.match(svg, /viewBox="-2 -2 28 28"/, file)
+      assert.match(svg, /<script[^>]*>/, file)
+    }
+  })
+})
+
+describe('云宝内联：按实例改写 id', () => {
+  const files = Object.keys(CLOUDLING_SVG)
+
+  /** 素材里定义的全部 id */
+  const idsIn = (text: string) => [...text.matchAll(/\bid="([\w-]+)"/g)].map((m) => m[1])
+
+  /** 素材里所有「指向某个元素」的引用：标记与脚本里都有 */
+  const refsIn = (text: string) => [
+    ...[...text.matchAll(/(?:url\(#|href="#)([\w-]+)/g)].map((m) => m[1]),
+    ...[...text.matchAll(/getElementById\(\s*(['"])([\w-]+)\1/g)].map((m) => m[2]),
+    ...[...text.matchAll(/querySelector(?:All)?\(\s*(['"])([^'"]*)\1/g)].flatMap((m) =>
+      [...m[2].matchAll(/#([\w-]+)/g)].map((x) => x[1]),
+    ),
+  ]
+
+  test('每份素材都拆得出「静态标记 + 驱动脚本」，且脚本非空', () => {
+    for (const file of files) {
+      const { markup, script } = scopeCloudling(CLOUDLING_SVG[file], 'x1')
+      assert.ok(markup.startsWith('<svg '), file)
+      assert.doesNotMatch(markup, /<script/, file)
+      assert.match(script, /getElementById/, file)
+      assert.doesNotMatch(script, /<!\[CDATA\[/, file)
+    }
+  })
+
+  test('id 定义与全部引用都加了同一个后缀，没漏的', () => {
+    for (const file of files) {
+      const raw = CLOUDLING_SVG[file]
+      const { markup, script } = scopeCloudling(raw, 'x1')
+      // 定义可能在静态标记里，也可能是脚本现拼的（thinking 那几个档）
+      const defined = idsIn(markup + script)
+      assert.deepEqual([...defined].sort(), idsIn(raw).map((id) => `${id}-x1`).sort(), file)
+      // 引用一律要落到改写后的定义上：漏改一处，它就会指回没加后缀的原 id
+      const refs = refsIn(markup + script)
+      assert.ok(refs.length > 0, file)
+      for (const ref of refs) {
+        assert.ok(defined.includes(ref), `${file}: #${ref} 没加后缀，或指向不存在的元素`)
+      }
+    }
+  })
+
+  test('两份实例的后缀不同，同一份素材互不撞', () => {
+    const a = scopeCloudling(CLOUDLING_SVG['cloudling-idle.svg'], 'a')
+    const b = scopeCloudling(CLOUDLING_SVG['cloudling-idle.svg'], 'b')
+    for (const id of idsIn(a.markup)) assert.ok(!b.markup.includes(`id="${id}"`), id)
+    assert.notEqual(a.script, b.script)
+  })
+
+  test('style 里的颜色不是选择器，不该被改写', () => {
+    const { markup } = scopeCloudling(CLOUDLING_SVG['cloudling-notification.svg'], 'x1')
+    assert.match(markup, /#5870E8/)
   })
 })
 
