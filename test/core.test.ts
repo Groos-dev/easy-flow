@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url'
 
 import { BoardDatabase, normalizeLinkList, normalizeCodeLinks, normalizeExtLinks } from '../server/db.ts'
 import { withStatus, type SessionStatus } from '../server/threads.ts'
+import { RolloutStore, rolloutStatusOf, sessionDirFor } from '../server/rollout.ts'
 import { HookStore, hookStore, normalizeHookEvent } from '../server/hook.ts'
 import { parseFrontmatter, readDocs, section } from '../server/markdown.ts'
 import { createProjectDir, createRequirementDir, setRequirementId } from '../server/convention.ts'
@@ -2948,27 +2949,21 @@ describe('会话状态', () => {
     writeFileSync(join(dir, `${hostSessionId}.json`), JSON.stringify({ hostSessionId, status, pid }), 'utf8')
   }
 
-  /** codex 的轮次库。只建读得到的那几列——真库比这宽得多 */
-  function codexTurns(
-    rows: Array<{ id: string; status: string; lastItemAt: number; ordinal?: number; startedAt?: number | null }>,
-  ): void {
-    mkdirSync(roots.codexHome, { recursive: true })
-    const db = new DatabaseSync(join(roots.codexHome, 'thread_history_1.sqlite'))
-    db.exec(
-      'CREATE TABLE IF NOT EXISTS thread_turns (thread_id TEXT, turn_id TEXT, status TEXT, started_at INTEGER, rollout_ordinal INTEGER)',
-    )
-    db.exec('CREATE TABLE IF NOT EXISTS thread_items (thread_id TEXT, created_at_ms INTEGER)')
-    rows.forEach((r, i) => {
-      db.prepare('INSERT INTO thread_turns VALUES (?, ?, ?, ?, ?)').run(
-        r.id,
-        `${r.id}-t${i}`,
-        r.status,
-        r.startedAt === undefined ? r.lastItemAt : r.startedAt,
-        r.ordinal ?? i,
-      )
-      db.prepare('INSERT INTO thread_items VALUES (?, ?)').run(r.id, r.lastItemAt)
-    })
-    db.close()
+  /**
+   * codex 的 rollout jsonl：写进「今天」那层日期目录（兜底只扫近几天），文件名末尾是 thread id。
+   * 一行一个事件、末尾带换行——写全了才算完整。
+   */
+  function codexRollout(id: string, lines: string[]): string {
+    const dir = sessionDirFor(roots.codexHome, new Date())
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, `rollout-2026-10-14T10-00-00-${id}.jsonl`)
+    writeFileSync(file, lines.join('\n') + '\n', 'utf8')
+    return file
+  }
+
+  /** 一条 rollout 事件行，形状照本机实测的顶层 { timestamp, type, payload } */
+  function evLine(type: string, payload: Record<string, unknown> | null = null, at = Date.now()): string {
+    return JSON.stringify({ timestamp: new Date(at).toISOString(), type, payload })
   }
 
   /** 桌面应用的未读集合 */
@@ -3097,11 +3092,12 @@ describe('会话状态', () => {
     assert.equal(statusOf('claude', 'local_ok').state, 'done', '同批的其它会话照常读出来')
   })
 
-  test('codex：最后一条 turn 完成就是 done，在未读集合里才算 fresh', () => {
-    codexTurns([
-      { id: 'cx-done-unread', status: 'completed', lastItemAt: Date.now() },
-      { id: 'cx-done-read', status: 'completed', lastItemAt: Date.now() },
+  test('codex：最后一条 rollout 是收尾就是 done，在未读集合里才算 fresh', () => {
+    codexRollout('cx-done-unread', [
+      evLine('event_msg', { type: 'task_started' }),
+      evLine('event_msg', { type: 'task_complete' }),
     ])
+    codexRollout('cx-done-read', [evLine('event_msg', { type: 'task_complete' })])
     codexUnread(['cx-done-unread'])
     assert.deepEqual(
       [statusOf('codex', 'cx-done-unread').state, statusOf('codex', 'cx-done-unread').fresh],
@@ -3110,43 +3106,41 @@ describe('会话状态', () => {
     assert.equal(statusOf('codex', 'cx-done-read').fresh, false)
   })
 
-  test('codex：turn 在跑且还有动静才是 running，久了就当它没了', () => {
-    codexTurns([
-      { id: 'cx-live', status: 'inProgress', lastItemAt: Date.now() - 60_000 },
-      { id: 'cx-dead', status: 'inProgress', lastItemAt: Date.now() - 6 * 60 * 60_000 },
-    ])
+  test('codex：最后一条是工具调用就是 running，久了没动静就当它没了', () => {
+    codexRollout('cx-live', [evLine('response_item', { type: 'function_call' }, Date.now() - 60_000)])
+    codexRollout('cx-dead', [evLine('response_item', { type: 'function_call' }, Date.now() - 6 * 60 * 60_000)])
     assert.equal(statusOf('codex', 'cx-live').state, 'running')
+    assert.equal(statusOf('codex', 'cx-live').activity, 'working')
     assert.equal(
       statusOf('codex', 'cx-dead').state,
       'unknown',
-      'codex 崩掉会把 turn 永久留在 inProgress，不能一直当在跑',
+      'codex 崩掉不会有收尾事件，不能一直当在跑',
     )
   })
 
-  test('codex：turn 失败是 failed，被打断是 unknown', () => {
-    codexTurns([
-      { id: 'cx-failed', status: 'failed', lastItemAt: Date.now() },
-      { id: 'cx-aborted', status: 'interrupted', lastItemAt: Date.now() },
+  test('codex：收尾带 error 是 failed，被打断是 blocked（同 hook 的 Interrupt）', () => {
+    codexRollout('cx-failed', [
+      evLine('event_msg', { type: 'task_complete', error: { message: 'stream disconnected' } }),
     ])
+    codexRollout('cx-aborted', [evLine('event_msg', { type: 'turn_aborted', reason: 'interrupted' })])
     assert.equal(statusOf('codex', 'cx-failed').state, 'failed')
-    assert.equal(statusOf('codex', 'cx-aborted').state, 'unknown')
+    assert.equal(statusOf('codex', 'cx-aborted').state, 'blocked')
   })
 
-  test('codex：一个 thread 多条 turn 时取最后一条，started_at 全是 NULL 也不能取错', () => {
-    // 真库里 9946 条 turn 有 4353 条 started_at 为 NULL；全 NULL 的 thread 上
-    // ORDER BY started_at DESC 会取到扫到的第一行（最早那条），实测 170 个 thread 会判错
-    codexTurns([
-      { id: 'cx-multi', status: 'completed', lastItemAt: Date.now(), ordinal: 3, startedAt: null },
-      { id: 'cx-multi', status: 'interrupted', lastItemAt: Date.now(), ordinal: 162, startedAt: null },
+  test('codex：一个 thread 跑过多轮，按落盘顺序取最后一条', () => {
+    codexRollout('cx-multi', [
+      evLine('event_msg', { type: 'task_complete' }),
+      evLine('event_msg', { type: 'task_started' }),
+      evLine('event_msg', { type: 'turn_aborted', reason: 'interrupted' }),
     ])
-    assert.equal(statusOf('codex', 'cx-multi').state, 'unknown', '最后一条是 interrupted')
+    assert.equal(statusOf('codex', 'cx-multi').state, 'blocked', '最后一条是打断')
   })
 
   test('codex：legacyMigration 是陈旧快照，不能并进未读集合', () => {
     // app 只在 unreadByIdentity 里清未读；legacy 那份 adopt 之后就不维护了，
     // 并上它会让早就读过的 thread 永远显示未读
     mkdirSync(roots.codexHome, { recursive: true })
-    codexTurns([{ id: 'cx-legacy-only', status: 'completed', lastItemAt: Date.now() }])
+    codexRollout('cx-legacy-only', [evLine('event_msg', { type: 'task_complete' })])
     writeFileSync(
       join(roots.codexHome, '.codex-global-state.json'),
       JSON.stringify({
@@ -3160,7 +3154,7 @@ describe('会话状态', () => {
     assert.equal(statusOf('codex', 'cx-legacy-only').fresh, false)
   })
 
-  test('codex：库不在、thread 没记录，都报 unknown 而不是抛', () => {
+  test('codex：没有 rollout 文件就报 unknown 而不是抛', () => {
     assert.equal(statusOf('codex', 'cx-never-seen').state, 'unknown')
   })
 
@@ -3177,7 +3171,7 @@ describe('会话状态', () => {
       lastAssistantUuid: 'a8',
       postTurnSummary: { status_category: 'blocked', needs_action: '走哪条？' },
     })
-    codexTurns([{ id, status: 'failed', lastItemAt: Date.now() }])
+    codexRollout(id, [evLine('event_msg', { type: 'task_complete', error: { message: 'x' } })])
     assert.equal(statusOf('claude', id).state, 'blocked')
     assert.equal(statusOf('codex', id).state, 'failed')
   })
@@ -3189,7 +3183,7 @@ describe('会话状态', () => {
       lastAssistantUuid: 'a7',
       postTurnSummary: { status_category: 'blocked', needs_action: '接着做吗？' },
     })
-    codexTurns([{ id: 'cx-batch', status: 'failed', lastItemAt: Date.now() }])
+    codexRollout('cx-batch', [evLine('event_msg', { type: 'task_complete', error: { message: 'x' } })])
     const got = withStatus(
       [
         { agent: 'claude', session: 'local_batch' },
@@ -3205,6 +3199,106 @@ describe('会话状态', () => {
     // 原字段原样带出来，不能只返回 status
     assert.equal(got[0].session, 'local_batch')
     assert.equal(got[0].agent, 'claude')
+  })
+})
+
+// ---------------------------------------------- rollout 兜底：增量 tail ~/.codex/sessions
+
+describe('rollout 兜底：事件译状态、增量读、只扫近几天', () => {
+  const HOME = join(TMP, 'rollout-home')
+
+  before(() => rmSync(HOME, { recursive: true, force: true }))
+
+  const DAY = 86_400_000
+
+  /** 一条完整的事件行，形状照本机实测的顶层 { timestamp, type, payload } */
+  function line(type: string, payload: Record<string, unknown> | null = null, at = Date.now()): string {
+    return JSON.stringify({ timestamp: new Date(at).toISOString(), type, payload })
+  }
+
+  /** 写一份 rollout，返回文件路径。dir 由调用方给，好测「近几天」的窗口 */
+  function writeRollout(dir: string, id: string, body: string): string {
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, `rollout-2026-10-14T10-00-00-${id}.jsonl`)
+    writeFileSync(file, body, 'utf8')
+    return file
+  }
+
+  test('一行 → 一档：与 hook 同一套字面量（state + activity）', () => {
+    const cases: Array<[string, string, string]> = [
+      ['session_meta', 'running', 'idle'],
+      ['event_msg/task_started', 'running', 'thinking'],
+      ['response_item/reasoning', 'running', 'thinking'],
+      ['response_item/function_call', 'running', 'working'],
+      ['response_item/web_search_call', 'running', 'working'],
+      ['response_item/function_call_output', 'running', 'thinking'],
+      ['event_msg/task_complete', 'done', ''],
+      ['event_msg/turn_aborted', 'blocked', ''],
+    ]
+    for (const [label, state, activity] of cases) {
+      const [type, sub] = label.split('/')
+      const got = rolloutStatusOf({ type, payload: sub ? { type: sub } : null }, 0)
+      assert.equal(got?.state, state, `${label} 该落到 ${state}`)
+      assert.equal(got?.activity, activity, `${label} 的活动该是 ${activity}`)
+    }
+  })
+
+  test('收尾带 error 是 failed；认不出的类型不认', () => {
+    assert.equal(rolloutStatusOf({ type: 'event_msg', payload: { type: 'task_complete', error: { m: 1 } } }, 0)?.state, 'failed')
+    assert.equal(rolloutStatusOf({ type: 'event_msg', payload: { type: 'token_count' } }, 0), null, '周期性事件不改状态')
+    assert.equal(rolloutStatusOf({ type: 'turn_context', payload: null }, 0), null, '元数据不认')
+    assert.equal(rolloutStatusOf({ type: 'response_item', payload: { type: 'message' } }, 0), null)
+  })
+
+  test('增量按字节读：半行不误判、认不出的忽略、补全后接着读', () => {
+    const home = join(HOME, 'incremental')
+    const store = new RolloutStore(home)
+    const dir = sessionDirFor(home, new Date())
+    const start = line('event_msg', { type: 'task_started' })
+    const meta = line('turn_context', { model: 'x' })
+    const call = line('response_item', { type: 'function_call' })
+    const done = line('event_msg', { type: 'task_complete' })
+    // 一段 rollout：认得出的、认不出的、以及一条写到一半的尾行（没有换行）
+    const file = writeRollout(dir, 'cx-half', [start, meta, call, done.slice(0, 24)].join('\n'))
+
+    store.refresh(['cx-half'])
+    // 最后一条**完整**的是 function_call → 干活；半行与认不出的都不算
+    assert.equal(store.get('cx-half')?.state, 'running')
+    assert.equal(store.get('cx-half')?.activity, 'working')
+
+    // 补全那条半行（整份重写、末尾带换行）。offset 停在最后一个换行，前面不重读
+    writeFileSync(file, [start, meta, call, done].join('\n') + '\n', 'utf8')
+    store.refresh(['cx-half'])
+    assert.equal(store.get('cx-half')?.state, 'done', '补全的尾行接上')
+  })
+
+  test('只扫近几天：窗口外的日期目录靠缓存继续扫到，没进过缓存的就不扫', () => {
+    const home = join(HOME, 'window')
+    const store = new RolloutStore(home)
+    const now = Date.now()
+    const near = sessionDirFor(home, new Date(now - DAY))
+    const far = sessionDirFor(home, new Date(now - 10 * DAY))
+    writeRollout(near, 'cx-near', line('event_msg', { type: 'task_complete' }, now) + '\n')
+    writeRollout(far, 'cx-far', line('event_msg', { type: 'task_complete' }, now - 10 * DAY) + '\n')
+
+    store.refresh(['cx-near', 'cx-far'], now)
+    assert.equal(store.get('cx-near')?.state, 'done')
+    assert.equal(store.get('cx-far')?.state, undefined, '窗口外的日期目录不该被遍历')
+
+    // 20 天后：near 的目录早已出窗口，但读到过就被缓存住了
+    store.refresh(['cx-near', 'cx-far'], now + 20 * DAY)
+    assert.equal(store.get('cx-near')?.state, 'done', '缓存住的日期目录继续扫')
+    assert.equal(store.get('cx-far')?.state, undefined)
+  })
+
+  test('读不到文件 / 全是半行都不算读到，调用方给 unknown', () => {
+    const home = join(HOME, 'empty')
+    const store = new RolloutStore(home)
+    store.refresh(['cx-none'], Date.now())
+    assert.equal(store.get('cx-none'), undefined)
+    writeRollout(sessionDirFor(home, new Date()), 'cx-partial', line('event_msg', { type: 'task_started' }).slice(0, 10))
+    store.refresh(['cx-partial'], Date.now())
+    assert.equal(store.get('cx-partial'), undefined, '只有半行就什么都不认')
   })
 })
 
