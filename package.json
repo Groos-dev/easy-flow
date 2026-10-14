@@ -12,9 +12,9 @@
     "dev:web": "vite --config vite.web.config.ts",
     "build": "electron-vite build",
     "start": "electron-vite preview",
-    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "dead-code": "node scripts/dead-code.mjs",
-    "test": "node --test --test-concurrency=1 \"test/*.test.ts\""
+    "test": "tsx --tsconfig tsconfig.test.json --test --test-concurrency=1 \"test/*.test.ts\""
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",
