@@ -36,7 +36,7 @@ function makeRequirement(dataDir: string, project: string, slug: string, id: str
   writeFileSync(join(path, 'requirement.md'), `# ${slug}\n\n## 需求\n\n需求正文`, 'utf8')
 }
 
-const worktree = (id: string, branch: string, orphan = false): Worktree => ({
+const worktree = (id: string, branch: string, missing = false): Worktree => ({
   id,
   requirementId: 'req-alpha',
   short: 'router',
@@ -46,7 +46,7 @@ const worktree = (id: string, branch: string, orphan = false): Worktree => ({
   main: join(testRoot, 'main'),
   created: '2026-10-12 10:00',
   updated: '2026-10-12 10:00',
-  orphan,
+  missing,
 })
 
 describe('需求详情页启动会话', () => {
@@ -153,7 +153,7 @@ describe('需求详情页启动会话', () => {
         worktreeId: '', agent: 'codex', loading: false, providerError: '', requestError: '',
         busy: false, result: null, onWorktreeChange() {}, onAgentChange() {}, onLaunch() {},
       }
-      const one = { id: 'wt-one', requirementId: 'req-alpha', short: 'router', repo: 'easy-flow', branch: 'feature-one', path: '/tmp/one', main: '/tmp/main', created: '', updated: '', orphan: false }
+      const one = { id: 'wt-one', requirementId: 'req-alpha', short: 'router', repo: 'easy-flow', branch: 'feature-one', path: '/tmp/one', main: '/tmp/main', created: '', updated: '', missing: false }
       const two = { ...one, id: 'wt-two', branch: 'feature-two' }
       const render = (props) => renderToStaticMarkup(createElement(Form, { ...base, ...props }))
       console.log(JSON.stringify({

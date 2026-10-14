@@ -144,7 +144,7 @@ function readIfExists(file: string): string | null {
 function worktreeLine(w: Worktree): string {
   const short = w.short ? `${w.short} / ` : ''
   return `- ${w.id}  ${short}${w.repo}  ${w.branch}  ${w.path}${
-    w.orphan ? '（目录已失联，可 easy-flow wt rm）' : ''
+    w.missing ? '（目录已失联，可 easy-flow wt rm）' : ''
   }`
 }
 

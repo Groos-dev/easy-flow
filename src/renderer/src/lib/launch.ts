@@ -10,7 +10,7 @@ export function launchWorktreeSelection(worktrees: Worktree[], selectedId = ''):
   available: Worktree[]
   selectedId: string
 } {
-  const available = worktrees.filter((w) => !w.orphan)
+  const available = worktrees.filter((w) => !w.missing)
   return {
     available,
     selectedId: available.some((w) => w.id === selectedId)

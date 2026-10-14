@@ -61,7 +61,7 @@ export default function InfoPanel({
             <div className="wt" key={w.id}>
               <div className="wt-head">
                 <span className="v mono">{w.repo}</span>
-                {w.orphan && <span className="wt-orphan">目录已失联</span>}
+                {w.missing && <span className="wt-missing">目录已失联</span>}
                 <span className="spacer" />
                 <CopyButton text={w.path} label="路径" />
               </div>
@@ -71,8 +71,8 @@ export default function InfoPanel({
               <OneLine
                 className="info-path mono"
                 text={w.path}
-                title={w.orphan ? `目录已失联：${w.path}` : w.path}
-                disabled={w.orphan}
+                title={w.missing ? `目录已失联：${w.path}` : w.path}
+                disabled={w.missing}
                 onClick={() => void api.openWorktree(w.id).catch(() => {})}
               />
             </div>

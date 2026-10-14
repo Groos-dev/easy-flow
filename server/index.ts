@@ -38,9 +38,9 @@ export const DEFAULT_PORT = 3210
 const NO_CHANGES = {
   added: [],
   updated: [],
-  orphaned: [],
+  missing: [],
   restored: [],
-  worktrees: { orphaned: [], restored: [] },
+  worktrees: { missing: [], restored: [] },
 }
 
 export interface BoardAppOptions {
@@ -332,7 +332,7 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         }
         const requirementWorktreePaths = db
           .listWorktrees(requirement.id)
-          .filter((w) => !w.orphan)
+          .filter((w) => !w.missing)
           .map((w) => w.path)
         if (!requirementWorktreePaths.length) {
           throw new Error(`No available worktree for requirement: ${requirement.id}`)

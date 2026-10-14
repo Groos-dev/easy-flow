@@ -194,7 +194,7 @@ describe('数据层 · 项目与需求同步', () => {
     db.close()
   })
 
-  test('目录消失 → 标记孤儿但不丢状态', () => {
+  test('目录消失 → 标记失联但不丢状态', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
@@ -202,12 +202,12 @@ describe('数据层 · 项目与需求同步', () => {
 
     rmSync(join(dir, 'onex', 'alpha'), { recursive: true, force: true })
     const sync = db.syncProjects()
-    assert.ok(sync.orphaned.includes('onex/alpha'))
-    assert.equal(db.get('alpha')?.status, 'Review', '孤儿仍需可查且状态不丢')
+    assert.ok(sync.missing.includes('onex/alpha'))
+    assert.equal(db.get('alpha')?.status, 'Review', '失联仍需可查且状态不丢')
     db.close()
   })
 
-  test('目录恢复 → 从孤儿状态恢复', () => {
+  test('目录恢复 → 从失联状态恢复', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
@@ -244,7 +244,8 @@ describe('数据层 · 项目与需求同步', () => {
 
   test('老库升级：补出 parent_id 列，已有需求的状态不被同步覆盖', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha\n\n## 需求\n\n甲', { id: 'req-alpha' }))
-    // 造一个没有 parent_id 的老库（这次改动之前的表结构）
+    // 造一个没有 parent_id 的老库（这次改动之前的表结构）。
+    // orphan 是有意留的旧列名——它正是这轮要迁移掉的，跟着改成 missing 就测不到迁移了
     const old = new DatabaseSync(join(dir, 'easy-flow.db'))
     old.exec(`CREATE TABLE requirement (
       slug TEXT NOT NULL, project TEXT NOT NULL DEFAULT '', id TEXT, title TEXT NOT NULL,
@@ -316,7 +317,7 @@ describe('数据层 · 待办同步', () => {
     db.close()
   })
 
-  test('md 消失 → 标记孤儿；恢复 → 复原', () => {
+  test('md 消失 → 标记失联；恢复 → 复原', () => {
     const dir = fresh((d) => makeTodo(d, 'T-20260101-001', '会消失的待办'))
     const db = new BoardDatabase(dir)
     db.syncTodos()
@@ -324,14 +325,14 @@ describe('数据层 · 待办同步', () => {
 
     rmSync(join(dir, '_todos', 'T-20260101-001.md'))
     const gone = db.syncTodos()
-    assert.deepEqual(gone.orphaned, ['T-20260101-001'])
-    assert.equal(db.todoById('T-20260101-001')!.orphan, true)
-    assert.equal(db.todoById('T-20260101-001')!.status, 'done', '孤儿也要保住状态')
+    assert.deepEqual(gone.missing, ['T-20260101-001'])
+    assert.equal(db.todoById('T-20260101-001')!.missing, true)
+    assert.equal(db.todoById('T-20260101-001')!.status, 'done', 'md 失联也要保住状态')
 
     makeTodo(dir, 'T-20260101-001', '又回来了')
     const back = db.syncTodos()
     assert.deepEqual(back.restored, ['T-20260101-001'])
-    assert.equal(db.todoById('T-20260101-001')!.orphan, false)
+    assert.equal(db.todoById('T-20260101-001')!.missing, false)
     db.close()
   })
 
@@ -1240,7 +1241,7 @@ describe('数据层 · worktree', () => {
     db.close()
   })
 
-  test('目录消失标孤儿、回来即恢复，记录一直留着', () => {
+  test('目录消失标失联、回来即恢复，记录一直留着', () => {
     const d = fresh(() => {
       makeReq(TMP, 'demo', 'alpha', '# alpha', { id: 'req-alpha' })
     })
@@ -1254,14 +1255,14 @@ describe('数据层 · worktree', () => {
     db.addWorktree({ ...base, id: 'wt-gone', branch: 'b2', path: join(d, 'wt-gone') })
 
     let sync = db.syncProjects()
-    assert.deepEqual(sync.worktrees.orphaned, ['wt-gone'])
-    assert.equal(db.worktreeById('wt-gone')!.orphan, true)
+    assert.deepEqual(sync.worktrees.missing, ['wt-gone'])
+    assert.equal(db.worktreeById('wt-gone')!.missing, true)
     assert.equal(db.listWorktrees(req.id).length, 2)
 
     mkdirSync(join(d, 'wt-gone'), { recursive: true })
     sync = db.syncProjects()
     assert.deepEqual(sync.worktrees.restored, ['wt-gone'])
-    assert.equal(db.worktreeById('wt-gone')!.orphan, false)
+    assert.equal(db.worktreeById('wt-gone')!.missing, false)
     db.close()
   })
 
@@ -1814,9 +1815,9 @@ describe('CLI 层', () => {
     seed.close()
 
     const env = { EASY_FLOW_REPO_ROOTS: workspace }
-    const made = cliOk(configFile, ['wt', 'new', created.id, '--repo', repoName, '--branch', 'feature-orphan'], env)
+    const made = cliOk(configFile, ['wt', 'new', created.id, '--repo', repoName, '--branch', 'feature-prune'], env)
     const id = /worktree id：(wt-[0-9a-f]+)/.exec(made)![1]
-    const wtPath = join(workspace, `${repoName}.feature-orphan`)
+    const wtPath = join(workspace, `${repoName}.feature-prune`)
 
     // 模拟别处 prune 过：git 不再认它，目录还在
     rmSync(join(repo, '.git', 'worktrees', basename(wtPath)), { recursive: true, force: true })

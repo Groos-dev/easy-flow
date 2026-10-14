@@ -21,7 +21,7 @@ function describeSync(sync: SyncResult | null): string {
   if (!sync) return '无需同步'
   const parts: string[] = []
   if (sync.added.length) parts.push(`新增 ${sync.added.length}`)
-  if (sync.orphaned.length) parts.push(`失联 ${sync.orphaned.length}`)
+  if (sync.missing.length) parts.push(`失联 ${sync.missing.length}`)
   if (sync.restored.length) parts.push(`恢复 ${sync.restored.length}`)
   if (sync.updated.length) parts.push(`更新 ${sync.updated.length}`)
   return parts.length ? parts.join(' · ') : '无变化'

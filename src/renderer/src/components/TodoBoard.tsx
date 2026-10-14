@@ -52,7 +52,7 @@ function TodoCard({ todo, onOpen, overlay = false }: CardProps) {
       <div className="card-foot">
         {todo.source && <span className="chip">{todo.source}</span>}
         {who && <span className="chip">{who}</span>}
-        {todo.orphan && <span className="chip warn">md 已失联</span>}
+        {todo.missing && <span className="chip warn">md 已失联</span>}
         <span className="stage">{todo.updated.slice(5)}</span>
       </div>
     </div>

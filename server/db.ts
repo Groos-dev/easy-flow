@@ -8,7 +8,7 @@
  * 同步策略（关键）：md 是"需求是否存在"的事实源，DB 是状态的权威。
  *   目录在、DB 无 → 新增（status 默认澄清）
  *   目录在、DB 有 → 只更新标题/摘要/仓库/文档索引，绝不动 status/priority
- *   DB 有、目录没了 → 标记为孤儿，保留在列表中可见
+ *   DB 有、目录没了 → 标记为失联，保留在列表中可见
  */
 import { DatabaseSync } from 'node:sqlite'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -139,7 +139,7 @@ export interface Worktree {
   main: string
   created: string
   updated: string
-  orphan: boolean
+  missing: boolean
 }
 
 interface WtRow {
@@ -152,7 +152,7 @@ interface WtRow {
   main: string
   created: string | null
   updated: string | null
-  orphan: number
+  missing: number
 }
 
 /**
@@ -222,7 +222,7 @@ export interface Todo {
   created: string
   updated: string
   /** md 没了（被手工删过、或盘不在） */
-  orphan: boolean
+  missing: boolean
 }
 
 interface TodoRow {
@@ -243,7 +243,7 @@ interface TodoRow {
   mtime: number
   created: string | null
   updated: string | null
-  orphan: number
+  missing: number
 }
 
 interface Row {
@@ -263,7 +263,7 @@ interface Row {
   ext_links: string | null
   mtime: number
   updated: string | null
-  orphan: number
+  missing: number
 }
 
 function asStatus(value: string | null | undefined): Status | null {
@@ -383,7 +383,7 @@ function toWorktree(row: WtRow): Worktree {
     main: row.main,
     created: row.created ?? '',
     updated: row.updated ?? '',
-    orphan: !!row.orphan,
+    missing: !!row.missing,
   }
 }
 
@@ -421,7 +421,7 @@ function toTodo(row: TodoRow): Todo {
     mtime: row.mtime,
     created: row.created ?? '',
     updated: row.updated ?? '',
-    orphan: !!row.orphan,
+    missing: !!row.missing,
   }
 }
 
@@ -582,16 +582,16 @@ export class BoardDatabase {
    *   项目目录在、DB 无   → 新增项目
    *   需求目录在、DB 无   → 新增需求（status 默认澄清）
    *   需求目录在、DB 有   → 只更新标题/摘要/仓库/文档索引，绝不动 status/priority
-   *   目录消失            → 标记孤儿，保留可见（状态不丢）
+   *   目录消失            → 标记失联，保留可见（状态不丢）
    *
    * worktree 一并校对，但只 stat 路径：它的归属是库里的关系，文件系统证明不了。
    */
   syncProjects(): {
     added: string[]
     updated: string[]
-    orphaned: string[]
+    missing: string[]
     restored: string[]
-    worktrees: { orphaned: string[]; restored: string[] }
+    worktrees: { missing: string[]; restored: string[] }
   } {
     // 模板随扫描补齐。这里是唯一扫 dataDir 的入口，看板/树/设置页/切换数据目录都会经过
     ensureTemplates(this.dataDir)
@@ -611,16 +611,16 @@ export class BoardDatabase {
     )
 
     const selectReq = this.db.prepare(
-      'SELECT slug, mtime, orphan FROM requirement WHERE slug = ? AND project = ?',
+      'SELECT slug, mtime, missing FROM requirement WHERE slug = ? AND project = ?',
     )
     const insertReq = this.db.prepare(
       `INSERT INTO requirement
          (slug, project, id, parent_id, title, path, status, priority, summary, repos, links,
-          feishu_task_links, code_links, ext_links, mtime, updated, orphan)
+          feishu_task_links, code_links, ext_links, mtime, updated, missing)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '[]', '[]', ?, ?, 0)`,
     )
     const updateReq = this.db.prepare(
-      `UPDATE requirement SET id = ?, parent_id = ?, title = ?, path = ?, summary = ?, repos = ?, links = ?, mtime = ?, orphan = 0
+      `UPDATE requirement SET id = ?, parent_id = ?, title = ?, path = ?, summary = ?, repos = ?, links = ?, mtime = ?, missing = 0
        WHERE slug = ? AND project = ?`,
     )
     const clearDocs = this.db.prepare('DELETE FROM doc WHERE slug = ? AND project = ?')
@@ -675,7 +675,7 @@ export class BoardDatabase {
         // 之前这里写的是 content.length 之和，于是「最近更新优先」实际变成「文档越长越靠前」。
         const mtime = parsed.docs.reduce((latest, d) => Math.max(latest, d.mtime), 0)
         const existing = selectReq.get(parsed.slug, proj.slug) as
-          | { slug: string; mtime: number; orphan: number }
+          | { slug: string; mtime: number; missing: number }
           | undefined
 
         if (!existing) {
@@ -711,49 +711,49 @@ export class BoardDatabase {
             parsed.slug,
             proj.slug,
           )
-          if (existing.orphan) restored.push(key)
+          if (existing.missing) restored.push(key)
           else updated.push(key)
         }
       }
     }
 
-    const orphaned: string[] = []
+    const missing: string[] = []
     const all = this.db
-      .prepare('SELECT slug, project, orphan FROM requirement')
-      .all() as Array<{ slug: string; project: string; orphan: number }>
-    const markOrphan = this.db.prepare(
-      'UPDATE requirement SET orphan = 1 WHERE slug = ? AND project = ?',
+      .prepare('SELECT slug, project, missing FROM requirement')
+      .all() as Array<{ slug: string; project: string; missing: number }>
+    const markMissing = this.db.prepare(
+      'UPDATE requirement SET missing = 1 WHERE slug = ? AND project = ?',
     )
     for (const r of all) {
-      if (!seenReqs.has(`${r.project}/${r.slug}`) && !r.orphan) {
-        markOrphan.run(r.slug, r.project)
-        orphaned.push(`${r.project}/${r.slug}`)
+      if (!seenReqs.has(`${r.project}/${r.slug}`) && !r.missing) {
+        markMissing.run(r.slug, r.project)
+        missing.push(`${r.project}/${r.slug}`)
       }
     }
 
     this.reconcileProject()
-    return { added, updated, orphaned, restored, worktrees: this.syncWorktrees() }
+    return { added, updated, missing, restored, worktrees: this.syncWorktrees() }
   }
 
   /** worktree 的存活校对：只 stat，不跑 git——这条路每次刷看板都会走 */
-  private syncWorktrees(): { orphaned: string[]; restored: string[] } {
-    const orphaned: string[] = []
+  private syncWorktrees(): { missing: string[]; restored: string[] } {
+    const missing: string[] = []
     const restored: string[] = []
     const rows = this.db
-      .prepare('SELECT id, path, orphan FROM worktree')
-      .all() as unknown as Array<{ id: string; path: string; orphan: number }>
-    const setOrphan = this.db.prepare('UPDATE worktree SET orphan = ? WHERE id = ?')
+      .prepare('SELECT id, path, missing FROM worktree')
+      .all() as unknown as Array<{ id: string; path: string; missing: number }>
+    const setMissing = this.db.prepare('UPDATE worktree SET missing = ? WHERE id = ?')
     for (const w of rows) {
       const alive = existsSync(w.path)
-      if (!alive && !w.orphan) {
-        setOrphan.run(1, w.id)
-        orphaned.push(w.id)
-      } else if (alive && w.orphan) {
-        setOrphan.run(0, w.id)
+      if (!alive && !w.missing) {
+        setMissing.run(1, w.id)
+        missing.push(w.id)
+      } else if (alive && w.missing) {
+        setMissing.run(0, w.id)
         restored.push(w.id)
       }
     }
-    return { orphaned, restored }
+    return { missing, restored }
   }
 
   // ------------------------------------------------------------- 读取
@@ -1011,11 +1011,11 @@ export class BoardDatabase {
   }): Worktree {
     this.db
       .prepare(
-        `INSERT INTO worktree (id, req_id, short, repo, branch, path, main, created, updated, orphan)
+        `INSERT INTO worktree (id, req_id, short, repo, branch, path, main, created, updated, missing)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
          ON CONFLICT(path) DO UPDATE SET
            req_id = excluded.req_id, short = excluded.short, repo = excluded.repo,
-           branch = excluded.branch, main = excluded.main, updated = excluded.updated, orphan = 0`,
+           branch = excluded.branch, main = excluded.main, updated = excluded.updated, missing = 0`,
       )
       .run(
         input.id,
@@ -1117,51 +1117,51 @@ export class BoardDatabase {
    * 把 <dataDir>/_todos/ 同步进库。与需求同一套规矩：
    *   md 在、库无 → 新增（status 默认 todo，来源等元数据留空，由调用方补）
    *   md 在、库有 → 只更新标题/摘要/路径/时间，绝不动 status 与来源
-   *   md 没了    → 标记孤儿，保留可见
+   *   md 没了    → 标记失联，保留可见
    * 待办是全局的，不分项目，所以这里不看 project 表。
    */
-  syncTodos(): { added: string[]; updated: string[]; orphaned: string[]; restored: string[] } {
+  syncTodos(): { added: string[]; updated: string[]; missing: string[]; restored: string[] } {
     const seen = new Set<string>()
     const added: string[] = []
     const updated: string[] = []
     const restored: string[] = []
 
-    const select = this.db.prepare('SELECT id, orphan FROM todo WHERE id = ?')
+    const select = this.db.prepare('SELECT id, missing FROM todo WHERE id = ?')
     const insert = this.db.prepare(
-      `INSERT INTO todo (id, title, status, source, summary, path, mtime, created, updated, orphan)
+      `INSERT INTO todo (id, title, status, source, summary, path, mtime, created, updated, missing)
        VALUES (?, ?, 'todo', '', ?, ?, ?, ?, ?, 0)`,
     )
     const update = this.db.prepare(
-      'UPDATE todo SET title = ?, summary = ?, path = ?, mtime = ?, orphan = 0 WHERE id = ?',
+      'UPDATE todo SET title = ?, summary = ?, path = ?, mtime = ?, missing = 0 WHERE id = ?',
     )
 
     for (const f of listTodoFiles(this.dataDir)) {
       seen.add(f.id)
-      const existing = select.get(f.id) as { id: string; orphan: number } | undefined
+      const existing = select.get(f.id) as { id: string; missing: number } | undefined
       if (!existing) {
         const at = stamp()
         insert.run(f.id, f.title || f.id, f.summary, f.file, f.mtime, at, at)
         added.push(f.id)
       } else {
         update.run(f.title || f.id, f.summary, f.file, f.mtime, f.id)
-        if (existing.orphan) restored.push(f.id)
+        if (existing.missing) restored.push(f.id)
         else updated.push(f.id)
       }
     }
 
-    const orphaned: string[] = []
-    const mark = this.db.prepare('UPDATE todo SET orphan = 1 WHERE id = ?')
-    const rows = this.db.prepare('SELECT id, orphan FROM todo').all() as unknown as Array<{
+    const missing: string[] = []
+    const mark = this.db.prepare('UPDATE todo SET missing = 1 WHERE id = ?')
+    const rows = this.db.prepare('SELECT id, missing FROM todo').all() as unknown as Array<{
       id: string
-      orphan: number
+      missing: number
     }>
     for (const r of rows) {
-      if (!seen.has(r.id) && !r.orphan) {
+      if (!seen.has(r.id) && !r.missing) {
         mark.run(r.id)
-        orphaned.push(r.id)
+        missing.push(r.id)
       }
     }
-    return { added, updated, orphaned, restored }
+    return { added, updated, missing, restored }
   }
 
   /** 全部待办，最近动过的在前。给了 requirementId 就只列挂在这条需求上的 */
@@ -1238,7 +1238,7 @@ export class BoardDatabase {
       .prepare(
         `INSERT INTO todo
            (id, title, status, source, session, channel, origin, chat, ref, req_id, link, happened,
-            summary, path, mtime, created, updated, orphan)
+            summary, path, mtime, created, updated, missing)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       )
       .run(

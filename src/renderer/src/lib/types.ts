@@ -38,7 +38,7 @@ export interface Worktree {
   created: string
   updated: string
   /** 目录已失联（被手工删过、或盘不在） */
-  orphan: boolean
+  missing: boolean
 }
 
 /** 状态即看板列，两者是同一个东西 */
@@ -84,10 +84,10 @@ export interface ChildStat {
 export interface SyncResult {
   added: string[]
   updated: string[]
-  orphaned: string[]
+  missing: string[]
   restored: string[]
   /** 工作区的存量校对（只 stat 路径，不跑 git） */
-  worktrees: { orphaned: string[]; restored: string[] }
+  worktrees: { missing: string[]; restored: string[] }
 }
 
 export interface BoardData {
@@ -141,7 +141,7 @@ export interface Todo {
   mtime: number
   created: string
   updated: string
-  orphan: boolean
+  missing: boolean
 }
 
 export interface TodosPayload {
@@ -149,7 +149,7 @@ export interface TodosPayload {
   /** 看板列顺序，也就是状态取值顺序 */
   statuses: TodoStatus[]
   sources: string[]
-  sync: { added: string[]; updated: string[]; orphaned: string[]; restored: string[] }
+  sync: { added: string[]; updated: string[]; missing: string[]; restored: string[] }
 }
 
 // ------------------------------------------------------------------ 项目

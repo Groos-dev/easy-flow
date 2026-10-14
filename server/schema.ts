@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS requirement (
   ext_links    TEXT,
   mtime    INTEGER NOT NULL DEFAULT 0,
   updated  TEXT,
-  orphan   INTEGER NOT NULL DEFAULT 0,
+  missing  INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (slug, project)
 );
 
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS todo (
   mtime    INTEGER NOT NULL DEFAULT 0,
   created  TEXT,
   updated  TEXT,
-  orphan   INTEGER NOT NULL DEFAULT 0
+  missing  INTEGER NOT NULL DEFAULT 0
 );
 
 /*
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS worktree (
   main     TEXT NOT NULL,
   created  TEXT,
   updated  TEXT,
-  orphan   INTEGER NOT NULL DEFAULT 0
+  missing  INTEGER NOT NULL DEFAULT 0
 );
 
 /*
@@ -131,6 +131,14 @@ function migrate(db: DatabaseSync): void {
       WHEN status IN ('联调', '发布', '验证验收') THEN 'Review'
       WHEN status = '关闭' THEN '已完成'
       ELSE '澄清' END`)
+  }
+
+  // 与界面的「失联」对齐：记录在、文件/目录没了。老库的 orphan 列改名 missing
+  for (const table of ['requirement', 'todo', 'worktree']) {
+    const names = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+    if (names.some((c) => c.name === 'orphan') && !names.some((c) => c.name === 'missing')) {
+      db.exec(`ALTER TABLE ${table} RENAME COLUMN orphan TO missing`)
+    }
   }
 
   addIfMissing('requirement', 'project', `project TEXT NOT NULL DEFAULT ''`)

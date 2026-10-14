@@ -34,7 +34,7 @@ export default function LaunchSessionForm({
   onLaunch: () => void
 }) {
   const { available } = launchWorktreeSelection(worktrees, worktreeId)
-  const orphaned = worktrees.filter((w) => w.orphan)
+  const missing = worktrees.filter((w) => w.missing)
   const feedback = result ? launchResultFeedback(requirementId, result) : null
   // Claude 的 deeplink 只能带一个工作目录，必须选；Codex 按需求建 project、roots 收全部工作区，不用选
   const needsWorktree = launchNeedsWorktree(agent)
@@ -50,8 +50,8 @@ export default function LaunchSessionForm({
       {available.length === 0 ? (
         <div className="launch-empty">
           <p>这条需求还没有可用工作区。先为此需求创建工作区，再回来启动会话。</p>
-          {orphaned.length > 0 && (
-            <p>已登记但目录失联：{orphaned.map((w) => `${w.repo} · ${w.branch}`).join('、')}</p>
+          {missing.length > 0 && (
+            <p>已登记但目录失联：{missing.map((w) => `${w.repo} · ${w.branch}`).join('、')}</p>
           )}
           <code>{worktreeCreationCommand(requirementId)}</code>
         </div>
@@ -88,8 +88,8 @@ export default function LaunchSessionForm({
               ) : agent === 'codex' ? (
                 <p className="launch-help">Codex 的新会话按需求建 project，会带上全部 {available.length} 个工作区，不用选。</p>
               ) : null}
-              {orphaned.length > 0 && (
-                <p className="launch-help">不可用工作区（目录已失联）：{orphaned.map((w) => `${w.repo} · ${w.branch}`).join('、')}</p>
+              {missing.length > 0 && (
+                <p className="launch-help">不可用工作区（目录已失联）：{missing.map((w) => `${w.repo} · ${w.branch}`).join('、')}</p>
               )}
               <button className="btn primary launch-submit" type="submit" disabled={!canLaunch}>
                 {busy ? '正在打开…' : '打开新会话草稿'}
