@@ -66,6 +66,8 @@ function face(state: PetState) {
 /**
  * 一档状态一只 pet。状态只从 props 进，组件本身不认识会话、数据源——可以拿假状态单独开发。
  *
+ * `event` 是「这是个没读过的事件」——事件边框与一次性动效靠它，读过就没了；
+ * pet 本身不跟事件走，读过了照样留着（它是回到会话的入口）。
  * `focus` 由外面的 PetRow 选出，同一时刻最多一只（见 lib/pets.ts 的 focusIndex）；
  * `compact` 是折叠卡上的小号变体。有 `link` 就渲染成按钮，点一下跳回会话；没有的只报状态，
  * 不给一个点了没反应的按钮。卡片是可拖拽的，所以这里把 pointerdown 拦掉。
@@ -73,6 +75,7 @@ function face(state: PetState) {
 export default function Pet({
   agent,
   state,
+  event = false,
   focus = false,
   compact = false,
   tip,
@@ -80,6 +83,7 @@ export default function Pet({
 }: {
   agent: string
   state: PetState
+  event?: boolean
   focus?: boolean
   compact?: boolean
   tip?: string
@@ -93,7 +97,7 @@ export default function Pet({
       {face(state)}
     </svg>
   )
-  const cls = `pet${compact ? ' compact' : ''} s-${state}${focus ? ' focus' : ''}`
+  const cls = `pet${compact ? ' compact' : ''} s-${state}${event ? ' event' : ''}${focus ? ' focus' : ''}`
   const style = { '--tint': agentTint(agent) } as CSSProperties
 
   if (!link) {
@@ -136,8 +140,9 @@ function petTip(session: Session, state: PetState): string {
 /**
  * 卡片上的那排 pet：把一条需求名下的会话译成 pet 并排开。
  *
- * 挂哪些会话、最多几只、谁抢注意力都在 planPetRow 里算好（与角标同一套判据：未读事件 + 正在跑，
- * 读过的事件连 pet 一起消失）。`compact` 给折叠的父需求窄条用——44px 塞不进去，收成小号。
+ * 挂哪些会话、最多几只、谁带事件样式、谁抢注意力都在 planPetRow 里算好：pet 长期留着
+ * （读得到状态就挂），只有事件边框与动效跟 `fresh` 走。
+ * `compact` 给折叠的父需求窄条用——44px 塞不进去，收成小号。
  */
 export function PetRow({ sessions, compact = false }: { sessions: Session[]; compact?: boolean }) {
   const { items, more } = planPetRow(sessions)
@@ -150,6 +155,7 @@ export function PetRow({ sessions, compact = false }: { sessions: Session[]; com
           key={`${p.session.agent}:${p.session.session}`}
           agent={p.session.agent}
           state={p.state}
+          event={p.event}
           focus={p.focus}
           compact={compact}
           tip={petTip(p.session, p.state)}

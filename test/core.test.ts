@@ -3293,7 +3293,7 @@ describe('pet：一行 pet 的排布', () => {
       status: { state, fresh, needsAction: '', at: '', detail: '' },
     }
   }
-  // 五个都挂得上角标的会话：两条在跑 + 一条卡住 + 跑完没看 + 失败
+  // 五个都读得到的会话：两条在跑 + 一条卡住 + 跑完没看 + 失败（都挂 pet）
   const pool: Session[] = [
     sess('claude', 'blocked', true),
     sess('codex', 'running', false),
@@ -3322,8 +3322,26 @@ describe('pet：一行 pet 的排布', () => {
     assert.equal(items.some((p) => p.focus), false)
   })
 
-  test('读过的、读不到的会话都不画 pet', () => {
-    assert.deepEqual(planPetRow([sess('claude', 'done', false)]).items, [])
+  test('pet 长期留着：读过的事件也画 pet，且点得到', () => {
+    const read = planPetRow([sess('claude', 'done', false)])
+    assert.equal(read.items.length, 1)
+    assert.equal(read.items[0].state, 'done')
+    assert.equal(read.items[0].event, false)
+  })
+
+  test('事件样式只跟 fresh 走：未读 done 带 event，读过的不带', () => {
+    assert.equal(planPetRow([sess('claude', 'done', true)]).items[0].event, true)
+    assert.equal(planPetRow([sess('claude', 'done', false)]).items[0].event, false)
+  })
+
+  test('读过的 pet 留着，但不抢注意力', () => {
+    const items = planPetRow([sess('claude', 'blocked', false)]).items
+    assert.equal(items.length, 1)
+    assert.equal(items[0].event, false)
+    assert.equal(items[0].focus, false)
+  })
+
+  test('读不到的会话不画 pet，空列表也不破', () => {
     assert.deepEqual(planPetRow([sess('cursor', 'unknown', true)]).items, [])
     assert.deepEqual(planPetRow([]), { items: [], more: 0 })
   })
