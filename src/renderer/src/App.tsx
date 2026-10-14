@@ -13,10 +13,11 @@ import {
 } from '@dnd-kit/core'
 import { api } from './lib/api'
 import { DONE_STATUS, childStatsOf } from './lib/children'
-import type { ChildStat, Project, Requirement, Session, Status, Todo, TodoStatus } from './lib/types'
+import type { ChildStat, NextUpItem, Project, Requirement, Session, Status, Todo, TodoStatus } from './lib/types'
 import BoardSwitcher, { type BoardView } from './components/BoardSwitcher'
 import MindMap from './components/MindMap'
 import Card from './components/Card'
+import NextUp from './components/NextUp'
 import Detail from './components/Detail'
 import SearchPanel from './components/SearchPanel'
 import Settings from './components/Settings'
@@ -132,14 +133,18 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([])
   /** 「已完成」列是否展开。默认收成窄条：历史只增不减，全铺开会把活跃三列挤窄 */
   const [doneOpen, setDoneOpen] = useState(false)
-  /** 需求板块里的视图：看板（默认）或导图；待办板块下不适用 */
-  const [reqView, setReqView] = useState<'board' | 'map'>('board')
+  /** 需求板块里的视图：看板（默认）/ 下一步 / 导图；待办板块下不适用 */
+  const [reqView, setReqView] = useState<'board' | 'next' | 'map'>('board')
   /** 详情页挂载点：需求或项目。slugs 用 'project:<slug>' 区分 */
   const [detail, setDetail] = useState<{ project: string; slug: string | null } | null>(null)
   const [priorities, setPriorities] = useState<string[]>([])
   const [items, setItems] = useState<Requirement[]>([])
   /** 全部会话（含实时状态）。卡片角标与详情页的「会话」块共用 */
   const [sessions, setSessions] = useState<Session[]>([])
+  /** 「下一步」的排名（服务端算好，每条带理由），只在「下一步」视图里读 */
+  const [nextItems, setNextItems] = useState<NextUpItem[]>([])
+  /** 上次算排名失败的原话；空串表示最近一次是成功的 */
+  const [nextError, setNextError] = useState('')
   /** 待办：全局的，不分项目 */
   const [todos, setTodos] = useState<Todo[]>([])
   const [todoStatuses, setTodoStatuses] = useState<string[]>([])
@@ -204,10 +209,11 @@ export default function App() {
   }, [openRequirement])
 
   /**
-   * 搜索面板只在看板上开。它筛的就是看板与导图，从详情页或设置页开出来，
-   * 人看到的是一个筛掉了卡片的界面自己却不在上面——不如不给这个入口。
+   * 搜索面板只在看板与导图上开（它筛的就是这两处）。详情页、设置页、待办板，
+   * 以及不认筛选的「下一步」都不给这个入口——从那些地方开出来，人看到的是一个
+   * 筛掉了卡片的界面自己却不在上面，不如不开。
    */
-  const onBoard = !showSettings && !detail && !todoId && view === 'req'
+  const onBoard = !showSettings && !detail && !todoId && view === 'req' && reqView !== 'next'
 
   // 窗口级快捷键。⌘, 打开设置——Electron 里由应用菜单的加速键触发（见 main/registerMenu），
   // 浏览器开发时没有菜单，这里补一个键盘监听；⌘K 开合搜索面板。
@@ -311,12 +317,29 @@ export default function App() {
   }, [])
 
   /**
+   * 名次与理由在服务端算（要会话实时状态，渲染层拿不到同一份），这里只拉一份。
+   * 失败时留着上一次的列表、记下原话——空列表分不清「没事」和「没算出来」。
+   */
+  const loadNextUp = useCallback(async () => {
+    try {
+      const data = await api.nextUp()
+      setNextItems(data.items)
+      setNextError('')
+    } catch (err) {
+      setNextError((err as Error).message)
+    }
+  }, [])
+
+  /**
    * 未读事件靠轮询浮上来：agent 跑完一轮时人在别处，不轮询就只能等他手动刷新——
    * 那就不叫「感知到」了。窗口在后台时不拉（那时也没人看）。
    */
   useEffect(() => {
     const tick = () => {
-      if (!document.hidden) void loadSessions()
+      if (document.hidden) return
+      void loadSessions()
+      // 会话状态是「下一步」的输入之一，跟着一起刷新
+      void loadNextUp()
     }
     const timer = setInterval(tick, SESSION_POLL_MS)
     // 切回窗口立刻补一次，别让人盯着过期数据等下一轮
@@ -325,7 +348,7 @@ export default function App() {
       clearInterval(timer)
       document.removeEventListener('visibilitychange', tick)
     }
-  }, [loadSessions])
+  }, [loadSessions, loadNextUp])
 
   /** 看板、待办、项目列表与会话一起重拉：agent 建完目录后不用重启应用就能看到 */
   const refresh = useCallback(() => {
@@ -333,14 +356,16 @@ export default function App() {
     void loadTodos()
     void loadProjects()
     void loadSessions()
-  }, [load, loadTodos, loadProjects, loadSessions])
+    void loadNextUp()
+  }, [load, loadTodos, loadProjects, loadSessions, loadNextUp])
 
   useEffect(() => {
     void load()
     void loadTodos()
     void loadProjects()
     void loadSessions()
-  }, [load, loadTodos, loadProjects, loadSessions])
+    void loadNextUp()
+  }, [load, loadTodos, loadProjects, loadSessions, loadNextUp])
 
   /** 需求 id → 名下的会话。需求没有 id 时不可能有会话，取不到正好 */
   const sessionsByReq = useMemo(() => {
@@ -364,6 +389,7 @@ export default function App() {
       setDetail(null)
       await load()
       await loadProjects()
+      await loadNextUp()
     } catch (err) {
       setError((err as Error).message)
     }
@@ -556,8 +582,8 @@ export default function App() {
 
               <div className="topbar-side right">
                 {/* 筛选标记常驻：关掉面板后看板上少了卡片，得有个东西解释为什么少。
-                    待办板不按需求筛，所以只在需求板块下摆 */}
-                {view === 'req' && query.trim() && (
+                    待办板不按需求筛，「下一步」也不吃这套筛，两处都不摆 */}
+                {view === 'req' && reqView !== 'next' && query.trim() && (
                   <button
                     className="filter-chip"
                     title="点一下继续改筛选词"
@@ -585,7 +611,7 @@ export default function App() {
                     </svg>
                   </button>
                 )}
-                {/* 导图是需求板块里的一种呈现，待办板块下不摆 */}
+                {/* 看板 / 下一步 / 导图是需求板块里的三种呈现，待办板块下不摆 */}
                 {view === 'req' && (
                   <div className="seg">
                     <button
@@ -593,6 +619,9 @@ export default function App() {
                       onClick={() => setReqView('board')}
                     >
                       看板
+                    </button>
+                    <button className={reqView === 'next' ? 'on' : ''} onClick={() => setReqView('next')}>
+                      下一步
                     </button>
                     <button className={reqView === 'map' ? 'on' : ''} onClick={() => setReqView('map')}>
                       导图
@@ -643,6 +672,12 @@ export default function App() {
                 </div>
                 <DragOverlay>{dragItem ? <Card req={dragItem} overlay /> : null}</DragOverlay>
               </DndContext>
+            ) : reqView === 'next' ? (
+              <NextUp
+                items={nextItems}
+                error={nextError}
+                onOpenRequirement={openRequirement}
+              />
             ) : (
               <MindMap
                 requirements={items}

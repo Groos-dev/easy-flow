@@ -20,6 +20,7 @@ import {
 } from './db.ts'
 import { withStatus } from './threads.ts'
 import { hookStore } from './hook.ts'
+import { rankNextUp } from './next-up.ts'
 import './launch-claude.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 import { installSkill, skillPlan } from './skill-install.ts'
@@ -283,6 +284,16 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
       // 逐需求拉 context 太碎；排序交给库（最近登记的在前）
       if (url.pathname === '/api/sessions' && req.method === 'GET') {
         json(req, res, 200, { sessions: withStatus(db.listSessions()) })
+        return
+      }
+
+      // 「下一步该动哪个」：服务端揉好信号、给每条配一句理由，前端只负责展示与跳转。
+      // 只看当前项目——看板是按项目隔离的。会话按归属过滤，别把别的项目的信号串进来
+      if (url.pathname === '/api/next-up' && req.method === 'GET') {
+        const requirements = db.list()
+        const ids = new Set(requirements.map((r) => r.id))
+        const sessions = withStatus(db.listSessions()).filter((s) => ids.has(s.requirementId))
+        json(req, res, 200, { items: rankNextUp(requirements, sessions) })
         return
       }
 

@@ -234,6 +234,28 @@ export interface Session {
   status: SessionStatus
 }
 
+/**
+ * 「下一步该动哪个」的一条推荐。名次与理由都由服务端算好（见 server/next-up.ts），
+ * 渲染层只负责展示与跳转——理由要「说人话」，那套措辞留在服务端一处。
+ */
+export interface NextUpItem {
+  slug: string
+  project: string
+  title: string
+  /** 需求状态，界面上并排摆一枚小药丸 */
+  status: string
+  /** 两级：现在就得动 / 有空再看 */
+  level: 'now' | 'soon'
+  /** 命中的档位，1 最硬、4 最软 */
+  tier: number
+  /** 一句话理由，中文 */
+  reason: string
+  /** 第二行的补充；没有则空串 */
+  detail: string
+  /** 命中的会话；没有会话信号时是 null，据此决定回会话还是开需求 */
+  session: { agent: string; link: string } | null
+}
+
 export interface SwitchResult {
   dataDir: string
   dbFile: string
