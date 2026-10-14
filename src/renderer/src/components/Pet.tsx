@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { AGENT_LABELS } from '../lib/labels'
-import { petArt } from '../lib/pet-art'
+import { petArt, scopeCloudling } from '../lib/pet-art'
 import { PET_LABEL, planPetRow, type PetState } from '../lib/pets'
 import type { Session } from '../lib/types'
 
 /**
  * 系统开了「减少动态效果」就换静态素材。
  * clawd 的自带动画封在 <img> 的 SVG 文档里，外部 CSS 够不进去，只能另出 *.still.svg；
- * cloudling 是脚本驱动，停不了 JS，still 版由构建脚本只放行首帧。都见 scripts/build-pets.mjs。
+ * cloudling 内联在页面里，由下面的 Cloudling 只放行首帧。都见 scripts/build-pets.mjs。
  */
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(
@@ -21,6 +21,64 @@ function usePrefersReducedMotion(): boolean {
     return () => mq.removeEventListener('change', sync)
   }, [])
   return reduced
+}
+
+/**
+ * 内联云宝的运行壳：给素材自带的脚本换一套作用域。
+ *
+ * - `document` 收窄到这棵子树。素材里除了 `getElementById`，还有 `querySelectorAll('.spark')`
+ *   这种按文档找的调用——不收窄，同屏两只同档云宝会互相改对方的元素。
+ * - `requestAnimationFrame` 也换掉：素材的循环只会一直排下一帧、自己不会停，元素一离开文档
+ *   （换档、卸载）就得断在下一帧，否则每换一次状态都多一条空转的 rAF。`still` 时只放行首帧——
+ *   眼睛与姿态是脚本画的，整段剥掉会剩一朵没表情的云。
+ *
+ * 用元素属性当实例句柄：壳在脚本之前求值，拿不到脚本里的变量，只能从外面按 `data-pet` 找回来。
+ */
+function inlineShell(uid: string, still: boolean, script: string): string {
+  return `(function (root, raf) {
+  var left = ${still ? 1 : Infinity};
+  var requestAnimationFrame = function (cb) {
+    if (left <= 0 || !root.isConnected) return 0;
+    left -= 1;
+    return raf(cb);
+  };
+  var document = {
+    createElement: window.document.createElement.bind(window.document),
+    createElementNS: window.document.createElementNS.bind(window.document),
+    getElementById: function (id) { return root.id === id ? root : root.querySelector('#' + id) },
+    querySelector: function (s) { return root.querySelector(s) },
+    querySelectorAll: function (s) { return root.querySelectorAll(s) },
+  };
+${script}
+})(window.document.querySelector('[data-pet="${uid}"]'), window.requestAnimationFrame.bind(window))`
+}
+
+/**
+ * 云宝：素材是脚本驱动的，`<img>` 会禁脚本、`<object>` 的文档画布又不透明，所以内联进宿主 DOM——
+ * 内联的 SVG 是普通元素，背景天然透明，主题怎么变都跟着走。
+ *
+ * 挂载是命令式的：那半截脚本要「插进文档之后」才会跑，React 的渲染管不到这一步。
+ * 同屏多只的 id 撞车在 scopeCloudling 里按实例改写掉。
+ */
+function Cloudling({ svg, still }: { svg: string; still: boolean }) {
+  const host = useRef<HTMLSpanElement>(null)
+  // 只用来当 id 后缀与查找句柄，取 useId 里能进 id 与属性选择器的那部分
+  const uid = useId().replace(/\W/g, '')
+  // 用 useEffect 不用 useLayoutEffect：挂载点本来就等数据，晚一帧无所谓，而 layout effect 在 SSR 下会刷警告
+  useEffect(() => {
+    const el = host.current
+    if (!el) return
+    const { markup, script } = scopeCloudling(svg, uid)
+    const root = document.importNode(new DOMParser().parseFromString(markup, 'image/svg+xml').documentElement, true)
+    root.setAttribute('data-pet', uid)
+    el.replaceChildren(root)
+    if (!script) return
+    // 脚本顶层有一堆 const，同屏多只会重复声明，包一层 IIFE（在 inlineShell 里）
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'script')
+    s.textContent = inlineShell(uid, still, script)
+    root.appendChild(s)
+  }, [svg, still, uid])
+  return <span ref={host} className="pet-art" aria-hidden="true" />
 }
 
 /**
@@ -59,13 +117,13 @@ export default function Pet({
   link?: string
 }) {
   const name = `${AGENT_LABELS[agent] ?? agent} · ${label ?? PET_LABEL[state]}`
-  const { src, channel } = petArt(agent, state, { compact, still })
-  // cloudling 是脚本驱动、必须走 <object>；clawd 走 <img>（每张 SVG 自带同名 @keyframes，内联会互相覆盖）
+  const art = petArt(agent, state, { compact, still })
+  // cloudling 内联成 <svg>（脚本驱动，且 object 的文档画布不透明）；clawd 走 <img>（每张自带同名 @keyframes，内联会互相覆盖）
   const body =
-    channel === 'object' ? (
-      <object data={src} type="image/svg+xml" aria-hidden="true" />
+    art.channel === 'inline' ? (
+      <Cloudling svg={art.svg} still={still} />
     ) : (
-      <img src={src} alt="" draggable={false} />
+      <img src={art.src} alt="" draggable={false} />
     )
   const cls = `pet${compact ? ' compact' : ''} s-${state}${event ? ' event' : ''}${focus ? ' focus' : ''}`
 
