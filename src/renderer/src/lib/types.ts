@@ -248,7 +248,7 @@ export interface NextUpItem {
   /** 第二行的补充；没有则空串 */
   detail: string
   /** 命中的会话；没有会话信号时是 null，据此决定回会话还是开需求 */
-  session: { agent: string; id: string; link: string } | null
+  session: { agent: string; link: string } | null
 }
 
 export interface SwitchResult {

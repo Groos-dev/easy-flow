@@ -200,6 +200,31 @@ describe('下一步 · 排名', () => {
     assert.deepEqual(items.map((i) => i.slug), ['y', 'x'])
   })
 
+  test('同档同优先级：谁等得久谁在前，等得一样久按 slug 兜底', () => {
+    const items = rankNextUp(
+      [
+        req({ slug: 'x', status: '澄清', priority: 'p2', updated: '2026-10-07' }),
+        req({ slug: 'y', status: '澄清', priority: 'p2', updated: '2026-10-05' }),
+        req({ slug: 'z', status: '澄清', priority: 'p2', updated: '2026-10-05' }),
+      ],
+      [],
+      NOW,
+    )
+    assert.deepEqual(items.map((i) => i.slug), ['y', 'z', 'x'])
+  })
+
+  test('failed 也是「跑完没看」的一种：读过（fresh=false）就不推', () => {
+    assert.deepEqual(
+      rankNextUp([req({ slug: 'a', status: '执行中' })], [sess('req-a', 'codex', 'failed', { fresh: false })], NOW),
+      [],
+    )
+  })
+
+  test('时间戳空或落在未来：天数算不出或为负，不推', () => {
+    assert.deepEqual(rankNextUp([req({ slug: 'a', status: 'Review', updated: '' })], [], NOW), [])
+    assert.deepEqual(rankNextUp([req({ slug: 'b', status: '澄清', updated: '2026-11-01' })], [], NOW), [])
+  })
+
   test('阈值可配：把澄清阈值调高，同一条需求就不再推', () => {
     const config: NextUpConfig = { ...DEFAULT_NEXT_UP_CONFIG, staleDays: { review: 2, clarify: 30 } }
     assert.deepEqual(
@@ -237,28 +262,38 @@ describe('下一步 · 排名', () => {
 // ---------------------------------------------------------------- HTTP
 
 describe('下一步 · HTTP', () => {
-  test('GET /api/next-up 返回当前项目的排名与理由', async () => {
+  test('GET /api/next-up 只算当前项目，别的项目的停滞不进榜', async () => {
     rmSync(TMP, { recursive: true, force: true })
-    const project = join(TMP, 'onex', 'alpha')
-    mkdirSync(project, { recursive: true })
-    writeFileSync(join(project, 'AGENTS.md'), '---\nid: req-alpha\n---\n\n', 'utf8')
-    writeFileSync(join(project, 'requirement.md'), '# alpha\n\n## 需求\n\n甲\n', 'utf8')
+    for (const [proj, slug, id] of [
+      ['onex', 'alpha', 'req-alpha'],
+      ['other', 'beta', 'req-beta'],
+    ] as const) {
+      const dir = join(TMP, proj, slug)
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'AGENTS.md'), `---\nid: ${id}\n---\n\n`, 'utf8')
+      writeFileSync(join(dir, 'requirement.md'), `# ${slug}\n\n## 需求\n\n${slug}\n`, 'utf8')
+    }
 
     const app = createBoardApp({ dataDir: TMP })
+    app.db.setStatus('alpha', 'Review', 'onex')
+    app.db.setStatus('beta', 'Review', 'other')
     // setStatus 会把 updated 写成今天，所以直接改库里的日期，才构得出「停太久」
-    app.db.setStatus('alpha', 'Review')
     const raw = new DatabaseSync(app.db.file)
-    raw.prepare('UPDATE requirement SET updated = ? WHERE slug = ? AND project = ?').run('2026-09-01', 'alpha', 'onex')
+    raw.prepare('UPDATE requirement SET updated = ? WHERE project = ?').run('2026-09-01', 'onex')
+    raw.prepare('UPDATE requirement SET updated = ? WHERE project = ?').run('2026-09-01', 'other')
     raw.close()
+    // 两个项目都停滞，看的是当前项目——显式定住 onex
+    app.db.setProject('onex')
 
     const server = createServer((rq, rs) => void app.handle(rq, rs))
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
     const addr = server.address()
     const base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`
     try {
-      const r = (await (await fetch(`${base}/api/next-up`)).json()) as { items: Array<{ slug: string; level: string; reason: string }> }
-      assert.equal(r.items.length, 1)
-      assert.equal(r.items[0].slug, 'alpha')
+      const r = (await (await fetch(`${base}/api/next-up`)).json()) as {
+        items: Array<{ slug: string; level: string; reason: string }>
+      }
+      assert.deepEqual(r.items.map((i) => i.slug), ['alpha'])
       assert.equal(r.items[0].level, 'soon')
       assert.match(r.items[0].reason, /^Review 停了 \d+ 天$/)
     } finally {

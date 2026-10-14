@@ -209,10 +209,11 @@ export default function App() {
   }, [openRequirement])
 
   /**
-   * 搜索面板只在看板上开。它筛的就是看板与导图，从详情页或设置页开出来，
-   * 人看到的是一个筛掉了卡片的界面自己却不在上面——不如不给这个入口。
+   * 搜索面板只在看板与导图上开（它筛的就是这两处）。详情页、设置页、待办板，
+   * 以及不认筛选的「下一步」都不给这个入口——从那些地方开出来，人看到的是一个
+   * 筛掉了卡片的界面自己却不在上面，不如不开。
    */
-  const onBoard = !showSettings && !detail && !todoId && view === 'req'
+  const onBoard = !showSettings && !detail && !todoId && view === 'req' && reqView !== 'next'
 
   // 窗口级快捷键。⌘, 打开设置——Electron 里由应用菜单的加速键触发（见 main/registerMenu），
   // 浏览器开发时没有菜单，这里补一个键盘监听；⌘K 开合搜索面板。
@@ -581,8 +582,8 @@ export default function App() {
 
               <div className="topbar-side right">
                 {/* 筛选标记常驻：关掉面板后看板上少了卡片，得有个东西解释为什么少。
-                    待办板不按需求筛，所以只在需求板块下摆 */}
-                {view === 'req' && query.trim() && (
+                    待办板不按需求筛，「下一步」也不吃这套筛，两处都不摆 */}
+                {view === 'req' && reqView !== 'next' && query.trim() && (
                   <button
                     className="filter-chip"
                     title="点一下继续改筛选词"
@@ -610,7 +611,7 @@ export default function App() {
                     </svg>
                   </button>
                 )}
-                {/* 导图是需求板块里的一种呈现，待办板块下不摆 */}
+                {/* 看板 / 下一步 / 导图是需求板块里的三种呈现，待办板块下不摆 */}
                 {view === 'req' && (
                   <div className="seg">
                     <button

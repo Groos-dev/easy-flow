@@ -593,6 +593,17 @@ body {
   color: var(--text);
 }
 
+/* 刷新失败但手里还有上一次的排名：照旧显示，但顶部一条红字说清这是旧的 */
+.next-error {
+  padding: 10px 12px;
+  border: 1px solid #4a2b2b;
+  border-radius: 8px;
+  background: #2a1f1f;
+  color: #ffb4b4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 /* 没有可推的时候明说一句，不是空列表——空列表分不清「没事」和「没算出来」 */
 .next-empty {
   flex: 1;

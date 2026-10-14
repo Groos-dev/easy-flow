@@ -39,7 +39,7 @@ export interface NextUpItem {
   /** 第二行的补充；没有则空串 */
   detail: string
   /** 命中的会话；没有会话信号时是 null，界面据此决定回会话还是开需求 */
-  session: { agent: string; id: string; link: string } | null
+  session: { agent: string; link: string } | null
 }
 
 export interface NextUpConfig {
@@ -136,7 +136,7 @@ function candidateOf(
           : failed
             ? '上一轮跑失败了，结果还没人看。'
             : '上一轮已经结束，结果还没人验收。',
-        session: { agent: session.agent, id: session.session, link: session.link },
+        session: { agent: session.agent, link: session.link },
       },
     }
   }

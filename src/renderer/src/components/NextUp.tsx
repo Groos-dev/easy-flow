@@ -33,6 +33,8 @@ export default function NextUp({ items, error, onOpenRequirement }: Props) {
 
   return (
     <div className="next">
+      {/* 有列表也不能把失败吞了：照旧渲染上一次的名次，但顶上要说清这是旧的 */}
+      {error && <div className="next-error">没能刷新「下一步」，下面是上一次算出的排名：{error}</div>}
       {groups.map((g) => (
         <div className="next-group" key={g.level}>
           <div className="next-group-head">{NEXT_UP_LEVEL_LABEL[g.level] ?? g.level}</div>
