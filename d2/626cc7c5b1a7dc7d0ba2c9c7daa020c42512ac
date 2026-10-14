@@ -1,0 +1,71 @@
+src/renderer/src/components/Card.tsx
+  s_96bf2edccbe84b::t_82e5cf51b32527 4,10-11
+  s_96bf2edccbe84b::t_9a5a3dd4aad55e 42,45-46
+  s_96bf2edccbe84b::t_318c769208eb52 93,95
+  s_96bf2edccbe84b::t_1fc820fcbf7266 38-40,43
+  s_96bf2edccbe84b::t_9fa24ee8e656db 90
+  s_96bf2edccbe84b::t_449fb294f3e730 103-104
+  s_96bf2edccbe84b::t_8bc2142ce1a809 37,41,44,47,52-54,89,92
+src/renderer/src/components/Detail.tsx
+  s_96bf2edccbe84b::t_1f2707fdc03414 446
+  s_96bf2edccbe84b::t_8a119c4fe4d6f3 449
+test/core.test.ts
+  s_96bf2edccbe84b::t_164ab1e6cd49a0 3198-3203
+README.md
+  s_96bf2edccbe84b::t_c72c6117654489 54-55
+src/renderer/src/components/SearchPanel.tsx
+  s_96bf2edccbe84b::t_942e87f911a009 34-36,41,44
+  s_96bf2edccbe84b::t_aa8b77a3c6b678 1-33,37-40,42-43,45-95
+src/renderer/src/lib/threads.ts
+  s_96bf2edccbe84b::t_5d70adea7fee32 12
+  s_96bf2edccbe84b::t_0fc7913dadda1f 26,28,31
+  s_96bf2edccbe84b::t_f9227381da677b 27,29-30
+  s_96bf2edccbe84b::t_ba4a2c021a7470 10-11
+src/renderer/src/styles.css
+  s_96bf2edccbe84b::t_c7f53861633435 587-602
+  s_96bf2edccbe84b::t_790a530202aeac 2025-2131
+  s_96bf2edccbe84b::t_afdc77e7168e7f 690
+  s_96bf2edccbe84b::t_4dd790449cf926 441-466
+  s_96bf2edccbe84b::t_76eae10160b24d 722
+  s_96bf2edccbe84b::t_d220a65cd97110 777-778,782-783,790,798-809
+  s_96bf2edccbe84b::t_99e1018268570d 232-273
+  s_96bf2edccbe84b::t_e84a019e7b3f63 417
+  s_96bf2edccbe84b::t_31bcf2a7e1b348 310-313,325-326,354-355
+src/renderer/src/components/ThreadBadge.tsx
+  s_96bf2edccbe84b::t_4486f5b9b8b471 2,4,7-14,26-35,40,56
+  s_96bf2edccbe84b::t_552e618a3aa170 43-44,48,55
+  s_96bf2edccbe84b::t_48bdc98ea43e0e 23-25
+src/renderer/src/components/TodoBoard.tsx
+  s_96bf2edccbe84b::t_3288d5c101c676 87
+  s_96bf2edccbe84b::t_0e49c25fdce8fc 21-28
+src/renderer/src/App.tsx
+  s_96bf2edccbe84b::t_2372d86f2f8ef1 392
+  s_96bf2edccbe84b::t_b564ecf41c09fb 558-560
+  s_96bf2edccbe84b::t_2049853be597a9 100
+  s_96bf2edccbe84b::t_7b3b9ac597fe6d 658-659
+  s_96bf2edccbe84b::t_358e10c8396562 21,25-31
+  s_96bf2edccbe84b::t_ef999a87b5bb69 206-211,220,231
+  s_96bf2edccbe84b::t_96c30dd02c1c49 372-377,382
+  s_96bf2edccbe84b::t_5955f96dab352b 657,660-671
+  s_96bf2edccbe84b::t_0147b83a292c10 94
+  s_96bf2edccbe84b::t_141f6a9d0e7a6f 561-587
+  s_96bf2edccbe84b::t_e9dfe7cbe47947 650
+  s_96bf2edccbe84b::t_9f23cc13a20201 155-164
+  s_96bf2edccbe84b::t_85c840d65e5de5 212-213,216-217,221-222,232-262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "d2626cc7c5b1a7dc7d0ba2c9c7daa020c42512ac",
+  "prompts": {},
+  "sessions": {
+    "s_96bf2edccbe84b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eeecd158-1664-4fd6-953c-533c382deb31",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
