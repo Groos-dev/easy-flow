@@ -118,8 +118,11 @@ function statusOf(over: DragOverEvent['over']): Status | undefined {
 /** 同列内按优先级排：p0 在前，没设优先级的排最后 */
 const PRIORITY_RANK: Record<string, number> = { p0: 0, p1: 1, p2: 2, p3: 3 }
 
-/** 未读事件的轮询间隔。够快让人察觉，又不至于把看板变成每秒一次的扫描 */
-const SESSION_POLL_MS = 20_000
+/**
+ * 会话状态的轮询间隔。对齐 clawd 的 1.5s：细粒度 activity（思考 / 干活）要跟着每次工具调用动，
+ * 20s 一轮就只能看见它在跑，看不出在干什么。接口只读、单次实测 8~10ms，这个频率不占什么。
+ */
+const SESSION_POLL_MS = 1_500
 
 export default function App() {
   const [statuses, setStatuses] = useState<Status[]>([])
