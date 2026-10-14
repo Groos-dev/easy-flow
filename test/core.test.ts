@@ -29,6 +29,7 @@ import { codeLinkLabel } from '../src/renderer/src/lib/links.ts'
 import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib/shortcut.ts'
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
+import { PET_STATES, PET_RANK, focusIndex, petStateOf } from '../src/renderer/src/lib/pets.ts'
 import { childStatsOf } from '../src/renderer/src/lib/children.ts'
 import { parseStamp, relTime } from '../src/renderer/src/lib/time.ts'
 import type { Requirement, Session } from '../src/renderer/src/lib/types.ts'
@@ -3237,6 +3238,42 @@ describe('未读事件：角标挂哪些会话', () => {
       (['done', 'blocked', 'failed', 'running', 'unknown'] as const).filter(isEventState),
       ['done', 'blocked', 'failed'],
     )
+  })
+})
+
+describe('pet：粗粒度状态映射与抢注意力挑选', () => {
+  test('会话状态落到最贴近的 pet 状态，读不到的不给 pet', () => {
+    assert.equal(petStateOf('running'), 'working')
+    assert.equal(petStateOf('done'), 'done')
+    assert.equal(petStateOf('blocked'), 'blocked')
+    assert.equal(petStateOf('failed'), 'failed')
+    assert.equal(petStateOf('unknown'), null)
+  })
+
+  test('六档状态齐备', () => {
+    assert.deepEqual([...PET_STATES].sort(), ['blocked', 'done', 'failed', 'idle', 'thinking', 'working'])
+  })
+
+  test('急缓顺序：卡住 > 失败 > 跑完 > 干活 > 思考 > 静止', () => {
+    assert.ok(PET_RANK.blocked < PET_RANK.failed)
+    assert.ok(PET_RANK.failed < PET_RANK.done)
+    assert.ok(PET_RANK.done < PET_RANK.working)
+    assert.ok(PET_RANK.working < PET_RANK.thinking)
+    assert.ok(PET_RANK.thinking < PET_RANK.idle)
+  })
+
+  test('同一时刻只挑一只：最急的动，没有需要人注意的谁都不动', () => {
+    assert.equal(focusIndex([]), -1)
+    assert.equal(focusIndex(['working']), -1)
+    assert.equal(focusIndex(['idle', 'thinking', 'working']), -1)
+    assert.equal(focusIndex(['working', 'done']), 1)
+    assert.equal(focusIndex(['thinking', 'blocked']), 1)
+    assert.equal(focusIndex(['blocked', 'failed', 'done']), 0)
+  })
+
+  test('并列取靠前的', () => {
+    assert.equal(focusIndex(['done', 'failed']), 1)
+    assert.equal(focusIndex(['failed', 'done']), 0)
   })
 })
 

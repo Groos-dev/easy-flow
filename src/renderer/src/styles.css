@@ -763,55 +763,138 @@ body {
   background: #ff5c5c;
 }
 
-/* 一条需求可能挂着好几个会话，各挂各的角标：同时开着几个 agent 时，
-   要能一眼看出是哪个在等你。放不下就换行，别把卡片撑宽 */
-.thread-badges {
+/* --------------------------------------------------- agent pet（卡上一会话一只） */
+
+/* 两轴分开：身体色（--tint）归 agent，姿势 + 光环归状态。
+   44px 是草稿量出来的下限——再小表情就看不出了 */
+.pets {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 5px;
+  margin-top: 6px;
 }
 
-/* 卡片角标：压在标题下面一行。做成按钮是因为它点一下直接跳回会话——
-   卡片本身的点击是开详情，两者不是一件事 */
-/* 卡片角标：agent 图标 + 状态点，点一下直接跳回会话——卡片本身的点击是开详情，
-   两者不是一件事。图标比写 agent 名省一半宽度，一行挂得下更多会话 */
-.thread-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+.pet {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 14px;
   background: #232830;
-  color: var(--text-dim);
-  font-size: 11px;
-  font-family: inherit;
-  line-height: 1;
+  border: 1px solid var(--border);
+  color: var(--tint, var(--text-dim));
 }
 
-button.thread-badge:hover {
-  border-color: var(--accent);
-  color: var(--text);
+.pet svg {
+  width: 38px;
+  height: 38px;
+  display: block;
+  transform-origin: 50% 88%;
 }
 
-/* 「有事件」的徽标另加一圈状态色边框：角标本身只说明「值得看」，正在跑也算，
-   这一圈把真要人消费的（卡住 / 跑完没看 / 失败）挑出来 */
-.thread-badge.event.t-blocked {
+/* 光环只给需要你注意的三档 */
+.pet.s-blocked {
   border-color: var(--status-review);
 }
 
-.thread-badge.event.t-failed {
-  border-color: #ff5c5c;
-}
-
-.thread-badge.event.t-done {
+.pet.s-done {
   border-color: var(--status-done);
 }
 
-/* 没有 deeplink 的会话：只报状态，不给一个点了没反应的按钮 */
-.thread-badge.off {
-  opacity: 0.7;
+.pet.s-failed {
+  border-color: #ff5c5c;
+  opacity: 0.85;
+}
+
+/* 静止/下线：整个人淡下去，不抢眼 */
+.pet.s-idle {
+  opacity: 0.42;
+}
+
+/* 有 deeplink 的才可点：没有的只报状态，不给一个点了没反应的按钮 */
+button.pet {
+  cursor: pointer;
+}
+
+button.pet:hover {
+  border-color: var(--accent);
+}
+
+@keyframes pet-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.05, 0.95); }
+}
+
+@keyframes pet-hop {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  40% { transform: translateY(-3px) scale(0.96, 1.05); }
+  70% { transform: translateY(0) scale(1.05, 0.94); }
+}
+
+@keyframes pet-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 159, 67, 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba(255, 159, 67, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 159, 67, 0); }
+}
+
+@keyframes pet-pop {
+  0% { transform: translateY(4px) scale(0.6); opacity: 0; }
+  55% { transform: translateY(-5px) scale(1.14, 0.92); opacity: 1; }
+  75% { transform: translateY(0) scale(0.96, 1.06); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+
+@keyframes pet-shake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  20% { transform: translateX(-2.5px) rotate(-6deg); }
+  60% { transform: translateX(2.5px) rotate(6deg); }
+}
+
+/* 同一时刻只有一只抢注意力（.focus 由 PetRow 按急缓选出）：跑着的轻，等你的重 */
+.pet.focus.s-thinking svg {
+  animation: pet-breathe 2.8s ease-in-out infinite;
+}
+
+.pet.focus.s-working svg {
+  animation: pet-hop 0.62s ease-in-out infinite;
+}
+
+.pet.focus.s-blocked {
+  animation: pet-pulse 2.2s ease-out infinite;
+}
+
+/* done / failed 是一次性事件：只响一下。转成常驻动画就成噪音了，所以与 focus 无关 */
+.pet.s-done svg {
+  animation: pet-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.pet.s-failed svg {
+  animation: pet-shake 0.36s ease-in-out 2;
+}
+
+/* 系统级降级：桌宠可以不管，看板必须管 */
+@media (prefers-reduced-motion: reduce) {
+  .pet,
+  .pet svg {
+    animation: none !important;
+  }
+}
+
+/* 超过四只的收成一个占位：卡片内容宽约 310px，再多就挤了 */
+.pet-more {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  border: 1px dashed var(--border);
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 详情页会话块里那行状态文案 */
