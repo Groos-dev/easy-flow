@@ -19,6 +19,7 @@ import {
   type TodoStatus,
 } from './db.ts'
 import { withStatus } from './threads.ts'
+import { hookStore } from './hook.ts'
 import './launch-claude.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 import { installSkill, skillPlan } from './skill-install.ts'
@@ -119,6 +120,24 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
     try {
       if (url.pathname === '/api/health') {
         json(req, res, 200, { ok: true, dataDir: currentDir, db: db.file })
+        return
+      }
+
+      // agent 的 hook 往这儿推事件（Claude 原生 http hook / Codex 的转发脚本）。
+      // 这是被人推的入口，不是给人看的接口：认不出的都吞掉，永远回 200，别呛回 agent。
+      if (url.pathname === '/api/hook' && req.method === 'POST') {
+        let payload: Record<string, unknown> = {}
+        try {
+          payload = await readBody(req)
+        } catch {
+          /* 报文不是合法 JSON：当没收到，照常回 200 */
+        }
+        // 两条管道共用一个入口，得认出来源：claude 的原生 http hook 带不了额外字段（缺省 claude），
+        // codex 的转发脚本用 ?agent=codex 或报文里带 agent
+        const fromQuery = url.searchParams.get('agent')
+        const fromBody = typeof payload.agent === 'string' && payload.agent ? payload.agent : ''
+        hookStore.record(payload, { agent: fromQuery || fromBody || 'claude' })
+        json(req, res, 200, { ok: true })
         return
       }
 
