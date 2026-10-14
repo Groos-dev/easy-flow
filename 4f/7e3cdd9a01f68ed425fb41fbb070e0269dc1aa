@@ -1,0 +1,51 @@
+src/renderer/src/components/LaunchSession.tsx
+  s_9b1798a9c5727b::t_7817337a488d32 58-59
+server/launch-codex.ts
+  s_9b1798a9c5727b::t_ea8585a81b7d08 27-28
+  s_9b1798a9c5727b::t_5a3ccf254dfe86 10-12
+test/launch-claude.test.ts
+  s_9b1798a9c5727b::t_a5a12840ed3958 29,33-47
+test/launch-codex.test.ts
+  s_9b1798a9c5727b::t_779dc793476261 45-61
+test/launch.test.ts
+  s_9b1798a9c5727b::t_71a4acbf16f8d4 42-51
+src/renderer/src/styles.css
+  s_9b1798a9c5727b::t_3b5a34e983243d 1986
+server/launch-claude.ts
+  s_9b1798a9c5727b::t_7438fdff73a299 7-8,11-13,17
+server/index.ts
+  s_9b1798a9c5727b::t_b517f41dee3001 321-326,328
+test/launch-board.test.ts
+  s_9b1798a9c5727b::t_1be79f5f6cfa17 350
+  s_9b1798a9c5727b::t_2d0ba4848e8e95 190,192-200
+  s_9b1798a9c5727b::t_e56d32b71935d3 29
+  s_9b1798a9c5727b::t_feaac39334316b 171-172
+  s_9b1798a9c5727b::t_fa6cf5e278817f 58-59
+  s_9b1798a9c5727b::t_7c751cc2096bf1 164
+  s_9b1798a9c5727b::t_091e1252a003d0 331-349,358-359
+  s_9b1798a9c5727b::t_edf74cd817bb5e 351-357
+  s_9b1798a9c5727b::t_1eb8829b1e9ba2 106-109
+src/renderer/src/components/LaunchSessionForm.tsx
+  s_9b1798a9c5727b::t_0634c90f300e46 39-40,50-57
+  s_9b1798a9c5727b::t_6c7173e4c2466c 58-74,76,78-82,85-96
+src/renderer/src/lib/launch.ts
+  s_9b1798a9c5727b::t_90db254a0d9a38 3-5
+server/launch.ts
+  s_9b1798a9c5727b::t_b80f062594ab11 58-64,66-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "4f7e3cdd9a01f68ed425fb41fbb070e0269dc1aa",
+  "prompts": {},
+  "sessions": {
+    "s_9b1798a9c5727b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8d3a12ea-c7a4-48b8-af0e-1771d5d714a8",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
