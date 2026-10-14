@@ -24,6 +24,7 @@ import { rankNextUp } from './next-up.ts'
 import './launch-claude.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 import { installSkill, skillPlan } from './skill-install.ts'
+import { hookPlan, installHooks, uninstallHooks } from './hook-install.ts'
 import { findLaunchProvider, launchPrompt, launchProviders } from './launch.ts'
 import './launch-codex.ts'
 import {
@@ -48,6 +49,8 @@ const NO_CHANGES = {
 export interface BoardAppOptions {
   /** 数据目录；不传则读配置 */
   dataDir?: string
+  /** 服务监听端口。设置页装 hook 时要把地址与端口写进配置，所以得知道真实端口 */
+  port?: number
 }
 
 export interface BoardApp {
@@ -80,7 +83,7 @@ function removeProjectData(db: BoardDatabase, slug: string): void {
   }
 }
 
-export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
+export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions = {}): BoardApp {
   const initial = readConfig()
   let currentDir = dataDir ?? initial.dataDir
   let db = new BoardDatabase(currentDir, initial.activeProject)
@@ -507,6 +510,26 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         return
       }
 
+      // --------------------------------------------------- Agent hook
+
+      // hook 装进了 agent 的用户级配置，所以这里读写的是 ~/.claude/settings.json / ~/.codex/hooks.json
+      if (url.pathname === '/api/hooks' && req.method === 'GET') {
+        json(req, res, 200, hookPlan({ port }))
+        return
+      }
+
+      if (url.pathname === '/api/hooks/install' && req.method === 'POST') {
+        const installed = installHooks({ port })
+        json(req, res, 200, { installed, ...hookPlan({ port }) })
+        return
+      }
+
+      if (url.pathname === '/api/hooks/uninstall' && req.method === 'POST') {
+        const removed = uninstallHooks()
+        json(req, res, 200, { removed, ...hookPlan({ port }) })
+        return
+      }
+
       json(req, res, 404, { error: 'not found' })
     } catch (err) {
       json(req, res, 400, { error: (err as Error).message })
@@ -543,7 +566,7 @@ export function startBoardServer({
   dataDir,
   host = '127.0.0.1',
 }: StartOptions = {}): Promise<RunningBoardServer> {
-  const app = createBoardApp({ dataDir })
+  const app = createBoardApp({ dataDir, port })
   const server = createServer((req, res) => void app.handle(req, res))
   return new Promise((resolve, reject) => {
     server.once('error', reject)

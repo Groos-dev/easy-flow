@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { acceleratorFromEvent, formatAccelerator } from '../lib/shortcut'
-import type { SettingsPayload, SkillPayload, SyncResult } from '../lib/types'
+import type { HookPlan, SettingsPayload, SkillPayload, SyncResult } from '../lib/types'
 
 interface Props {
   onBack: () => void
@@ -9,12 +9,13 @@ interface Props {
   onApplied: () => void
 }
 
-type SectionId = 'data' | 'shortcut' | 'skill'
+type SectionId = 'data' | 'shortcut' | 'skill' | 'hook'
 
 const SECTIONS: Array<{ id: SectionId; label: string }> = [
   { id: 'data', label: '数据目录' },
   { id: 'shortcut', label: '快捷键' },
   { id: 'skill', label: 'CLI 与 Skill' },
+  { id: 'hook', label: '钩子' },
 ]
 
 function describeSync(sync: SyncResult | null): string {
@@ -39,6 +40,11 @@ export default function Settings({ onBack, onApplied }: Props) {
   const [skill, setSkill] = useState<SkillPayload | null>(null)
   const [skillNotice, setSkillNotice] = useState('')
   const [skillError, setSkillError] = useState('')
+
+  // Agent hook 安装状态：同样只在打开这一节时读真文件
+  const [hook, setHook] = useState<HookPlan | null>(null)
+  const [hookNotice, setHookNotice] = useState('')
+  const [hookError, setHookError] = useState('')
 
   // 呼出快捷键：注册归主进程（globalShortcut 只在那儿），这里只做录制与显示
   const [hotkey, setHotkey] = useState<{ shortcut: string; fallback: string } | null>(null)
@@ -71,6 +77,14 @@ export default function Settings({ onBack, onApplied }: Props) {
       .skill()
       .then(setSkill)
       .catch((e: Error) => setSkillError(`读取安装状态失败：${e.message}`))
+  }, [section])
+
+  useEffect(() => {
+    if (section !== 'hook') return
+    void api
+      .hooks()
+      .then(setHook)
+      .catch((e: Error) => setHookError(`读取安装状态失败：${e.message}`))
   }, [section])
 
   useEffect(() => {
@@ -191,6 +205,36 @@ export default function Settings({ onBack, onApplied }: Props) {
     }
   }
 
+  async function installHooks() {
+    setBusy(true)
+    setHookNotice('')
+    setHookError('')
+    try {
+      const res = await api.installHooks()
+      setHook(res)
+      setHookNotice(res.installed.length ? `已完成：${res.installed.join('；')}` : '没有需要安装的')
+    } catch (e) {
+      setHookError(`安装失败：${(e as Error).message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function uninstallHooks() {
+    setBusy(true)
+    setHookNotice('')
+    setHookError('')
+    try {
+      const res = await api.uninstallHooks()
+      setHook(res)
+      setHookNotice(res.removed.join('；'))
+    } catch (e) {
+      setHookError(`卸载失败：${(e as Error).message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="settings-page">
       <aside className="settings-nav">
@@ -291,6 +335,48 @@ export default function Settings({ onBack, onApplied }: Props) {
               点上面的键位开始录制，在任意应用里按它呼出 / 收起面板。
               组合要带 ⌘ / ⌃ / ⌥；被别的应用占用时会改绑失败，换一个再试。
             </p>
+          </>
+        )}
+
+
+        {section === 'hook' && (
+          <>
+            <h1>钩子</h1>
+
+            {hookError && <div className="notice">{hookError}</div>}
+            {hookNotice && <div className="notice ok">{hookNotice}</div>}
+
+            <p className="hint">
+              把 easy-flow 的 hook 装进两个 agent 的用户配置，会话状态才能细到每次工具调用。
+              只往事件数组里追加自己那条，卸载只摘自己那条——别人的 hook 原样不动；改配置前会留一份 .bak。
+              端口变了，装出来的地址会跟着更新。
+            </p>
+
+            <div className="section-label">安装状态</div>
+            {(hook?.agents ?? []).map((a) => (
+              <div className="row" key={a.id}>
+                <span>
+                  {a.label} ·{' '}
+                  {a.problem ? `读不了：${a.problem}` : a.installed ? `已安装（${a.events} 个事件）` : '未安装'}
+                </span>
+                <span>{a.url}</span>
+              </div>
+            ))}
+            {!hook && <div className="row"><span>读取中…</span></div>}
+
+            <div className="row">
+              <button className="btn primary" disabled={busy || !hook} onClick={() => void installHooks()}>
+                {hook?.agents.some((a) => a.installed) ? '重新安装' : '一键安装'}
+              </button>
+              <button className="btn" disabled={busy || !hook} onClick={() => void uninstallHooks()}>
+                一键卸载
+              </button>
+            </div>
+
+            <div className="section-label">写到哪</div>
+            <pre>
+              {(hook?.agents ?? []).map((a) => `${a.label}  ${a.file}`).join('\n') || '读取中…'}
+            </pre>
           </>
         )}
 
