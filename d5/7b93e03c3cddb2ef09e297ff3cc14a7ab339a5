@@ -1,0 +1,38 @@
+src/renderer/src/App.tsx
+  s_d9b2c19219dd2b::t_f76b2902146d23 436-438
+  s_d9b2c19219dd2b::t_8596547762a4d0 694-696
+  s_d9b2c19219dd2b::t_ef78b22bc1084e 416-435,439-456
+  s_d9b2c19219dd2b::t_f98e793604d4cd 147-150
+  s_d9b2c19219dd2b::t_b6437698540e70 40-45,58-60
+  s_d9b2c19219dd2b::t_82f25f046fae84 15
+  s_d9b2c19219dd2b::t_b578d26cb06304 111-113
+src/renderer/src/components/Card.tsx
+  s_d9b2c19219dd2b::t_0eb8ae85b5fc4c 4,16-21,26
+  s_d9b2c19219dd2b::t_b50ece6b634a35 59,62
+  s_d9b2c19219dd2b::t_6299832ecff72f 111-131
+src/renderer/src/lib/children.ts
+  s_d9b2c19219dd2b::t_1c1faa332f46ee 27-41,43-49
+  s_d9b2c19219dd2b::t_166a7144d872c6 2,5-6
+  s_d9b2c19219dd2b::t_e4ed407b6ef1ca 42
+src/renderer/src/styles.css
+  s_d9b2c19219dd2b::t_845cbe0eeb9623 497-562
+test/core.test.ts
+  s_d9b2c19219dd2b::t_0d19c37ea13236 752-791
+  s_d9b2c19219dd2b::t_a7ca6f6dab7369 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "d57b93e03c3cddb2ef09e297ff3cc14a7ab339a5",
+  "prompts": {},
+  "sessions": {
+    "s_d9b2c19219dd2b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7a263272-8772-4ade-b9f4-3469b4772e60",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
