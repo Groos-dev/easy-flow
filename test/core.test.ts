@@ -31,7 +31,7 @@ import { codeLinkLabel } from '../src/renderer/src/lib/links.ts'
 import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib/shortcut.ts'
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
-import { PET_STATES, PET_RANK, MAX_PETS, focusIndex, petStateOf, planPetRow } from '../src/renderer/src/lib/pets.ts'
+import { PET_STATES, PET_RANK, MAX_PETS, focusIndex, petStateOf, petLabelOf, planPetRow } from '../src/renderer/src/lib/pets.ts'
 import { petArt } from '../src/renderer/src/lib/pet-art.ts'
 import { childStatsOf, childrenOf } from '../src/renderer/src/lib/children.ts'
 import { parseStamp, relTime } from '../src/renderer/src/lib/time.ts'
@@ -3658,11 +3658,26 @@ describe('未读事件：角标挂哪些会话', () => {
 
 describe('pet：粗粒度状态映射与抢注意力挑选', () => {
   test('会话状态落到最贴近的 pet 状态，读不到的不给 pet', () => {
-    assert.equal(petStateOf('running'), 'working')
-    assert.equal(petStateOf('done'), 'done')
-    assert.equal(petStateOf('blocked'), 'blocked')
-    assert.equal(petStateOf('failed'), 'failed')
-    assert.equal(petStateOf('unknown'), null)
+    assert.equal(petStateOf('running', false), 'working')
+    assert.equal(petStateOf('done', true), 'done')
+    assert.equal(petStateOf('blocked', false), 'blocked')
+    assert.equal(petStateOf('failed', true), 'failed')
+    assert.equal(petStateOf('unknown', true), null)
+  })
+
+  test('读过的 done 落静止，blocked 不降档（看过 ≠ 答过）', () => {
+    assert.equal(petStateOf('done', false), 'idle')
+    assert.equal(petStateOf('blocked', false), 'blocked')
+    assert.equal(petStateOf('failed', false), 'failed')
+    // running 不是事件，fresh 对它没有意义
+    assert.equal(petStateOf('running', false), 'working')
+  })
+
+  test('文案比姿势说得细：读过的 done 姿势静止、文案「跑完已看」', () => {
+    assert.equal(petLabelOf('done', false, 'idle'), '跑完已看')
+    assert.equal(petLabelOf('done', true, 'done'), '跑完待看')
+    assert.equal(petLabelOf('blocked', false, 'blocked'), '等你')
+    assert.equal(petLabelOf('running', false, 'working'), '干活')
   })
 
   test('六档状态齐备', () => {
@@ -3798,16 +3813,30 @@ describe('pet：一行 pet 的排布', () => {
     assert.equal(items.some((p) => p.focus), false)
   })
 
-  test('pet 长期留着：读过的事件也画 pet，且点得到', () => {
+  test('pet 长期留着：读过的事件也画 pet，且点得到——但姿势降成静止', () => {
     const read = planPetRow([sess('claude', 'done', false)])
     assert.equal(read.items.length, 1)
-    assert.equal(read.items[0].state, 'done')
+    assert.equal(read.items[0].state, 'idle')
+    assert.equal(read.items[0].label, '跑完已看')
     assert.equal(read.items[0].event, false)
+  })
+
+  test('没读过的 done 姿势与文案都不变', () => {
+    const unread = planPetRow([sess('claude', 'done', true)]).items[0]
+    assert.equal(unread.state, 'done')
+    assert.equal(unread.label, '跑完待看')
+    assert.equal(unread.event, true)
   })
 
   test('事件样式只跟 fresh 走：未读 done 带 event，读过的不带', () => {
     assert.equal(planPetRow([sess('claude', 'done', true)]).items[0].event, true)
     assert.equal(planPetRow([sess('claude', 'done', false)]).items[0].event, false)
+  })
+
+  test('读过的 blocked 仍摆「等你」，姿势与文案都不降档', () => {
+    const read = planPetRow([sess('claude', 'blocked', false)]).items[0]
+    assert.equal(read.state, 'blocked')
+    assert.equal(read.label, '等你')
   })
 
   test('读过的 pet 留着，但不抢注意力', () => {
