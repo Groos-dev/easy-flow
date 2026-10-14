@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { AGENT_LABELS } from '../lib/labels'
-import { agentFilter, petImageSrc } from '../lib/pet-art'
+import { petArt } from '../lib/pet-art'
 import { PET_LABEL, planPetRow, type PetState } from '../lib/pets'
 import type { Session } from '../lib/types'
 
 /**
  * 系统开了「减少动态效果」就换静态素材。
- * 素材是 <img> 里的 SVG，自带 <style> 与 @keyframes——外部 CSS 够不进那个文档，停不掉它的动画，
- * 所以另有剥掉动画的 *.still.svg（构建期生成，见 scripts/build-pets.mjs）。
+ * clawd 的自带动画封在 <img> 的 SVG 文档里，外部 CSS 够不进去，只能另出 *.still.svg；
+ * cloudling 是脚本驱动，停不了 JS，still 版由构建脚本只放行首帧。都见 scripts/build-pets.mjs。
  */
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(
@@ -24,7 +24,8 @@ function usePrefersReducedMotion(): boolean {
 }
 
 /**
- * 一档状态一只 pet：换成 clawd 的像素形象，动作是素材自带的（每张 SVG 里都有自己的 @keyframes）。
+ * 一档状态一只 pet：一个 agent 一套素材，动作与表情都来自素材本身
+ * （clawd 是 SVG 自带的 @keyframes，cloudling 是素材里的脚本；宿主不再另写）。
  *
  * 状态只从 props 进，组件本身不认识会话、数据源——可以拿假状态单独开发。
  * `event` 是「这是个没读过的事件」——事件边框与一次性动效靠它，读过就没了；
@@ -54,15 +55,14 @@ export default function Pet({
   link?: string
 }) {
   const label = `${AGENT_LABELS[agent] ?? agent} · ${PET_LABEL[state]}`
-  const tint = agentFilter(agent)
-  const body = (
-    <img
-      src={petImageSrc(state, { compact, still })}
-      alt=""
-      draggable={false}
-      style={tint ? { filter: tint } : undefined}
-    />
-  )
+  const { src, channel } = petArt(agent, state, { compact, still })
+  // cloudling 是脚本驱动、必须走 <object>；clawd 走 <img>（每张 SVG 自带同名 @keyframes，内联会互相覆盖）
+  const body =
+    channel === 'object' ? (
+      <object data={src} type="image/svg+xml" aria-hidden="true" />
+    ) : (
+      <img src={src} alt="" draggable={false} />
+    )
   const cls = `pet${compact ? ' compact' : ''} s-${state}${event ? ' event' : ''}${focus ? ' focus' : ''}`
 
   if (!link) {

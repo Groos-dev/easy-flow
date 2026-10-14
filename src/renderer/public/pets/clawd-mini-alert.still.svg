@@ -86,6 +86,8 @@
     
       /* still：停掉自带动画，其余声明原样保留（prefers-reduced-motion 用） */
       * { animation: none !important; }
+      /* still：靠动画显形的装饰，冻结后置为可见 */
+      .alert-pop { opacity: 1 !important; }
     </style>
   </defs>
 
