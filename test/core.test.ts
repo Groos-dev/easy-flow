@@ -3195,6 +3195,14 @@ describe('未读事件：角标挂哪些会话', () => {
     }
   })
 
+  test('一个事件只能消费一次：消掉之后卡片上不留任何残迹', () => {
+    // 告警色、原文、可点的角标三者同判据，所以读过之后连入口一起消失——
+    // 不能出现「还亮着告警、却点不到会话」的卡片
+    const read = badgesOf([sess('claude', 'blocked', false)])
+    assert.deepEqual(read, [])
+    assert.equal(badgesOf([sess('claude', 'blocked', true)]).length, 1)
+  })
+
   test('正在跑不受已读影响：它不是事件，自己会结束，不用人消费', () => {
     assert.equal(badgesOf([sess('claude', 'running', false)]).length, 1)
   })

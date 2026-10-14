@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import type { ChildStat, Requirement, Session } from '../lib/types'
+import { badgesOf, isEventState } from '../lib/threads'
 import { relTime } from '../lib/time'
 import ThreadBadge from './ThreadBadge'
 
 interface Props {
   req: Requirement
-  /** 这条需求名下该挂角标的会话，已按急缓排好；空数组就不挂 */
+  /** 这条需求名下的全部会话。挂不挂角标由这里自己按 badgesOf 判——卡片的待处理状态
+   *  要比角标宽一点（读过但没回答的 blocked 也算），拿不到全量就漏掉那种 */
   sessions?: Session[]
   /** 有子需求才传：卡片默认收成一行窄条，点一下铺开 */
   childStat?: ChildStat
@@ -32,11 +34,24 @@ export default function Card({ req, sessions, childStat, onOpen, overlay = false
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined
 
+  /**
+   * 卡片自己的状态：卡住了优先，其余未读事件次之。判据与角标同一套（`needsBadge`）——
+   * 事件消费一次就消，所以「有告警」与「有可点的入口」永远同时成立，不会出现
+   * 只报警、点不到会话的卡片。
+   */
+  const all = sessions ?? []
+  const blocked = all.find((s) => s.status.state === 'blocked' && s.status.fresh)
+  const need = blocked?.status.needsAction ?? ''
+  const unread = !blocked && all.some((s) => isEventState(s.status.state) && s.status.fresh)
+  const badges = badgesOf(all)
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`card${folded ? ' folded' : ''}${isDragging ? ' dragging' : ''}`}
+      className={`card${folded ? ' folded' : ''}${isDragging ? ' dragging' : ''}${
+        need ? ' needs-you' : unread ? ' unread' : ''
+      }`}
       onClick={() => (folded ? setOpen(true) : !overlay && onOpen?.(req.slug))}
       title={folded ? '展开' : undefined}
       {...listeners}
@@ -71,27 +86,23 @@ export default function Card({ req, sessions, childStat, onOpen, overlay = false
           </span>
         )}
       </div>
+      {/* 收窄也照挂：父需求名下常有自己的会话，收窄不该把信号一起收掉 */}
+      {!overlay && need && <div className="card-need">{need}</div>}
       {/* 每个会话各挂一个角标：一眼看出这条需求名下哪个 agent 跑完了、哪个卡住了。
-          拖拽浮层里不挂——那一层只负责跟手，不是给人读的。父需求收窄了也照挂：
-          父需求名下常有自己的会话和工作区，收窄不该把信号一起收掉 */}
-      {!overlay && sessions && sessions.length > 0 && (
+          拖拽浮层里不挂——那一层只负责跟手，不是给人读的 */}
+      {!overlay && badges.length > 0 && (
         <div className="thread-badges">
-          {sessions.map((s) => (
+          {badges.map((s) => (
             <ThreadBadge key={`${s.agent}:${s.session}`} session={s} />
           ))}
         </div>
       )}
       {!folded && (
         <>
-          <div className="card-slug">{req.slug}</div>
           {req.summary && <div className="card-summary">{req.summary}</div>}
+          {/* 页脚只留日期：slug 是命令行的句柄，仓库是「涉及仓库」表里的短名，
+              两样在看板上都扫不出信息——详情浮窗与需求文档里有 */}
           <div className="card-foot">
-            {req.repos.slice(0, 3).map((r) => (
-              <span key={r.short} className="chip">
-                {r.short}
-              </span>
-            ))}
-            {req.repos.length > 3 && <span className="chip">+{req.repos.length - 3}</span>}
             {/* 状态更新日期优先；没有就回落到文件修改时间 */}
             <span className="stage">{req.updated ? req.updated.slice(5) : relTime(req.mtime)}</span>
           </div>

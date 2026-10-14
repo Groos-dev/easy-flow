@@ -14,13 +14,21 @@ import {
 import { api } from './lib/api'
 import { DONE_STATUS, childStatsOf } from './lib/children'
 import type { ChildStat, Project, Requirement, Session, Status, Todo, TodoStatus } from './lib/types'
-import { badgesOf } from './lib/threads'
 import BoardSwitcher, { type BoardView } from './components/BoardSwitcher'
 import MindMap from './components/MindMap'
 import Card from './components/Card'
 import Detail from './components/Detail'
+import SearchPanel from './components/SearchPanel'
 import Settings from './components/Settings'
 import TodoBoard from './components/TodoBoard'
+
+/** 空列的一句话：一个「—」说不出这一列是干什么的。认不出的状态回落到通用文案 */
+const COLUMN_HINT: Record<string, string> = {
+  澄清: '没有待澄清的需求',
+  执行中: '没有正在执行的需求',
+  Review: '没有等待评审的需求',
+  已完成: '还没有完成的需求',
+}
 
 interface BoardColumnProps {
   status: Status
@@ -83,13 +91,13 @@ function ColumnView({
       </div>
       <div className="column-body">
         {items.length === 0 ? (
-          <div className="empty">—</div>
+          <div className="empty">{COLUMN_HINT[status] ?? '没有需求'}</div>
         ) : (
           items.map((r) => (
             <Card
               key={r.slug}
               req={r}
-              sessions={badgesOf(sessionsByReq.get(r.id) ?? [])}
+              sessions={sessionsByReq.get(r.id) ?? []}
               childStat={childStats.get(r.id)}
               onOpen={onOpen}
             />
@@ -144,6 +152,16 @@ export default function App() {
   /** mini 面板可能点开非当前项目的需求，这里单独持有 */
   const [crossReq, setCrossReq] = useState<Requirement | null>(null)
   const [overStatus, setOverStatus] = useState<Status | null>(null)
+  /**
+   * ⌘K 搜索。「面板开着」与「筛选词还在」是两件事：关掉面板筛选留着，
+   * 否则刚搜出来的那几张卡在眼前一闪就没了，看板与导图上的过滤等于白做。
+   */
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  /** 命中集合；null 表示没在筛。看板的过滤与导图的 hits 共用它 */
+  const [hits, setHits] = useState<Set<string> | null>(null)
+  /** 正在等服务端返回：用来区分「还没查」与「查了没有」 */
+  const [searching, setSearching] = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   /** 待打开的需求只取一次（主窗口刚重建时的那份交接） */
@@ -185,13 +203,23 @@ export default function App() {
     return () => off?.()
   }, [openRequirement])
 
-  // Cmd+, 打开设置。Electron 里由应用菜单的加速键触发（见 main/registerMenu），
-  // 浏览器开发时没有菜单，这里补一个键盘监听。
+  /**
+   * 搜索面板只在看板上开。它筛的就是看板与导图，从详情页或设置页开出来，
+   * 人看到的是一个筛掉了卡片的界面自己却不在上面——不如不给这个入口。
+   */
+  const onBoard = !showSettings && !detail && !todoId && view === 'req'
+
+  // 窗口级快捷键。⌘, 打开设置——Electron 里由应用菜单的加速键触发（见 main/registerMenu），
+  // 浏览器开发时没有菜单，这里补一个键盘监听；⌘K 开合搜索面板。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+      if (!(e.metaKey || e.ctrlKey)) return
+      if (e.key === ',') {
         e.preventDefault()
         setShowSettings(true)
+      } else if (e.key === 'k' && onBoard) {
+        e.preventDefault()
+        setSearchOpen((v) => !v)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -200,7 +228,38 @@ export default function App() {
       window.removeEventListener('keydown', onKey)
       off?.()
     }
-  }, [])
+  }, [onBoard])
+
+  /**
+   * 搜索交给服务端：它连文档正文一起搜（见 db.search），渲染层不做遍历。
+   * 防抖只是别让每个按键都发一次请求；换了项目就重查，命中集合是按项目算的。
+   */
+  useEffect(() => {
+    const q = query.trim()
+    if (!q) {
+      setHits(null)
+      setSearching(false)
+      return
+    }
+    setSearching(true)
+    let alive = true
+    const timer = setTimeout(() => {
+      void api
+        .search(q)
+        .then((r) => {
+          if (alive) setHits(new Set(r.requirements.map((x) => x.slug)))
+        })
+        // 搜挂了不该把看板一起弄坏：维持上一次的命中集合，界面照常能用
+        .catch(() => {})
+        .finally(() => {
+          if (alive) setSearching(false)
+        })
+    }, 120)
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
+  }, [query, project])
 
   const load = useCallback(async () => {
     try {
@@ -310,11 +369,17 @@ export default function App() {
     }
   }
 
+  /** 搜索时看板只留命中的卡片。导图不在这里筛——它要留着祖先链，见 filterByHits */
+  const shown = useMemo(
+    () => (hits ? items.filter((r) => hits.has(r.slug)) : items),
+    [items, hits],
+  )
+
   const byStatus = useMemo(() => {
     const map = new Map<Status, Requirement[]>(
       (statuses ?? []).map((s) => [s, []]),
     )
-    for (const r of items) {
+    for (const r of shown) {
       const st = (r.status ?? '澄清') as Status
       if (!map.has(st)) map.set(st, [])
       map.get(st)!.push(r)
@@ -324,7 +389,7 @@ export default function App() {
       list.sort((a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9))
     }
     return map
-  }, [items, statuses])
+  }, [shown, statuses])
 
   /**
    * 父需求的子需求完成度。父子在版面上散在各列（`byStatus` 只按状态分列），
@@ -490,6 +555,36 @@ export default function App() {
               </div>
 
               <div className="topbar-side right">
+                {/* 筛选标记常驻：关掉面板后看板上少了卡片，得有个东西解释为什么少。
+                    待办板不按需求筛，所以只在需求板块下摆 */}
+                {view === 'req' && query.trim() && (
+                  <button
+                    className="filter-chip"
+                    title="点一下继续改筛选词"
+                    onClick={() => setSearchOpen(true)}
+                  >
+                    <span className="filter-chip-q">{query.trim()}</span>
+                    <span className="n">{hits ? shown.length : ''}</span>
+                    <svg
+                      className="filter-chip-x"
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setQuery('')
+                      }}
+                    >
+                      <title>清掉筛选</title>
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                    </svg>
+                  </button>
+                )}
                 {/* 导图是需求板块里的一种呈现，待办板块下不摆 */}
                 {view === 'req' && (
                   <div className="seg">
@@ -552,12 +647,28 @@ export default function App() {
               <MindMap
                 requirements={items}
                 projectName={projectName || project}
+                hits={hits}
                 onOpen={(slug) => setDetail({ project, slug })}
               />
             )}
           </div>
         )}
       </main>
+
+      {/* 面板挂在最外层：它得盖住看板整块，而不是被某个分支的布局裁掉 */}
+      {searchOpen && onBoard && (
+        <SearchPanel
+          query={query}
+          onQuery={setQuery}
+          results={hits ? shown : []}
+          pending={searching}
+          onPick={(slug) => {
+            setSearchOpen(false)
+            openRequirement(project, slug)
+          }}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
     </div>
   )
 }

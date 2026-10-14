@@ -7,6 +7,9 @@
  * 「读过」由服务端给的 fresh 判——Claude 看会话有没有在你最后一次聚焦之后动过，
  * Codex 看官方的未读集合，你一打开会话那边就把标记清了。
  *
+ * 一个事件只能消费一次：跳过去看过，它就不再占版面。`blocked` 不例外——
+ * 看板的告警、卡片上那句话原文、能点的角标，三者用同一条判据，要亮一起亮，要消一起消。
+ *
  * `running` 不是事件，是实时状态：它自己会结束，不需要人「消费」，所以不受已读影响。
  * `unknown` 读不到，不提示。
  */
@@ -20,7 +23,12 @@ export function isEventState(state: ThreadState): boolean {
   return state === 'done' || state === 'blocked' || state === 'failed'
 }
 
-/** 这条会话现在要不要挂角标：未读事件，或正在跑 */
+/**
+ * 这条会话现在要不要挂角标：未读事件，或正在跑。
+ *
+ * 事件只能消费一次——读过就不再展示，`blocked` 也一样。卡片上那圈告警色与原文
+ * 用的是同一条判据，所以「有告警」与「有可点的入口」永远同时成立。
+ */
 export function needsBadge(session: Session): boolean {
   const { state, fresh } = session.status
   if (state === 'unknown') return false

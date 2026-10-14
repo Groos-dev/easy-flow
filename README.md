@@ -51,8 +51,8 @@
   与 `AGENTS.md`（身份 id 写在 frontmatter，外加给 agent 的指令）——缺一份就不算需求
 - **子需求**就是需求目录里的需求目录，判据与一层时完全一样，层级不限。它和普通需求
   一样入库、一样出现在看板上，也能按 id 反查；`slug` 是相对项目根的路径
-  （顶层 `alpha`，子需求 `alpha/gateway`），卡片上直接显示这个路径。父子关系另存在
-  库里（`parent_id`），需求没 id 时它为空，层级仍能从 slug 看出来
+  （顶层 `alpha`，子需求 `alpha/gateway`）。父子关系另存在库里（`parent_id`），
+  需求没 id 时它为空，层级仍能从 slug 看出来
 - **状态**（看板列、优先级、链接、会话）只存在 `easy-flow.db` 里，永远不写进 md：
   agent 重写需求文档不会把状态弄丢，代价是换数据目录等于换状态
 - **会话**是 agent 登记在需求上的自己的会话（claude code / codex / cursor）：agent 开工时

@@ -229,6 +229,48 @@ body {
   border-color: #2b3a55;
 }
 
+/*
+ * 生效中的筛选：顶栏留一枚标记，说明看板上为什么少了卡片。
+ * 点主体继续改词，点叉清掉——两件事分开，别让「改」和「清」抢同一下点击。
+ */
+.filter-chip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  padding: 3px 6px 3px 10px;
+  border: 1px solid #2b3a55;
+  border-radius: 999px;
+  background: #1b2536;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.filter-chip-q {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-chip .n {
+  flex: none;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.filter-chip-x {
+  flex: none;
+  color: var(--text-faint);
+}
+
+.filter-chip-x:hover {
+  color: var(--text);
+}
+
 .search {
   width: 260px;
   padding: 5px 10px;
@@ -265,19 +307,23 @@ body {
 
 /* ---------------------------------------------------------------- 看板 */
 
+/*
+ * 列撑满可用高度（默认 stretch）。列只包住内容时，视觉重心全挤在左上角，
+ * 下方留一大片空；撑满之后「还有多少没做完」也能从列的深浅上看出来。
+ */
 .board {
   flex: 1;
   display: flex;
   gap: 12px;
   padding: 12px 16px 16px;
   overflow-x: auto;
-  align-items: flex-start;
 }
 
 .column {
   flex: 1 1 0;
   min-width: 240px;
-  max-height: 100%;
+  /* 撑满高度后列体才是唯一滚动的那个；不归零会被内容撑破 */
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--column);
@@ -305,6 +351,8 @@ body {
 }
 
 .column-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -366,6 +414,7 @@ body {
   color: var(--text-faint);
   text-align: center;
   font-size: 12px;
+  line-height: 1.6;
 }
 
 /* ---------------------------------------------------------------- 卡片 */
@@ -387,6 +436,32 @@ body {
 
 .card.dragging {
   opacity: 0.4;
+}
+
+/*
+ * 会话信号压到卡片上：卡住（未读的 blocked）用橙，其余未读事件用蓝。
+ * 用左侧色条而不是整块底色——四列扫过去能认出哪几张在等你，又不至于吵。
+ */
+.card.needs-you {
+  border-color: #4a3a28;
+  box-shadow: inset 3px 0 0 var(--status-review);
+}
+
+.card.unread {
+  border-color: #2b3a55;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* 需要人介入的那句话原文。卡片上给两行就够——它是一句话，不是一段 */
+.card-need {
+  margin-top: 4px;
+  color: #e8b48a;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 /* 父需求收成一行：只留标题与子需求完成度，点一下才铺开。与「已完成」列同一套收窄语言 */
@@ -509,6 +584,22 @@ body {
   border-radius: 4px;
 }
 
+/* 设置页里那几块「读出来的现状」（数据目录、装了什么）：等宽带底，
+   与旁边的说明文字分层——原先是个裸 pre，跟旁边的卡片不是一个语言 */
+.settings-main pre {
+  margin: 6px 0;
+  padding: 10px 12px;
+  background: var(--column);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ------------------------------------------------------- 右下角齿轮按钮 */
 
 .gear-btn {
@@ -596,6 +687,7 @@ body {
   -webkit-box-orient: vertical;
 }
 
+/* 待办卡片上的 id：它是 `todo set <id>` 的句柄，留着有用 */
 .card-slug {
   color: var(--text-faint);
   font-size: 11px;
@@ -627,7 +719,7 @@ body {
 }
 
 .chip {
-  padding: 1px 6px;
+  padding: 2px 7px;
   background: #2a3038;
   border-radius: 4px;
   color: var(--text-dim);
@@ -682,23 +774,39 @@ body {
 
 /* 卡片角标：压在标题下面一行。做成按钮是因为它点一下直接跳回会话——
    卡片本身的点击是开详情，两者不是一件事 */
+/* 卡片角标：agent 图标 + 状态点，点一下直接跳回会话——卡片本身的点击是开详情，
+   两者不是一件事。图标比写 agent 名省一半宽度，一行挂得下更多会话 */
 .thread-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 1px 7px;
+  gap: 4px;
+  padding: 2px 6px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: #232830;
   color: var(--text-dim);
   font-size: 11px;
   font-family: inherit;
-  line-height: 1.6;
+  line-height: 1;
 }
 
 button.thread-badge:hover {
   border-color: var(--accent);
   color: var(--text);
+}
+
+/* 「有事件」的徽标另加一圈状态色边框：角标本身只说明「值得看」，正在跑也算，
+   这一圈把真要人消费的（卡住 / 跑完没看 / 失败）挑出来 */
+.thread-badge.event.t-blocked {
+  border-color: var(--status-review);
+}
+
+.thread-badge.event.t-failed {
+  border-color: #ff5c5c;
+}
+
+.thread-badge.event.t-done {
+  border-color: var(--status-done);
 }
 
 /* 没有 deeplink 的会话：只报状态，不给一个点了没反应的按钮 */
@@ -1913,4 +2021,111 @@ button.thread-badge:hover {
 
 .launch-retry:hover {
   text-decoration: underline;
+}
+
+/* --------------------------------------------------------- ⌘K 搜索面板 */
+
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  /* 面板压在窗口顶部约 1/6 处：够靠上，视线不用挪 */
+  padding: 15vh 16px 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.palette {
+  width: 100%;
+  max-width: 560px;
+  max-height: 62vh;
+  display: flex;
+  flex-direction: column;
+  background: #1a1f27;
+  border: 1px solid #333b47;
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.palette-input {
+  flex: none;
+  padding: 12px 14px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.palette-input::placeholder {
+  color: var(--text-faint);
+}
+
+.palette-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.palette-hint {
+  padding: 18px 10px;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+.palette-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.palette-row.on {
+  background: var(--card-hover);
+}
+
+/* 状态点尺寸只在这里给，颜色共用看板那组 .dot.s-* */
+.palette-row .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.palette-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-slug {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.palette-foot {
+  flex: none;
+  display: flex;
+  gap: 14px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 11px;
 }

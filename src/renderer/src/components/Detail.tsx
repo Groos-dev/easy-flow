@@ -443,8 +443,10 @@ export default function Detail({
           ) : (
             <div
               className="doc-scroll"
+              title="双击进入编辑（⌘E）"
               onDoubleClick={() => setMode('source')}
             >
+              {/* 上面那个 title 不只是提示：样式表按 [title] 认出「这里能双击进编辑」并画出虚框 */}
               {loading && <div className="loading">读取中…</div>}
               {!loading && (
                 <article className="markdown-body">

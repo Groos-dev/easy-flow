@@ -18,6 +18,14 @@ function label(status: string): string {
   return TODO_STATUS_LABEL[status] ?? status
 }
 
+/** 空列的一句话：一个「—」说不出这一列是干什么的。认不出的状态回落到通用文案 */
+const EMPTY_HINT: Record<string, string> = {
+  todo: '没有待办的事',
+  in_progress: '没有正在做的',
+  done: '还没有完成的',
+  cancelled: '没有取消的',
+}
+
 interface CardProps {
   todo: Todo
   onOpen: (id: string) => void
@@ -76,7 +84,7 @@ function ColumnView({ status, items, onOpen, isOver }: ColumnProps) {
       </div>
       <div className="column-body">
         {items.length === 0 ? (
-          <div className="empty">—</div>
+          <div className="empty">{EMPTY_HINT[status] ?? '没有待办'}</div>
         ) : (
           items.map((t) => <TodoCard key={t.id} todo={t} onOpen={onOpen} />)
         )}
