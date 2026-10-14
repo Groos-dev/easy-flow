@@ -1,0 +1,23 @@
+test/next-up.test.ts
+  s_96bf2edccbe84b::t_e7ff3aa3de6b7f 74
+test/pet-card.test.ts
+  s_96bf2edccbe84b::t_b91b4be9ff1b29 26
+test/core.test.ts
+  s_96bf2edccbe84b::t_0bedaec4294a89 3573
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "cb577a349b503c598fc3e8690cebe2884d8fafaa",
+  "prompts": {},
+  "sessions": {
+    "s_96bf2edccbe84b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eeecd158-1664-4fd6-953c-533c382deb31",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
