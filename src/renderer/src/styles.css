@@ -969,7 +969,7 @@ body {
 
 /* --------------------------------------------------- agent pet（卡上一会话一只） */
 
-/* 两轴分开：身体色（--tint）归 agent，姿势 + 光环归状态。
+/* 两轴分开：身体色（素材上的 CSS filter）归 agent，姿势 + 光环归状态。
    44px 是草稿量出来的下限——再小表情就看不出了 */
 .pets {
   display: flex;
@@ -989,10 +989,10 @@ body {
   border-radius: 14px;
   background: #232830;
   border: 1px solid var(--border);
-  color: var(--tint, var(--text-dim));
 }
 
-.pet svg {
+/* 素材走 <img>：每张 SVG 自带 <style> 与 @keyframes，内联会让同名的 keyframes 互相覆盖 */
+.pet img {
   width: 38px;
   height: 38px;
   display: block;
@@ -1031,17 +1031,6 @@ button.pet:hover {
   border-color: var(--accent);
 }
 
-@keyframes pet-breathe {
-  0%, 100% { transform: scale(1, 1); }
-  50% { transform: scale(1.05, 0.95); }
-}
-
-@keyframes pet-hop {
-  0%, 100% { transform: translateY(0) scale(1, 1); }
-  40% { transform: translateY(-3px) scale(0.96, 1.05); }
-  70% { transform: translateY(0) scale(1.05, 0.94); }
-}
-
 @keyframes pet-pulse {
   0% { box-shadow: 0 0 0 0 rgba(255, 159, 67, 0.55); }
   70% { box-shadow: 0 0 0 7px rgba(255, 159, 67, 0); }
@@ -1061,15 +1050,8 @@ button.pet:hover {
   60% { transform: translateX(2.5px) rotate(6deg); }
 }
 
-/* 干活 / 思考是实时状态，只轻动、不抢注意力，所以无条件动——
-   套 .focus 会卡在 focusIndex 那条 gate 上，最活跃的两档反而永远是死的 */
-.pet.s-thinking svg {
-  animation: pet-breathe 2.8s ease-in-out infinite;
-}
-
-.pet.s-working svg {
-  animation: pet-hop 0.62s ease-in-out infinite;
-}
+/* 干活 / 思考的轻动来自素材自带的动效，宿主不再另写一份——
+   要停就换 *.still.svg，见 Pet.tsx 的 prefers-reduced-motion */
 
 /* 只有「等你」那圈脉冲算抢注意力：同组里只让最急的一只脉冲（.focus 由 PetRow 选出）；
    读过的事件连它一起消失 */
@@ -1078,18 +1060,18 @@ button.pet:hover {
 }
 
 /* done / failed 是一次性事件：只响一下，读过就不再响。转常驻就成噪音了，所以与 focus 无关 */
-.pet.event.s-done svg {
+.pet.event.s-done img {
   animation: pet-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-.pet.event.s-failed svg {
+.pet.event.s-failed img {
   animation: pet-shake 0.36s ease-in-out 2;
 }
 
 /* 系统级降级：桌宠可以不管，看板必须管 */
 @media (prefers-reduced-motion: reduce) {
   .pet,
-  .pet svg {
+  .pet img {
     animation: none !important;
   }
 }
@@ -1121,7 +1103,7 @@ button.pet:hover {
   border-radius: 8px;
 }
 
-.pet.compact svg {
+.pet.compact img {
   width: 21px;
   height: 21px;
 }

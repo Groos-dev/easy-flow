@@ -2,7 +2,8 @@
  * 卡上 pet 的状态词汇与挑选规则。
  *
  * 六档姿势来自设计稿（design/card-draft.html）：静止 / 思考 / 干活 / 等你 / 跑完待看 / 失败。
- * 两轴分开：身体色归 agent（AGENT_TINT），姿势 + 光环归状态，所以换个 agent 也认得出在干什么。
+ * 两轴分开：身体色归 agent、姿势 + 光环归状态，所以换个 agent 也认得出在干什么。
+ * 这里只管状态词汇与一行怎么排；素材文件与 agent 染色在 lib/pet-art.ts。
  *
  * 除了挑状态，这里也把「一行 pet 怎么排」算成纯数据（planPetRow）——渲染层只管贴 markup，
  * 排布规则才有回归保护。
@@ -21,20 +22,6 @@ export const PET_LABEL: Record<PetState, string> = {
   blocked: '等你',
   done: '跑完待看',
   failed: '失败',
-}
-
-/** 身体色 = 哪个 agent：Claude 暖棕、Codex 青绿、Cursor 灰 */
-export const AGENT_TINT: Record<string, string> = {
-  claude: '#c98a5e',
-  codex: '#5fb8a0',
-  cursor: '#8b93a1',
-}
-
-/** 认不出的 agent 走一个中性灰，别借用某个具体 agent 的颜色 */
-export const UNKNOWN_TINT = '#8b93a1'
-
-export function agentTint(agent: string): string {
-  return AGENT_TINT[agent] ?? UNKNOWN_TINT
 }
 
 /**

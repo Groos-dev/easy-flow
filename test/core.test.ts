@@ -31,6 +31,7 @@ import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
 import { PET_STATES, PET_RANK, MAX_PETS, focusIndex, petStateOf, planPetRow } from '../src/renderer/src/lib/pets.ts'
+import { agentFilter, petImageSrc } from '../src/renderer/src/lib/pet-art.ts'
 import { childStatsOf } from '../src/renderer/src/lib/children.ts'
 import { parseStamp, relTime } from '../src/renderer/src/lib/time.ts'
 import type { Requirement, Session } from '../src/renderer/src/lib/types.ts'
@@ -3556,6 +3557,37 @@ describe('pet：粗粒度状态映射与抢注意力挑选', () => {
   test('并列取靠前的', () => {
     assert.equal(focusIndex(['done', 'failed']), 1)
     assert.equal(focusIndex(['failed', 'done']), 0)
+  })
+})
+
+describe('pet 素材：状态→clawd 文件、染色、静态版', () => {
+  const art = { compact: false, still: false }
+
+  test('六档大图各一张', () => {
+    assert.equal(petImageSrc('idle', art), 'pets/clawd-idle-follow.svg')
+    assert.equal(petImageSrc('thinking', art), 'pets/clawd-working-thinking.svg')
+    assert.equal(petImageSrc('working', art), 'pets/clawd-working-typing.svg')
+    assert.equal(petImageSrc('blocked', art), 'pets/clawd-notification.svg')
+    assert.equal(petImageSrc('done', art), 'pets/clawd-happy.svg')
+    assert.equal(petImageSrc('failed', art), 'pets/clawd-error.svg')
+  })
+
+  test('折叠卡换 mini 组', () => {
+    assert.equal(petImageSrc('idle', { compact: true, still: false }), 'pets/clawd-mini-idle.svg')
+    assert.equal(petImageSrc('blocked', { compact: true, still: false }), 'pets/clawd-mini-alert.svg')
+    assert.equal(petImageSrc('done', { compact: true, still: false }), 'pets/clawd-mini-happy.svg')
+  })
+
+  test('reduced-motion 换静态版（大图与 mini 都要有）', () => {
+    assert.equal(petImageSrc('done', { compact: false, still: true }), 'pets/clawd-happy.still.svg')
+    assert.equal(petImageSrc('done', { compact: true, still: true }), 'pets/clawd-mini-happy.still.svg')
+  })
+
+  test('染色归 agent：claude 用原色，codex 转青绿，认不出的走中性灰', () => {
+    assert.equal(agentFilter('claude'), '')
+    assert.match(agentFilter('codex'), /hue-rotate/)
+    assert.equal(agentFilter('cursor'), agentFilter('some-new-agent'))
+    assert.match(agentFilter('cursor'), /grayscale/)
   })
 })
 
