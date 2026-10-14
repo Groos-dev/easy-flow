@@ -2026,7 +2026,6 @@ button.thread-badge:hover {
   max-width: 100%;
 }
 
-.launch-empty,
 .launch-result,
 .launch-error {
   display: grid;
@@ -2034,7 +2033,6 @@ button.thread-badge:hover {
   overflow-wrap: anywhere;
 }
 
-.launch-empty p,
 .launch-result p,
 .launch-error p,
 .launch-help {
@@ -2051,7 +2049,7 @@ button.thread-badge:hover {
   color: #ffb4b4;
 }
 
-.launch-empty code,
+.launch-help code,
 .launch-result code,
 .launch-error code {
   white-space: pre-wrap;

@@ -26,9 +26,25 @@ describe('Claude Code 启动链接', () => {
     assert.equal(parsed.searchParams.get('folder'), folder)
   })
 
-  test('缺失或非绝对工作区路径时报错', () => {
-    assert.throws(() => claudeLaunchUrl('prompt', ''), /folder/i)
+  test('非绝对工作区路径时报错', () => {
     assert.throws(() => claudeLaunchUrl('prompt', 'relative/worktree'), /absolute/i)
+  })
+
+  test('没有工作区时不带 folder——应用自己的「New Claude Code Session」也是这么开的', () => {
+    const prompt = '在 easy-flow 需求 req-abc123 上开始工作'
+    const url = claudeLaunchUrl(prompt, '')
+
+    assert.equal(url, `claude://code/new?q=${encodeURIComponent(prompt)}`)
+    const parsed = new URL(url)
+    assert.equal(parsed.pathname, '/new')
+    assert.equal(parsed.searchParams.get('q'), prompt)
+    assert.equal(parsed.searchParams.get('folder'), null)
+  })
+
+  test('provider 在没有工作区的需求上生成不带 folder 的链接', () => {
+    const url = claudeProvider.build({ ...input, worktreeId: '', worktreePath: '', requirementWorktreePaths: [] }, 'prompt')
+
+    assert.equal(new URL(url).searchParams.get('folder'), null)
   })
 
   test('provider 为选中的单个工作区生成 Claude 新会话链接', () => {

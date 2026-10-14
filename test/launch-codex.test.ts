@@ -42,6 +42,23 @@ describe('Codex 开发会话启动', () => {
     assert.deepEqual(codexProjectRoots(input), input.requirementWorktreePaths)
   })
 
+  test('没有工作区时不带 projectId——建 project 也选不中，只多个空 project', async () => {
+    const url = new URL(codexLaunchUrl('', '先读上下文'))
+    assert.equal(url.searchParams.get('projectId'), null)
+    assert.equal(url.searchParams.get('prompt'), '先读上下文')
+
+    const start = AppServer.start
+    try {
+      AppServer.start = async () => {
+        throw new Error('没有工作区时不该去起 app-server')
+      }
+      const url2 = await codexProvider.build({ ...input, requirementWorktreePaths: [] }, 'prompt')
+      assert.equal(new URL(url2).searchParams.get('projectId'), null)
+    } finally {
+      AppServer.start = start
+    }
+  })
+
   test('需求级 project 只在创建时指定 roots', async () => {
     const calls: Array<{ method: string; params: Record<string, unknown> }> = []
     const server = {

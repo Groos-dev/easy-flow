@@ -55,19 +55,19 @@ export function sessionAddCommand(requirementId: string, agent: LaunchAgent): st
 export function launchPrompt(input: LaunchInput): string {
   const register = sessionAddCommand(input.requirementId, input.agent)
   // Codex 的新会话收整条需求（project 含全部工作区），所以按需求取上下文；
-  // Claude 的会话只有一个工作目录，按工作区取
-  if (input.agent === 'codex') {
-    return [
-      `在 easy-flow 需求 ${input.requirementId} 上开始工作。`,
-      '',
-      `先运行 easy-flow context ${input.requirementId} 读项目规范、需求内容、工作区与状态，再动手。`,
-      `发送首条消息、当前会话 ID 已产生后，运行 ${register}`,
-    ].join('\n')
-  }
-  return [
-    `在 easy-flow 需求 ${input.requirementId} 的工作区 ${input.worktreeId} 上开始工作。`,
+  // Claude 的会话只有一个工作目录，按工作区取。没有工作区时两边都退到需求：
+  // Claude 的 deeplink 不带 folder，Codex 不建 project
+  const byWorktree = !!input.worktreeId
+  const lines = [
+    byWorktree
+      ? `在 easy-flow 需求 ${input.requirementId} 的工作区 ${input.worktreeId} 上开始工作。`
+      : `在 easy-flow 需求 ${input.requirementId} 上开始工作。`,
     '',
-    `先运行 easy-flow context ${input.worktreeId} 读项目规范、需求内容与状态，再动手。`,
-    `发送首条消息、当前会话 ID 已产生后，在这个工作区运行 ${register}`,
-  ].join('\n')
+    `先运行 easy-flow context ${byWorktree ? input.worktreeId : input.requirementId} 读项目规范、需求内容与状态，再动手。`,
+  ]
+  if (!input.requirementWorktreePaths.length) {
+    lines.push('这条需求还没有工作区：要改代码先用 easy-flow wt new 开工作区，别直接改仓库主 checkout。')
+  }
+  lines.push(`发送首条消息、当前会话 ID 已产生后${byWorktree ? '，在这个工作区' : ''}运行 ${register}`)
+  return lines.join('\n')
 }

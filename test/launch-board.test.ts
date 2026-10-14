@@ -26,6 +26,7 @@ let base: string
 let previousPath: string | undefined
 let previousOpenFail: string | undefined
 let builtInput: LaunchInput | undefined
+let builtClaudeInput: LaunchInput | undefined
 let builtPrompt = ''
 let buildError = ''
 
@@ -54,6 +55,8 @@ describe('需求详情页启动会话', () => {
     const dataDir = join(testRoot, 'data')
     makeRequirement(dataDir, 'demo', 'alpha', 'req-alpha')
     makeRequirement(dataDir, 'demo', 'beta', 'req-beta')
+    // 刚建出来、还没开工作区的需求
+    makeRequirement(dataDir, 'demo', 'gamma', 'req-gamma')
     mkdirSync(worktreePath, { recursive: true })
     mkdirSync(join(testRoot, 'worktree-beta'), { recursive: true })
     app = createBoardApp({ dataDir })
@@ -100,7 +103,10 @@ describe('需求详情页启动会话', () => {
     registerLaunchProvider({
       id: 'claude',
       label: '测试 Claude Code',
-      build: () => 'claude-test://new-session',
+      build: (input) => {
+        builtClaudeInput = input
+        return 'claude-test://new-session'
+      },
     })
 
     server = createServer((req, res) => void app.handle(req, res))
@@ -155,12 +161,15 @@ describe('需求详情页启动会话', () => {
       }
       const one = { id: 'wt-one', requirementId: 'req-alpha', short: 'router', repo: 'easy-flow', branch: 'feature-one', path: '/tmp/one', main: '/tmp/main', created: '', updated: '', missing: false }
       const two = { ...one, id: 'wt-two', branch: 'feature-two' }
+      const gone = { ...one, id: 'wt-gone', branch: 'feature-gone', missing: true }
       const render = (props) => renderToStaticMarkup(createElement(Form, { ...base, ...props }))
       console.log(JSON.stringify({
         one: render({ worktrees: [one], worktreeId: 'wt-one', agent: 'claude' }),
         multiple: render({ worktrees: [one, two], agent: 'claude' }),
         codex: render({ worktrees: [one, two] }),
         empty: render({ worktrees: [] }),
+        emptyClaude: render({ worktrees: [], agent: 'claude' }),
+        missing: render({ worktrees: [gone] }),
         failure: render({ worktrees: [one], worktreeId: 'wt-one', result: { agent: 'codex', url: 'codex-test://new-session', prompt: 'easy-flow context wt-one', opened: false, error: 'handler unavailable' } }),
       }))
     `
@@ -178,7 +187,17 @@ describe('需求详情页启动会话', () => {
     // Codex 按需求建 project、收全部工作区，不出现工作区选择
     assert.match(markup.codex, /不用选/)
     assert.doesNotMatch(markup.codex, /选择工作区/)
+    // 没有工作区不再挡下入口：照常可选 agent、可提交，只提示先开工作区
     assert.match(markup.empty, /easy-flow wt new req-alpha/)
+    assert.match(markup.empty, /class="btn primary launch-submit" type="submit"/)
+    assert.doesNotMatch(markup.empty, /launch-submit" type="submit" disabled=""/)
+    // Claude 在没有工作区时不出现工作区选择，也不因此禁用提交
+    assert.match(markup.emptyClaude, /easy-flow wt new req-alpha/)
+    assert.doesNotMatch(markup.emptyClaude, /选择工作区/)
+    assert.doesNotMatch(markup.emptyClaude, /launch-submit" type="submit" disabled=""/)
+    // 只有失联工作区时同样放行，并把失联那几条列出来
+    assert.match(markup.missing, /feature-gone/)
+    assert.doesNotMatch(markup.missing, /launch-submit" type="submit" disabled=""/)
     assert.match(markup.failure, /role="alert"/)
     assert.match(markup.failure, /handler unavailable/)
     assert.match(markup.failure, /easy-flow context wt-one/)
@@ -307,6 +326,35 @@ describe('需求详情页启动会话', () => {
     assert.equal(repeated.status, 0, repeated.stderr)
     assert.equal(app.db.listSessions('req-alpha').length, 1)
     assert.equal(app.db.listSessions('req-alpha')[0].title, '更新标题')
+  })
+
+  test('需求还没有工作区时也能启动：两个 agent 都不带工作区，提示词里让人先开工作区', async () => {
+    builtInput = undefined
+    builtClaudeInput = undefined
+
+    const codex = await post('/api/launch', { slug: 'gamma', project: 'demo', agent: 'codex' })
+    assert.equal(codex.opened, true)
+    assert.deepEqual(builtInput, {
+      agent: 'codex',
+      requirementId: 'req-gamma',
+      worktreeId: '',
+      worktreePath: '',
+      requirementWorktreePaths: [],
+    })
+    assert.match(codex.prompt, /easy-flow context req-gamma/)
+    assert.match(codex.prompt, /easy-flow wt new/)
+
+    const claude = await post('/api/launch', { slug: 'gamma', project: 'demo', agent: 'claude' })
+    assert.equal(claude.opened, true)
+    assert.equal(claude.url, 'claude-test://new-session')
+    const claudeInput: LaunchInput | undefined = builtClaudeInput
+    assert.deepEqual(claudeInput, {
+      agent: 'claude',
+      requirementId: 'req-gamma',
+      worktreeId: '',
+      worktreePath: '',
+      requirementWorktreePaths: [],
+    })
   })
 
   test('启动 URL handler 失败时返回可复制 prompt、原因且不登记会话', async () => {

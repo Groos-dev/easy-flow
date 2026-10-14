@@ -39,6 +39,16 @@ describe('启动交接', () => {
     assert.doesNotMatch(prompt, /wt-xyz789/)
   })
 
+  test('需求还没有工作区时按需求取上下文，并写明先开工作区再动代码', () => {
+    const prompt = launchPrompt({ ...input, worktreeId: '', worktreePath: '', requirementWorktreePaths: [] })
+    assert.match(prompt, /easy-flow context req-abc123/)
+    assert.match(prompt, /easy-flow wt new/)
+    assert.match(prompt, /easy-flow req session add req-abc123 --agent claude/)
+    assert.doesNotMatch(prompt, /wt-xyz789/)
+    // 有工作区时不出现这句：那是正常的开发会话
+    assert.doesNotMatch(launchPrompt(input), /easy-flow wt new/)
+  })
+
   test('注册过的 provider 能被查到，没注册的返回 undefined', () => {
     registerLaunchProvider({ id: 'claude', label: 'Claude Code', build: () => 'claude://code/new' })
     assert.equal(findLaunchProvider('claude')?.label, 'Claude Code')

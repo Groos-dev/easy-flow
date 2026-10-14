@@ -36,8 +36,8 @@ export default function LaunchSessionForm({
   const { available } = launchWorktreeSelection(worktrees, worktreeId)
   const missing = worktrees.filter((w) => w.missing)
   const feedback = result ? launchResultFeedback(requirementId, result) : null
-  // Claude 的 deeplink 只能带一个工作目录，必须选；Codex 按需求建 project、roots 收全部工作区，不用选
-  const needsWorktree = launchNeedsWorktree(agent)
+  // Claude 的 deeplink 只能带一个工作目录，有工作区就必须选；Codex 按需求建 project、roots 收全部工作区，不用选
+  const needsWorktree = launchNeedsWorktree(agent, available)
   const canLaunch = !!agent && (!needsWorktree || !!worktreeId) && !busy
 
   function submit(event: FormEvent) {
@@ -47,57 +47,53 @@ export default function LaunchSessionForm({
 
   return (
     <div className="launch-session-form">
-      {available.length === 0 ? (
-        <div className="launch-empty">
-          <p>这条需求还没有可用工作区。先为此需求创建工作区，再回来启动会话。</p>
-          {missing.length > 0 && (
-            <p>已登记但目录失联：{missing.map((w) => `${w.repo} · ${w.branch}`).join('、')}</p>
-          )}
-          <code>{worktreeCreationCommand(requirementId)}</code>
-        </div>
-      ) : (
-        <form onSubmit={submit}>
-          {loading ? (
-            <p className="launch-help">正在读取可用 Agent…</p>
-          ) : providerError ? (
-            <p className="launch-error" role="alert">读取 Agent 失败：{providerError}</p>
-          ) : providers.length === 0 ? (
-            <p className="launch-help">当前没有可用的 Agent 启动方式；已有会话仍可从本页会话列表回到原会话。</p>
-          ) : (
-            <>
+      <form onSubmit={submit}>
+        {available.length === 0 && (
+          <p className="launch-help">
+            这条需求还没有工作区：新会话先按需求取上下文，改代码前自己开工作区——
+            <code>{worktreeCreationCommand(requirementId)}</code>
+          </p>
+        )}
+        {loading ? (
+          <p className="launch-help">正在读取可用 Agent…</p>
+        ) : providerError ? (
+          <p className="launch-error" role="alert">读取 Agent 失败：{providerError}</p>
+        ) : providers.length === 0 ? (
+          <p className="launch-help">当前没有可用的 Agent 启动方式；已有会话仍可从本页会话列表回到原会话。</p>
+        ) : (
+          <>
+            <div className="launch-select-row">
+              <span>Agent</span>
+              <SelectMenu
+                value={agent}
+                placeholder="选择 Agent"
+                options={providers.map((p) => ({ value: p.id, label: p.label }))}
+                onChange={(value) => onAgentChange(value as LaunchAgent)}
+              />
+            </div>
+            {needsWorktree ? (
               <div className="launch-select-row">
-                <span>Agent</span>
+                <span>工作区</span>
                 <SelectMenu
-                  value={agent}
-                  placeholder="选择 Agent"
-                  options={providers.map((p) => ({ value: p.id, label: p.label }))}
-                  onChange={(value) => onAgentChange(value as LaunchAgent)}
+                  value={worktreeId}
+                  placeholder="选择工作区"
+                  disabled={available.length === 1}
+                  options={available.map((w) => ({ value: w.id, label: `${w.repo} · ${w.branch}` }))}
+                  onChange={onWorktreeChange}
                 />
               </div>
-              {needsWorktree ? (
-                <div className="launch-select-row">
-                  <span>工作区</span>
-                  <SelectMenu
-                    value={worktreeId}
-                    placeholder="选择工作区"
-                    disabled={available.length === 1}
-                    options={available.map((w) => ({ value: w.id, label: `${w.repo} · ${w.branch}` }))}
-                    onChange={onWorktreeChange}
-                  />
-                </div>
-              ) : agent === 'codex' ? (
-                <p className="launch-help">Codex 的新会话按需求建 project，会带上全部 {available.length} 个工作区，不用选。</p>
-              ) : null}
-              {missing.length > 0 && (
-                <p className="launch-help">不可用工作区（目录已失联）：{missing.map((w) => `${w.repo} · ${w.branch}`).join('、')}</p>
-              )}
-              <button className="btn primary launch-submit" type="submit" disabled={!canLaunch}>
-                {busy ? '正在打开…' : '打开新会话草稿'}
-              </button>
-            </>
-          )}
-        </form>
-      )}
+            ) : agent === 'codex' && available.length > 0 ? (
+              <p className="launch-help">Codex 的新会话按需求建 project，会带上全部 {available.length} 个工作区，不用选。</p>
+            ) : null}
+            {missing.length > 0 && (
+              <p className="launch-help">不可用工作区（目录已失联）：{missing.map((w) => `${w.repo} · ${w.branch}`).join('、')}</p>
+            )}
+            <button className="btn primary launch-submit" type="submit" disabled={!canLaunch}>
+              {busy ? '正在打开…' : '打开新会话草稿'}
+            </button>
+          </>
+        )}
+      </form>
 
       {requestError && <p className="launch-error" role="alert">启动请求失败：{requestError}</p>}
 

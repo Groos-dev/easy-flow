@@ -7,7 +7,9 @@ export function codexProjectRoots(input: LaunchInput): string[] {
 }
 
 export function codexLaunchUrl(projectId: string, prompt: string): string {
-  return `codex://threads/new?projectId=${encodeURIComponent(projectId)}&prompt=${encodeURIComponent(prompt)}`
+  // 没有工作区时不带 projectId：project 收不到 roots，app 解析不出工作区也就不会选它，建了只是多个空 project
+  const project = projectId ? `projectId=${encodeURIComponent(projectId)}&` : ''
+  return `codex://threads/new?${project}prompt=${encodeURIComponent(prompt)}`
 }
 
 export function codexAppServerStartError(error: unknown): Error {
@@ -22,6 +24,8 @@ export const codexProvider: LaunchProvider = {
   id: 'codex',
   label: 'Codex',
   async build(input, prompt) {
+    // 需求还没有工作区：直接开新会话草稿，不建 project（也就不用起 app-server）
+    if (!input.requirementWorktreePaths.length) return codexLaunchUrl('', prompt)
     // 新会话页发消息前 thread 尚不存在，登记留给提示词在新会话里执行，不能先写占位行。
     // 动态载入 app-server 客户端：它顶层按自身文件位置读 package.json，静态 import 会把这段
     // 打进 Electron 主进程 bundle，使启动阶段就去 require 一个构建产物里不存在的路径。
