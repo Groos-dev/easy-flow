@@ -1,0 +1,46 @@
+src/renderer/src/components/Pet.tsx
+  s_734cf304ceaa6f::t_c1bfc43f31c3dd 3,10,26-66,69-81
+  s_734cf304ceaa6f::t_b4c6936fa9d5e1 120-121,123-124,126
+src/renderer/src/lib/pet-art.ts
+  s_734cf304ceaa6f::t_bf4c9123ff2baa 8-10,14,57-58,61,63-64,69,72,74-79,84-89,92-93,96-100,102,106,118-119
+  s_734cf304ceaa6f::t_dbd042ae26897b 82-83,90-91,104,112,117
+  s_734cf304ceaa6f::t_422c8408b31eef 80-81,105
+  s_734cf304ceaa6f::t_7abdb0820eff5e 94-95,101,103,107-111,113-116
+src/renderer/src/styles.css
+  s_734cf304ceaa6f::t_8da34d7bc6df85 1060-1062,1064,1072-1075
+  s_734cf304ceaa6f::t_af5f331420d68d 1186
+  s_734cf304ceaa6f::t_27c27e51b9fcd8 1130,1140,1145,1153
+test/core.test.ts
+  s_734cf304ceaa6f::t_10b0ed28028c44 35-36
+  s_734cf304ceaa6f::t_dac2a974740927 3724-3730,3740-3752,3766-3773,3780-3781,3793-3809,3819-3832,3841-3854
+  s_734cf304ceaa6f::t_f8038c81e87ced 34
+  s_734cf304ceaa6f::t_b38784691dc987 3833-3835,3837-3839
+  s_734cf304ceaa6f::t_3a4ac8c7ba35f2 3717-3722,3732-3737,3756,3762-3765,3774-3777,3785
+  s_734cf304ceaa6f::t_56c2a46ae22364 3836,3840
+  s_734cf304ceaa6f::t_5a14cc6ecdf7d1 3810-3818
+src/renderer/public/pets/README.md
+  s_734cf304ceaa6f::t_6dcf57f4dd57f7 6,8-14,33-34,36-38,48,60-63
+test/pet-card.test.ts
+  s_734cf304ceaa6f::t_680941bdedfdf2 120,122-123,125
+scripts/build-pets.mjs
+  s_734cf304ceaa6f::t_6dafe3c26e9c5b 12-17,32
+  s_734cf304ceaa6f::t_47fec93a887436 41-50
+  s_734cf304ceaa6f::t_f047a470b5b44e 99
+  s_734cf304ceaa6f::t_06a3f3ec9310de 164-165,177,185,187-190,192
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "8e8be819ff66f85f3edf948274a5580139223cca",
+  "prompts": {},
+  "sessions": {
+    "s_734cf304ceaa6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "985278b5-4b48-4a2c-96aa-5be4fdd41f1f",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
