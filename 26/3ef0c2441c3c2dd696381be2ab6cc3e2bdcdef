@@ -1,0 +1,93 @@
+src/renderer/public/pets/cloudling-idle.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-261
+src/renderer/public/pets/cloudling-error.still.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-446
+src/renderer/public/pets/clawd-working-thinking.still.svg
+  s_fb1ae48b888212::t_5ba8c8c2a86844 413-414
+src/renderer/public/pets/cloudling-mini-peek.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-334
+src/renderer/public/pets/cloudling-mini-typing.still.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-710
+src/renderer/public/pets/clawd-mini-alert.still.svg
+  s_fb1ae48b888212::t_5ba8c8c2a86844 89-90
+src/renderer/public/pets/cloudling-mini-happy.still.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-389
+test/pet-card.test.ts
+  s_fb1ae48b888212::t_5ba8c8c2a86844 105,111-116
+src/renderer/public/pets/README.md
+  s_fb1ae48b888212::t_5ba8c8c2a86844 1,3,5-11,29-31,34-35,40,43-59
+src/renderer/public/pets/cloudling-mini-alert.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-396
+src/renderer/public/pets/cloudling-typing.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-360
+src/renderer/public/pets/cloudling-mini-idle.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-285
+src/renderer/public/pets/cloudling-error.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-434
+src/renderer/public/pets/cloudling-attention.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-386
+src/renderer/public/pets/clawd-happy.still.svg
+  s_fb1ae48b888212::t_5ba8c8c2a86844 114-115
+src/renderer/public/pets/cloudling-mini-idle.still.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-297
+src/renderer/public/pets/cloudling-notification.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-500
+src/renderer/public/pets/cloudling-notification.still.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-512
+src/renderer/public/pets/cloudling-attention.still.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-398
+src/renderer/src/styles.css
+  s_fb1ae48b888212::t_5ba8c8c2a86844 1060-1063,1067,1071-1075,1137-1138,1142-1143,1150-1151,1183-1184
+src/renderer/src/lib/pet-art.ts
+  s_fb1ae48b888212::t_5ba8c8c2a86844 2,4-11,16,25-26,35-42,45-59,62-67,69-76
+src/renderer/public/pets/cloudling-thinking.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-726
+src/renderer/public/pets/clawd-notification.still.svg
+  s_fb1ae48b888212::t_5ba8c8c2a86844 279-281
+src/renderer/public/pets/cloudling-mini-peek.still.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-346
+src/renderer/public/pets/cloudling-mini-alert.still.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-408
+src/renderer/src/lib/pets.ts
+  s_fb1ae48b888212::t_5ba8c8c2a86844 5-6
+src/renderer/public/pets/cloudling-typing.still.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-372
+src/renderer/public/pets/cloudling-mini-happy.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-377
+src/renderer/public/pets/cloudling-idle.still.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-273
+src/renderer/public/pets/cloudling-mini-typing.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-698
+src/renderer/public/pets/clawd-mini-happy.still.svg
+  s_fb1ae48b888212::t_5ba8c8c2a86844 71-72
+src/renderer/src/components/Pet.tsx
+  s_fb1ae48b888212::t_5ba8c8c2a86844 3,9-10,27-28,58-65
+scripts/build-pets.mjs
+  s_fb1ae48b888212::t_5ba8c8c2a86844 3,5-17,20-21,31-52,67-84,91-130,148,153-154,166,168-194,197
+src/renderer/public/pets/cloudling-thinking.still.svg
+  s_d4d7a5dd5f287b::t_92fcee4d154873 1-738
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "263ef0c2441c3c2dd696381be2ab6cc3e2bdcdef",
+  "prompts": {},
+  "sessions": {
+    "s_d4d7a5dd5f287b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4d2519d4-c721-4880-b624-425987b51f50",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    },
+    "s_fb1ae48b888212": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "448f30f6-1467-41ae-89dd-0d64e2a8a055",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
