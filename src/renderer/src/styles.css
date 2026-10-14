@@ -999,17 +999,21 @@ body {
   transform-origin: 50% 88%;
 }
 
-/* 光环只给需要你注意的三档 */
-.pet.s-blocked {
+/* 事件边框只给「没读过」的那三档：读过就没了，pet 本身留着（它是回到会话的入口） */
+.pet.event.s-blocked {
   border-color: var(--status-review);
 }
 
-.pet.s-done {
+.pet.event.s-done {
   border-color: var(--status-done);
 }
 
-.pet.s-failed {
+.pet.event.s-failed {
   border-color: #ff5c5c;
+}
+
+/* 失败整体暗一档：这是姿势本身的样子，不跟事件走 */
+.pet.s-failed {
   opacity: 0.85;
 }
 
@@ -1067,17 +1071,18 @@ button.pet:hover {
   animation: pet-hop 0.62s ease-in-out infinite;
 }
 
-/* 只有「等你」那圈脉冲算抢注意力：同组里只让最急的一只脉冲（.focus 由 PetRow 选出） */
-.pet.focus.s-blocked {
+/* 只有「等你」那圈脉冲算抢注意力：同组里只让最急的一只脉冲（.focus 由 PetRow 选出）；
+   读过的事件连它一起消失 */
+.pet.event.focus.s-blocked {
   animation: pet-pulse 2.2s ease-out infinite;
 }
 
-/* done / failed 是一次性事件：只响一下。转成常驻动画就成噪音了，所以与 focus 无关 */
-.pet.s-done svg {
+/* done / failed 是一次性事件：只响一下，读过就不再响。转常驻就成噪音了，所以与 focus 无关 */
+.pet.event.s-done svg {
   animation: pet-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-.pet.s-failed svg {
+.pet.event.s-failed svg {
   animation: pet-shake 0.36s ease-in-out 2;
 }
 

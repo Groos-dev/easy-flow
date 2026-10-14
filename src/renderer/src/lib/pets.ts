@@ -7,7 +7,7 @@
  * 除了挑状态，这里也把「一行 pet 怎么排」算成纯数据（planPetRow）——渲染层只管贴 markup，
  * 排布规则才有回归保护。
  */
-import { badgesOf } from './threads'
+import { badgesOf, isEventState } from './threads'
 import type { Session, ThreadState } from './types'
 
 export const PET_STATES = ['idle', 'thinking', 'working', 'blocked', 'done', 'failed'] as const
@@ -99,7 +99,9 @@ export const MAX_PETS = 4
 export interface PetItem {
   session: Session
   state: PetState
-  /** 唯一抢注意力的那只（只对 blocked 有效）；其余为 false */
+  /** 未读事件：给事件边框与一次性动效。读过就没了——pet 本身留着 */
+  event: boolean
+  /** 唯一抢动效的那只（只对 blocked 的脉冲有效）；其余为 false */
   focus: boolean
 }
 
@@ -111,18 +113,33 @@ export interface PetRowPlan {
 }
 
 /**
- * 一行 pet 的排布：挂哪些会话（沿用角标判据 badgesOf）、截到几只、谁抢注意力。
+ * 一行 pet 的排布：挂哪些会话、截到几只、谁带事件样式、谁抢动效。
  * 渲染层只负责贴 markup，规则在这儿算好才测得动。
+ *
+ * 两层拆开：pet 是**回到会话的入口**，只要读得到状态（unknown 之外）就长期留着；
+ * 事件样式（边框 + 动效）与抢注意力才跟 `fresh` 走，读过就消失。
  */
 export function planPetRow(sessions: Session[]): PetRowPlan {
-  const pets = badgesOf(sessions)
+  const pets = sessions
     .map((session) => ({ session, state: petStateOf(session.status.state) }))
     .filter((p): p is { session: Session; state: PetState } => p.state !== null)
 
-  const focus = focusIndex(pets.map((p) => p.state))
+  // 抢动效仍按 badgesOf 挑（未读事件 + 正在跑），再映射回整排的坐标——
+  // 消费掉的 pet 留着，但不抢注意力。badgesOf 已按急缓排序，focusIndex 只认 attention 三档。
+  const attentive = badgesOf(sessions)
+  const focusAt = focusIndex(
+    attentive.map((s) => petStateOf(s.status.state)).filter((s): s is PetState => s !== null),
+  )
+  const focusSession = focusAt >= 0 ? attentive[focusAt] : undefined
+
   const shown = pets.slice(0, MAX_PETS)
   return {
-    items: shown.map((p, i) => ({ session: p.session, state: p.state, focus: i === focus })),
+    items: shown.map((p) => ({
+      session: p.session,
+      state: p.state,
+      event: isEventState(p.session.status.state) && p.session.status.fresh,
+      focus: p.session === focusSession,
+    })),
     more: pets.length - shown.length,
   }
 }

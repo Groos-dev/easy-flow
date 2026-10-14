@@ -61,6 +61,7 @@ const pool: Session[] = [
 
 const petCount = (html: string) => html.match(/class="pet /g)?.length ?? 0
 const focusCount = (html: string) => html.match(/ focus"/g)?.length ?? 0
+const eventCount = (html: string) => html.match(/class="pet[^"]*?\bevent\b/g)?.length ?? 0
 const moreCount = (html: string) => html.match(/class="pet-more[^"]*"[^>]*>\+(\d+)</)?.[1] ?? ''
 
 const render = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el)
@@ -83,10 +84,22 @@ describe('PetRow 渲染', () => {
     assert.equal(focusCount(html), 0)
   })
 
-  test('没有会话 / 读过的 / 读不到的一律不渲染', () => {
+  test('读得到的会话都挂 pet——读过的事件也留着，读不到的才不渲染', () => {
     assert.equal(render(createElement(PetRow, { sessions: [] })), '')
-    assert.equal(render(createElement(PetRow, { sessions: [sess('claude', 'done', false)] })), '')
     assert.equal(render(createElement(PetRow, { sessions: [sess('cursor', 'unknown', true)] })), '')
+    const read = render(createElement(PetRow, { sessions: [sess('claude', 'done', false)] }))
+    assert.equal(petCount(read), 1)
+    assert.match(read, /class="pet s-done"/)
+    assert.equal(eventCount(read), 0)
+    assert.equal(focusCount(read), 0)
+  })
+
+  test('事件样式只跟 fresh 走：未读带 event，读过的不带', () => {
+    const unread = render(createElement(PetRow, { sessions: [sess('claude', 'done', true)] }))
+    assert.match(unread, /class="pet s-done event focus"/)
+    assert.equal(eventCount(unread), 1)
+    const read = render(createElement(PetRow, { sessions: [sess('claude', 'done', false)] }))
+    assert.equal(eventCount(read), 0)
   })
 
   test('compact 变体整排带 compact 类（折叠卡用的小号）', () => {
@@ -110,6 +123,14 @@ describe('Card 挂 pet', () => {
     )
     assert.match(html, /class="card[^"]*folded/)
     assert.match(html, /class="pets compact"/)
+  })
+
+  test('折叠卡的小号 pet 也长期存在——读过的会话照样能点回去', () => {
+    const html = render(
+      createElement(Card, { req: req(), sessions: [sess('claude', 'done', false)], childStat: { total: 1, done: 0 } }),
+    )
+    assert.match(html, /class="pet compact s-done"/)
+    assert.equal(eventCount(html), 0)
   })
 
   test('拖拽浮层不挂 pet', () => {
