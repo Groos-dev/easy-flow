@@ -31,7 +31,7 @@ import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
 import { PET_STATES, PET_RANK, MAX_PETS, focusIndex, petStateOf, planPetRow } from '../src/renderer/src/lib/pets.ts'
-import { agentFilter, petImageSrc } from '../src/renderer/src/lib/pet-art.ts'
+import { petArt } from '../src/renderer/src/lib/pet-art.ts'
 import { childStatsOf } from '../src/renderer/src/lib/children.ts'
 import { parseStamp, relTime } from '../src/renderer/src/lib/time.ts'
 import type { Requirement, Session } from '../src/renderer/src/lib/types.ts'
@@ -3560,34 +3560,64 @@ describe('pet：粗粒度状态映射与抢注意力挑选', () => {
   })
 })
 
-describe('pet 素材：状态→clawd 文件、染色、静态版', () => {
+describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => {
   const art = { compact: false, still: false }
+  const PETS_DIR = join(REPO_ROOT, 'src/renderer/public/pets')
 
-  test('六档大图各一张', () => {
-    assert.equal(petImageSrc('idle', art), 'pets/clawd-idle-follow.svg')
-    assert.equal(petImageSrc('thinking', art), 'pets/clawd-working-thinking.svg')
-    assert.equal(petImageSrc('working', art), 'pets/clawd-working-typing.svg')
-    assert.equal(petImageSrc('blocked', art), 'pets/clawd-notification.svg')
-    assert.equal(petImageSrc('done', art), 'pets/clawd-happy.svg')
-    assert.equal(petImageSrc('failed', art), 'pets/clawd-error.svg')
+  test('Claude 用 clawd，走 <img>：六档大图各一张', () => {
+    assert.deepEqual(petArt('claude', 'idle', art), { src: 'pets/clawd-idle-follow.svg', channel: 'img' })
+    assert.equal(petArt('claude', 'thinking', art).src, 'pets/clawd-working-thinking.svg')
+    assert.equal(petArt('claude', 'working', art).src, 'pets/clawd-working-typing.svg')
+    assert.equal(petArt('claude', 'blocked', art).src, 'pets/clawd-notification.svg')
+    assert.equal(petArt('claude', 'done', art).src, 'pets/clawd-happy.svg')
+    assert.equal(petArt('claude', 'failed', art).src, 'pets/clawd-error.svg')
   })
 
-  test('折叠卡换 mini 组', () => {
-    assert.equal(petImageSrc('idle', { compact: true, still: false }), 'pets/clawd-mini-idle.svg')
-    assert.equal(petImageSrc('blocked', { compact: true, still: false }), 'pets/clawd-mini-alert.svg')
-    assert.equal(petImageSrc('done', { compact: true, still: false }), 'pets/clawd-mini-happy.svg')
+  test('Codex 用 cloudling，走 <object>：六档各一张', () => {
+    assert.deepEqual(petArt('codex', 'idle', art), { src: 'pets/cloudling-idle.svg', channel: 'object' })
+    assert.equal(petArt('codex', 'thinking', art).src, 'pets/cloudling-thinking.svg')
+    assert.equal(petArt('codex', 'working', art).src, 'pets/cloudling-typing.svg')
+    assert.equal(petArt('codex', 'blocked', art).src, 'pets/cloudling-notification.svg')
+    assert.equal(petArt('codex', 'done', art).src, 'pets/cloudling-attention.svg')
+    assert.equal(petArt('codex', 'failed', art).src, 'pets/cloudling-error.svg')
+  })
+
+  test('认不出的 agent 落到 clawd（默认那只），不染不动', () => {
+    assert.deepEqual(petArt('cursor', 'done', art), petArt('claude', 'done', art))
+    assert.equal(petArt('some-new-agent', 'done', art).channel, 'img')
+  })
+
+  test('折叠卡换 mini 组（两套都有，failed 复用 alert）', () => {
+    const mini = { compact: true, still: false }
+    assert.equal(petArt('claude', 'idle', mini).src, 'pets/clawd-mini-idle.svg')
+    assert.equal(petArt('claude', 'blocked', mini).src, 'pets/clawd-mini-alert.svg')
+    assert.equal(petArt('claude', 'done', mini).src, 'pets/clawd-mini-happy.svg')
+    assert.equal(petArt('claude', 'failed', mini).src, 'pets/clawd-mini-alert.svg')
+    assert.equal(petArt('codex', 'idle', mini).src, 'pets/cloudling-mini-idle.svg')
+    assert.equal(petArt('codex', 'working', mini).src, 'pets/cloudling-mini-typing.svg')
+    assert.equal(petArt('codex', 'done', mini).src, 'pets/cloudling-mini-happy.svg')
+    assert.equal(petArt('codex', 'failed', mini).src, 'pets/cloudling-mini-alert.svg')
   })
 
   test('reduced-motion 换静态版（大图与 mini 都要有）', () => {
-    assert.equal(petImageSrc('done', { compact: false, still: true }), 'pets/clawd-happy.still.svg')
-    assert.equal(petImageSrc('done', { compact: true, still: true }), 'pets/clawd-mini-happy.still.svg')
+    assert.equal(petArt('claude', 'done', { compact: false, still: true }).src, 'pets/clawd-happy.still.svg')
+    assert.equal(petArt('claude', 'done', { compact: true, still: true }).src, 'pets/clawd-mini-happy.still.svg')
+    assert.equal(petArt('codex', 'failed', { compact: false, still: true }).src, 'pets/cloudling-error.still.svg')
+    assert.equal(petArt('codex', 'blocked', { compact: true, still: true }).src, 'pets/cloudling-mini-alert.still.svg')
   })
 
-  test('染色归 agent：claude 用原色，codex 转青绿，认不出的走中性灰', () => {
-    assert.equal(agentFilter('claude'), '')
-    assert.match(agentFilter('codex'), /hue-rotate/)
-    assert.equal(agentFilter('cursor'), agentFilter('some-new-agent'))
-    assert.match(agentFilter('cursor'), /grayscale/)
+  test('映射到的素材都真的落在 public/pets 里（生成物没漏）', () => {
+    for (const agent of ['claude', 'codex', 'cursor']) {
+      for (const state of PET_STATES) {
+        for (const compact of [false, true]) {
+          for (const still of [false, true]) {
+            const { src } = petArt(agent, state, { compact, still })
+            const rel = src.replace(/^pets\//, '')
+            assert.ok(existsSync(join(PETS_DIR, rel)), `${agent}/${state} compact=${compact} still=${still} → ${src}`)
+          }
+        }
+      }
+    }
   })
 })
 

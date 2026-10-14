@@ -102,22 +102,21 @@ describe('PetRow 渲染', () => {
     assert.equal(eventCount(read), 0)
   })
 
-  test('pet 用 <img> 加载 clawd 素材，不再内联手绘 svg', () => {
+  test('Claude 走 <img> 加载 clawd 素材，不再内联手绘 svg', () => {
     const html = render(createElement(PetRow, { sessions: [sess('claude', 'blocked', true)] }))
     assert.match(html, /<img[^>]+src="pets\/clawd-notification\.svg"/)
     assert.doesNotMatch(html, /<svg/)
   })
 
+  test('Codex 走 <object> 加载 cloudling（脚本驱动，<img> 会禁脚本只剩静止的云）', () => {
+    const html = render(createElement(PetRow, { sessions: [sess('codex', 'blocked', true)] }))
+    assert.match(html, /<object[^>]+data="pets\/cloudling-notification\.svg"/)
+    assert.doesNotMatch(html, /<img/)
+  })
+
   test('折叠卡换 mini 素材', () => {
     const html = render(createElement(PetRow, { sessions: [sess('claude', 'done', true)], compact: true }))
     assert.match(html, /src="pets\/clawd-mini-happy\.svg"/)
-  })
-
-  test('身体色走 CSS filter：claude 不染，codex 有 filter', () => {
-    const claude = render(createElement(PetRow, { sessions: [sess('claude', 'running', true)] }))
-    assert.doesNotMatch(claude, /filter:/)
-    const codex = render(createElement(PetRow, { sessions: [sess('codex', 'running', true)] }))
-    assert.match(codex, /style="filter:hue-rotate\(155deg\)/)
   })
 
   test('compact 变体整排带 compact 类（折叠卡用的小号）', () => {
