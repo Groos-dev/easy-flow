@@ -280,6 +280,28 @@ export interface AgentSkill {
   linked: boolean
 }
 
+export type HookAgentId = 'claude' | 'codex'
+
+/** 与 server/hook-install.ts 的 HookAgentStatus 对应。status 一律读真文件得出 */
+export interface HookAgentStatus {
+  id: HookAgentId
+  label: string
+  /** 用户级配置文件 */
+  file: string
+  installed: boolean
+  /** 装了几个事件 */
+  events: number
+  /** 指向的地址与端口 */
+  url: string
+  /** 读文件出的问题；正常为空串 */
+  problem: string
+}
+
+export interface HookPlan {
+  port: number
+  agents: HookAgentStatus[]
+}
+
 export interface SkillPayload {
   /** The skill entity and CLI entry inside the repo; null when the environment does not allow it */
   source: string | null
