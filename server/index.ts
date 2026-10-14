@@ -132,7 +132,11 @@ export function createBoardApp({ dataDir }: BoardAppOptions = {}): BoardApp {
         } catch {
           /* 报文不是合法 JSON：当没收到，照常回 200 */
         }
-        hookStore.record(payload)
+        // 两条管道共用一个入口，得认出来源：claude 的原生 http hook 带不了额外字段（缺省 claude），
+        // codex 的转发脚本用 ?agent=codex 或报文里带 agent
+        const fromQuery = url.searchParams.get('agent')
+        const fromBody = typeof payload.agent === 'string' && payload.agent ? payload.agent : ''
+        hookStore.record(payload, { agent: fromQuery || fromBody || 'claude' })
         json(req, res, 200, { ok: true })
         return
       }

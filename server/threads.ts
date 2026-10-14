@@ -82,39 +82,38 @@ export function withStatus<T extends { agent: string; session: string; cwd?: str
 
   return sessions.map((s) => {
     const rec = s.agent === 'claude' ? records!.get(s.session) : undefined
-    // cwd 兜底只给 claude：codex 的会话 id 就是 thread id，直接命中
-    const hook = activeHook(hooks, s.session, rec?.cliSessionId, s.agent === 'claude' ? s.cwd : undefined)
+    const hook = activeHook(hooks, s.session, s.agent, rec?.cliSessionId, s.cwd)
     const status =
       s.agent === 'claude'
         ? claudeStatus(rec, live!.get(s.session), hook)
         : s.agent === 'codex'
           ? codexStatus(turns!.get(s.session), unread!.has(s.session), hook)
-          : // cursor 这类没有落盘状态可读，只有 hook 可能给出一条
-            hook ? hookStatus(hook, undefined) : unknownStatus(`${s.agent} 没有可读的状态来源`)
+          : // cursor 这类没有落盘状态可读
+            unknownStatus(`${s.agent} 没有可读的状态来源`)
     return { ...s, status }
   })
 }
 
 /**
- * 取这条会话的 hook 状态。命中方式按可信度排：
- *   1. session_id 直接等于登记 id（终端会话就是这种）
+ * 取这条会话的 hook 状态。命中方式按可信度排，三级都限同一个 agent——
+ * 同一个工作区里并排跑着 claude 与 codex 是常态，不分开就会互相点亮：
+ *   1. session_id 直接等于登记 id
  *   2. 登记 id 是桌面应用的 `local_<uuid>`，hook 给的是内层 `<uuid>`——靠记录的 cliSessionId 翻译
- *   3. 前两条都没中再按工作目录兜：同目录下最近的那条
- * 正在跑的状态过久没动静就当它没了——进程崩了不会有收尾事件，与 codex 的 TTL 同一取舍。
+ *   3. 前两条都没中再按工作目录兜：同目录下最近的那条（同一目录开两个会话时会认错，已知取舍）
+ * 条目自身的过期在 HookStore 里判。
  */
 function activeHook(
   hooks: HookStore,
   session: string,
+  agent: string,
   cliSessionId: string | undefined,
   cwd: string | undefined,
 ): HookStatus | undefined {
-  const hit =
-    hooks.get(session) ??
-    (cliSessionId ? hooks.get(cliSessionId) : undefined) ??
-    (cwd ? hooks.byCwd(cwd) : undefined)
-  if (!hit) return undefined
-  if (hit.state === 'running' && Date.now() - hit.at > RUNNING_TTL_MS) return undefined
-  return hit
+  return (
+    hooks.get(session, agent) ??
+    (cliSessionId ? hooks.get(cliSessionId, agent) : undefined) ??
+    (cwd ? hooks.byCwd(cwd, agent) : undefined)
+  )
 }
 
 // ------------------------------------------------------------------ Claude
@@ -203,7 +202,7 @@ function claudeStatus(
   hook: HookStatus | undefined,
 ): SessionStatus {
   // hook 给的是「此刻在干什么」，比进程在不在、上一轮的结论都细，所以最先用
-  if (hook) return hookStatus(hook, rec)
+  if (hook) return hookStatus(hook, claudeFresh(rec))
   // 进程在跑是当下最硬的信号，优先于记录里那份（可能刚过期的）结论。
   // 进程只报 busy/idle，说不出在思考还是在干活，所以 activity 留空
   if (live && isRunning(live)) {
@@ -218,8 +217,7 @@ function claudeStatus(
   if (!summary || stale) return unknownStatus(stale ? '会话的结论落后于最新一轮' : '会话没有结论')
 
   const at = stampOf(rec.lastActivityAt)
-  // 桌面应用只记「最后一次聚焦」，没有真正的已读标记，拿它代理
-  const fresh = (rec.lastActivityAt ?? 0) > (rec.lastFocusedAt ?? 0)
+  const fresh = claudeFresh(rec)
   switch (summary.status_category) {
     case 'blocked':
       return {
@@ -315,8 +313,9 @@ interface CodexGlobalState {
 }
 
 function codexStatus(turn: CodexTurn | undefined, unread: boolean, hook: HookStatus | undefined): SessionStatus {
-  // 与 claude 同一条管道：hook 有就更细，没有才读轮次库
-  if (hook) return hookStatus(hook, undefined)
+  // 与 claude 同一条管道：hook 有就更细，没有才读轮次库。
+  // 未读仍按 codex 官方的集合判，别让 hook 把「跑完没看」一律说成没看过
+  if (hook) return hookStatus(hook, unread)
   if (!turn) return unknownStatus('没有 codex 的轮次记录')
   const at = stampOf(turn.lastItemAt)
   switch (turn.status) {
@@ -336,14 +335,22 @@ function codexStatus(turn: CodexTurn | undefined, unread: boolean, hook: HookSta
 }
 
 /**
- * hook 状态 → SessionStatus。
- * fresh 是「有你看过之后的新内容」：running / unknown 不算事件，一律 false；
- * blocked / done / failed 是事件，桌面会话沿用 lastFocusedAt 代理（你看过就消），
+ * 桌面应用只记「最后一次聚焦」，没有真正的已读标记，拿它代理；
  * 没有记录（终端会话）时只能算新——否则这类事件永远挂不上角标。
  */
-function hookStatus(hook: HookStatus, rec: ClaudeRecord | undefined): SessionStatus {
+function claudeFresh(rec: ClaudeRecord | undefined): boolean {
+  return rec ? (rec.lastActivityAt ?? 0) > (rec.lastFocusedAt ?? 0) : true
+}
+
+/**
+ * hook 状态 → SessionStatus。
+ * fresh 是「有你看过之后的新内容」，各 agent 有自己的已读信号（claude 拿 lastFocusedAt 代理，
+ * codex 用官方未读集合），由调用方算好传进来：running / idle 不算事件，一律 false；
+ * 只有 blocked / done / failed 这三档才看它。
+ */
+function hookStatus(hook: HookStatus, eventFresh: boolean): SessionStatus {
   const eventish = hook.state === 'done' || hook.state === 'blocked' || hook.state === 'failed'
-  const fresh = !eventish ? false : rec ? (rec.lastActivityAt ?? 0) > (rec.lastFocusedAt ?? 0) : true
+  const fresh = eventish ? eventFresh : false
   return {
     state: hook.state,
     activity: hook.activity,
