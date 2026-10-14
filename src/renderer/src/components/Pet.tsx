@@ -1,11 +1,7 @@
 import type { CSSProperties } from 'react'
 import { AGENT_LABELS } from '../lib/labels'
-import { badgesOf } from '../lib/threads'
-import { AGENT_TINT, PET_LABEL, focusIndex, petStateOf, type PetState } from '../lib/pets'
+import { PET_LABEL, agentTint, planPetRow, type PetState } from '../lib/pets'
 import type { Session } from '../lib/types'
-
-/** 一张卡最多挂几只：卡片内容宽约 310px，再多就挤了，多的收成 +N */
-const MAX_PETS = 4
 
 /**
  * 每档一张脸。姿势要能一眼分开——只靠颜色，色盲用户就废了。
@@ -70,20 +66,22 @@ function face(state: PetState) {
 /**
  * 一档状态一只 pet。状态只从 props 进，组件本身不认识会话、数据源——可以拿假状态单独开发。
  *
- * `focus` 由外面的 PetRow 按急缓选出来，同一时刻只有它动（见 lib/pets.ts 的 focusIndex）。
- * 有 `link` 就渲染成按钮，点一下跳回会话；没有的只报状态，不给一个点了没反应的按钮。
- * 卡片是可拖拽的，所以这里把 pointerdown 拦掉——从 pet 上按下不该变成拖卡片。
+ * `focus` 由外面的 PetRow 选出，同一时刻最多一只（见 lib/pets.ts 的 focusIndex）；
+ * `compact` 是折叠卡上的小号变体。有 `link` 就渲染成按钮，点一下跳回会话；没有的只报状态，
+ * 不给一个点了没反应的按钮。卡片是可拖拽的，所以这里把 pointerdown 拦掉。
  */
 export default function Pet({
   agent,
   state,
   focus = false,
+  compact = false,
   tip,
   link,
 }: {
   agent: string
   state: PetState
   focus?: boolean
+  compact?: boolean
   tip?: string
   link?: string
 }) {
@@ -95,12 +93,12 @@ export default function Pet({
       {face(state)}
     </svg>
   )
-  const cls = `pet s-${state}${focus ? ' focus' : ''}`
-  const style = { '--tint': AGENT_TINT[agent] ?? AGENT_TINT.cursor } as CSSProperties
+  const cls = `pet${compact ? ' compact' : ''} s-${state}${focus ? ' focus' : ''}`
+  const style = { '--tint': agentTint(agent) } as CSSProperties
 
   if (!link) {
     return (
-      <span className={cls} style={style} title={tip ?? label}>
+      <span className={cls} style={style} title={tip ?? label} role="img" aria-label={label}>
         {body}
       </span>
     )
@@ -138,33 +136,28 @@ function petTip(session: Session, state: PetState): string {
 /**
  * 卡片上的那排 pet：把一条需求名下的会话译成 pet 并排开。
  *
- * 挂哪些会话与角标同一套判据（`badgesOf`）——未读事件 + 正在跑，读过的事件连 pet 一起消失。
- * 一张卡最多 4 只，多的收成 +N。
+ * 挂哪些会话、最多几只、谁抢注意力都在 planPetRow 里算好（与角标同一套判据：未读事件 + 正在跑，
+ * 读过的事件连 pet 一起消失）。`compact` 给折叠的父需求窄条用——44px 塞不进去，收成小号。
  */
-export function PetRow({ sessions }: { sessions: Session[] }) {
-  const pets = badgesOf(sessions)
-    .map((session) => ({ session, state: petStateOf(session.status.state) }))
-    .filter((p): p is { session: Session; state: PetState } => p.state !== null)
-  if (pets.length === 0) return null
-
-  const focus = focusIndex(pets.map((p) => p.state))
-  const shown = pets.slice(0, MAX_PETS)
-  const more = pets.length - shown.length
+export function PetRow({ sessions, compact = false }: { sessions: Session[]; compact?: boolean }) {
+  const { items, more } = planPetRow(sessions)
+  if (items.length === 0) return null
 
   return (
-    <div className="pets">
-      {shown.map((p, i) => (
+    <div className={`pets${compact ? ' compact' : ''}`}>
+      {items.map((p) => (
         <Pet
           key={`${p.session.agent}:${p.session.session}`}
           agent={p.session.agent}
           state={p.state}
-          focus={i === focus}
+          focus={p.focus}
+          compact={compact}
           tip={petTip(p.session, p.state)}
           link={p.session.link || undefined}
         />
       ))}
       {more > 0 && (
-        <span className="pet-more" title={`还有 ${more} 个会话未展示`}>
+        <span className={`pet-more${compact ? ' compact' : ''}`} title={`还有 ${more} 个会话未展示`}>
           +{more}
         </span>
       )}

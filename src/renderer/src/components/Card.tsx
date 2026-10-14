@@ -88,8 +88,9 @@ export default function Card({ req, sessions, childStat, onOpen, overlay = false
       {/* 收窄也照挂：父需求名下常有自己的会话，收窄不该把信号一起收掉 */}
       {!overlay && need && <div className="card-need">{need}</div>}
       {/* 每个会话一只 pet：姿势看出哪个 agent 在等你、哪个跑完了。
-          收窄的窄条放不下 44px 的 pet，拖拽浮层只负责跟手——两者都不挂 */}
-      {!overlay && !folded && <PetRow sessions={all} />}
+          收窄的父需求窄条也挂，只是收成小号——pet 是卡上唯一能直接跳回会话的入口，
+          不能逼人先展开；拖拽浮层只负责跟手，那一层不挂 */}
+      {!overlay && <PetRow sessions={all} compact={folded} />}
       {!folded && (
         <>
           {req.summary && <div className="card-summary">{req.summary}</div>}

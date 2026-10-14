@@ -853,15 +853,17 @@ button.pet:hover {
   60% { transform: translateX(2.5px) rotate(6deg); }
 }
 
-/* 同一时刻只有一只抢注意力（.focus 由 PetRow 按急缓选出）：跑着的轻，等你的重 */
-.pet.focus.s-thinking svg {
+/* 干活 / 思考是实时状态，只轻动、不抢注意力，所以无条件动——
+   套 .focus 会卡在 focusIndex 那条 gate 上，最活跃的两档反而永远是死的 */
+.pet.s-thinking svg {
   animation: pet-breathe 2.8s ease-in-out infinite;
 }
 
-.pet.focus.s-working svg {
+.pet.s-working svg {
   animation: pet-hop 0.62s ease-in-out infinite;
 }
 
+/* 只有「等你」那圈脉冲算抢注意力：同组里只让最急的一只脉冲（.focus 由 PetRow 选出） */
 .pet.focus.s-blocked {
   animation: pet-pulse 2.2s ease-out infinite;
 }
@@ -895,6 +897,31 @@ button.pet:hover {
   color: var(--text-faint);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+
+/* 折叠的父需求窄条塞不下 44px：收成小号，只当「一眼看出谁在等 / 点一下跳回去」的入口，
+   表情细节让位给紧凑 */
+.pets.compact {
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.pet.compact {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+}
+
+.pet.compact svg {
+  width: 21px;
+  height: 21px;
+}
+
+.pet-more.compact {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  font-size: 10px;
 }
 
 /* 详情页会话块里那行状态文案 */

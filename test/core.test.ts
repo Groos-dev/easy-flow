@@ -29,7 +29,7 @@ import { codeLinkLabel } from '../src/renderer/src/lib/links.ts'
 import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib/shortcut.ts'
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
-import { PET_STATES, PET_RANK, focusIndex, petStateOf } from '../src/renderer/src/lib/pets.ts'
+import { PET_STATES, PET_RANK, MAX_PETS, focusIndex, petStateOf, planPetRow } from '../src/renderer/src/lib/pets.ts'
 import { childStatsOf } from '../src/renderer/src/lib/children.ts'
 import { parseStamp, relTime } from '../src/renderer/src/lib/time.ts'
 import type { Requirement, Session } from '../src/renderer/src/lib/types.ts'
@@ -3262,7 +3262,9 @@ describe('pet：粗粒度状态映射与抢注意力挑选', () => {
     assert.ok(PET_RANK.thinking < PET_RANK.idle)
   })
 
-  test('同一时刻只挑一只：最急的动，没有需要人注意的谁都不动', () => {
+  test('focus 只给 attention 三档：没有需要人注意的就返回 -1', () => {
+    // 干活 / 思考的轻动是无条件的、不走 focus，所以只有「没人需要人注意」时才是 -1——
+    // 这里刻意固定成意图，别有人再把它「修」回「挑一只 working」
     assert.equal(focusIndex([]), -1)
     assert.equal(focusIndex(['working']), -1)
     assert.equal(focusIndex(['idle', 'thinking', 'working']), -1)
@@ -3274,6 +3276,56 @@ describe('pet：粗粒度状态映射与抢注意力挑选', () => {
   test('并列取靠前的', () => {
     assert.equal(focusIndex(['done', 'failed']), 1)
     assert.equal(focusIndex(['failed', 'done']), 0)
+  })
+})
+
+describe('pet：一行 pet 的排布', () => {
+  function sess(agent: string, state: Session['status']['state'], fresh: boolean): Session {
+    return {
+      requirementId: 'req-x',
+      agent,
+      session: `${agent}-${state}-${fresh}`,
+      title: '',
+      cwd: '',
+      link: '',
+      created: '',
+      updated: '',
+      status: { state, fresh, needsAction: '', at: '', detail: '' },
+    }
+  }
+  // 五个都挂得上角标的会话：两条在跑 + 一条卡住 + 跑完没看 + 失败
+  const pool: Session[] = [
+    sess('claude', 'blocked', true),
+    sess('codex', 'running', false),
+    sess('claude', 'done', true),
+    sess('codex', 'failed', true),
+    sess('claude', 'running', false),
+  ]
+
+  test('1/2/3/4 个会话出等量 pet，5 个收成 4 只 + 1（不破版）', () => {
+    for (const n of [1, 2, 3, 4, 5]) {
+      const { items, more } = planPetRow(pool.slice(0, n))
+      assert.equal(items.length, Math.min(n, MAX_PETS), `${n} 个会话`)
+      assert.equal(more, Math.max(0, n - MAX_PETS), `${n} 个会话的 +N`)
+    }
+  })
+
+  test('最多一只抢注意力，且只落在 attention 三档上', () => {
+    const { items } = planPetRow(pool)
+    assert.equal(items.filter((p) => p.focus).length, 1)
+    assert.equal(items.find((p) => p.focus)?.state, 'blocked')
+  })
+
+  test('都只有正在跑时谁也不抢注意力', () => {
+    const { items } = planPetRow([sess('claude', 'running', false), sess('codex', 'running', false)])
+    assert.deepEqual(items.map((p) => p.state), ['working', 'working'])
+    assert.equal(items.some((p) => p.focus), false)
+  })
+
+  test('读过的、读不到的会话都不画 pet', () => {
+    assert.deepEqual(planPetRow([sess('claude', 'done', false)]).items, [])
+    assert.deepEqual(planPetRow([sess('cursor', 'unknown', true)]).items, [])
+    assert.deepEqual(planPetRow([]), { items: [], more: 0 })
   })
 })
 
