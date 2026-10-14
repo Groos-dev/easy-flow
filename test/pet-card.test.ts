@@ -89,9 +89,18 @@ describe('PetRow 渲染', () => {
     assert.equal(render(createElement(PetRow, { sessions: [sess('cursor', 'unknown', true)] })), '')
     const read = render(createElement(PetRow, { sessions: [sess('claude', 'done', false)] }))
     assert.equal(petCount(read), 1)
-    assert.match(read, /class="pet s-done"/)
+    assert.match(read, /class="pet s-idle"/)
     assert.equal(eventCount(read), 0)
     assert.equal(focusCount(read), 0)
+  })
+
+  test('读过的 done 姿势是静止，但文案仍说清「跑完已看」', () => {
+    const read = render(createElement(PetRow, { sessions: [sess('claude', 'done', false)] }))
+    assert.match(read, /src="pets\/clawd-idle-follow.svg"/)
+    assert.match(read, /aria-label="Claude Code · 跑完已看"/)
+    const unread = render(createElement(PetRow, { sessions: [sess('claude', 'done', true)] }))
+    assert.match(unread, /src="pets\/clawd-happy.svg"/)
+    assert.match(unread, /aria-label="Claude Code · 跑完待看"/)
   })
 
   test('事件样式只跟 fresh 走：未读带 event，读过的不带', () => {
@@ -146,7 +155,7 @@ describe('Card 挂 pet', () => {
     const html = render(
       createElement(Card, { req: req(), sessions: [sess('claude', 'done', false)], childStat: { total: 1, done: 0 } }),
     )
-    assert.match(html, /class="pet compact s-done"/)
+    assert.match(html, /class="pet compact s-idle"/)
     assert.equal(eventCount(html), 0)
   })
 

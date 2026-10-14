@@ -57,20 +57,24 @@ export function focusIndex(states: PetState[]): number {
 }
 
 /**
- * 会话实时状态 → pet 状态。
+ * 会话实时状态 + 已读 → pet 状态。
  *
  * TODO(hook): 细粒度管道（claude-hook / codex-hook）接上后，「正在跑」要拆成 thinking / working，
  * 别再把它们合成 working 这一档；届时它的状态字面量就直接是 pet 的六档，这层适配可以撤。
  *
  * 在那之前只有粗粒度四档，先按最贴近的姿势落：running 落 working（设计稿的「正在跑」变体
  * 画的就是 working），其余同名。unknown 读不到，不给 pet——与角标口径一致。
+ *
+ * `done` 是唯一看 `fresh` 的一档：它的结论会一直挂到下一轮跑完，读过了还摆着「跑完待看」，
+ * 「没处理」和「处理过了」就分不出来。读过的一律落 idle（静止），素材与 CSS 都是现成的。
+ * `blocked` 不降档：看过 ≠ 答过，它还得等人。
  */
-export function petStateOf(state: ThreadState): PetState | null {
+export function petStateOf(state: ThreadState, fresh: boolean): PetState | null {
   switch (state) {
     case 'running':
       return 'working'
     case 'done':
-      return 'done'
+      return fresh ? 'done' : 'idle'
     case 'blocked':
       return 'blocked'
     case 'failed':
@@ -80,12 +84,22 @@ export function petStateOf(state: ThreadState): PetState | null {
   }
 }
 
+/**
+ * 展示文案。与姿势分开：读过的 done 姿势降成静止，文案仍要说清它是「跑完已看」——
+ * 只说「静止」会把「上一轮跑完了」这个信息丢掉。
+ */
+export function petLabelOf(state: ThreadState, fresh: boolean, pose: PetState): string {
+  return state === 'done' && !fresh ? '跑完已看' : PET_LABEL[pose]
+}
+
 /** 一张卡最多挂几只 pet：卡片内容宽约 310px，再多就挤了，多的收成 +N */
 export const MAX_PETS = 4
 
 export interface PetItem {
   session: Session
   state: PetState
+  /** 展示文案。可能比姿势说得更细——读过的 done 姿势是静止、文案是「跑完已看」 */
+  label: string
   /** 未读事件：给事件边框与一次性动效。读过就没了——pet 本身留着 */
   event: boolean
   /** 唯一抢动效的那只（只对 blocked 的脉冲有效）；其余为 false */
@@ -104,18 +118,21 @@ export interface PetRowPlan {
  * 渲染层只负责贴 markup，规则在这儿算好才测得动。
  *
  * 两层拆开：pet 是**回到会话的入口**，只要读得到状态（unknown 之外）就长期留着；
- * 事件样式（边框 + 动效）与抢注意力才跟 `fresh` 走，读过就消失。
+ * 事件样式（边框 + 动效）与抢注意力才跟 `fresh` 走，读过就消失。姿势也看一眼 `fresh`——
+ * 读过的 done 降成静止（见 petStateOf），别让「跑完待看」一直挂在一只已经处理过的会话上。
  */
 export function planPetRow(sessions: Session[]): PetRowPlan {
   const pets = sessions
-    .map((session) => ({ session, state: petStateOf(session.status.state) }))
+    .map((session) => ({ session, state: petStateOf(session.status.state, session.status.fresh) }))
     .filter((p): p is { session: Session; state: PetState } => p.state !== null)
 
   // 抢动效仍按 badgesOf 挑（未读事件 + 正在跑），再映射回整排的坐标——
   // 消费掉的 pet 留着，但不抢注意力。badgesOf 已按急缓排序，focusIndex 只认 attention 三档。
   const attentive = badgesOf(sessions)
   const focusAt = focusIndex(
-    attentive.map((s) => petStateOf(s.status.state)).filter((s): s is PetState => s !== null),
+    attentive
+      .map((s) => petStateOf(s.status.state, s.status.fresh))
+      .filter((s): s is PetState => s !== null),
   )
   const focusSession = focusAt >= 0 ? attentive[focusAt] : undefined
 
@@ -124,6 +141,7 @@ export function planPetRow(sessions: Session[]): PetRowPlan {
     items: shown.map((p) => ({
       session: p.session,
       state: p.state,
+      label: petLabelOf(p.session.status.state, p.session.status.fresh, p.state),
       event: isEventState(p.session.status.state) && p.session.status.fresh,
       focus: p.session === focusSession,
     })),
