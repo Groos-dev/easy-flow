@@ -1,0 +1,70 @@
+src/renderer/src/components/InfoPanel.tsx
+  s_b35607c9c0b8be::t_a16d13c8cbbf07 64
+  s_b35607c9c0b8be::t_f68184d95a324b 74-75
+src/renderer/src/styles.css
+  s_b35607c9c0b8be::t_dcc6ae94261c9d 1397
+server/cli.ts
+  s_b35607c9c0b8be::t_2f8fd7efe25453 147
+src/renderer/src/components/LaunchSessionForm.tsx
+  s_b35607c9c0b8be::t_e99a99d8160fe9 91-92
+  s_b35607c9c0b8be::t_d75261e5ea43e8 53-54
+server/schema.ts
+  s_b35607c9c0b8be::t_c599f32b9e741b 136-143
+  s_b35607c9c0b8be::t_7328b28b309f13 34,70,87
+test/core.test.ts
+  s_b35607c9c0b8be::t_91b75be0452844 247-248
+  s_b35607c9c0b8be::t_fe2648cc916b42 1258-1259,1265
+  s_b35607c9c0b8be::t_d1dc584c63775c 1818,1820
+  s_b35607c9c0b8be::t_88077cdff4c739 197,205-206,210
+  s_b35607c9c0b8be::t_71fc1b102973c4 320,328-330,335
+  s_b35607c9c0b8be::t_f1278cabc7cd44 1244
+src/renderer/src/components/Settings.tsx
+  s_b35607c9c0b8be::t_7cb8a804376eb7 24
+server/db.ts
+  s_b35607c9c0b8be::t_e4a5f56a9618cb 142
+  s_b35607c9c0b8be::t_40edd9b1d1772a 246,266
+  s_b35607c9c0b8be::t_8c8c8b1190b0be 585,592,594
+  s_b35607c9c0b8be::t_7a03c169f6b312 386
+  s_b35607c9c0b8be::t_11a36d6774d3f0 720,722-725,728-730,735,739-740,743-745,748-752,756
+  s_b35607c9c0b8be::t_00ab0e676758f6 1120,1123,1129,1131,1135,1140,1147,1152-1154,1156,1159,1161,1164
+  s_b35607c9c0b8be::t_da85710bb126e9 1014,1018
+  s_b35607c9c0b8be::t_bb87f44b137ba5 614,619,623
+  s_b35607c9c0b8be::t_8417649fbbf2be 155
+  s_b35607c9c0b8be::t_4b4a4f019c01ab 1241
+  s_b35607c9c0b8be::t_89c4233b402e82 678
+  s_b35607c9c0b8be::t_8319520a87e896 225
+  s_b35607c9c0b8be::t_5d555f651dcbc8 424
+  s_b35607c9c0b8be::t_9a4f834dd2d34a 714
+  s_b35607c9c0b8be::t_fae8ed551a1a61 11
+server/index.ts
+  s_b35607c9c0b8be::t_505810fbd106fa 41,43
+  s_b35607c9c0b8be::t_0f1b45050b3d72 335
+src/renderer/src/lib/types.ts
+  s_b35607c9c0b8be::t_730f13f17b2d2f 144
+  s_b35607c9c0b8be::t_f9b529b0dbe8d9 41
+  s_b35607c9c0b8be::t_2eb998ba7cdff2 87,90
+  s_b35607c9c0b8be::t_6151a5594a296f 152
+test/launch-board.test.ts
+  s_b35607c9c0b8be::t_f0c32c23b65b33 39,49
+  s_b35607c9c0b8be::t_a8bccc1f5943f9 156
+src/renderer/src/lib/launch.ts
+  s_b35607c9c0b8be::t_be60782d1e67e3 13
+src/renderer/src/components/TodoBoard.tsx
+  s_b35607c9c0b8be::t_02598e07b941e1 55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "2f2d77c9aea4ca3363e286bbf4c3f0d13598f011",
+  "prompts": {},
+  "sessions": {
+    "s_b35607c9c0b8be": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "360b5dce-8102-4579-a3e5-83e55866a2b6",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
