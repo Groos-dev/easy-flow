@@ -54,8 +54,12 @@ const CLOUDLING_MODULE_HEADER = `/**
 // clawd（<img>）
 // ---------------------------------------------------------------------------
 
-// 六档常驻状态用大图，折叠卡用 mini——多出来的状态（yawn / sleep / …）不落地。
-// 公共取景框：六档共用同一尺寸，状态切换时角色不跳大小；内容超出时才按需放宽（happy 的彩带、error 的烟雾）。
+// 常驻状态用大图，折叠卡用 mini。公共取景框：各档共用同一尺寸，状态切换时角色不跳大小；
+// 内容超出时才按需放宽（happy 的彩带、error 的烟雾）。
+//
+// 后 25 个是 16 档对齐时补的（theme.json 的 states / displayHintMap / idleAnimations / reactions /
+// miniMode 引用到的全部文件）。bbox 用 headless Chrome 的 getBBox 量出，与先前那 11 个同一套方法。
+// 没有 top：动画外扩的那几个先按静态框走——统一尺寸比不裁掉一颗星星重要，等真接上再逐个看。
 const CLAWD_ART = [
   { name: 'clawd-idle-follow.svg', bbox: [0, 6, 15, 10] },
   { name: 'clawd-working-thinking.svg', bbox: [-2.12, -6.34, 20.24, 22.34] },
@@ -69,6 +73,31 @@ const CLAWD_ART = [
   { name: 'clawd-mini-typing.svg', bbox: [-2, 4.61, 20.5, 12.95] },
   { name: 'clawd-mini-alert.svg', bbox: [-4, 2.5, 18.84, 14.37] },
   { name: 'clawd-mini-happy.svg', bbox: [-7.5, -6.5, 22.34, 23.67] },
+  { name: 'clawd-collapse-sleep.svg', bbox: [-0.61, 0, 16.22, 16] },
+  { name: 'clawd-designing.svg', bbox: [-7, 2, 28, 14] },
+  { name: 'clawd-dizzy.svg', bbox: [0, -0.25, 15, 16.25] },
+  { name: 'clawd-headphones-groove.svg', bbox: [-5, 2.85, 23, 13.15] },
+  { name: 'clawd-heart-eyes.svg', bbox: [0, 6, 15, 10] },
+  { name: 'clawd-idle-bubble.svg', bbox: [0, -1.2, 22, 17.2] },
+  { name: 'clawd-idle-doze.svg', bbox: [-0.61, 7.3, 16.22, 8.7] },
+  { name: 'clawd-idle-look.svg', bbox: [0, 6, 15, 10] },
+  { name: 'clawd-idle-reading.svg', bbox: [0, -7.08, 15, 23.08] },
+  { name: 'clawd-idle-yawn.svg', bbox: [0, 6, 15, 10] },
+  { name: 'clawd-mini-crabwalk.svg', bbox: [-2, 6.74, 15.3, 9.52] },
+  { name: 'clawd-mini-sleep.svg', bbox: [-3.17, 0, 18.01, 16.87] },
+  { name: 'clawd-react-annoyed.svg', bbox: [0, 0.5, 16.6, 15.5] },
+  { name: 'clawd-react-double-jump.svg', bbox: [0, 6, 15, 10] },
+  { name: 'clawd-react-double.svg', bbox: [0, 6, 18.25, 12.75] },
+  { name: 'clawd-react-drag.svg', bbox: [-1.11, 5.65, 15.69, 10.2] },
+  { name: 'clawd-react-left.svg', bbox: [0, 6, 15, 14.75] },
+  { name: 'clawd-react-right.svg', bbox: [0, 6, 19.25, 14.75] },
+  { name: 'clawd-sleeping.svg', bbox: [-1, 0, 17, 16] },
+  { name: 'clawd-wake.svg', bbox: [-1, 9, 17, 7] },
+  { name: 'clawd-working-building.svg', bbox: [0, 1, 23, 15] },
+  { name: 'clawd-working-carrying.svg', bbox: [-1.76, 4.17, 18.83, 12.14] },
+  { name: 'clawd-working-debugger.svg', bbox: [0, 4.5, 15, 11.5] },
+  { name: 'clawd-working-juggling.svg', bbox: [-0.28, -1.73, 15.56, 17.73] },
+  { name: 'clawd-working-sweeping.svg', bbox: [-3, 5, 18.5, 11] },
 ]
 
 // still 版额外规则：把「基础 opacity: 0、只靠动画显形」的装饰置为可见（连同动画冻结后应有的静置 transform）。
