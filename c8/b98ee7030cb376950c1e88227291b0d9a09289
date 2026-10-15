@@ -1,0 +1,30 @@
+src/renderer/src/components/Pet.tsx
+  s_ed313eed89e20f::t_d802f812325902 79-80
+src/main/index.ts
+  s_ed313eed89e20f::t_298e213e3c560f 2
+  s_ed313eed89e20f::t_bc4f128b8cdf6b 23-24,29,32,35
+  s_ed313eed89e20f::t_2ed9c6d1c305de 362
+  s_ed313eed89e20f::t_e90cd00203ba3a 112
+src/preload/index.ts
+  s_ed313eed89e20f::t_0222ad7fb540aa 3-4
+  s_ed313eed89e20f::t_1a74a2b7677759 49
+  s_ed313eed89e20f::t_ec4d643a84c320 50-51
+src/renderer/src/vite-env.d.ts
+  s_ed313eed89e20f::t_4933af045fb77d 28-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "c8b98ee7030cb376950c1e88227291b0d9a09289",
+  "prompts": {},
+  "sessions": {
+    "s_ed313eed89e20f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0b4f72b-edf3-484e-b3bc-924ffef0e785",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
