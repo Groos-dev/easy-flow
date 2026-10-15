@@ -14,7 +14,7 @@
  * 实测依据见需求 docs/easy-flow/hook-pipeline.md（本机 claude 2.1.278：http hook 生效、
  * session_id 等于 CLAUDE_CODE_SESSION_ID、主 agent 不带 agent_id）。
  */
-import { sessionState, type SessionStateStore, type SessionStatus, type ThreadState } from './session-state.ts'
+import { type SessionStateStore, type SessionStatus, type ThreadState } from './session-state.ts'
 
 /** hook 打过来的 JSON。字段随事件变，只挑我们认的；其余原样放着不关心 */
 export interface HookPayload {
@@ -60,6 +60,7 @@ export function normalizeHookEvent(payload: HookPayload, at = Date.now()): Sessi
       // 要调工具了：这是「干活」，tool_name 在 payload 里，不改状态形状
       return of('working')
     case 'PreCompact':
+      return of('sweeping')
     case 'PostCompact':
       // 压上下文：活儿还在跑，只是不在调工具
       return of('thinking')
@@ -96,7 +97,7 @@ export interface RecordOptions {
 export function recordHook(
   payload: HookPayload,
   { agent = 'claude', at = Date.now() }: RecordOptions = {},
-  store: SessionStateStore = sessionState,
+  store: SessionStateStore,
 ): SessionStatus | null {
   const session = str(payload.session_id)
   const event = str(payload.hook_event_name)

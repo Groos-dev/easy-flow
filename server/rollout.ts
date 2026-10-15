@@ -9,18 +9,18 @@
  * 对齐 clawd-on-desk 的 logConfig：sessionDir=<codexHome>/sessions、filePattern=rollout-*.jsonl、
  * pollIntervalMs=1500。照抄它两件事：
  *   - 增量按字节读：每个文件记 offset，只读到最后一个换行，写了一半的尾行留到下次
- *   - 只扫近几天：当天及前两天，加上缓存里「读到过文件」的日期目录，不遍历整棵树
- * 本实现按请求读（看板每 20s 拉一次 /api/sessions），节奏交给看板的轮询，不另起常驻定时器；
- * 增量读保证重复读只 stat + 读新增字节，「轮询不拖慢任何东西」。
+ *   - 只扫近几天：当天及前两天，加上跟过的会话所在的日期目录，不遍历整棵树
+ * 读的位置（offset）记在 source_file 上，所以增量读跨重启也成立。
  *
  * 事件 → 状态的依据是本机实测：一轮里 reasoning / function_call / function_call_output 各成一条，
  * 粒度与 Claude 的 PreToolUse / PostToolUse 同级；task_started / task_complete / turn_aborted
  * 划出这一轮的边界（分布见需求 requirement.md）。只读、不写，读不到就是读不到。
  */
 import { closeSync, openSync, readSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { readdirOrEmpty } from './fsutil.ts'
 import type { SessionStatus, ThreadState } from './session-state.ts'
+import type { SourceTable } from './source-file.ts'
 
 /** rollout 落在 <codexHome>/sessions/<年>/<月>/<日>/ 这层日期目录下 */
 const SESSION_DIR = 'sessions'
@@ -100,51 +100,47 @@ export function rolloutStatusOf(line: RolloutLine, at: number): SessionStatus | 
   return null
 }
 
-interface Tracked {
+interface Track {
   /** 认领的文件绝对路径。同一条会话换文件（fork / 重建）时不接新的 */
   path: string
   /** 已读到的字节数，只到最后一个换行——写了一半的尾行留到下次 */
   offset: number
-  /** fold 出来的最新状态；只有认不出的事件时保持 undefined */
-  status?: SessionStatus
+  mtimeMs: number
+  /** fold 出来的最新状态；只有认不出的事件时保持上一次的 */
+  state: SessionStatus | null
 }
 
-/**
- * 进程内的一份 rollout 观察表：offset 与状态都留在内存里，所以「别每次全量读」是真的——
- * 重复读只 stat + 读新增字节。一个 codexHome 一份（见 rolloutStore），跨请求长期复用。
- */
 export class RolloutStore {
-  private byId = new Map<string, Tracked>()
-  /** 读到过文件的日期目录：会话跑过近三天后，靠它继续被扫到 */
-  private dirs = new Set<string>()
+  constructor(
+    private readonly codexHome: string,
+    private readonly sources: SourceTable,
+  ) {}
 
-  constructor(private readonly codexHome: string) {}
-
-  /**
-   * 增量读一遍。只处理 ids 里的会话（外加已经在追踪的），读不到的会话不进表。
-   * now 可注入，便于测试跨越「近几天」的窗口。
-   */
-  refresh(ids: Iterable<string>, now = Date.now()): void {
+  /** 增量读一遍，返回认到的会话状态。只处理 ids 里的会话（外加已经跟过的） */
+  refresh(ids: Iterable<string>, now = Date.now()): Map<string, SessionStatus> {
     const want = new Set(ids)
-    for (const dir of this.candidateDirs(now)) {
+    const tracked = new Map<string, Track>()
+    for (const row of this.sources.listSources()) {
+      const id = threadIdOf(basename(row.path))
+      if (id) tracked.set(id, { path: row.path, offset: row.offset, mtimeMs: row.mtimeMs, state: row.state as SessionStatus | null })
+    }
+
+    for (const dir of this.candidateDirs(now, tracked)) {
       for (const file of readdirOrEmpty(dir)) {
         const id = threadIdOf(file)
         if (!id) continue
-        const path = join(dir, file)
-        if (!want.has(id) && !this.byId.has(id)) continue
-        this.dirs.add(dir)
-        this.readFile(path, id)
+        if (!want.has(id) && !tracked.has(id)) continue
+        this.readFile(join(dir, file), id, tracked)
       }
     }
+
+    const out = new Map<string, SessionStatus>()
+    for (const [id, track] of tracked) if (track.state) out.set(id, track.state)
+    return out
   }
 
-  /** 某条会话的最新状态。没读到 / 认不出返回 undefined，调用方自己给 unknown */
-  get(id: string): SessionStatus | undefined {
-    return this.byId.get(id)?.status
-  }
-
-  /** 近几天 + 缓存里的日期目录，去重后按顺序返回 */
-  private candidateDirs(now: number): string[] {
+  /** 近几天 + 跟过的会话所在目录，去重后按顺序返回 */
+  private candidateDirs(now: number, tracked: Map<string, Track>): string[] {
     const out: string[] = []
     const seen = new Set<string>()
     const push = (dir: string) => {
@@ -158,37 +154,46 @@ export class RolloutStore {
       push(sessionDirFor(this.codexHome, day))
       day.setDate(day.getDate() - 1)
     }
-    for (const dir of this.dirs) push(dir)
+    for (const track of tracked.values()) push(dirname(track.path))
     return out
   }
 
-  private readFile(path: string, id: string): void {
-    let size: number
+  private readFile(path: string, id: string, tracked: Map<string, Track>): void {
+    let stats: ReturnType<typeof statSync>
     try {
-      size = statSync(path).size
+      stats = statSync(path)
     } catch {
       return // 文件没了：当读不到
     }
-    const known = this.byId.get(id)
+    const known = tracked.get(id)
     // 同一条会话认领过的文件不同（fork / 重建）：认最早认领的那个，别把两条流混进一份 offset
     if (known && known.path !== path) return
-    const track: Tracked = known ?? { path, offset: 0 }
-    this.byId.set(id, track)
-    if (size < track.offset) track.offset = 0 // 被截断 / 换过：从头再读，别拿旧 offset 跳字节
-    if (size <= track.offset) return
+    const track: Track = known ?? { path, offset: 0, mtimeMs: 0, state: null }
+    tracked.set(id, track)
 
-    const buf = readBytes(path, track.offset, size - track.offset)
-    if (!buf) return
-    const cut = buf.lastIndexOf(0x0a) // '\n'
-    if (cut < 0) return // 全是半行：等下次
-    const text = buf.subarray(0, cut).toString('utf8')
-    track.offset += cut + 1
-    for (const line of text.split('\n')) {
-      const ev = parseLine(line)
-      if (!ev) continue // 空行 / 写坏的行 / 不是 JSON：忽略，不拖垮整条
-      const parsed = Date.parse(str(ev.timestamp))
-      const status = rolloutStatusOf(ev, Number.isFinite(parsed) ? parsed : Date.now())
-      if (status) track.status = status
+    let { offset, state } = track
+    if (stats.size < offset) offset = 0 // 被截断 / 换过：从头再读，别拿旧 offset 跳字节
+    if (stats.size > offset) {
+      const buf = readBytes(path, offset, stats.size - offset)
+      const cut = buf ? buf.lastIndexOf(0x0a) : -1 // '\n'
+      if (buf && cut >= 0) {
+        const text = buf.subarray(0, cut).toString('utf8')
+        offset += cut + 1
+        for (const line of text.split('\n')) {
+          const ev = parseLine(line)
+          if (!ev) continue // 空行 / 写坏的行 / 不是 JSON：忽略，不拖垮整条
+          const parsed = Date.parse(str(ev.timestamp))
+          const status = rolloutStatusOf(ev, Number.isFinite(parsed) ? parsed : Date.now())
+          if (status) state = status
+        }
+      }
+    }
+
+    track.offset = offset
+    track.mtimeMs = stats.mtimeMs
+    track.state = state
+    if (!known || known.offset !== offset || known.mtimeMs !== stats.mtimeMs) {
+      this.sources.touchSource(path, { mtimeMs: stats.mtimeMs, offset, state })
     }
   }
 }
@@ -222,11 +227,4 @@ function parseLine(line: string): RolloutLine | null {
   }
 }
 
-const stores = new Map<string, RolloutStore>()
 
-/** 一个 codexHome 一份 store：offset 与状态跨请求复用 */
-export function rolloutStore(codexHome: string): RolloutStore {
-  let store = stores.get(codexHome)
-  if (!store) stores.set(codexHome, (store = new RolloutStore(codexHome)))
-  return store
-}

@@ -128,19 +128,24 @@ const STILL_RULE = `
 // cloudling（内联 <svg>）
 // ---------------------------------------------------------------------------
 
-// 六档大图 + 折叠卡 mini；failed 复用 mini-alert（cloudling 的 mini 组里没有单独的失败版）。
 const CLOUDLING_ART = [
   'cloudling-idle.svg',
   'cloudling-thinking.svg',
   'cloudling-typing.svg',
+  'cloudling-sweeping.svg',
   'cloudling-notification.svg',
   'cloudling-attention.svg',
   'cloudling-error.svg',
+  'cloudling-idle-to-dozing.svg',
+  'cloudling-dozing.svg',
+  'cloudling-dozing-to-sleeping.svg',
+  'cloudling-sleeping.svg',
   'cloudling-mini-idle.svg',
   'cloudling-mini-peek.svg',
   'cloudling-mini-typing.svg',
   'cloudling-mini-alert.svg',
   'cloudling-mini-happy.svg',
+  'cloudling-mini-sleep.svg',
 ]
 const CLOUDLING_SRC = join(SRC, 'cloudling')
 // 原 viewBox `-32 -24 88 72` 里角色只占 22×19，缩到 44px 里几乎看不见；
@@ -191,6 +196,16 @@ for (const { name, bbox, top } of CLAWD_ART) {
 
 // ---- cloudling ----
 // 不落地 SVG 文件：它只以「内联进宿主 DOM」的形态出现，所以直接写进 TS 模块
+
+function stripXmlDecl(svg) {
+  return svg.replace(/^\s*<\?xml[^>]*\?>\s*/, '')
+}
+
+function flattenIdPrefix(svg) {
+  const prefix = svg.match(/const p = '([\w-]+)'/)?.[1]
+  return prefix ? svg.replaceAll('${p}', prefix) : svg
+}
+
 const cloudlingArt = []
 for (const name of CLOUDLING_ART) {
   const src = join(CLOUDLING_SRC, name)
@@ -204,7 +219,7 @@ for (const name of CLOUDLING_ART) {
     process.exit(1)
   }
   // 重设根 <svg> 的取景框与尺寸；尺寸只是兜底，内联后由 CSS 定
-  const body = raw
+  const body = flattenIdPrefix(stripXmlDecl(raw))
     .replace(/<svg\b[^>]*>/, (tag) =>
       tag
         .replace(/viewBox="[^"]*"/, `viewBox="${CLOUDLING_VIEWBOX}"`)

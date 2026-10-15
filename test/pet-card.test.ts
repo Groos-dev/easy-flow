@@ -13,7 +13,7 @@ import Card from '../src/renderer/src/components/Card.tsx'
 import { PetRow } from '../src/renderer/src/components/Pet.tsx'
 import type { Requirement, Session } from '../src/renderer/src/lib/types.ts'
 
-function sess(agent: string, state: Session['status']['state'], link = ''): Session {
+function sess(agent: string, state: Session['status']['state'], link = '', observedAt = 0): Session {
   return {
     requirementId: 'req-x',
     agent,
@@ -23,7 +23,7 @@ function sess(agent: string, state: Session['status']['state'], link = ''): Sess
     link,
     created: '',
     updated: '',
-    status: { state, needsAction: '', observedAt: 0, detail: '' },
+    status: { state, needsAction: '', observedAt, detail: '' },
   }
 }
 
@@ -90,8 +90,7 @@ describe('PetRow 渲染', () => {
     assert.equal(petCount(render(createElement(PetRow, { sessions: [sess('claude', 'done')] }))), 1)
   })
 
-  test('姿势就是状态：跑完待看 / 静止各画各的', () => {
-    const done = render(createElement(PetRow, { sessions: [sess('claude', 'done')] }))
+  test('姿势就是状态：跑完待看 / 静止各画各的', () => {    const done = render(createElement(PetRow, { sessions: [sess('claude', 'done')] }))
     assert.match(done, /src="pets\/clawd-happy.svg"/)
     assert.match(done, /aria-label="Claude Code · 跑完待看"/)
     const idle = render(createElement(PetRow, { sessions: [sess('claude', 'idle')] }))
@@ -99,8 +98,17 @@ describe('PetRow 渲染', () => {
     assert.match(idle, /aria-label="Claude Code · 静止"/)
   })
 
-  test('事件边框跟状态走：事件型三档带 event，静止不带', () => {
-    const done = render(createElement(PetRow, { sessions: [sess('claude', 'done')] }))
+  test('静止越久越困：静 1 分钟打哈欠、静 1 小时睡着', () => {
+    const now = Date.now()
+    const art = (idleMs: number) =>
+      render(createElement(PetRow, { sessions: [sess('claude', 'idle', '', now - idleMs)] }))
+    assert.match(art(0), /src="pets\/clawd-idle-follow\.svg"/)
+    assert.match(art(60_000), /src="pets\/clawd-idle-yawn\.svg"/)
+    assert.match(art(20 * 60_000), /src="pets\/clawd-idle-doze\.svg"/)
+    assert.match(art(60 * 60_000), /src="pets\/clawd-sleeping\.svg"/)
+  })
+
+  test('事件边框跟状态走：事件型三档带 event，静止不带', () => {    const done = render(createElement(PetRow, { sessions: [sess('claude', 'done')] }))
     assert.match(done, /class="pet s-done event focus"/)
     assert.equal(eventCount(done), 1)
     assert.equal(eventCount(render(createElement(PetRow, { sessions: [sess('claude', 'idle')] }))), 0)

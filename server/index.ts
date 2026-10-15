@@ -18,14 +18,18 @@ import {
   type Priority,
   type TodoStatus,
 } from './db.ts'
-import { hookKeyOf, withStatus } from './threads.ts'
+import { hookKeyOf, PULL_INTERVAL_MS, pullStatuses, readStatuses } from './threads.ts'
 import { recordHook } from './hook.ts'
-import { idleStatus, sessionState } from './session-state.ts'
+import { idleStatus, SessionStateStore } from './session-state.ts'
+import type { SourceTable } from './source-file.ts'
 import { rankNextUp } from './next-up.ts'
 import './launch-claude.ts'
+import { logLevel, createLogger } from './log.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 import { installSkill, skillPlan } from './skill-install.ts'
 import { hookPlan, installHooks, uninstallHooks } from './hook-install.ts'
+
+const log = createLogger('easy-flow')
 import { findLaunchProvider, launchPrompt, launchProviders } from './launch.ts'
 import './launch-codex.ts'
 import {
@@ -57,6 +61,8 @@ export interface BoardAppOptions {
 export interface BoardApp {
   db: BoardDatabase
   readonly dataDir: string
+  store: SessionStateStore
+  sources: SourceTable
   handle: (req: IncomingMessage, res: ServerResponse) => Promise<void>
   close: () => void
 }
@@ -90,6 +96,20 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
   let db = new BoardDatabase(currentDir, initial.activeProject)
   db.syncProjects()
   db.pickProject()
+
+  const sources: SourceTable = {
+    source: (path) => db.source(path),
+    listSources: () => db.listSources(),
+    touchSource: (path, patch) => db.touchSource(path, patch),
+  }
+
+  const stateStore = new SessionStateStore({
+    get: (agent, session) => db.getSessionState(agent, session),
+    put: (agent, session, status) => db.putSessionState(agent, session, status),
+    drop: (agent, session) => db.dropSessionState(agent, session),
+    keyOf: (agent, session) => db.keyOf(agent, session),
+    alias: (agent, session, key) => db.alias(agent, session, key),
+  })
 
   // 首次运行时把生效的数据目录固化下来，否则配置一直缺失，
   // 每个进程都要重新猜默认值（独立跑 server 与 Electron 之间会不一致）。
@@ -141,7 +161,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
         // codex 的转发脚本用 ?agent=codex 或报文里带 agent
         const fromQuery = url.searchParams.get('agent')
         const fromBody = typeof payload.agent === 'string' && payload.agent ? payload.agent : ''
-        recordHook(payload, { agent: fromQuery || fromBody || 'claude' })
+        recordHook(payload, { agent: fromQuery || fromBody || 'claude' }, stateStore)
         json(req, res, 200, { ok: true })
         return
       }
@@ -277,7 +297,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
           // 归属只存在库里，详情页要展示工作区就得从这儿带出去
           worktrees: db.listWorktrees(ctx.requirement.id),
           // 同理：会话只归库，详情页的「会话」块靠这一份；状态是读 agent 应用的落盘文件得来的
-          sessions: withStatus(db.listSessions(ctx.requirement.id)),
+          sessions: readStatuses(db.listSessions(ctx.requirement.id), stateStore),
           // 挂在这条需求上的待办（立项时由 todo 侧登记）。同样是只归库的关系
           todos: db.listTodos(ctx.requirement.id),
         })
@@ -287,7 +307,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
       // 全部会话（归属在每条的 requirementId 上）：mini 面板一次拉全，
       // 逐需求拉 context 太碎；排序交给库（最近登记的在前）
       if (url.pathname === '/api/sessions' && req.method === 'GET') {
-        json(req, res, 200, { sessions: withStatus(db.listSessions()) })
+        json(req, res, 200, { sessions: readStatuses(db.listSessions(), stateStore) })
         return
       }
 
@@ -297,7 +317,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
         const body = await readBody(req)
         const agent = String(body.agent)
         const session = String(body.session)
-        sessionState.put(agent, hookKeyOf(agent, session), idleStatus())
+        const key = hookKeyOf(agent, session)
+        stateStore.put(agent, key, idleStatus())
         json(req, res, 200, { ok: true })
         return
       }
@@ -307,7 +328,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
       if (url.pathname === '/api/next-up' && req.method === 'GET') {
         const requirements = db.list()
         const ids = new Set(requirements.map((r) => r.id))
-        const sessions = withStatus(db.listSessions()).filter((s) => ids.has(s.requirementId))
+        const sessions = readStatuses(db.listSessions(), stateStore).filter((s) => ids.has(s.requirementId))
         json(req, res, 200, { items: rankNextUp(requirements, sessions) })
         return
       }
@@ -552,6 +573,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
     get dataDir() {
       return currentDir
     },
+    store: stateStore,
+    sources,
     handle,
     close: () => db.close(),
   }
@@ -577,12 +600,24 @@ export function startBoardServer({
 }: StartOptions = {}): Promise<RunningBoardServer> {
   const app = createBoardApp({ dataDir, port })
   const server = createServer((req, res) => void app.handle(req, res))
+
+  const pull = () => {
+    try {
+      pullStatuses(app.db.listSessions(), app.store, app.sources)
+    } catch (err) {
+      log.warn(`pull failed: ${(err as Error).message}`)
+    }
+  }
+  pull()
+  const timer = setInterval(pull, PULL_INTERVAL_MS)
+  timer.unref()
+
   return new Promise((resolve, reject) => {
     server.once('error', reject)
     server.listen(port, host, () => {
-      console.log(`[easy-flow] 服务已启动 http://${host}:${port}`)
-      console.log(`[easy-flow] 数据目录    ${app.dataDir}`)
-      console.log(`[easy-flow] 数据库      ${app.db.file}`)
+      log.info(`listening on http://${host}:${port} (log level ${logLevel}, EASY_FLOW_LOG=debug for detail)`)
+      log.info(`data dir   ${app.dataDir}`)
+      log.info(`database   ${app.db.file}`)
       resolve({
         server,
         port,

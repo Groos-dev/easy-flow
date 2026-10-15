@@ -14,64 +14,130 @@
 import { CLOUDLING_SVG } from './pet-cloudling-art'
 import type { Pose } from './pets'
 
-/** 六档 → clawd 默认主题里的状态文件 */
 const CLAWD_FILE: Record<Pose, string> = {
   idle: 'clawd-idle-follow.svg',
   thinking: 'clawd-working-thinking.svg',
   working: 'clawd-working-typing.svg',
+  sweeping: 'clawd-working-sweeping.svg',
   blocked: 'clawd-notification.svg',
   done: 'clawd-happy.svg',
   failed: 'clawd-error.svg',
 }
 
-/** 折叠卡的小号：clawd 的 mini 组只有五张、没有失败版，failed 复用 alert（靠 .pet.s-failed 整体暗一档区分） */
 const CLAWD_MINI_FILE: Record<Pose, string> = {
   idle: 'clawd-mini-idle.svg',
   thinking: 'clawd-mini-peek.svg',
   working: 'clawd-mini-typing.svg',
+  sweeping: 'clawd-mini-typing.svg',
   blocked: 'clawd-mini-alert.svg',
   done: 'clawd-mini-happy.svg',
   failed: 'clawd-mini-alert.svg',
 }
 
-/** 六档 → cloudling 主题里的状态文件 */
 const CLOUDLING_FILE: Record<Pose, string> = {
   idle: 'cloudling-idle.svg',
   thinking: 'cloudling-thinking.svg',
   working: 'cloudling-typing.svg',
+  sweeping: 'cloudling-sweeping.svg',
   blocked: 'cloudling-notification.svg',
   done: 'cloudling-attention.svg',
   failed: 'cloudling-error.svg',
 }
 
-/** 折叠卡的小号：cloudling 有 9 个 mini 状态，六档都落得上；failed 同样复用 alert */
 const CLOUDLING_MINI_FILE: Record<Pose, string> = {
   idle: 'cloudling-mini-idle.svg',
   thinking: 'cloudling-mini-peek.svg',
   working: 'cloudling-mini-typing.svg',
+  sweeping: 'cloudling-mini-typing.svg',
   blocked: 'cloudling-mini-alert.svg',
   done: 'cloudling-mini-happy.svg',
   failed: 'cloudling-mini-alert.svg',
 }
 
+/** 静止越久越困：打哈欠 → 打盹 → 瘫倒 → 睡着 */
+export type IdleMood = 'awake' | 'yawning' | 'dozing' | 'collapsing' | 'sleeping'
+
+const CLAWD_IDLE: Record<IdleMood, string> = {
+  awake: 'clawd-idle-follow.svg',
+  yawning: 'clawd-idle-yawn.svg',
+  dozing: 'clawd-idle-doze.svg',
+  collapsing: 'clawd-collapse-sleep.svg',
+  sleeping: 'clawd-sleeping.svg',
+}
+
+const CLOUDLING_IDLE: Record<IdleMood, string> = {
+  awake: 'cloudling-idle.svg',
+  yawning: 'cloudling-idle-to-dozing.svg',
+  dozing: 'cloudling-dozing.svg',
+  collapsing: 'cloudling-dozing-to-sleeping.svg',
+  sleeping: 'cloudling-sleeping.svg',
+}
+
+const COLLAPSE_MS = 5_000
+
+const IDLE_STAGES: ReadonlyArray<{ after: number; mood: IdleMood }> = [
+  { after: 50 * 60_000 + COLLAPSE_MS, mood: 'sleeping' },
+  { after: 50 * 60_000, mood: 'collapsing' },
+  { after: 10 * 60_000, mood: 'dozing' },
+  { after: 20_000, mood: 'yawning' },
+]
+
+export function idleMoodOf(observedAt: number, now = Date.now()): IdleMood {
+  if (!observedAt) return 'awake'
+  const idleMs = now - observedAt
+  return IDLE_STAGES.find((stage) => idleMs >= stage.after)?.mood ?? 'awake'
+}
+
 /** 一块素材怎么落到页面上 */
 export type PetArt = { channel: 'img'; src: string } | { channel: 'inline'; svg: string }
 
+interface Theme {
+  files: Record<Pose, string>
+  minis: Record<Pose, string>
+  idle: Record<IdleMood, string>
+  miniSleep: string
+  inline: boolean
+}
+
+const CLAWD: Theme = {
+  files: CLAWD_FILE,
+  minis: CLAWD_MINI_FILE,
+  idle: CLAWD_IDLE,
+  miniSleep: 'clawd-mini-sleep.svg',
+  inline: false,
+}
+
+const CLOUDLING: Theme = {
+  files: CLOUDLING_FILE,
+  minis: CLOUDLING_MINI_FILE,
+  idle: CLOUDLING_IDLE,
+  miniSleep: 'cloudling-mini-sleep.svg',
+  inline: true,
+}
+
 /** 认不出的 agent 落到 clawd（默认那只）；只有 codex 走 cloudling */
-function artFor(agent: string): { files: Record<Pose, string>; minis: Record<Pose, string>; inline: boolean } {
-  return agent === 'codex'
-    ? { files: CLOUDLING_FILE, minis: CLOUDLING_MINI_FILE, inline: true }
-    : { files: CLAWD_FILE, minis: CLAWD_MINI_FILE, inline: false }
+function themeFor(agent: string): Theme {
+  return agent === 'codex' ? CLOUDLING : CLAWD
+}
+
+function fileFor(theme: Theme, state: Pose, mood: IdleMood, compact: boolean): string {
+  if (state !== 'idle') return (compact ? theme.minis : theme.files)[state]
+  if (!compact) return theme.idle[mood]
+  return mood === 'sleeping' ? theme.miniSleep : theme.minis.idle
 }
 
 /**
  * 相对路径，不带前导斜杠：dev 下按 vite 根解析，打包后按 index.html 同级目录解析，两边都能取到。
  * `still` 只对 `<img>` 那条通道有意义——clawd 的自带动画封在文档里，只能换 `*.still.svg` 那份。
  */
-export function petArt(agent: string, state: Pose, { compact, still }: { compact: boolean; still: boolean }): PetArt {
-  const { files, minis, inline } = artFor(agent)
-  const file = (compact ? minis : files)[state]
-  if (inline) return { channel: 'inline', svg: CLOUDLING_SVG[file] }
+export function petArt(
+  agent: string,
+  state: Pose,
+  { compact, still, mood = 'awake' }: { compact: boolean; still: boolean; mood?: IdleMood },
+): PetArt {
+  const theme = themeFor(agent)
+  const file = fileFor(theme, state, mood, compact)
+  if (theme.inline) return { channel: 'inline', svg: CLOUDLING_SVG[file] }
   return { channel: 'img', src: `pets/${still ? file.replace(/\.svg$/, '.still.svg') : file}` }
 }
 

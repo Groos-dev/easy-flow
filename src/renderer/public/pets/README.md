@@ -29,13 +29,12 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| `clawd-*.svg` | Claude 六档状态的大图（44px 卡片）+ 折叠卡用的小号 mini |
+| `clawd-*.svg` | Claude 各档状态的大图（44px 卡片）+ 折叠卡用的小号 mini |
 | `clawd-*.still.svg` | 同上，`prefers-reduced-motion` 时换这一份（`animation: none`） |
 | `README.md` | 本文件 |
 
 云宝不在这里——它只以内联的形态出现，素材落在生成物 `src/renderer/src/lib/pet-cloudling-art.ts`
-（11 档：六档大图 + 折叠卡 mini 五张，failed 复用 mini-alert）。只落地六档要用的那几张，
-`.pet-src/` 里多出来的状态（yawn / sleeping / juggling …）不生成。
+（17 档：常驻状态 + 静止那串打哈欠 / 打盹 / 瘫倒 / 睡着 + 折叠卡 mini，failed 复用 mini-alert）。
 
 ## 重新生成
 
@@ -50,7 +49,7 @@ node scripts/build-pets.mjs   # 需要 .pet-src/ 里有 clawd + cloudling 原始
 ## 已知差异（别当 bug）
 
 - **clawd 的 `done` / `failed` 是无限循环**：`clawd-happy.svg` / `clawd-error.svg` 自带
-  `infinite` 动画，读了事件之后仍持续动，六档同屏时也各自动各自的。这是素材自带行为，
+  `infinite` 动画，读了事件之后仍持续动，同屏多只时也各自动各自的。这是素材自带行为，
   用户已确认接受，不改成一次性。
 - **两份静态版的停法不一样**：
   - clawd（`<img>`）进不去文档内部，构建期另出 `*.still.svg` 注入 `animation: none`；
