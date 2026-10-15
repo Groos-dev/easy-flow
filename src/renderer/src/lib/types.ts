@@ -197,7 +197,7 @@ export interface ContextPayload {
 }
 
 /** 会话的实时状态。字面量与 server/session-state.ts 的 THREAD_STATES 一致 */
-export type ThreadState = 'idle' | 'thinking' | 'working' | 'done' | 'blocked' | 'failed' | 'unknown'
+export type ThreadState = 'idle' | 'thinking' | 'working' | 'sweeping' | 'done' | 'blocked' | 'failed' | 'unknown'
 
 /** 与 server/threads.ts 的 SessionStatus 对应。hook 驱动优先，落盘兜底 */
 export interface SessionStatus {

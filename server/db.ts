@@ -26,6 +26,8 @@ import {
 import { readTextOrNull } from './fsutil.ts'
 import { applySchema } from './schema.ts'
 import { ensureTemplates, projectIssues } from './convention.ts'
+import type { SessionStatus, ThreadState } from './session-state.ts'
+import type { SourceRow } from './source-file.ts'
 
 /**
  * 状态 = 看板的列。两者是同一个东西，所以只有这一套取值，顺序即列顺序。
@@ -175,6 +177,35 @@ export interface Session {
   link: string
   created: string
   updated: string
+}
+
+interface SessionStateRow {
+  agent: string
+  session: string
+  state: string
+  needs_action: string
+  observed_at: number
+  detail: string
+}
+
+interface SourceFileRow {
+  path: string
+  mtime_ms: number
+  offset: number
+  state: string | null
+}
+
+function toSourceRow(row: SourceFileRow): SourceRow {
+  return { mtimeMs: row.mtime_ms, offset: row.offset, state: row.state ? JSON.parse(row.state) : null }
+}
+
+function toSessionStatus(row: SessionStateRow): SessionStatus {
+  return {
+    state: row.state as ThreadState,
+    needsAction: row.needs_action,
+    observedAt: row.observed_at,
+    detail: row.detail,
+  }
 }
 
 interface SessionRow {
@@ -1095,6 +1126,79 @@ export class BoardDatabase {
         now,
       )
     return this.sessionBy(input.agent, input.session)!
+  }
+
+  getSessionState(agent: string, session: string): SessionStatus | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM session_state WHERE agent = ? AND session = ?')
+      .get(agent, session) as unknown as SessionStateRow | undefined
+    return row ? toSessionStatus(row) : undefined
+  }
+
+  putSessionState(agent: string, session: string, status: SessionStatus): void {
+    this.db
+      .prepare(
+        `INSERT INTO session_state (agent, session, state, needs_action, observed_at, detail)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(agent, session) DO UPDATE SET
+           state = excluded.state, needs_action = excluded.needs_action,
+           observed_at = excluded.observed_at, detail = excluded.detail`,
+      )
+      .run(agent, session, status.state, status.needsAction, status.observedAt, status.detail)
+  }
+
+  dropSessionState(agent: string, session: string): boolean {
+    const info = this.db.prepare('DELETE FROM session_state WHERE agent = ? AND session = ?').run(agent, session)
+    return Number(info.changes) > 0
+  }
+
+  listSessionStates(): Array<{ agent: string; session: string; status: SessionStatus }> {
+    const rows = this.db.prepare('SELECT * FROM session_state').all() as unknown as SessionStateRow[]
+    return rows.map((row) => ({ agent: row.agent, session: row.session, status: toSessionStatus(row) }))
+  }
+
+  source(path: string): SourceRow | undefined {
+    const row = this.db.prepare('SELECT * FROM source_file WHERE path = ?').get(path) as unknown as
+      | SourceFileRow
+      | undefined
+    return row ? toSourceRow(row) : undefined
+  }
+
+  listSources(): Array<{ path: string } & SourceRow> {
+    const rows = this.db.prepare('SELECT * FROM source_file').all() as unknown as SourceFileRow[]
+    return rows.map((row) => ({ path: row.path, ...toSourceRow(row) }))
+  }
+
+  touchSource(path: string, patch: Partial<SourceRow>): void {
+    const current = this.source(path)
+    const next: SourceRow = {
+      mtimeMs: patch.mtimeMs ?? current?.mtimeMs ?? 0,
+      offset: patch.offset ?? current?.offset ?? 0,
+      state: patch.state !== undefined ? patch.state : (current?.state ?? null),
+    }
+    this.db
+      .prepare(
+        `INSERT INTO source_file (path, mtime_ms, offset, state) VALUES (?, ?, ?, ?)
+         ON CONFLICT(path) DO UPDATE SET
+           mtime_ms = excluded.mtime_ms, offset = excluded.offset, state = excluded.state`,
+      )
+      .run(path, next.mtimeMs, next.offset, next.state === null || next.state === undefined ? null : JSON.stringify(next.state))
+  }
+
+  keyOf(agent: string, session: string): string {
+    const row = this.db
+      .prepare('SELECT state_key FROM session_source WHERE agent = ? AND session = ?')
+      .get(agent, session) as unknown as { state_key: string } | undefined
+    return row?.state_key ?? session
+  }
+
+  alias(agent: string, session: string, key: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO session_source (agent, session, state_key) VALUES (?, ?, ?)
+         ON CONFLICT(agent, session) DO UPDATE SET state_key = excluded.state_key`,
+      )
+      .run(agent, session, key)
   }
 
   sessionBy(agent: SessionAgent, session: string): Session | undefined {

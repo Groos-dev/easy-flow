@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { AGENT_LABELS } from '../lib/labels'
-import { petArt, scopeCloudling } from '../lib/pet-art'
+import { petArt, scopeCloudling, idleMoodOf, type IdleMood } from '../lib/pet-art'
 import { PET_LABEL, planPetRow, type Pose } from '../lib/pets'
 import type { Session } from '../lib/types'
 
@@ -98,6 +98,7 @@ function Cloudling({ svg, still }: { svg: string; still: boolean }) {
 export default function Pet({
   agent,
   state,
+  mood,
   event = false,
   focus = false,
   compact = false,
@@ -108,6 +109,7 @@ export default function Pet({
 }: {
   agent: string
   state: Pose
+  mood?: IdleMood
   event?: boolean
   focus?: boolean
   compact?: boolean
@@ -117,7 +119,7 @@ export default function Pet({
   onOpen?: () => void
 }) {
   const name = `${AGENT_LABELS[agent] ?? agent} · ${PET_LABEL[state]}`
-  const art = petArt(agent, state, { compact, still })
+  const art = petArt(agent, state, { compact, still, mood })
   // cloudling 内联成 <svg>（脚本驱动，且 object 的文档画布不透明）；clawd 走 <img>（每张自带同名 @keyframes，内联会互相覆盖）
   const body =
     art.channel === 'inline' ? (
@@ -183,6 +185,7 @@ export function PetRow({ sessions, compact = false }: { sessions: Session[]; com
           key={`${p.session.agent}:${p.session.session}`}
           agent={p.session.agent}
           state={p.state}
+          mood={p.state === 'idle' ? idleMoodOf(p.session.status.observedAt) : undefined}
           event={p.event}
           focus={p.focus}
           compact={compact}

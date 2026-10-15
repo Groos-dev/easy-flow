@@ -19,10 +19,11 @@ import { spawnSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { BoardDatabase, normalizeLinkList, normalizeCodeLinks, normalizeExtLinks } from '../server/db.ts'
-import { hookKeyOf, withStatus } from '../server/threads.ts'
+import { hookKeyOf, pullStatuses, readStatuses } from '../server/threads.ts'
 import { RolloutStore, rolloutStatusOf, sessionDirFor } from '../server/rollout.ts'
+import type { SourceTable } from '../server/source-file.ts'
 import { normalizeHookEvent, recordHook } from '../server/hook.ts'
-import { idleStatus, sessionState, SessionStateStore, THREAD_STATES, type SessionStatus } from '../server/session-state.ts'
+import { idleStatus, SessionStateStore, THREAD_STATES, type SessionStatus } from '../server/session-state.ts'
 import { parseFrontmatter, readDocs, section } from '../server/markdown.ts'
 import { createProjectDir, createRequirementDir, setRequirementId } from '../server/convention.ts'
 import { createBoardApp } from '../server/index.ts'
@@ -33,7 +34,7 @@ import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
 import { PET_LABEL, PET_RANK, MAX_PETS, focusIndex, planPetRow, type Pose } from '../src/renderer/src/lib/pets.ts'
-import { petArt, scopeCloudling } from '../src/renderer/src/lib/pet-art.ts'
+import { petArt, scopeCloudling, idleMoodOf, type IdleMood } from '../src/renderer/src/lib/pet-art.ts'
 import { CLOUDLING_SVG } from '../src/renderer/src/lib/pet-cloudling-art.ts'
 import { childStatsOf, childrenOf } from '../src/renderer/src/lib/children.ts'
 import { parseStamp, relTime } from '../src/renderer/src/lib/time.ts'
@@ -46,6 +47,26 @@ process.env.GIT_CONFIG_GLOBAL = '/dev/null'
 // 固定一个路径，多个 worktree 并行跑测试时会互相删对方的夹具（fresh 每次清空它）。
 // 按 cwd 派生：每个工作区一份，同工作区内仍是同一目录。
 const TMP = process.env.EASY_FLOW_TEST_TMP ?? join(tmpdir(), `easy-flow-test-${basename(process.cwd())}`)
+
+/** 状态层与读位置都落在 sqlite 上：每个用例一个自己的库。放 OS 临时目录——TMP 会被 fresh() 整个清掉 */
+let storeSeq = 0
+function newState(): { store: SessionStateStore; sources: SourceTable } {
+  const db = new BoardDatabase(join(tmpdir(), `easy-flow-test-state-${process.pid}`, String(storeSeq++)), 'p')
+  return {
+    store: new SessionStateStore({
+      get: (agent, session) => db.getSessionState(agent, session),
+      put: (agent, session, status) => db.putSessionState(agent, session, status),
+      drop: (agent, session) => db.dropSessionState(agent, session),
+      keyOf: (agent, session) => db.keyOf(agent, session),
+      alias: (agent, session, key) => db.alias(agent, session, key),
+    }),
+    sources: {
+      source: (path) => db.source(path),
+      listSources: () => db.listSources(),
+      touchSource: (path, patch) => db.touchSource(path, patch),
+    },
+  }
+}
 
 /** 造一个需求目录 */
 function makeReq(
@@ -2434,8 +2455,6 @@ describe('HTTP 层', () => {
   after(async () => {
     await new Promise<void>((r) => server.close(() => r()))
     app.close()
-    // hook 状态是进程内单例：这一批往里推过事件，擦干净免得影响后面的用例
-    sessionState.clear()
   })
 
   const get = async (p: string) => (await fetch(`${base}${p}`)).json() as Promise<any>
@@ -2593,7 +2612,7 @@ describe('HTTP 层', () => {
     assert.equal(one.link, 'codex://threads/th-ctx')
   })
 
-  test('会话都带实时状态——把 withStatus 摘掉这条就会红', async () => {
+  test('会话都带实时状态——把 readStatuses 摘掉这条就会红', async () => {
     for (const path of ['/api/sessions', '/api/context?slug=alpha']) {
       const r = await get(path)
       const list = r.sessions.filter((s: any) => s.session === 'th-ctx')
@@ -2984,6 +3003,8 @@ describe('会话状态', () => {
     codexHome: join(HOME, '.codex'),
   }
 
+  const { store: suiteStore, sources: suiteSources } = newState()
+
   before(() => rmSync(HOME, { recursive: true, force: true }))
 
   /** 桌面应用的会话记录。写在第三方 provider 那套目录下——本机在用的就是它 */
@@ -3017,9 +3038,21 @@ describe('会话状态', () => {
     return JSON.stringify({ timestamp: new Date(at).toISOString(), type, payload })
   }
 
+  /** codex 的官方未读集合：不在这里面的 thread 就是看过了 */
+  function codexUnreadState(unreadIds: string[]): void {
+    mkdirSync(roots.codexHome, { recursive: true })
+    writeFileSync(
+      join(roots.codexHome, '.codex-global-state.json'),
+      JSON.stringify({ 'electron-thread-read-state-v1': { unreadByIdentity: { id1: { host1: unreadIds } } } }),
+      'utf8',
+    )
+  }
+
   /** 桌面应用的未读集合 */
   function statusOf(agent: string, session: string): SessionStatus {
-    return withStatus([{ agent, session }], roots)[0].status
+    const one = [{ agent, session }]
+    pullStatuses(one, suiteStore, suiteSources, roots)
+    return readStatuses(one, suiteStore)[0].status
   }
 
   test('桌面会话：CLI 进程在跑就是 running', () => {
@@ -3091,8 +3124,43 @@ describe('会话状态', () => {
     assert.equal(statusOf('claude', 'local_review').state, 'done')
   })
 
+  test('桌面会话：跑完的已看过落静止，没看过仍是跑完待看', () => {
+    const at = Date.now() - 60_000
+    claudeRecord('local_seen', {
+      lastActivityAt: at,
+      lastFocusedAt: at + 30_000,
+      postTurnSummaryFor: 'a3',
+      lastAssistantUuid: 'a3',
+      postTurnSummary: { status_category: 'review_ready' },
+    })
+    assert.equal(statusOf('claude', 'local_seen').state, 'idle')
+
+    claudeRecord('local_unseen', {
+      lastActivityAt: at,
+      lastFocusedAt: at - 30_000,
+      postTurnSummaryFor: 'a3b',
+      lastAssistantUuid: 'a3b',
+      postTurnSummary: { status_category: 'review_ready' },
+    })
+    assert.equal(statusOf('claude', 'local_unseen').state, 'done')
+  })
+
+  test('桌面会话：blocked 看过也不降档——看过不等于答过', () => {
+    const at = Date.now() - 60_000
+    claudeRecord('local_blocked_seen', {
+      lastActivityAt: at,
+      lastFocusedAt: at + 30_000,
+      postTurnSummaryFor: 'a3c',
+      lastAssistantUuid: 'a3c',
+      postTurnSummary: { status_category: 'blocked', needs_action: '走哪条？' },
+    })
+    const got = statusOf('claude', 'local_blocked_seen')
+    assert.equal(got.state, 'blocked')
+    assert.equal(got.needsAction, '走哪条？')
+  })
+
   test('板侧写进去的 idle 压住落盘结论，下一个 hook 事件直接覆盖它', () => {
-    const store = new SessionStateStore()
+    const { store, sources } = newState()
     const cli = 'e6a1f0c2-1111-2222-3333-444455556666'
     claudeRecord('local_clicked', {
       cliSessionId: cli,
@@ -3102,7 +3170,11 @@ describe('会话状态', () => {
       lastAssistantUuid: 'a6',
       postTurnSummary: { status_category: 'blocked', needs_action: '走哪条？' },
     })
-    const at = () => withStatus([{ agent: 'claude', session: 'local_clicked' }], roots, store)[0].status
+    const at = () => {
+      const one = [{ agent: 'claude', session: 'local_clicked' }]
+      pullStatuses(one, store, sources, roots)
+      return readStatuses(one, store)[0].status
+    }
     assert.equal(at().state, 'blocked', '没点过就是落盘结论')
 
     // 点 pet：写进状态层，用与 hook 事件同一个 key（内层 cliSessionId）
@@ -3191,6 +3263,28 @@ describe('会话状态', () => {
     assert.equal(statusOf('codex', 'cx-never-seen').state, 'unknown')
   })
 
+  test('codex：跑完且官方未读里没有它就落静止，还在未读里就仍是跑完待看', () => {
+    codexRollout('cx-read', [evLine('event_msg', { type: 'task_complete' })])
+    codexRollout('cx-unread', [evLine('event_msg', { type: 'task_complete' })])
+    codexUnreadState(['cx-unread'])
+    assert.equal(statusOf('codex', 'cx-read').state, 'idle')
+    assert.equal(statusOf('codex', 'cx-unread').state, 'done')
+  })
+
+  test('codex：blocked / failed 看过也不降档', () => {
+    codexRollout('cx-aborted-seen', [evLine('event_msg', { type: 'turn_aborted' })])
+    codexRollout('cx-failed-seen', [evLine('event_msg', { type: 'task_complete', error: { message: 'x' } })])
+    codexUnreadState([])
+    assert.equal(statusOf('codex', 'cx-aborted-seen').state, 'blocked')
+    assert.equal(statusOf('codex', 'cx-failed-seen').state, 'failed')
+  })
+
+  test('codex：未读集合读不到时不动它——宁可多提醒一次', () => {
+    codexRollout('cx-no-state', [evLine('event_msg', { type: 'task_complete' })])
+    rmSync(join(roots.codexHome, '.codex-global-state.json'), { force: true })
+    assert.equal(statusOf('codex', 'cx-no-state').state, 'done')
+  })
+
   test('cursor 没有可读的状态来源，一律 unknown', () => {
     assert.equal(statusOf('cursor', 'conv-1').state, 'unknown')
   })
@@ -3217,14 +3311,13 @@ describe('会话状态', () => {
       postTurnSummary: { status_category: 'blocked', needs_action: '接着做吗？' },
     })
     codexRollout('cx-batch', [evLine('event_msg', { type: 'task_complete', error: { message: 'x' } })])
-    const got = withStatus(
-      [
-        { agent: 'claude', session: 'local_batch' },
-        { agent: 'codex', session: 'cx-batch' },
-        { agent: 'cursor', session: 'conv-2' },
-      ],
-      roots,
-    )
+    const one = [
+      { agent: 'claude', session: 'local_batch' },
+      { agent: 'codex', session: 'cx-batch' },
+      { agent: 'cursor', session: 'conv-2' },
+    ]
+    pullStatuses(one, suiteStore, suiteSources, roots)
+    const got = readStatuses(one, suiteStore)
     assert.deepEqual(
       got.map((s) => s.status.state),
       ['blocked', 'failed', 'unknown'],
@@ -3284,7 +3377,8 @@ describe('rollout 兜底：事件译状态、增量读、只扫近几天', () =>
 
   test('增量按字节读：半行不误判、认不出的忽略、补全后接着读', () => {
     const home = join(HOME, 'incremental')
-    const store = new RolloutStore(home)
+    const { sources } = newState()
+    const store = new RolloutStore(home, sources)
     const dir = sessionDirFor(home, new Date())
     const start = line('event_msg', { type: 'task_started' })
     const meta = line('turn_context', { model: 'x' })
@@ -3293,43 +3387,41 @@ describe('rollout 兜底：事件译状态、增量读、只扫近几天', () =>
     // 一段 rollout：认得出的、认不出的、以及一条写到一半的尾行（没有换行）
     const file = writeRollout(dir, 'cx-half', [start, meta, call, done.slice(0, 24)].join('\n'))
 
-    store.refresh(['cx-half'])
     // 最后一条**完整**的是 function_call → 干活；半行与认不出的都不算
-    assert.equal(store.get('cx-half')?.state, 'working')
+    assert.equal(store.refresh(['cx-half']).get('cx-half')?.state, 'working')
 
     // 补全那条半行（整份重写、末尾带换行）。offset 停在最后一个换行，前面不重读
     writeFileSync(file, [start, meta, call, done].join('\n') + '\n', 'utf8')
-    store.refresh(['cx-half'])
-    assert.equal(store.get('cx-half')?.state, 'done', '补全的尾行接上')
+    assert.equal(store.refresh(['cx-half']).get('cx-half')?.state, 'done', '补全的尾行接上')
   })
 
   test('只扫近几天：窗口外的日期目录靠缓存继续扫到，没进过缓存的就不扫', () => {
     const home = join(HOME, 'window')
-    const store = new RolloutStore(home)
+    const { sources } = newState()
+    const store = new RolloutStore(home, sources)
     const now = Date.now()
     const near = sessionDirFor(home, new Date(now - DAY))
     const far = sessionDirFor(home, new Date(now - 10 * DAY))
     writeRollout(near, 'cx-near', line('event_msg', { type: 'task_complete' }, now) + '\n')
     writeRollout(far, 'cx-far', line('event_msg', { type: 'task_complete' }, now - 10 * DAY) + '\n')
 
-    store.refresh(['cx-near', 'cx-far'], now)
-    assert.equal(store.get('cx-near')?.state, 'done')
-    assert.equal(store.get('cx-far')?.state, undefined, '窗口外的日期目录不该被遍历')
+    const first = store.refresh(['cx-near', 'cx-far'], now)
+    assert.equal(first.get('cx-near')?.state, 'done')
+    assert.equal(first.get('cx-far'), undefined, '窗口外的日期目录不该被遍历')
 
-    // 20 天后：near 的目录早已出窗口，但读到过就被缓存住了
-    store.refresh(['cx-near', 'cx-far'], now + 20 * DAY)
-    assert.equal(store.get('cx-near')?.state, 'done', '缓存住的日期目录继续扫')
-    assert.equal(store.get('cx-far')?.state, undefined)
+    // 20 天后：near 的目录早已出窗口，但读到过就继续扫
+    const later = store.refresh(['cx-near', 'cx-far'], now + 20 * DAY)
+    assert.equal(later.get('cx-near')?.state, 'done', '跟过的日期目录继续扫')
+    assert.equal(later.get('cx-far'), undefined)
   })
 
   test('读不到文件 / 全是半行都不算读到，调用方给 unknown', () => {
     const home = join(HOME, 'empty')
-    const store = new RolloutStore(home)
-    store.refresh(['cx-none'], Date.now())
-    assert.equal(store.get('cx-none'), undefined)
+    const { sources } = newState()
+    const store = new RolloutStore(home, sources)
+    assert.equal(store.refresh(['cx-none'], Date.now()).get('cx-none'), undefined)
     writeRollout(sessionDirFor(home, new Date()), 'cx-partial', line('event_msg', { type: 'task_started' }).slice(0, 10))
-    store.refresh(['cx-partial'], Date.now())
-    assert.equal(store.get('cx-partial'), undefined, '只有半行就什么都不认')
+    assert.equal(store.refresh(['cx-partial'], Date.now()).get('cx-partial'), undefined, '只有半行就什么都不认')
   })
 })
 
@@ -3346,7 +3438,7 @@ describe('hook 事件：归一与暂存', () => {
       ['PostToolUse', 'thinking'],
       ['UserPromptSubmit', 'thinking'],
       ['SessionStart', 'idle'],
-      ['PreCompact', 'thinking'],
+      ['PreCompact', 'sweeping'],
       ['PostCompact', 'thinking'],
       ['PermissionRequest', 'blocked'],
       ['Interrupt', 'blocked'],
@@ -3362,7 +3454,7 @@ describe('hook 事件：归一与暂存', () => {
   test('两个 agent 的事件都要认——codex 发 Interrupt 与 Pre/PostCompact，不发 PostToolUseFailure', () => {
     // 少认一个的后果是状态卡在旧值上：打断后一直显示「干活」
     assert.equal(event('Interrupt')?.state, 'blocked')
-    assert.equal(event('PreCompact')?.state, 'thinking')
+    assert.equal(event('PreCompact')?.state, 'sweeping')
     assert.equal(event('PostCompact')?.state, 'thinking')
   })
 
@@ -3373,26 +3465,25 @@ describe('hook 事件：归一与暂存', () => {
   })
 
   test('一条会话只留最新一条；重复登记时后到覆盖先到', () => {
-    const store = new SessionStateStore()
+    const { store } = newState()
     recordHook({ hook_event_name: 'PreToolUse', session_id: 'a', cwd: '/tmp' }, CLAUDE, store)
     recordHook({ hook_event_name: 'PostToolUse', session_id: 'a', cwd: '/tmp' }, CLAUDE, store)
-    assert.equal(store.size, 1)
     assert.equal(store.get('claude', 'a')?.state, 'thinking')
   })
 
   test('缺 session_id / 子 agent 的事件都不动主会话状态', () => {
-    const store = new SessionStateStore()
+    const { store } = newState()
     assert.equal(recordHook({ hook_event_name: 'PreToolUse' }, CLAUDE, store), null, '没有 id 就没人可挂')
     recordHook(
       { hook_event_name: 'PreToolUse', session_id: 'a', cwd: '/tmp', agent_id: 'sub-1', agent_type: 'claude' },
       CLAUDE,
       store,
     )
-    assert.equal(store.size, 0, '子 agent 的生死不改主会话状态')
+    assert.equal(store.get('claude', 'a'), undefined, '子 agent 的生死不改主会话状态')
   })
 
   test('SessionEnd 把这条抹掉，读的时候自然退回落盘', () => {
-    const store = new SessionStateStore()
+    const { store } = newState()
     recordHook({ hook_event_name: 'Stop', session_id: 'a', cwd: '/tmp' }, CLAUDE, store)
     assert.equal(store.get('claude', 'a')?.state, 'done')
     assert.equal(recordHook({ hook_event_name: 'SessionEnd', session_id: 'a', cwd: '/tmp' }, CLAUDE, store), null)
@@ -3400,16 +3491,15 @@ describe('hook 事件：归一与暂存', () => {
   })
 
   test('条目按 agent 分开存：同一个会话 id 两条管道互不覆盖', () => {
-    const store = new SessionStateStore()
+    const { store } = newState()
     recordHook({ hook_event_name: 'PreToolUse', session_id: 'same', cwd: '/tmp' }, CLAUDE, store)
     recordHook({ hook_event_name: 'Stop', session_id: 'same', cwd: '/tmp' }, { agent: 'codex' }, store)
     assert.equal(store.get('claude', 'same')?.state, 'working')
     assert.equal(store.get('codex', 'same')?.state, 'done')
-    assert.equal(store.size, 2)
   })
 
   test('时刻新的赢：陈年的 hook 事件盖不掉更新的落盘结论，反过来也不许', () => {
-    const store = new SessionStateStore()
+    const { store } = newState()
     const stale = Date.now() - 31 * 60_000
     const of = (state: SessionStatus['state'], observedAt: number): SessionStatus =>
       ({ state, needsAction: '', observedAt, detail: state })
@@ -3425,7 +3515,7 @@ describe('hook 事件：归一与暂存', () => {
   })
 
   test('板侧写的 idle 一直摆着，直到有更新的观察落下来', () => {
-    const store = new SessionStateStore()
+    const { store } = newState()
     const clicked = Date.now() - 31 * 60_000
     store.put('claude', 'idle-1', idleStatus(clicked))
     assert.equal(store.get('claude', 'idle-1')?.state, 'idle', '过了多久都还在')
@@ -3456,11 +3546,16 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
     writeFileSync(join(dir, `${sessionId}.json`), JSON.stringify({ sessionId, ...rec }), 'utf8')
   }
 
-  const statusOf = (agent: string, session: string, store: SessionStateStore): SessionStatus =>
-    withStatus([{ agent, session }], roots, store)[0].status
+  const { sources } = newState()
+
+  const statusOf = (agent: string, session: string, store: SessionStateStore): SessionStatus => {
+    const one = [{ agent, session }]
+    pullStatuses(one, store, sources, roots)
+    return readStatuses(one, store)[0].status
+  }
 
   test('hook 说在干活就顶掉落盘那份结论——同一 turn 内能看出切换', () => {
-    const store = new SessionStateStore()
+    const { store } = newState()
     claudeRecord('local_working', {
       lastActivityAt: Date.now(),
       postTurnSummaryFor: 't1',
@@ -3478,7 +3573,7 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
   })
 
   test('登记 id 与 hook 报的 id 不同名时，靠记录的 cliSessionId 翻译', () => {
-    const store = new SessionStateStore()
+    const { store } = newState()
     const cli = 'e6a1f0c2-1111-2222-3333-444455556666'
     claudeRecord('local_translated', { cliSessionId: cli })
     recordHook({ hook_event_name: 'PreToolUse', session_id: cli, cwd: '/tmp' }, {}, store)
@@ -3486,7 +3581,7 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
   })
 
   test('两个 id 都对不上就退回落盘结论，不借同目录别的会话的 hook', () => {
-    const store = new SessionStateStore()
+    const { store } = newState()
     const dir = join(TMP, 'hook-home', 'worktree')
     mkdirSync(dir, { recursive: true })
     claudeRecord('local_bycwd', {
@@ -3502,7 +3597,7 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
   })
 
   test('同目录并排跑多个会话时互不点亮，各自只认自己的 id', () => {
-    const store = new SessionStateStore()
+    const { store } = newState()
     const dir = join(TMP, 'hook-home', 'shared-wt')
     mkdirSync(dir, { recursive: true })
     recordHook({ hook_event_name: 'PreToolUse', session_id: 'claude-x', cwd: dir }, {}, store)
@@ -3512,7 +3607,7 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
   })
 
   test('在跑的状态太久没动静就当它没了——进程崩了不会有收尾事件', () => {
-    const store = new SessionStateStore()
+    const { store } = newState()
     claudeRecord('local_stale', {
       lastActivityAt: Date.now(),
       postTurnSummaryFor: 't2',
@@ -3527,7 +3622,7 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
   })
 
   test('过期的 blocked 也一样让位', () => {
-    const store = new SessionStateStore()
+    const { store } = newState()
     claudeRecord('local_stale_blocked', {
       lastActivityAt: Date.now(),
       postTurnSummaryFor: 't4',
@@ -3548,7 +3643,7 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
       lastAssistantUuid: 't3',
       postTurnSummary: { status_category: 'review_ready' },
     })
-    const got = statusOf('claude', 'local_disk', new SessionStateStore())
+    const got = statusOf('claude', 'local_disk', newState().store)
     assert.equal(got.state, 'done')
     assert.equal(got.detail, '桌面应用结论：review_ready')
   })
@@ -3623,7 +3718,10 @@ describe('未读事件：角标挂哪些会话', () => {
 
 describe('pet：姿势与抢注意力挑选', () => {
   test('状态字面量与状态层同一套，一个不多一个不少', () => {
-    assert.deepEqual([...THREAD_STATES].sort(), ['blocked', 'done', 'failed', 'idle', 'thinking', 'unknown', 'working'])
+    assert.deepEqual(
+      [...THREAD_STATES].sort(),
+      ['blocked', 'done', 'failed', 'idle', 'sweeping', 'thinking', 'unknown', 'working'],
+    )
     assert.deepEqual(Object.keys(PET_LABEL).sort(), [...THREAD_STATES].sort(), '每一档都得有名字')
   })
 
@@ -3654,36 +3752,39 @@ describe('pet：姿势与抢注意力挑选', () => {
 
 describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => {
   const art = { compact: false, still: false }
+  type ArtOpt = { compact: boolean; still: boolean; mood?: IdleMood }
   const PETS_DIR = join(REPO_ROOT, 'src/renderer/public/pets')
 
   /** 走 <img> 的素材：拿它的 src，顺带钉住通道 */
-  const imgSrc = (agent: string, state: Pose, opt = art) => {
+  const imgSrc = (agent: string, state: Pose, opt: ArtOpt = art) => {
     const got = petArt(agent, state, opt)
     assert.equal(got.channel, 'img')
     return got.channel === 'img' ? got.src : ''
   }
 
   /** 云宝内联：拿它那份 SVG 原文，顺带钉住通道 */
-  const cloudlingSvg = (state: Pose, opt = art) => {
+  const cloudlingSvg = (state: Pose, opt: ArtOpt = art) => {
     const got = petArt('codex', state, opt)
     assert.equal(got.channel, 'inline')
     return got.channel === 'inline' ? got.svg : ''
   }
 
-  test('Claude 用 clawd，走 <img>：六档大图各一张', () => {
+  test('Claude 用 clawd，走 <img>：各档大图各一张', () => {
     assert.equal(imgSrc('claude', 'idle'), 'pets/clawd-idle-follow.svg')
     assert.equal(imgSrc('claude', 'thinking'), 'pets/clawd-working-thinking.svg')
     assert.equal(imgSrc('claude', 'working'), 'pets/clawd-working-typing.svg')
+    assert.equal(imgSrc('claude', 'sweeping'), 'pets/clawd-working-sweeping.svg')
     assert.equal(imgSrc('claude', 'blocked'), 'pets/clawd-notification.svg')
     assert.equal(imgSrc('claude', 'done'), 'pets/clawd-happy.svg')
     assert.equal(imgSrc('claude', 'failed'), 'pets/clawd-error.svg')
   })
 
-  test('Codex 用 cloudling，内联成 <svg>：六档各一张、互不重样', () => {
+  test('Codex 用 cloudling，内联成 <svg>：各档一张、互不重样', () => {
     const files: Record<Pose, string> = {
       idle: 'cloudling-idle.svg',
       thinking: 'cloudling-thinking.svg',
       working: 'cloudling-typing.svg',
+      sweeping: 'cloudling-sweeping.svg',
       blocked: 'cloudling-notification.svg',
       done: 'cloudling-attention.svg',
       failed: 'cloudling-error.svg',
@@ -3712,6 +3813,32 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
     assert.equal(cloudlingSvg('failed', mini), CLOUDLING_SVG['cloudling-mini-alert.svg'])
   })
 
+  test('静止越久越困：20s 打哈欠、10min 打盹、50min 瘫倒一下再睡', () => {
+    const at = 1_700_000_000_000
+    assert.equal(idleMoodOf(at, at + 19_999), 'awake')
+    assert.equal(idleMoodOf(at, at + 20_000), 'yawning')
+    assert.equal(idleMoodOf(at, at + 10 * 60_000), 'dozing')
+    assert.equal(idleMoodOf(at, at + 50 * 60_000), 'collapsing')
+    assert.equal(idleMoodOf(at, at + 50 * 60_000 + 5_000), 'sleeping')
+    assert.equal(idleMoodOf(0, at), 'awake', '说不出时刻就当刚静下来')
+  })
+
+  test('静止那档按 mood 换图；折叠卡只有睡着的 mini', () => {
+    const mood = (m: IdleMood): ArtOpt => ({ compact: false, still: false, mood: m })
+    assert.equal(imgSrc('claude', 'idle', mood('awake')), 'pets/clawd-idle-follow.svg')
+    assert.equal(imgSrc('claude', 'idle', mood('yawning')), 'pets/clawd-idle-yawn.svg')
+    assert.equal(imgSrc('claude', 'idle', mood('dozing')), 'pets/clawd-idle-doze.svg')
+    assert.equal(imgSrc('claude', 'idle', mood('collapsing')), 'pets/clawd-collapse-sleep.svg')
+    assert.equal(imgSrc('claude', 'idle', mood('sleeping')), 'pets/clawd-sleeping.svg')
+    assert.equal(cloudlingSvg('idle', mood('sleeping')), CLOUDLING_SVG['cloudling-sleeping.svg'])
+
+    const mini = (m: IdleMood): ArtOpt => ({ compact: true, still: false, mood: m })
+    assert.equal(imgSrc('claude', 'idle', mini('sleeping')), 'pets/clawd-mini-sleep.svg')
+    assert.equal(cloudlingSvg('idle', mini('sleeping')), CLOUDLING_SVG['cloudling-mini-sleep.svg'])
+    assert.equal(imgSrc('claude', 'idle', mini('yawning')), 'pets/clawd-mini-idle.svg')
+    assert.equal(imgSrc('claude', 'working', mini('sleeping')), 'pets/clawd-mini-typing.svg')
+  })
+
   test('reduced-motion：clawd 换静态版；云宝内联，由挂载时只放行首帧', () => {
     const still = { compact: false, still: true }
     assert.equal(imgSrc('claude', 'done', still), 'pets/clawd-happy.still.svg')
@@ -3735,8 +3862,8 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
     }
   })
 
-  test('内联的云宝：11 档都在、都带脚本、都是收紧过的取景框', () => {
-    assert.equal(Object.keys(CLOUDLING_SVG).length, 11)
+  test('内联的云宝：17 档都在、都带脚本、都是收紧过的取景框', () => {
+    assert.equal(Object.keys(CLOUDLING_SVG).length, 17)
     for (const [file, svg] of Object.entries(CLOUDLING_SVG)) {
       assert.match(svg, /^<svg /, file)
       assert.match(svg, /viewBox="-2 -2 28 28"/, file)

@@ -106,6 +106,44 @@ CREATE TABLE IF NOT EXISTS session (
   PRIMARY KEY (agent, session)
 );
 
+/*
+ * session_state：会话状态。三类来源都写它——hook 事件、拉取文件、板侧点击（点一下 pet = 这条静止）。
+ * 状态一变就落库，所以重启后原样还在；读口只查这张表。
+ */
+CREATE TABLE IF NOT EXISTS session_state (
+  agent        TEXT NOT NULL,
+  session      TEXT NOT NULL,
+  state        TEXT NOT NULL,
+  needs_action TEXT NOT NULL DEFAULT '',
+  observed_at  INTEGER NOT NULL,
+  detail       TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (agent, session)
+);
+
+/*
+ * session_source：登记 id → 状态层 key 的翻译。claude 桌面会话登记的是 local_<uuid>，
+ * 而 hook 报的是内层 uuid，不翻就落在两个格子里。只有拉取侧读得到记录文件，翻译落在库上，
+ * 读口与点击只查它。
+ */
+CREATE TABLE IF NOT EXISTS session_source (
+  agent     TEXT NOT NULL,
+  session   TEXT NOT NULL,
+  state_key TEXT NOT NULL,
+  PRIMARY KEY (agent, session)
+);
+
+/*
+ * source_file：读外部文件读到哪儿了——mtime 用来判断「这份文件变没变」，offset 是增量读到第几字节，
+ * state 是那份文件 fold 出来的状态。都是记账，丢了只是重读一遍，不会算错。
+ */
+CREATE TABLE IF NOT EXISTS source_file (
+  path     TEXT NOT NULL,
+  mtime_ms REAL NOT NULL DEFAULT 0,
+  offset   INTEGER NOT NULL DEFAULT 0,
+  state    TEXT,
+  PRIMARY KEY (path)
+);
+
 CREATE INDEX IF NOT EXISTS idx_doc_scope ON doc(project, slug);
 CREATE INDEX IF NOT EXISTS idx_req_project ON requirement(project);
 CREATE INDEX IF NOT EXISTS idx_todo_status ON todo(status);

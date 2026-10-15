@@ -18,7 +18,9 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -28,6 +30,9 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const TMP = join(ROOT, '.tmp')
 const PID_FILE = join(TMP, 'app.pid')
 const LOG_FILE = join(TMP, 'app.log')
+const LOG_ROTATED = join(TMP, 'app.log.1')
+/** 日志只留一代：超过这个大小就在启动时挪走，别让它无限涨 */
+const LOG_MAX_BYTES = 5 * 1024 * 1024
 
 /** 内嵌服务端口，用来判断应用有没有起来（见 server/index.ts 的 DEFAULT_PORT） */
 const PORT = 3210
@@ -124,6 +129,13 @@ function signal(pid, sig) {
   }
 }
 
+/** 启动时转一次：服务是追加写的，只有这里能动手 */
+function rotateLog() {
+  if (!existsSync(LOG_FILE) || statSync(LOG_FILE).size < LOG_MAX_BYTES) return
+  rmSync(LOG_ROTATED, { force: true })
+  renameSync(LOG_FILE, LOG_ROTATED)
+}
+
 function logTail(lines = 15) {
   if (!existsSync(LOG_FILE)) return '(没有日志)'
   return readFileSync(LOG_FILE, 'utf8').trimEnd().split('\n').slice(-lines).join('\n')
@@ -138,6 +150,7 @@ function start() {
   }
 
   mkdirSync(TMP, { recursive: true })
+  rotateLog()
   appendFileSync(LOG_FILE, `\n=== 启动 ${new Date().toISOString()} ===\n`)
   const log = openSync(LOG_FILE, 'a')
   const child = spawn('pnpm', ['dev'], {

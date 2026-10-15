@@ -18,7 +18,6 @@
 import type { Requirement, Session } from './db.ts'
 import type { SessionStatus } from './session-state.ts'
 
-/** 带实时状态的会话。状态由 threads.withStatus 读 agent 落盘文件补上 */
 export type RankableSession = Session & { status: SessionStatus }
 
 /** 两级：现在就得动 / 有空再看 */
