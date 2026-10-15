@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, screen, session, shell } from 'electron'
+import { randomBytes } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RunningBoardServer } from '../../server/index.ts'
@@ -19,17 +20,19 @@ if (process.env.EASY_FLOW_DEBUG === '1') {
   app.commandLine.appendSwitch('remote-debugging-port', process.env.EASY_FLOW_DEBUG_PORT ?? '9229')
 }
 
+const CSP_NONCE = randomBytes(16).toString('base64')
+
 /**
  * CSP 必须按环境区分：
  *   dev  — Vite 会注入内联脚本（@react-refresh、@vite/client）并开 HMR WebSocket，
  *          script-src 必须放开 inline 与 ws，否则渲染层整页白/黑屏。
- *   prod — 渲染层是本地打包文件，不依赖内联脚本，收紧到 'self'。
+ *   prod — 渲染层是本地打包文件，内联脚本只放行带 CSP_NONCE 的那一条。
  */
 const CSP_DEV =
-  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+  `default-src 'self'; script-src 'self' 'unsafe-inline' 'nonce-${CSP_NONCE}'; style-src 'self' 'unsafe-inline'; ` +
   "connect-src 'self' ws://localhost:* http://localhost:* http://127.0.0.1:*; img-src 'self' data:"
 const CSP_PROD =
-  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+  `default-src 'self'; script-src 'self' 'nonce-${CSP_NONCE}'; style-src 'self' 'unsafe-inline'; ` +
   "connect-src 'self' http://127.0.0.1:*; img-src 'self' data:"
 
 function applyCsp(): void {
@@ -106,6 +109,7 @@ function createPanel(): void {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      additionalArguments: [`--easy-flow-csp-nonce=${CSP_NONCE}`],
     },
   })
 
@@ -355,6 +359,7 @@ async function createWindow(): Promise<void> {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      additionalArguments: [`--easy-flow-csp-nonce=${CSP_NONCE}`],
     },
   })
 

@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+const CSP_NONCE_FLAG = '--easy-flow-csp-nonce='
+
 /** 订阅形如 easy-flow:open-settings 的频道，返回取消订阅函数 */
 function subscribe(channel: string, handler: (payload: never) => void): () => void {
   const listener = (_e: unknown, payload: never) => handler(payload)
@@ -43,6 +45,9 @@ contextBridge.exposeInMainWorld('easyFlow', {
 
   /** 平台标识（darwin / win32 / linux）。快捷键符号按平台显示 */
   platform: process.platform,
+
+  /** prod 的 CSP 只放行带它的内联脚本 */
+  cspNonce: process.argv.find((a) => a.startsWith(CSP_NONCE_FLAG))?.slice(CSP_NONCE_FLAG.length) ?? '',
 
   /** 读当前生效的呼出快捷键与默认值 */
   getShortcut: (): Promise<{ shortcut: string; fallback: string }> =>

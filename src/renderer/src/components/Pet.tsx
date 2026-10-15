@@ -76,6 +76,8 @@ function Cloudling({ svg, still }: { svg: string; still: boolean }) {
     if (!script) return
     // 脚本顶层有一堆 const，同屏多只会重复声明，包一层 IIFE（在 inlineShell 里）
     const s = document.createElementNS('http://www.w3.org/2000/svg', 'script')
+    const nonce = window.easyFlow?.cspNonce
+    if (nonce) s.setAttribute('nonce', nonce)
     s.textContent = inlineShell(uid, still, script)
     root.appendChild(s)
   }, [svg, still, uid])

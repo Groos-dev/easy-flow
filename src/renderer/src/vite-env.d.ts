@@ -25,6 +25,8 @@ interface EasyFlowBridge {
   takePendingOpen?: () => Promise<{ project: string; slug: string } | null>
   /** 平台标识（darwin / win32 / linux） */
   platform?: string
+  /** prod 的 CSP 只放行带它的内联脚本 */
+  cspNonce?: string
   /** 读当前生效的呼出快捷键与默认值 */
   getShortcut?: () => Promise<{ shortcut: string; fallback: string }>
   /** 改绑呼出快捷键 */
