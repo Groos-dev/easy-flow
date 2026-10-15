@@ -1,0 +1,48 @@
+test/launch-board.test.ts
+  s_0e88ef7da4036c::t_0d9b1377fb15b6 187-188
+  s_0e88ef7da4036c::t_5020a8355914a8 281,285-286
+  s_0e88ef7da4036c::t_d17afc5961fada 397,402-408
+  s_0e88ef7da4036c::t_a493b4973be120 234
+  s_0e88ef7da4036c::t_99378d3ca70788 245
+  s_0e88ef7da4036c::t_78d8d487530487 368
+server/launch-codex.ts
+  s_0e88ef7da4036c::t_9f1d1a6bf23e0f 4,9,12-15
+  s_0e88ef7da4036c::t_d2575d8b21381f 31
+  s_0e88ef7da4036c::t_f2bb58a9abc54d 53
+test/launch-codex.test.ts
+  s_0e88ef7da4036c::t_934d4abac2685e 47,50,58-61,63
+  s_0e88ef7da4036c::t_aa5a1ec91d700e 19-20
+  s_0e88ef7da4036c::t_c6e4e3c5ed065d 94,109
+  s_0e88ef7da4036c::t_fdf39d4965a02f 29,32-33,39
+server/index.ts
+  s_0e88ef7da4036c::t_0e5539a3249c3e 358-359,361-362
+src/renderer/src/components/LaunchSessionForm.tsx
+  s_0e88ef7da4036c::t_48eca3427e4082 39-40
+  s_0e88ef7da4036c::t_d0ceeed3acda7b 74,85
+test/launch.test.ts
+  s_0e88ef7da4036c::t_f92e429f54ce04 34-35,37-38
+src/renderer/src/lib/launch.ts
+  s_0e88ef7da4036c::t_91b3dbbbd6eb17 3-5
+  s_0e88ef7da4036c::t_1b2daa29e5dd01 1
+server/launch.ts
+  s_0e88ef7da4036c::t_4d205e4cd80746 57-58
+  s_0e88ef7da4036c::t_035bab1f8a5971 19,21
+src/renderer/src/components/LaunchSession.tsx
+  s_0e88ef7da4036c::t_1595110ee3723b 58-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "0c50b3bd628098df48d4334b3842240511f8c860",
+  "prompts": {},
+  "sessions": {
+    "s_0e88ef7da4036c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3f560282-713c-41b6-9616-70d3b4df74aa",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
