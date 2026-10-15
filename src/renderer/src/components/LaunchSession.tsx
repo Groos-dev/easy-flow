@@ -55,8 +55,8 @@ export default function LaunchSession({ req, worktrees }: { req: Requirement; wo
 
   async function launch() {
     if (!agent || busy) return
-    // Claude 有工作区就必须带一个；Codex 不选，服务端按需求把全部工作区收进 project
-    const needsWorktree = launchNeedsWorktree(agent, launchWorktreeSelection(worktrees).available)
+    // 有工作区就必须带一个：Claude 用它当 folder，Codex 用它当 path（app 按目录认项目）
+    const needsWorktree = launchNeedsWorktree(launchWorktreeSelection(worktrees).available)
     if (needsWorktree && !worktreeId) return
     const sequence = ++requestSequence.current
     const selectedWorktreeId = needsWorktree ? worktreeId : ''

@@ -31,12 +31,12 @@ describe('启动交接', () => {
     assert.ok(prompt.length < 400)
   })
 
-  test('Codex 的提示词按需求取上下文——它的会话收整条需求，不绑单个工作区', () => {
-    const prompt = launchPrompt({ ...input, agent: 'codex', worktreeId: '', worktreePath: '' })
+  test('两个 agent 都按所选工作区取上下文——会话实际只拿到那一个目录', () => {
+    const prompt = launchPrompt({ ...input, agent: 'codex' })
     assert.match(prompt, /req-abc123/)
-    assert.match(prompt, /easy-flow context req-abc123/)
+    assert.match(prompt, /wt-xyz789/)
+    assert.match(prompt, /easy-flow context wt-xyz789/)
     assert.match(prompt, /easy-flow req session add req-abc123 --agent codex/)
-    assert.doesNotMatch(prompt, /wt-xyz789/)
   })
 
   test('需求还没有工作区时按需求取上下文，并写明先开工作区再动代码', () => {

@@ -1,8 +1,8 @@
-import type { LaunchAgent, LaunchResult, Worktree } from './types'
+import type { LaunchResult, Worktree } from './types'
 
-/** Claude 的 deeplink 只能带一个工作目录，有可用工作区时必须选一个；一个都没有时不带 folder 也能起 */
-export function launchNeedsWorktree(agent: LaunchAgent | '', available: Worktree[]): boolean {
-  return agent === 'claude' && available.length > 0
+/** deeplink 只带一个工作目录（Claude 的 folder、Codex 的 path），有可用工作区时必须选一个；一个都没有时不带目录也能起 */
+export function launchNeedsWorktree(available: Worktree[]): boolean {
+  return available.length > 0
 }
 
 /** 只有可用 worktree 才能启动；唯一项直选，多项留空要求用户明确选择。 */
