@@ -19,8 +19,9 @@ import type {
 // 渲染层走 HTTP 访问本地服务，开发与打包共用同一套代码：
 //   dev（浏览器）  → 相对路径，由 Vite proxy 转发到 127.0.0.1:3210
 //   dev/build（Electron）→ 主进程内嵌同一服务，直连回环地址
+// 可选链是给 node 测试留的：那些用例用 react-dom/server 直接渲染组件，没有 Vite 的 import.meta.env
 const BASE: string =
-  import.meta.env.VITE_API_BASE ?? (import.meta.env.DEV ? '' : 'http://127.0.0.1:3210')
+  import.meta.env?.VITE_API_BASE ?? (import.meta.env?.DEV ? '' : 'http://127.0.0.1:3210')
 
 async function request<T>(
   path: string,
@@ -73,6 +74,14 @@ export const api = {
 
   /** 全部 agent 会话（需求归属在每条的 requirementId 上）。mini 面板一次拉全 */
   sessions: (): Promise<{ sessions: Session[] }> => request('/api/sessions'),
+
+  /**
+   * 点一下 pet：告诉服务端这条会话此刻「静止」。服务端把它写成一条状态事件，
+   * 与 hook 事件共用同一张表——下一个事件一到就覆盖，不需要谁来清。
+   * fire-and-forget：记不下也不该拦住人打开会话
+   */
+  markSessionClicked: (agent: string, session: string): Promise<{ ok: boolean }> =>
+    request('/api/sessions/clicked', { method: 'POST', body: JSON.stringify({ agent, session }) }),
 
   /**
    * 「下一步该动哪个」的排名。名次与理由由服务端算——它要会话实时状态，

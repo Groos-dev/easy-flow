@@ -2,7 +2,7 @@
  * Codex 侧转发层回归：一是 `/api/hook?agent=codex` 让事件落进 codex 那一格（共用入口缺省算 claude），
  * 二是 scripts/codex-hook.mjs 对 agent 无感的纪律。
  *
- * 归一与暂存本身（事件名 → state + activity、四档 TTL、按 agent 分格、SessionEnd、子 agent）由
+ * 归一与暂存本身（事件名 → state、按 agent 分格、SessionEnd、子 agent）由
  * core.test.ts 覆盖；这里只测 Codex 接进来这一面，不重复那套。
  *
  * 运行：pnpm test
@@ -74,7 +74,7 @@ describe('/api/hook?agent=codex', () => {
     assert.equal(res.status, 200)
     assert.equal((await res.json()).ok, true)
     const codex = await statusOf('codex')
-    assert.deepEqual([codex.state, codex.activity], ['running', 'working'])
+    assert.equal(codex.state, 'working')
     assert.equal(codex.detail, 'hook 事件：PreToolUse')
   })
 

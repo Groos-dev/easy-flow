@@ -23,7 +23,9 @@ export const STATUS_CLASS: Record<string, string> = {
  * unknown 不给配色——它不该出现在角标上，只该在详情页里说明为什么读不到。
  */
 export const THREAD_STATE_LABEL: Record<string, string> = {
-  running: '正在跑',
+  thinking: '正在思考',
+  working: '正在干活',
+  idle: '静止',
   done: '已完成待看',
   blocked: '需要人介入',
   failed: '失败',
@@ -37,7 +39,9 @@ export const NEXT_UP_LEVEL_LABEL: Record<string, string> = {
 }
 
 export const THREAD_STATE_CLASS: Record<string, string> = {
-  running: 't-running',
+  thinking: 't-thinking',
+  working: 't-working',
+  idle: 't-idle',
   done: 't-done',
   blocked: 't-blocked',
   failed: 't-failed',

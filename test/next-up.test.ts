@@ -22,7 +22,7 @@ import {
 } from '../server/next-up.ts'
 import { createBoardApp } from '../server/index.ts'
 import type { Requirement, Session, SessionAgent, SessionRole } from '../server/db.ts'
-import type { SessionStatus, ThreadState } from '../server/threads.ts'
+import type { SessionStatus, ThreadState } from '../server/session-state.ts'
 
 // 夹具目录按 cwd 派生：多个 worktree 并行跑测试时互不干扰
 const TMP = join(tmpdir(), `easy-flow-nextup-test-${basename(process.cwd())}`)
@@ -56,7 +56,7 @@ function sess(
   requirementId: string,
   agent: SessionAgent,
   state: ThreadState,
-  opts: { fresh?: boolean; link?: string; at?: string; needsAction?: string } = {},
+  opts: { link?: string; observedAt?: number; needsAction?: string } = {},
 ): RankableSession {
   const session: Session = {
     requirementId,
@@ -71,10 +71,8 @@ function sess(
   }
   const status: SessionStatus = {
     state,
-    activity: '',
-    fresh: opts.fresh ?? true,
     needsAction: opts.needsAction ?? '',
-    at: opts.at ?? '',
+    observedAt: opts.observedAt ?? 0,
     detail: '',
   }
   return { ...session, status }
@@ -96,17 +94,13 @@ describe('下一步 · 排名', () => {
     assert.equal(items[0].session?.link, 'app://claude/1')
   })
 
-  test('卡住不看已读——读过也还停在榜上（它是真停住，不是一条读过就消的未读）', () => {
-    const items = rankNextUp(
-      [req({ slug: 'a', status: '执行中' })],
-      [sess('req-a', 'codex', 'blocked', { fresh: false })],
-      NOW,
-    )
+  test('卡住的会话一直停在榜上——要人推正是它停着的理由', () => {
+    const items = rankNextUp([req({ slug: 'a', status: '执行中' })], [sess('req-a', 'codex', 'blocked')], NOW)
     assert.equal(items.length, 1)
     assert.equal(items[0].tier, 1)
   })
 
-  test('agent 跑完没看 → 第 2 档、有空再看', () => {
+  test('agent 跑完 → 第 2 档、有空再看', () => {
     const items = rankNextUp(
       [req({ slug: 'a', status: 'Review', updated: '2026-10-14' })],
       [sess('req-a', 'codex', 'done')],
@@ -115,22 +109,22 @@ describe('下一步 · 排名', () => {
     assert.equal(items.length, 1)
     assert.equal(items[0].tier, 2)
     assert.equal(items[0].level, 'soon')
-    assert.equal(items[0].reason, 'Codex 跑完了没看')
+    assert.equal(items[0].reason, 'Codex 跑完了')
     assert.equal(items[0].session?.link, 'app://codex/1')
   })
 
-  test('跑完但已看过（fresh=false）→ 不进榜；正在跑也不进榜', () => {
+  test('点过的（idle）与正在跑的不进榜', () => {
     assert.deepEqual(
-      rankNextUp([req({ slug: 'a', status: '执行中' })], [sess('req-a', 'codex', 'done', { fresh: false })], NOW),
+      rankNextUp([req({ slug: 'a', status: '执行中' })], [sess('req-a', 'codex', 'idle')], NOW),
       [],
     )
     assert.deepEqual(
-      rankNextUp([req({ slug: 'a', status: '执行中' })], [sess('req-a', 'codex', 'running')], NOW),
+      rankNextUp([req({ slug: 'a', status: '执行中' })], [sess('req-a', 'codex', 'working')], NOW),
       [],
     )
   })
 
-  test('agent 跑失败没看 → 与「跑完没看」同档，理由说的是「跑失败了」', () => {
+  test('agent 跑失败 → 与「跑完」同档，理由说的是「跑失败了」', () => {
     const items = rankNextUp(
       [req({ slug: 'a', status: '执行中' })],
       [sess('req-a', 'codex', 'failed')],
@@ -138,7 +132,7 @@ describe('下一步 · 排名', () => {
     )
     assert.equal(items.length, 1)
     assert.equal(items[0].tier, 2)
-    assert.equal(items[0].reason, 'Codex 跑失败了没人看')
+    assert.equal(items[0].reason, 'Codex 跑失败了')
   })
 
   test('Review 停太久 → 第 3 档，理由给出天数', () => {
@@ -214,11 +208,11 @@ describe('下一步 · 排名', () => {
     assert.deepEqual(items.map((i) => i.slug), ['y', 'z', 'x'])
   })
 
-  test('failed 也是「跑完没看」的一种：读过（fresh=false）就不推', () => {
-    assert.deepEqual(
-      rankNextUp([req({ slug: 'a', status: '执行中' })], [sess('req-a', 'codex', 'failed', { fresh: false })], NOW),
-      [],
-    )
+  test('failed 也进第 2 档', () => {
+    const items = rankNextUp([req({ slug: 'a', status: '执行中' })], [sess('req-a', 'codex', 'failed')], NOW)
+    assert.equal(items.length, 1)
+    assert.equal(items[0].tier, 2)
+    assert.equal(items[0].reason, 'Codex 跑失败了')
   })
 
   test('时间戳空或落在未来：天数算不出或为负，不推', () => {

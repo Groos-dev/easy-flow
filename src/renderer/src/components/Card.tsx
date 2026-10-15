@@ -42,14 +42,13 @@ export default function Card({ req, sessions, childStat, kids, onJumpChild, flas
     : undefined
 
   /**
-   * 卡片自己的状态：卡住了优先，其余未读事件次之。判据与角标同一套（`needsBadge`）——
-   * 事件消费一次就消，所以「有告警」与「有可点的入口」永远同时成立，不会出现
-   * 只报警、点不到会话的卡片。
+   * 卡片自己的状态：卡住了优先，其余事件型状态次之。判据与角标同一套（`needsBadge`）——
+   * 要亮一起亮、要消一起消，不会出现只报警、点不到会话的卡片。
    */
   const all = sessions ?? []
-  const blocked = all.find((s) => s.status.state === 'blocked' && s.status.fresh)
+  const blocked = all.find((s) => s.status.state === 'blocked')
   const need = blocked?.status.needsAction ?? ''
-  const unread = !blocked && all.some((s) => isEventState(s.status.state) && s.status.fresh)
+  const waiting = !blocked && all.some((s) => isEventState(s.status.state))
 
   return (
     <div
@@ -57,7 +56,7 @@ export default function Card({ req, sessions, childStat, kids, onJumpChild, flas
       style={style}
       data-slug={req.slug}
       className={`card${folded ? ' folded' : ''}${isDragging ? ' dragging' : ''}${
-        need ? ' needs-you' : unread ? ' unread' : ''
+        need ? ' needs-you' : waiting ? ' waiting' : ''
       }${flash ? ' flash' : ''}`}
       onClick={() => (folded ? setOpen(true) : !overlay && onOpen?.(req.slug))}
       title={folded ? '展开' : undefined}

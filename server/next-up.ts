@@ -16,7 +16,7 @@
  * 只读、纯函数：输入需求与会话，输出排名与理由，便于单测断言。
  */
 import type { Requirement, Session } from './db.ts'
-import type { SessionStatus } from './threads.ts'
+import type { SessionStatus } from './session-state.ts'
 
 /** 带实时状态的会话。状态由 threads.withStatus 读 agent 落盘文件补上 */
 export type RankableSession = Session & { status: SessionStatus }
@@ -55,7 +55,7 @@ export const DEFAULT_NEXT_UP_CONFIG: NextUpConfig = {
 }
 
 /** 档位。数字越小越硬，排序从它开始 */
-const TIER = { blocked: 1, agentUnread: 2, reviewStale: 3, clarifyStale: 4 } as const
+const TIER = { blocked: 1, agentFinished: 2, reviewStale: 3, clarifyStale: 4 } as const
 
 const AGENT_LABELS: Record<string, string> = {
   claude: 'Claude Code',
@@ -129,13 +129,13 @@ function candidateOf(
         reason: blocked
           ? `${label} 卡住了`
           : failed
-            ? `${label} 跑失败了没人看`
-            : `${label} 跑完了没看`,
+            ? `${label} 跑失败了`
+            : `${label} 跑完了`,
         detail: blocked
           ? session.status.needsAction
           : failed
-            ? '上一轮跑失败了，结果还没人看。'
-            : '上一轮已经结束，结果还没人验收。',
+            ? '上一轮跑失败了，等你看一眼。'
+            : '上一轮已经结束，等你看一眼。',
         session: { agent: session.agent, link: session.link },
       },
     }
@@ -175,8 +175,9 @@ function candidateOf(
 }
 
 /**
- * 一条需求挂多条会话时取最硬的那条。卡住不看已读——它一直停着，正是要人推的；
- * 跑完/跑失败只在**未读**（fresh）时算，看过了就不占版面。正在跑、读不到状态的不进榜。
+ * 一条需求挂多条会话时取最硬的那条。卡住与跑完 / 跑失败都一直算——它们的结论会挂到下一轮，
+ * 要人推正是它停着的理由；看板上看不出「处理过」了，pet 上点一下就把它写成 idle 落榜。
+ * 正在跑、读不到状态的不进榜。
  */
 function hardestSession(
   sessions: readonly RankableSession[],
@@ -191,9 +192,7 @@ function hardestSession(
 
 function sessionTier(s: RankableSession): number | null {
   if (s.status.state === 'blocked') return TIER.blocked
-  if ((s.status.state === 'done' || s.status.state === 'failed') && s.status.fresh) {
-    return TIER.agentUnread
-  }
+  if (s.status.state === 'done' || s.status.state === 'failed') return TIER.agentFinished
   return null
 }
 
@@ -203,7 +202,8 @@ function identity(req: Requirement): Pick<NextUpItem, 'slug' | 'project' | 'titl
 
 /** 档内排序的起点：优先取会话状态时间，其次需求更新时间，最后文件修改时间 */
 function sinceOf(req: Requirement, session?: RankableSession): number {
-  const at = session ? parseLocalTime(session.status.at) : 0
+  // 状态的时刻直接就是 ms，不用再走一遍字符串
+  const at = session ? session.status.observedAt : 0
   return at || parseLocalTime(req.updated) || req.mtime || 0
 }
 

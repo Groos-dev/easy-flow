@@ -18,8 +18,9 @@ import {
   type Priority,
   type TodoStatus,
 } from './db.ts'
-import { withStatus } from './threads.ts'
-import { hookStore } from './hook.ts'
+import { hookKeyOf, withStatus } from './threads.ts'
+import { recordHook } from './hook.ts'
+import { idleStatus, sessionState } from './session-state.ts'
 import { rankNextUp } from './next-up.ts'
 import './launch-claude.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
@@ -140,7 +141,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
         // codex 的转发脚本用 ?agent=codex 或报文里带 agent
         const fromQuery = url.searchParams.get('agent')
         const fromBody = typeof payload.agent === 'string' && payload.agent ? payload.agent : ''
-        hookStore.record(payload, { agent: fromQuery || fromBody || 'claude' })
+        recordHook(payload, { agent: fromQuery || fromBody || 'claude' })
         json(req, res, 200, { ok: true })
         return
       }
@@ -287,6 +288,17 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
       // 逐需求拉 context 太碎；排序交给库（最近登记的在前）
       if (url.pathname === '/api/sessions' && req.method === 'GET') {
         json(req, res, 200, { sessions: withStatus(db.listSessions()) })
+        return
+      }
+
+      // 点一下 pet = 这条会话此刻「静止」。写进状态层、用与 hook 事件同一个 key，
+      // 所以下一个事件一到就把它覆盖掉——不需要任何失效判据，也不落库
+      if (url.pathname === '/api/sessions/clicked' && req.method === 'POST') {
+        const body = await readBody(req)
+        const agent = String(body.agent)
+        const session = String(body.session)
+        sessionState.put(agent, hookKeyOf(agent, session), idleStatus())
+        json(req, res, 200, { ok: true })
         return
       }
 
