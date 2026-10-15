@@ -16,9 +16,9 @@ export interface LaunchInput {
   agent: LaunchAgent
   /** 需求 id（req-…） */
   requirementId: string
-  /** Claude 用：用户选中的工作区（它的 deeplink 只能带一个目录）；Codex 不选，为空串 */
+  /** 用户选中的工作区：两个 agent 的 deeplink 都只能带一个目录——Claude 用它当工作目录，Codex 用它当 path 定位项目 */
   worktreeId: string
-  /** 工作区目录；Claude deeplink 的工作目录就是它 */
+  /** 工作区目录；deeplink 里的那个目录就是它 */
   worktreePath: string
   /** Codex 用：需求名下全部可用工作区路径——一条需求一个 project，roots 收这些 */
   requirementWorktreePaths: string[]
@@ -54,9 +54,8 @@ export function sessionAddCommand(requirementId: string, agent: LaunchAgent): st
 /** 预填提示词：只带身份与下一步动作，实时内容由新会话自己用 easy-flow context 拉 */
 export function launchPrompt(input: LaunchInput): string {
   const register = sessionAddCommand(input.requirementId, input.agent)
-  // Codex 的新会话收整条需求（project 含全部工作区），所以按需求取上下文；
-  // Claude 的会话只有一个工作目录，按工作区取。没有工作区时两边都退到需求：
-  // Claude 的 deeplink 不带 folder，Codex 不建 project
+  // 有工作区就按工作区取上下文：两个 agent 的会话实际都只拿到这一个目录（Codex 的多仓库 project app 侧认不出）
+  // 没有工作区时两边都退到需求：Claude 的 deeplink 不带 folder，Codex 不建 project、也不带 path
   const byWorktree = !!input.worktreeId
   const lines = [
     byWorktree

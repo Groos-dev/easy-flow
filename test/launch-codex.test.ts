@@ -16,8 +16,8 @@ import {
 const input: LaunchInput = {
   agent: 'codex',
   requirementId: 'req-demo',
-  worktreeId: '',
-  worktreePath: '',
+  worktreeId: 'wt-demo',
+  worktreePath: '/Users/groos/repo/demo.feature-x',
   requirementWorktreePaths: ['/Users/groos/repo/demo.feature-x', '/Users/groos/repo/demo.feature-y'],
 }
 
@@ -26,15 +26,17 @@ describe('Codex 开发会话启动', () => {
     assert.equal(findLaunchProvider('codex'), codexProvider)
   })
 
-  test('深链分别编码项目 id 与预填提示词', () => {
+  test('深链分别编码项目 id、工作区目录与预填提示词', () => {
     const projectId = 'project id+&/中文'
     const prompt = '先读上下文 & 再开始 + 保留原文\n第二行'
-    const url = new URL(codexLaunchUrl(projectId, prompt))
+    const worktreePath = '/Users/groos/repo/demo.feature-x 带 空格'
+    const url = new URL(codexLaunchUrl(projectId, prompt, worktreePath))
 
     assert.equal(url.protocol, 'codex:')
     assert.equal(url.hostname, 'threads')
     assert.equal(url.pathname, '/new')
     assert.equal(url.searchParams.get('projectId'), projectId)
+    assert.equal(url.searchParams.get('path'), worktreePath)
     assert.equal(url.searchParams.get('prompt'), prompt)
   })
 
@@ -42,9 +44,10 @@ describe('Codex 开发会话启动', () => {
     assert.deepEqual(codexProjectRoots(input), input.requirementWorktreePaths)
   })
 
-  test('没有工作区时不带 projectId——建 project 也选不中，只多个空 project', async () => {
+  test('没有工作区时不带 projectId、也不带 path——建 project 也选不中，只多个空 project', async () => {
     const url = new URL(codexLaunchUrl('', '先读上下文'))
     assert.equal(url.searchParams.get('projectId'), null)
+    assert.equal(url.searchParams.get('path'), null)
     assert.equal(url.searchParams.get('prompt'), '先读上下文')
 
     const start = AppServer.start
@@ -52,8 +55,12 @@ describe('Codex 开发会话启动', () => {
       AppServer.start = async () => {
         throw new Error('没有工作区时不该去起 app-server')
       }
-      const url2 = await codexProvider.build({ ...input, requirementWorktreePaths: [] }, 'prompt')
+      const url2 = await codexProvider.build(
+        { ...input, worktreeId: '', worktreePath: '', requirementWorktreePaths: [] },
+        'prompt',
+      )
       assert.equal(new URL(url2).searchParams.get('projectId'), null)
+      assert.equal(new URL(url2).searchParams.get('path'), null)
     } finally {
       AppServer.start = start
     }
@@ -84,7 +91,7 @@ describe('Codex 开发会话启动', () => {
     ])
   })
 
-  test('开发会话用需求级 project（全部工作区 roots）并返回深链', async () => {
+  test('开发会话用需求级 project（全部工作区 roots）并在深链里带所选工作区目录', async () => {
     const calls: Array<{ method: string; params: Record<string, unknown> }> = []
     const server = {
       async call(method: string, params: Record<string, unknown>) {
@@ -99,6 +106,7 @@ describe('Codex 开发会话启动', () => {
       const url = await codexProvider.build(input, 'start work')
 
       assert.equal(new URL(url).searchParams.get('projectId'), 'requirement-project')
+      assert.equal(new URL(url).searchParams.get('path'), input.worktreePath)
       assert.equal(new URL(url).searchParams.get('prompt'), 'start work')
       const roots = input.requirementWorktreePaths.map((path) => ({ path }))
       assert.deepEqual(calls, [

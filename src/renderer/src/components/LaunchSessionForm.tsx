@@ -36,8 +36,8 @@ export default function LaunchSessionForm({
   const { available } = launchWorktreeSelection(worktrees, worktreeId)
   const missing = worktrees.filter((w) => w.missing)
   const feedback = result ? launchResultFeedback(requirementId, result) : null
-  // Claude 的 deeplink 只能带一个工作目录，有工作区就必须选；Codex 按需求建 project、roots 收全部工作区，不用选
-  const needsWorktree = launchNeedsWorktree(agent, available)
+  // deeplink 只能带一个工作目录（Claude 当 folder、Codex 当 path）：有工作区就必须选一个
+  const needsWorktree = launchNeedsWorktree(available)
   const canLaunch = !!agent && (!needsWorktree || !!worktreeId) && !busy
 
   function submit(event: FormEvent) {
@@ -71,7 +71,7 @@ export default function LaunchSessionForm({
                 onChange={(value) => onAgentChange(value as LaunchAgent)}
               />
             </div>
-            {needsWorktree ? (
+            {needsWorktree && (
               <div className="launch-select-row">
                 <span>工作区</span>
                 <SelectMenu
@@ -82,9 +82,7 @@ export default function LaunchSessionForm({
                   onChange={onWorktreeChange}
                 />
               </div>
-            ) : agent === 'codex' && available.length > 0 ? (
-              <p className="launch-help">Codex 的新会话按需求建 project，会带上全部 {available.length} 个工作区，不用选。</p>
-            ) : null}
+            )}
             {missing.length > 0 && (
               <p className="launch-help">不可用工作区（目录已失联）：{missing.map((w) => `${w.repo} · ${w.branch}`).join('、')}</p>
             )}
