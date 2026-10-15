@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { api } from '../lib/api'
 import { AGENT_LABELS } from '../lib/labels'
 import { petArt, scopeCloudling } from '../lib/pet-art'
-import { PET_LABEL, planPetRow, type PetState } from '../lib/pets'
+import { PET_LABEL, planPetRow, type Pose } from '../lib/pets'
 import type { Session } from '../lib/types'
 
 /**
@@ -86,37 +87,36 @@ function Cloudling({ svg, still }: { svg: string; still: boolean }) {
  * （clawd 是 SVG 自带的 @keyframes，cloudling 是素材里的脚本；宿主不再另写）。
  *
  * 状态只从 props 进，组件本身不认识会话、数据源——可以拿假状态单独开发。
- * `label` 是展示文案，缺省按姿势取；读过的 done 姿势是静止、文案是「跑完已看」，
- * 由调用方给（见 lib/pets.ts 的 petLabelOf）——姿势和文案不是一回事。
  * `event` 是「这是个没读过的事件」——事件边框与一次性动效靠它，读过就没了；
  * pet 本身不跟事件走，读过了照样留着（它是回到会话的入口）。
  * `focus` 由外面的 PetRow 选出，同一时刻最多一只（见 lib/pets.ts 的 focusIndex）；
  * `compact` 是折叠卡上的小号变体，`still` 换静态素材（减动效兜底）。
  * 有 `link` 就渲染成按钮，点一下跳回会话；没有的只报状态，不给一个点了没反应的按钮。
+ * `onOpen` 在跳转前叫一声，调用方拿去记「这只 pet 我点过了」（见 lib/api.ts）。
  * 卡片是可拖拽的，所以这里把 pointerdown 拦掉。
  */
 export default function Pet({
   agent,
   state,
-  label,
   event = false,
   focus = false,
   compact = false,
   still = false,
   tip,
   link,
+  onOpen,
 }: {
   agent: string
-  state: PetState
-  label?: string
+  state: Pose
   event?: boolean
   focus?: boolean
   compact?: boolean
   still?: boolean
   tip?: string
   link?: string
+  onOpen?: () => void
 }) {
-  const name = `${AGENT_LABELS[agent] ?? agent} · ${label ?? PET_LABEL[state]}`
+  const name = `${AGENT_LABELS[agent] ?? agent} · ${PET_LABEL[state]}`
   const art = petArt(agent, state, { compact, still })
   // cloudling 内联成 <svg>（脚本驱动，且 object 的文档画布不透明）；clawd 走 <img>（每张自带同名 @keyframes，内联会互相覆盖）
   const body =
@@ -142,6 +142,7 @@ export default function Pet({
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation()
+        onOpen?.()
         window.open(link, '_blank')
       }}
     >
@@ -151,11 +152,11 @@ export default function Pet({
 }
 
 /** 悬停先答「这条会话在做什么」，再给状态与原文 */
-function petTip(session: Session, label: string): string {
+function petTip(session: Session, state: Pose): string {
   const { needsAction, detail } = session.status
   return [
     session.title || session.session,
-    `${AGENT_LABELS[session.agent] ?? session.agent} · ${label}`,
+    `${AGENT_LABELS[session.agent] ?? session.agent} · ${PET_LABEL[state]}`,
     needsAction ? `需要你回答：${needsAction}` : detail,
     session.link ? '点一下回到这个会话' : `没有会话级链接，会话 id：${session.session}`,
   ]
@@ -167,7 +168,7 @@ function petTip(session: Session, label: string): string {
  * 卡片上的那排 pet：把一条需求名下的会话译成 pet 并排开。
  *
  * 挂哪些会话、最多几只、谁带事件样式、谁抢注意力都在 planPetRow 里算好：pet 长期留着
- * （读得到状态就挂），事件边框与动效跟 `fresh` 走，姿势也看一眼 `fresh`（读过的 done 落静止）。
+ * （读得到状态就挂），姿势就是状态本身；点过 pet 会被写成 idle，边框与动效跟着消失。
  * `compact` 给折叠的父需求窄条用——44px 塞不进去，收成小号。
  */
 export function PetRow({ sessions, compact = false }: { sessions: Session[]; compact?: boolean }) {
@@ -182,13 +183,17 @@ export function PetRow({ sessions, compact = false }: { sessions: Session[]; com
           key={`${p.session.agent}:${p.session.session}`}
           agent={p.session.agent}
           state={p.state}
-          label={p.label}
           event={p.event}
           focus={p.focus}
           compact={compact}
           still={still}
-          tip={petTip(p.session, p.label)}
+          tip={petTip(p.session, p.state)}
           link={p.session.link || undefined}
+          // 点一下 = 这条会话此刻「静止」：服务端写成一条状态事件，下一个 hook 事件直接覆盖。
+          // 记不下不该拦住人打开会话，所以不等它、也不报错
+          onOpen={() => {
+            api.markSessionClicked(p.session.agent, p.session.session).catch(() => {})
+          }}
         />
       ))}
       {more > 0 && (

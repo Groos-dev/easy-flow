@@ -1,17 +1,18 @@
 /**
- * 会话的实时状态：从 agent 应用自己的落盘文件读，只读、不写回。
+ * 会话状态的**拉取源**与读口。
  *
- * 两边都没有一个能直接用的「未读」字段，但「跑完了 / 卡在等人」有比未读更准的信号：
- *   Claude 桌面会话 → 会话记录里的 postTurnSummary.status_category
- *   Codex thread   → rollout jsonl（server/rollout.ts），fine 到每次工具调用
+ * 看板每次请求时读一遍 agent 应用的落盘（只读、不写回），把观察写进状态层
+ * （server/session-state.ts），再从状态层读出来。写的时候按「时刻新的赢」合并，
+ * 所以读的时候一次查表就够——没有优先级梯子，也没有第二个口径。
+ *
+ *   Claude 桌面会话 → 会话记录里的 postTurnSummary.status_category + CLI 进程文件
+ *   Codex thread   → rollout jsonl（server/rollout.ts），细到每次工具调用
  * 字段位置与实测依据见需求 docs/easy-flow/research.md。
  *
- * hook 事件（server/hook.ts）是更快的「推」信号：有就优先用它，它是当下这一刻的形态；
- * 没有（服务重启、hook 没装、事件认不出）才退回落盘文件。所以读完不会比 hook 之前更差。
- *
- * 两条纪律：
+ * 三条纪律：
  *   - 读不到一律 unknown，不猜。应用没装、目录搬走、字段缺失、库被锁都算读不到
- *   - 只读不写：会话是 agent 应用的东西，看板不替它做主（hook 状态只活在服务进程内，不落库）
+ *   - 只读不写：会话是 agent 应用的东西，看板不替它做主（状态只活在服务进程内，不落库）
+ *   - 说不出时刻的观察 observedAt 记 0：它只在状态层空着时落得下，盖不掉有时刻的那条
  *
  * 已知缺口：Codex 的「等审批」在落盘文件里认不出来（只有 app-server 的 activeFlags 有，
  * 而那只对当前进程加载过的 thread 有效），所以 Codex 侧不会给出 blocked。
@@ -19,29 +20,11 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { readdirOrEmpty, readTextOrNull } from './fsutil.ts'
-import { hookStore, type HookStatus, type HookStore, type SessionActivity } from './hook.ts'
+import { isActive, sessionState, unknownStatus, type SessionStateStore, type SessionStatus } from './session-state.ts'
 import { rolloutStore } from './rollout.ts'
 
-/** 状态字面量。服务端与渲染层共用这一套，展示层不再译第二遍 */
-export const THREAD_STATES = ['running', 'done', 'blocked', 'failed', 'unknown'] as const
-export type ThreadState = (typeof THREAD_STATES)[number]
-
-/** 停在「在跑」多久没新事件就当它没了：codex 崩掉不会有收尾事件 */
+/** 停在「在干活」多久没新事件就当它没了：会话崩了不会有收尾事件 */
 const RUNNING_TTL_MS = 30 * 60_000
-
-export interface SessionStatus {
-  state: ThreadState
-  /** 细粒度活动（思考 / 干活 / 静止）：hook 驱动时有值，落盘兜底路径为空串 */
-  activity: SessionActivity | ''
-  /** 有你看过之后的新内容：Claude 拿 lastFocusedAt 代理，Codex 用官方未读集合 */
-  fresh: boolean
-  /** 需要人介入时，要人回答的那句话原文；其余为空串 */
-  needsAction: string
-  /** 状态时间（yyyy-mm-dd HH:mm，本机时区）；读不到为空串 */
-  at: string
-  /** 判据出处，详情页 hover 用 */
-  detail: string
-}
 
 /** 三处外部数据的位置。默认本机；测试传临时目录 */
 export interface ThreadRoots {
@@ -63,56 +46,122 @@ export function defaultRoots(): ThreadRoots {
 }
 
 /**
- * 给一批会话挂上实时状态。按数据源各扫一遍（不是每条会话各扫一遍），
- * 所以调用方一次传全量比逐条问划算。返回的每条都带 status，没有读不到的情形——
- * 读不到也是 unknown 这一种状态。
+ * 给一批会话挂上实时状态：先把落盘的观察拉进状态层，再逐条读出来。
+ * 按数据源各扫一遍（不是每条会话各扫一遍），所以调用方一次传全量比逐条问划算。
+ * 返回的每条都带 status，没有读不到的情形——读不到也是 unknown 这一种状态。
  */
-export function withStatus<T extends { agent: string; session: string; cwd?: string }>(
+export function withStatus<T extends { agent: string; session: string }>(
   sessions: readonly T[],
   roots: ThreadRoots = defaultRoots(),
-  hooks: HookStore = hookStore,
+  states: SessionStateStore = sessionState,
 ): Array<T & { status: SessionStatus }> {
   const claude = sessions.filter((s) => s.agent === 'claude')
   const codex = sessions.filter((s) => s.agent === 'codex')
   const records = claude.length ? claudeRecords(roots) : null
   const live = claude.length ? claudeLive(roots) : null
-  const unread = codex.length ? codexUnread(roots) : null
-  const rollouts = codex.length ? codexRollout(roots, codex.map((s) => s.session)) : null
 
+  // 拉取：把文件源的观察写进状态层。合并按时刻走，所以先后顺序无所谓
+  if (records && live) for (const s of claude) pullClaude(s.session, records, live, states)
+  if (codex.length) {
+    const rollouts = rolloutStore(roots.codexHome)
+    rollouts.refresh(codex.map((s) => s.session))
+    for (const s of codex) {
+      states.put('codex', s.session, rollouts.get(s.session) ?? unknownStatus('没有 codex 的 rollout 记录'))
+    }
+  }
+
+  // 读：一次查表，再加一条领域规则
   return sessions.map((s) => {
     const rec = s.agent === 'claude' ? records!.get(s.session) : undefined
-    const hook = activeHook(hooks, s.session, s.agent, rec?.cliSessionId, s.cwd)
-    const status =
-      s.agent === 'claude'
-        ? claudeStatus(rec, live!.get(s.session), hook)
-        : s.agent === 'codex'
-          ? codexStatus(rollouts!.get(s.session), unread!.has(s.session), hook)
-          : // cursor 这类没有落盘状态可读
-            unknownStatus(`${s.agent} 没有可读的状态来源`)
+    const proc = s.agent === 'claude' ? live!.get(s.session) : undefined
+    const stored = states.get(s.agent, stateKeyOf(s.agent, s.session, rec))
+    const status = stored
+      ? settleActive(stored, !!proc && isRunning(proc))
+      : unknownStatus(`${s.agent} 没有可读的状态来源`)
     return { ...s, status }
   })
 }
 
 /**
- * 取这条会话的 hook 状态。命中方式按可信度排，三级都限同一个 agent——
- * 同一个工作区里并排跑着 claude 与 codex 是常态，不分开就会互相点亮：
- *   1. session_id 直接等于登记 id
- *   2. 登记 id 是桌面应用的 `local_<uuid>`，hook 给的是内层 `<uuid>`——靠记录的 cliSessionId 翻译
- *   3. 前两条都没中再按工作目录兜：同目录下最近的那条（同一目录开两个会话时会认错，已知取舍）
- * 条目自身的过期在 HookStore 里判。
+ * 板侧写状态（点 pet）时该用哪个 key。与读口用的是同一个翻译——
+ * 桌面会话的登记 id 是 `local_<uuid>`，而 hook 报的是内层 `<uuid>`，不翻就落在两个格子里，
+ * 「下一个事件直接覆盖」就不成立。没有记录的（终端会话、codex）用登记 id——hook 报的也是它。
  */
-function activeHook(
-  hooks: HookStore,
+export function hookKeyOf(agent: string, session: string, roots: ThreadRoots = defaultRoots()): string {
+  return stateKeyOf(agent, session, agent === 'claude' ? claudeRecords(roots).get(session) : undefined)
+}
+
+function stateKeyOf(agent: string, session: string, rec: ClaudeRecord | undefined): string {
+  if (agent !== 'claude') return session
+  return rec?.cliSessionId || session
+}
+
+/**
+ * 把一条 claude 会话的落盘观察写进状态层：进程在跑、记录里的上一轮结论，谁的时刻新谁说话。
+ * 两边都写，不在这儿判优先级——那是状态层的活。
+ */
+function pullClaude(
   session: string,
-  agent: string,
-  cliSessionId: string | undefined,
-  cwd: string | undefined,
-): HookStatus | undefined {
-  return (
-    hooks.get(session, agent) ??
-    (cliSessionId ? hooks.get(cliSessionId, agent) : undefined) ??
-    (cwd ? hooks.byCwd(cwd, agent) : undefined)
-  )
+  records: Map<string, ClaudeRecord>,
+  live: Map<string, ClaudeLive>,
+  states: SessionStateStore,
+): void {
+  const rec = records.get(session)
+  const key = stateKeyOf('claude', session, rec)
+
+  // 进程在跑是「此刻的事实」，不是一条带时刻的观察——所以时刻记现在，不是文件里的 statusUpdatedAt
+  // （那个只在 busy/idle 切换时写，比记录里的 lastActivityAt 旧得多，拿它排序会被上一轮的结论顶掉）。
+  // 表里已经在干活就让它说话：hook 分得出「思考 / 干活」，而进程文件只报 busy/idle，说不出是哪种。
+  const proc = live.get(session)
+  if (proc && isRunning(proc) && !isActive(states.get('claude', key)?.state ?? 'unknown')) {
+    states.put('claude', key, {
+      state: 'working',
+      needsAction: '',
+      observedAt: Date.now(),
+      detail: 'CLI 进程在跑',
+    })
+  }
+
+  states.put('claude', key, claudeRecordStatus(rec))
+}
+
+/**
+ * 桌面记录里的上一轮结论。没有记录 / 没有结论 / 结论落后于最新一轮，都记 observedAt 0——
+ * 说不出时刻的观察不该盖掉有时刻的（比如一条刚到的 hook 事件）。
+ */
+function claudeRecordStatus(rec: ClaudeRecord | undefined): SessionStatus {
+  if (!rec) return unknownStatus('没有桌面应用的会话记录（终端会话，或记录已被清掉）')
+
+  const summary = rec.postTurnSummary
+  // 结论是为某一轮生成的；对不上最新一轮说明后面又跑过，那份结论已经过期
+  const stale =
+    !!rec.postTurnSummaryFor && !!rec.lastAssistantUuid && rec.postTurnSummaryFor !== rec.lastAssistantUuid
+  if (!summary || stale) return unknownStatus(stale ? '会话的结论落后于最新一轮' : '会话没有结论')
+
+  const observedAt = rec.lastActivityAt ?? 0
+  switch (summary.status_category) {
+    case 'blocked':
+      return { state: 'blocked', needsAction: summary.needs_action ?? '', observedAt, detail: '桌面应用结论：blocked' }
+    case 'review_ready':
+    case 'completed':
+      return { state: 'done', needsAction: '', observedAt, detail: `桌面应用结论：${summary.status_category}` }
+    case 'failed':
+      return { state: 'failed', needsAction: '', observedAt, detail: '桌面应用结论：failed' }
+    default:
+      return unknownStatus(`认不出的桌面应用结论：${summary.status_category}`)
+  }
+}
+
+/**
+ * 停在「在干活」太久就当它没了——会话崩了不会有收尾事件。
+ * 进程还活着的不算：那条有 pid 兜底，进程在就是真在（CLI 只在状态切换时写文件，
+ * 长时间 busy 不会刷新时刻，拿它当过期会误杀）。
+ */
+function settleActive(status: SessionStatus, alive: boolean): SessionStatus {
+  if (!isActive(status.state) || alive) return status
+  return Date.now() - status.observedAt > RUNNING_TTL_MS
+    ? unknownStatus('最后一条状态停在半途，早已没有动静')
+    : status
 }
 
 // ------------------------------------------------------------------ Claude
@@ -121,8 +170,8 @@ interface ClaudeRecord {
   sessionId?: string
   /** CLI 那一层的会话 id（transcript / hook 的 session_id）；桌面记录里与 sessionId 不同名 */
   cliSessionId?: string
+  /** 最后一轮活动的时刻。桌面记录这条观察的时刻就是它（进 observedAt） */
   lastActivityAt?: number
-  lastFocusedAt?: number
   postTurnSummaryFor?: string
   lastAssistantUuid?: string
   postTurnSummary?: {
@@ -195,139 +244,6 @@ function claudeLive(roots: ThreadRoots): Map<string, ClaudeLive> {
   return out
 }
 
-function claudeStatus(
-  rec: ClaudeRecord | undefined,
-  live: ClaudeLive | undefined,
-  hook: HookStatus | undefined,
-): SessionStatus {
-  // hook 给的是「此刻在干什么」，比进程在不在、上一轮的结论都细，所以最先用
-  if (hook) return liveStatus(hook, claudeFresh(rec), 'hook')
-  // 进程在跑是当下最硬的信号，优先于记录里那份（可能刚过期的）结论。
-  // 进程只报 busy/idle，说不出在思考还是在干活，所以 activity 留空
-  if (live && isRunning(live)) {
-    return { state: 'running', activity: '', fresh: false, needsAction: '', at: stampOf(live.statusUpdatedAt), detail: 'CLI 进程在跑' }
-  }
-  if (!rec) return unknownStatus('没有桌面应用的会话记录（终端会话，或记录已被清掉）')
-
-  const summary = rec.postTurnSummary
-  // 结论是为某一轮生成的；对不上最新一轮说明后面又跑过，那份结论已经过期
-  const stale =
-    !!rec.postTurnSummaryFor && !!rec.lastAssistantUuid && rec.postTurnSummaryFor !== rec.lastAssistantUuid
-  if (!summary || stale) return unknownStatus(stale ? '会话的结论落后于最新一轮' : '会话没有结论')
-
-  const at = stampOf(rec.lastActivityAt)
-  const fresh = claudeFresh(rec)
-  switch (summary.status_category) {
-    case 'blocked':
-      return {
-        state: 'blocked',
-        activity: '',
-        fresh,
-        needsAction: summary.needs_action ?? '',
-        at,
-        detail: '桌面应用结论：blocked',
-      }
-    case 'review_ready':
-    case 'completed':
-      return { state: 'done', activity: '', fresh, needsAction: '', at, detail: `桌面应用结论：${summary.status_category}` }
-    case 'failed':
-      return { state: 'failed', activity: '', fresh, needsAction: '', at, detail: '桌面应用结论：failed' }
-    default:
-      return unknownStatus(`认不出的桌面应用结论：${summary.status_category}`)
-  }
-}
-
-// ------------------------------------------------------------------ Codex
-
-/**
- * 读 rollout 后的最新状态：增量 tail ~/.codex/sessions 下的 rollout jsonl（见 server/rollout.ts）。
- *
- * 换成它是因为 thread_turns.status 是 turn 级四档（completed / failed / inProgress / interrupted），
- * 答不了「此刻在思考还是在干活」；rollout 里每次工具调用都是一条，粒度与 Claude 的 hook 同级。
- */
-function codexRollout(roots: ThreadRoots, ids: readonly string[]): Map<string, HookStatus> {
-  const out = new Map<string, HookStatus>()
-  const store = rolloutStore(roots.codexHome)
-  store.refresh(ids)
-  for (const id of ids) {
-    const status = store.get(id)
-    if (status) out.set(id, status)
-  }
-  return out
-}
-
-/**
- * 桌面应用的未读集合。identityKey 是登录身份 sha256，换账号会变，所以把所有 host 求并集。
- *
- * 只认 `unreadByIdentity`——那是 app 一直在维护、你一打开 thread 就清的那份。
- * `legacyMigration` 是 app 迁移老格式时**一次性**抄过去的快照，此后不再维护、也不清理
- * （本机：新集合 7 条、旧快照 14 条，差集 8 条是 adopt 之后被读掉的）。并上它，
- * 那 8 条会永远显示未读——app 里怎么读都消不掉。
- */
-function codexUnread(roots: ThreadRoots): Set<string> {
-  const out = new Set<string>()
-  const raw = readTextOrNull(join(roots.codexHome, '.codex-global-state.json'))
-  if (!raw) return out
-  try {
-    const state = (JSON.parse(raw) as CodexGlobalState)['electron-thread-read-state-v1']
-    for (const byHost of Object.values(state?.unreadByIdentity ?? {})) {
-      for (const ids of Object.values(byHost)) for (const id of ids) out.add(id)
-    }
-  } catch {
-    /* 解析不了就当没有未读 */
-  }
-  return out
-}
-
-interface CodexGlobalState {
-  'electron-thread-read-state-v1'?: {
-    unreadByIdentity?: Record<string, Record<string, string[]>>
-  }
-}
-
-function codexStatus(
-  rollout: HookStatus | undefined,
-  unread: boolean,
-  hook: HookStatus | undefined,
-): SessionStatus {
-  // 与 claude 同一条管道：hook 有就更细，没有才读 rollout。
-  // 未读仍按 codex 官方的集合判，别让来源把「跑完没看」一律说成没看过
-  if (hook) return liveStatus(hook, unread, 'hook')
-  if (!rollout) return unknownStatus('没有 codex 的 rollout 记录')
-  // 停在「在跑」但很久没新事件：会话崩了不会有收尾，别一直当在跑
-  if (rollout.state === 'running' && Date.now() - rollout.at >= RUNNING_TTL_MS) {
-    return unknownStatus('最后一条 rollout 停在半途，早已没有动静')
-  }
-  return liveStatus(rollout, unread, 'rollout')
-}
-
-/**
- * 桌面应用只记「最后一次聚焦」，没有真正的已读标记，拿它代理；
- * 没有记录（终端会话）时只能算新——否则这类事件永远挂不上角标。
- */
-function claudeFresh(rec: ClaudeRecord | undefined): boolean {
-  return rec ? (rec.lastActivityAt ?? 0) > (rec.lastFocusedAt ?? 0) : true
-}
-
-/**
- * hook / rollout 状态 → SessionStatus。
- * fresh 是「有你看过之后的新内容」，各 agent 有自己的已读信号（claude 拿 lastFocusedAt 代理，
- * codex 用官方未读集合），由调用方算好传进来：running / idle 不算事件，一律 false；
- * 只有 blocked / done / failed 这三档才看它。
- * source 是判据出处（hook / rollout），进 detail 供详情页 hover。
- */
-function liveStatus(s: HookStatus, eventFresh: boolean, source: string): SessionStatus {
-  const eventish = s.state === 'done' || s.state === 'blocked' || s.state === 'failed'
-  return {
-    state: s.state,
-    activity: s.activity,
-    fresh: eventish ? eventFresh : false,
-    needsAction: s.needsAction,
-    at: stampOf(s.at),
-    detail: `${source} 事件：${s.event}`,
-  }
-}
-
 // ------------------------------------------------------------------ 零件
 
 /**
@@ -345,17 +261,4 @@ function isRunning(live: ClaudeLive): boolean {
   } catch {
     return false
   }
-}
-
-/** 读不到时的状态。调用方拿不到条目时也该拿到它，而不是自己拼一个 */
-export function unknownStatus(detail: string): SessionStatus {
-  return { state: 'unknown', activity: '', fresh: false, needsAction: '', at: '', detail }
-}
-
-/** epoch ms → 库里的时间戳口径（yyyy-mm-dd HH:mm，本机时区），渲染层的 parseStamp 认这个 */
-function stampOf(ms: number | undefined | null): string {
-  if (!ms || !Number.isFinite(ms)) return ''
-  const d = new Date(ms)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }

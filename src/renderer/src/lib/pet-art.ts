@@ -12,10 +12,10 @@
  * 素材来源与许可见 src/renderer/public/pets/README.md；构建见 scripts/build-pets.mjs。
  */
 import { CLOUDLING_SVG } from './pet-cloudling-art'
-import type { PetState } from './pets'
+import type { Pose } from './pets'
 
 /** 六档 → clawd 默认主题里的状态文件 */
-const CLAWD_FILE: Record<PetState, string> = {
+const CLAWD_FILE: Record<Pose, string> = {
   idle: 'clawd-idle-follow.svg',
   thinking: 'clawd-working-thinking.svg',
   working: 'clawd-working-typing.svg',
@@ -25,7 +25,7 @@ const CLAWD_FILE: Record<PetState, string> = {
 }
 
 /** 折叠卡的小号：clawd 的 mini 组只有五张、没有失败版，failed 复用 alert（靠 .pet.s-failed 整体暗一档区分） */
-const CLAWD_MINI_FILE: Record<PetState, string> = {
+const CLAWD_MINI_FILE: Record<Pose, string> = {
   idle: 'clawd-mini-idle.svg',
   thinking: 'clawd-mini-peek.svg',
   working: 'clawd-mini-typing.svg',
@@ -35,7 +35,7 @@ const CLAWD_MINI_FILE: Record<PetState, string> = {
 }
 
 /** 六档 → cloudling 主题里的状态文件 */
-const CLOUDLING_FILE: Record<PetState, string> = {
+const CLOUDLING_FILE: Record<Pose, string> = {
   idle: 'cloudling-idle.svg',
   thinking: 'cloudling-thinking.svg',
   working: 'cloudling-typing.svg',
@@ -45,7 +45,7 @@ const CLOUDLING_FILE: Record<PetState, string> = {
 }
 
 /** 折叠卡的小号：cloudling 有 9 个 mini 状态，六档都落得上；failed 同样复用 alert */
-const CLOUDLING_MINI_FILE: Record<PetState, string> = {
+const CLOUDLING_MINI_FILE: Record<Pose, string> = {
   idle: 'cloudling-mini-idle.svg',
   thinking: 'cloudling-mini-peek.svg',
   working: 'cloudling-mini-typing.svg',
@@ -58,7 +58,7 @@ const CLOUDLING_MINI_FILE: Record<PetState, string> = {
 export type PetArt = { channel: 'img'; src: string } | { channel: 'inline'; svg: string }
 
 /** 认不出的 agent 落到 clawd（默认那只）；只有 codex 走 cloudling */
-function artFor(agent: string): { files: Record<PetState, string>; minis: Record<PetState, string>; inline: boolean } {
+function artFor(agent: string): { files: Record<Pose, string>; minis: Record<Pose, string>; inline: boolean } {
   return agent === 'codex'
     ? { files: CLOUDLING_FILE, minis: CLOUDLING_MINI_FILE, inline: true }
     : { files: CLAWD_FILE, minis: CLAWD_MINI_FILE, inline: false }
@@ -68,7 +68,7 @@ function artFor(agent: string): { files: Record<PetState, string>; minis: Record
  * 相对路径，不带前导斜杠：dev 下按 vite 根解析，打包后按 index.html 同级目录解析，两边都能取到。
  * `still` 只对 `<img>` 那条通道有意义——clawd 的自带动画封在文档里，只能换 `*.still.svg` 那份。
  */
-export function petArt(agent: string, state: PetState, { compact, still }: { compact: boolean; still: boolean }): PetArt {
+export function petArt(agent: string, state: Pose, { compact, still }: { compact: boolean; still: boolean }): PetArt {
   const { files, minis, inline } = artFor(agent)
   const file = (compact ? minis : files)[state]
   if (inline) return { channel: 'inline', svg: CLOUDLING_SVG[file] }

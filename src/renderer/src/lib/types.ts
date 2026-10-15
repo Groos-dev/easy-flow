@@ -196,23 +196,16 @@ export interface ContextPayload {
   todos: Todo[]
 }
 
-/** 会话的实时状态。字面量与 server/threads.ts 的 THREAD_STATES 一致 */
-export type ThreadState = 'running' | 'done' | 'blocked' | 'failed' | 'unknown'
-
-/** 细粒度活动。字面量与 server/hook.ts 的 SESSION_ACTIVITIES 一致 */
-export type SessionActivity = 'idle' | 'thinking' | 'working'
+/** 会话的实时状态。字面量与 server/session-state.ts 的 THREAD_STATES 一致 */
+export type ThreadState = 'idle' | 'thinking' | 'working' | 'done' | 'blocked' | 'failed' | 'unknown'
 
 /** 与 server/threads.ts 的 SessionStatus 对应。hook 驱动优先，落盘兜底 */
 export interface SessionStatus {
   state: ThreadState
-  /** 细粒度活动；落盘兜底路径为空串 */
-  activity: SessionActivity | ''
-  /** 有你看过之后的新内容 */
-  fresh: boolean
   /** 需要人介入时，要人回答的那句话原文；其余为空串 */
   needsAction: string
-  /** 状态时间（yyyy-mm-dd HH:mm）；读不到为空串 */
-  at: string
+  /** 这条状态的时刻（epoch ms）；说不出时刻为 0。展示时才格式化成 yyyy-mm-dd HH:mm */
+  observedAt: number
   /** 判据出处 */
   detail: string
 }

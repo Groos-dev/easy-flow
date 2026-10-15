@@ -1017,8 +1017,14 @@ body {
   background: var(--status-clarify);
 }
 
-.thread-dot.t-running {
+.thread-dot.t-thinking,
+.thread-dot.t-working {
   background: var(--status-doing);
+}
+
+/* 点过的：不提醒，淡下去（与 pet 的静止姿势一个口径） */
+.thread-dot.t-idle {
+  background: var(--text-faint);
 }
 
 .thread-dot.t-done {

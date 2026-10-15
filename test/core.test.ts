@@ -19,9 +19,10 @@ import { spawnSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { BoardDatabase, normalizeLinkList, normalizeCodeLinks, normalizeExtLinks } from '../server/db.ts'
-import { withStatus, type SessionStatus } from '../server/threads.ts'
+import { hookKeyOf, withStatus } from '../server/threads.ts'
 import { RolloutStore, rolloutStatusOf, sessionDirFor } from '../server/rollout.ts'
-import { HookStore, hookStore, normalizeHookEvent } from '../server/hook.ts'
+import { normalizeHookEvent, recordHook } from '../server/hook.ts'
+import { idleStatus, sessionState, SessionStateStore, THREAD_STATES, type SessionStatus } from '../server/session-state.ts'
 import { parseFrontmatter, readDocs, section } from '../server/markdown.ts'
 import { createProjectDir, createRequirementDir, setRequirementId } from '../server/convention.ts'
 import { createBoardApp } from '../server/index.ts'
@@ -31,7 +32,7 @@ import { codeLinkLabel } from '../src/renderer/src/lib/links.ts'
 import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib/shortcut.ts'
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
-import { PET_STATES, PET_RANK, MAX_PETS, focusIndex, petStateOf, petLabelOf, planPetRow, type PetState } from '../src/renderer/src/lib/pets.ts'
+import { PET_LABEL, PET_RANK, MAX_PETS, focusIndex, planPetRow, type Pose } from '../src/renderer/src/lib/pets.ts'
 import { petArt, scopeCloudling } from '../src/renderer/src/lib/pet-art.ts'
 import { CLOUDLING_SVG } from '../src/renderer/src/lib/pet-cloudling-art.ts'
 import { childStatsOf, childrenOf } from '../src/renderer/src/lib/children.ts'
@@ -2434,7 +2435,7 @@ describe('HTTP 层', () => {
     await new Promise<void>((r) => server.close(() => r()))
     app.close()
     // hook 状态是进程内单例：这一批往里推过事件，擦干净免得影响后面的用例
-    hookStore.clear()
+    sessionState.clear()
   })
 
   const get = async (p: string) => (await fetch(`${base}${p}`)).json() as Promise<any>
@@ -2599,8 +2600,18 @@ describe('HTTP 层', () => {
       assert.equal(list.length, 1, `${path} 该带出这条会话`)
       // 状态是读 agent 应用落盘文件得来的；测试机上读不到就落到 unknown，但字段必须在
       assert.equal(typeof list[0].status?.state, 'string', `${path} 的会话该带 status`)
-      assert.equal(typeof list[0].status.fresh, 'boolean')
     }
+  })
+
+  test('POST /api/sessions/clicked 把这条会话写成静止，下一个 hook 事件直接覆盖', async () => {
+    assert.deepEqual(await post('/api/sessions/clicked', { agent: 'codex', session: 'th-ctx' }), { ok: true })
+    const clicked = (await get('/api/sessions')).sessions.find((s: any) => s.session === 'th-ctx')
+    assert.equal(clicked.status.state, 'idle')
+
+    // 与 hook 事件共用同一张表：同一个 session_id 的事件一到就覆盖掉
+    await post('/api/hook', { hook_event_name: 'PreToolUse', session_id: 'th-ctx', agent: 'codex' })
+    const after = (await get('/api/sessions')).sessions.find((s: any) => s.session === 'th-ctx')
+    assert.equal(after.status.state, 'working')
   })
 
   test('/api/context 带上该需求的关联待办', async () => {
@@ -2726,17 +2737,15 @@ describe('HTTP 层', () => {
     })
     assert.equal(first.ok, true)
     const working = (await get('/api/sessions')).sessions.find((s: any) => s.session === 'local-http')
-    assert.equal(working.status.state, 'running')
-    assert.equal(working.status.activity, 'working')
+    assert.equal(working.status.state, 'working')
 
     await post('/api/hook', { hook_event_name: 'PostToolUse', session_id: 'local-http', cwd, tool_name: 'Bash' })
     const thinking = (await get('/api/sessions')).sessions.find((s: any) => s.session === 'local-http')
-    assert.equal(thinking.status.activity, 'thinking')
+    assert.equal(thinking.status.state, 'thinking', '同一 turn 内从「干活」切到「思考」')
 
     await post('/api/hook', { hook_event_name: 'Stop', session_id: 'local-http', cwd })
     const done = (await get('/api/sessions')).sessions.find((s: any) => s.session === 'local-http')
     assert.equal(done.status.state, 'done')
-    assert.equal(done.status.activity, '')
   })
 
   test('POST /api/hook 认不出的 / 坏报文都吞掉，永远回 200', async () => {
@@ -3009,17 +3018,6 @@ describe('会话状态', () => {
   }
 
   /** 桌面应用的未读集合 */
-  function codexUnread(ids: string[]): void {
-    mkdirSync(roots.codexHome, { recursive: true })
-    writeFileSync(
-      join(roots.codexHome, '.codex-global-state.json'),
-      JSON.stringify({
-        'electron-thread-read-state-v1': { unreadByIdentity: { identity: { 'local:host': ids } } },
-      }),
-      'utf8',
-    )
-  }
-
   function statusOf(agent: string, session: string): SessionStatus {
     return withStatus([{ agent, session }], roots)[0].status
   }
@@ -3027,7 +3025,7 @@ describe('会话状态', () => {
   test('桌面会话：CLI 进程在跑就是 running', () => {
     claudeRecord('local_busy', { lastActivityAt: Date.now() })
     claudeLive('local_busy', 'busy')
-    assert.equal(statusOf('claude', 'local_busy').state, 'running')
+    assert.equal(statusOf('claude', 'local_busy').state, 'working')
   })
 
   test('桌面会话：进程没了但文件残留 busy，不能一直当在跑', () => {
@@ -3054,7 +3052,7 @@ describe('会话状态', () => {
     assert.equal(statusOf('claude', 'local_idle').state, 'blocked')
   })
 
-  test('at 是库里的时间戳口径；时间戳缺失或为 0 时给空串', () => {
+  test('observedAt 是这条状态的时刻（ms）；记录里说不出时刻就记 0', () => {
     const now = Date.now()
     claudeRecord('local_at', {
       lastActivityAt: now,
@@ -3062,13 +3060,13 @@ describe('会话状态', () => {
       lastAssistantUuid: 'a0',
       postTurnSummary: { status_category: 'completed' },
     })
-    assert.match(statusOf('claude', 'local_at').at, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
+    assert.equal(statusOf('claude', 'local_at').observedAt, now)
     claudeRecord('local_no_at', {
       postTurnSummaryFor: 'a00',
       lastAssistantUuid: 'a00',
       postTurnSummary: { status_category: 'completed' },
     })
-    assert.equal(statusOf('claude', 'local_no_at').at, '')
+    assert.equal(statusOf('claude', 'local_no_at').observedAt, 0)
   })
 
   test('桌面会话：结论 blocked 时连要人回答的那句话一起带出来', () => {
@@ -3083,27 +3081,45 @@ describe('会话状态', () => {
     assert.equal(got.needsAction, '要我按流程开需求吗？')
   })
 
-  test('桌面会话：review_ready 是 done，没看过的才算 fresh', () => {
-    const now = Date.now()
-    claudeRecord('local_fresh', {
-      lastActivityAt: now,
-      lastFocusedAt: now - 60_000,
+  test('桌面会话：review_ready 是 done', () => {
+    claudeRecord('local_review', {
+      lastActivityAt: Date.now(),
       postTurnSummaryFor: 'a2',
       lastAssistantUuid: 'a2',
       postTurnSummary: { status_category: 'review_ready' },
     })
-    claudeRecord('local_seen', {
-      lastActivityAt: now - 60_000,
-      lastFocusedAt: now,
-      postTurnSummaryFor: 'a3',
-      lastAssistantUuid: 'a3',
-      postTurnSummary: { status_category: 'review_ready' },
+    assert.equal(statusOf('claude', 'local_review').state, 'done')
+  })
+
+  test('板侧写进去的 idle 压住落盘结论，下一个 hook 事件直接覆盖它', () => {
+    const store = new SessionStateStore()
+    const cli = 'e6a1f0c2-1111-2222-3333-444455556666'
+    claudeRecord('local_clicked', {
+      cliSessionId: cli,
+      // 落盘结论比点击旧——真实场景就是这样，点击总发生在上一轮结束之后
+      lastActivityAt: Date.now() - 60_000,
+      postTurnSummaryFor: 'a6',
+      lastAssistantUuid: 'a6',
+      postTurnSummary: { status_category: 'blocked', needs_action: '走哪条？' },
     })
-    assert.deepEqual(
-      [statusOf('claude', 'local_fresh').state, statusOf('claude', 'local_fresh').fresh],
-      ['done', true],
-    )
-    assert.equal(statusOf('claude', 'local_seen').fresh, false, '看过了就不再算新内容')
+    const at = () => withStatus([{ agent: 'claude', session: 'local_clicked' }], roots, store)[0].status
+    assert.equal(at().state, 'blocked', '没点过就是落盘结论')
+
+    // 点 pet：写进状态层，用与 hook 事件同一个 key（内层 cliSessionId）
+    store.put('claude', cli, idleStatus())
+    assert.equal(at().state, 'idle')
+
+    // 下一个事件落到同一个 key 上，直接覆盖
+    recordHook({ hook_event_name: 'PreToolUse', session_id: cli, cwd: '/tmp' }, {}, store)
+    assert.equal(at().state, 'working')
+  })
+
+  test('hookKeyOf 把登记 id 翻成 hook 报的那个 id；没有记录就用登记 id', () => {
+    claudeRecord('local_key', { cliSessionId: 'inner-uuid' })
+    assert.equal(hookKeyOf('claude', 'local_key', roots), 'inner-uuid')
+    assert.equal(hookKeyOf('claude', 'local_no_record', roots), 'local_no_record')
+    // codex 的登记 id 就是 hook 报的那个，不翻
+    assert.equal(hookKeyOf('codex', 'th-1', roots), 'th-1')
   })
 
   test('桌面会话：结论落后于最新一轮就报 unknown，不拿过期结论充数', () => {
@@ -3134,25 +3150,18 @@ describe('会话状态', () => {
     assert.equal(statusOf('claude', 'local_ok').state, 'done', '同批的其它会话照常读出来')
   })
 
-  test('codex：最后一条 rollout 是收尾就是 done，在未读集合里才算 fresh', () => {
-    codexRollout('cx-done-unread', [
+  test('codex：最后一条 rollout 是收尾就是 done', () => {
+    codexRollout('cx-done', [
       evLine('event_msg', { type: 'task_started' }),
       evLine('event_msg', { type: 'task_complete' }),
     ])
-    codexRollout('cx-done-read', [evLine('event_msg', { type: 'task_complete' })])
-    codexUnread(['cx-done-unread'])
-    assert.deepEqual(
-      [statusOf('codex', 'cx-done-unread').state, statusOf('codex', 'cx-done-unread').fresh],
-      ['done', true],
-    )
-    assert.equal(statusOf('codex', 'cx-done-read').fresh, false)
+    assert.equal(statusOf('codex', 'cx-done').state, 'done')
   })
 
   test('codex：最后一条是工具调用就是 running，久了没动静就当它没了', () => {
     codexRollout('cx-live', [evLine('response_item', { type: 'function_call' }, Date.now() - 60_000)])
     codexRollout('cx-dead', [evLine('response_item', { type: 'function_call' }, Date.now() - 6 * 60 * 60_000)])
-    assert.equal(statusOf('codex', 'cx-live').state, 'running')
-    assert.equal(statusOf('codex', 'cx-live').activity, 'working')
+    assert.equal(statusOf('codex', 'cx-live').state, 'working')
     assert.equal(
       statusOf('codex', 'cx-dead').state,
       'unknown',
@@ -3176,24 +3185,6 @@ describe('会话状态', () => {
       evLine('event_msg', { type: 'turn_aborted', reason: 'interrupted' }),
     ])
     assert.equal(statusOf('codex', 'cx-multi').state, 'blocked', '最后一条是打断')
-  })
-
-  test('codex：legacyMigration 是陈旧快照，不能并进未读集合', () => {
-    // app 只在 unreadByIdentity 里清未读；legacy 那份 adopt 之后就不维护了，
-    // 并上它会让早就读过的 thread 永远显示未读
-    mkdirSync(roots.codexHome, { recursive: true })
-    codexRollout('cx-legacy-only', [evLine('event_msg', { type: 'task_complete' })])
-    writeFileSync(
-      join(roots.codexHome, '.codex-global-state.json'),
-      JSON.stringify({
-        'electron-thread-read-state-v1': {
-          unreadByIdentity: { identity: { 'local:host': [] } },
-          legacyMigration: { unreadThreadIdsByHostId: { local: ['cx-legacy-only'] } },
-        },
-      }),
-      'utf8',
-    )
-    assert.equal(statusOf('codex', 'cx-legacy-only').fresh, false)
   })
 
   test('codex：没有 rollout 文件就报 unknown 而不是抛', () => {
@@ -3266,22 +3257,21 @@ describe('rollout 兜底：事件译状态、增量读、只扫近几天', () =>
     return file
   }
 
-  test('一行 → 一档：与 hook 同一套字面量（state + activity）', () => {
-    const cases: Array<[string, string, string]> = [
-      ['session_meta', 'running', 'idle'],
-      ['event_msg/task_started', 'running', 'thinking'],
-      ['response_item/reasoning', 'running', 'thinking'],
-      ['response_item/function_call', 'running', 'working'],
-      ['response_item/web_search_call', 'running', 'working'],
-      ['response_item/function_call_output', 'running', 'thinking'],
-      ['event_msg/task_complete', 'done', ''],
-      ['event_msg/turn_aborted', 'blocked', ''],
+  test('一行 → 一档：与 hook 同一套字面量', () => {
+    const cases: Array<[string, string]> = [
+      ['session_meta', 'idle'],
+      ['event_msg/task_started', 'thinking'],
+      ['response_item/reasoning', 'thinking'],
+      ['response_item/function_call', 'working'],
+      ['response_item/web_search_call', 'working'],
+      ['response_item/function_call_output', 'thinking'],
+      ['event_msg/task_complete', 'done'],
+      ['event_msg/turn_aborted', 'blocked'],
     ]
-    for (const [label, state, activity] of cases) {
+    for (const [label, state] of cases) {
       const [type, sub] = label.split('/')
       const got = rolloutStatusOf({ type, payload: sub ? { type: sub } : null }, 0)
       assert.equal(got?.state, state, `${label} 该落到 ${state}`)
-      assert.equal(got?.activity, activity, `${label} 的活动该是 ${activity}`)
     }
   })
 
@@ -3305,8 +3295,7 @@ describe('rollout 兜底：事件译状态、增量读、只扫近几天', () =>
 
     store.refresh(['cx-half'])
     // 最后一条**完整**的是 function_call → 干活；半行与认不出的都不算
-    assert.equal(store.get('cx-half')?.state, 'running')
-    assert.equal(store.get('cx-half')?.activity, 'working')
+    assert.equal(store.get('cx-half')?.state, 'working')
 
     // 补全那条半行（整份重写、末尾带换行）。offset 停在最后一个换行，前面不重读
     writeFileSync(file, [start, meta, call, done].join('\n') + '\n', 'utf8')
@@ -3352,31 +3341,29 @@ describe('hook 事件：归一与暂存', () => {
     normalizeHookEvent({ hook_event_name: name, session_id: 's1', cwd: '/tmp', ...extra })
 
   test('事件名归一成状态：什么事件落到哪一档', () => {
-    const cases: Array<[string, string, string]> = [
-      ['PreToolUse', 'running', 'working'],
-      ['PostToolUse', 'running', 'thinking'],
-      ['UserPromptSubmit', 'running', 'thinking'],
-      ['SessionStart', 'running', 'idle'],
-      ['PreCompact', 'running', 'thinking'],
-      ['PostCompact', 'running', 'thinking'],
-      ['PermissionRequest', 'blocked', ''],
-      ['Interrupt', 'blocked', ''],
-      ['Stop', 'done', ''],
-      ['StopFailure', 'failed', ''],
-      ['PostToolUseFailure', 'failed', ''],
+    const cases: Array<[string, string]> = [
+      ['PreToolUse', 'working'],
+      ['PostToolUse', 'thinking'],
+      ['UserPromptSubmit', 'thinking'],
+      ['SessionStart', 'idle'],
+      ['PreCompact', 'thinking'],
+      ['PostCompact', 'thinking'],
+      ['PermissionRequest', 'blocked'],
+      ['Interrupt', 'blocked'],
+      ['Stop', 'done'],
+      ['StopFailure', 'failed'],
+      ['PostToolUseFailure', 'failed'],
     ]
-    for (const [name, state, activity] of cases) {
-      const got = event(name)
-      assert.equal(got?.state, state, `${name} 该落到 ${state}`)
-      assert.equal(got?.activity, activity, `${name} 的活动该是 ${activity}`)
+    for (const [name, state] of cases) {
+      assert.equal(event(name)?.state, state, `${name} 该落到 ${state}`)
     }
   })
 
   test('两个 agent 的事件都要认——codex 发 Interrupt 与 Pre/PostCompact，不发 PostToolUseFailure', () => {
     // 少认一个的后果是状态卡在旧值上：打断后一直显示「干活」
     assert.equal(event('Interrupt')?.state, 'blocked')
-    assert.equal(event('PreCompact')?.state, 'running')
-    assert.equal(event('PostCompact')?.state, 'running')
+    assert.equal(event('PreCompact')?.state, 'thinking')
+    assert.equal(event('PostCompact')?.state, 'thinking')
   })
 
   test('认不出的 / 缺事件名的都不认，忽略即可，不抛错', () => {
@@ -3386,61 +3373,69 @@ describe('hook 事件：归一与暂存', () => {
   })
 
   test('一条会话只留最新一条；重复登记时后到覆盖先到', () => {
-    const store = new HookStore()
-    store.record({ hook_event_name: 'PreToolUse', session_id: 'a', cwd: '/tmp' }, CLAUDE)
-    store.record({ hook_event_name: 'PostToolUse', session_id: 'a', cwd: '/tmp' }, CLAUDE)
+    const store = new SessionStateStore()
+    recordHook({ hook_event_name: 'PreToolUse', session_id: 'a', cwd: '/tmp' }, CLAUDE, store)
+    recordHook({ hook_event_name: 'PostToolUse', session_id: 'a', cwd: '/tmp' }, CLAUDE, store)
     assert.equal(store.size, 1)
-    assert.equal(store.get('a', 'claude')?.activity, 'thinking')
+    assert.equal(store.get('claude', 'a')?.state, 'thinking')
   })
 
   test('缺 session_id / 子 agent 的事件都不动主会话状态', () => {
-    const store = new HookStore()
-    assert.equal(store.record({ hook_event_name: 'PreToolUse' }, CLAUDE), null, '没有 id 就没人可挂')
-    store.record(
+    const store = new SessionStateStore()
+    assert.equal(recordHook({ hook_event_name: 'PreToolUse' }, CLAUDE, store), null, '没有 id 就没人可挂')
+    recordHook(
       { hook_event_name: 'PreToolUse', session_id: 'a', cwd: '/tmp', agent_id: 'sub-1', agent_type: 'claude' },
       CLAUDE,
+      store,
     )
     assert.equal(store.size, 0, '子 agent 的生死不改主会话状态')
   })
 
   test('SessionEnd 把这条抹掉，读的时候自然退回落盘', () => {
-    const store = new HookStore()
-    store.record({ hook_event_name: 'Stop', session_id: 'a', cwd: '/tmp' }, CLAUDE)
-    assert.equal(store.get('a', 'claude')?.state, 'done')
-    assert.equal(store.record({ hook_event_name: 'SessionEnd', session_id: 'a', cwd: '/tmp' }, CLAUDE), null)
-    assert.equal(store.get('a', 'claude'), undefined)
+    const store = new SessionStateStore()
+    recordHook({ hook_event_name: 'Stop', session_id: 'a', cwd: '/tmp' }, CLAUDE, store)
+    assert.equal(store.get('claude', 'a')?.state, 'done')
+    assert.equal(recordHook({ hook_event_name: 'SessionEnd', session_id: 'a', cwd: '/tmp' }, CLAUDE, store), null)
+    assert.equal(store.get('claude', 'a'), undefined)
   })
 
   test('条目按 agent 分开存：同一个会话 id 两条管道互不覆盖', () => {
-    const store = new HookStore()
-    store.record({ hook_event_name: 'PreToolUse', session_id: 'same', cwd: '/tmp' }, CLAUDE)
-    store.record({ hook_event_name: 'Stop', session_id: 'same', cwd: '/tmp' }, { agent: 'codex' })
-    assert.equal(store.get('same', 'claude')?.activity, 'working')
-    assert.equal(store.get('same', 'codex')?.state, 'done')
+    const store = new SessionStateStore()
+    recordHook({ hook_event_name: 'PreToolUse', session_id: 'same', cwd: '/tmp' }, CLAUDE, store)
+    recordHook({ hook_event_name: 'Stop', session_id: 'same', cwd: '/tmp' }, { agent: 'codex' }, store)
+    assert.equal(store.get('claude', 'same')?.state, 'working')
+    assert.equal(store.get('codex', 'same')?.state, 'done')
     assert.equal(store.size, 2)
   })
 
-  test('四档都会过期：陈年的 Stop / blocked 不能一直压着落盘', () => {
-    const store = new HookStore()
+  test('时刻新的赢：陈年的 hook 事件盖不掉更新的落盘结论，反过来也不许', () => {
+    const store = new SessionStateStore()
     const stale = Date.now() - 31 * 60_000
-    for (const [name, session] of [['Stop', 'd'], ['Interrupt', 'b'], ['StopFailure', 'f'], ['PreToolUse', 'r']]) {
-      store.record({ hook_event_name: name, session_id: session, cwd: '/tmp' }, { agent: 'claude', at: stale })
-    }
-    for (const session of ['d', 'b', 'f', 'r']) {
-      assert.equal(store.get(session, 'claude'), undefined, `${session} 过期后不该再返回`)
-    }
-    assert.equal(store.size, 0, '写的时候顺手清掉，别让崩溃会话的条目一直占着')
+    const of = (state: SessionStatus['state'], observedAt: number): SessionStatus =>
+      ({ state, needsAction: '', observedAt, detail: state })
+
+    recordHook({ hook_event_name: 'Stop', session_id: 'a', cwd: '/tmp' }, { agent: 'claude', at: stale }, store)
+    assert.equal(store.get('claude', 'a')?.state, 'done')
+
+    store.put('claude', 'a', of('failed', Date.now()))
+    assert.equal(store.get('claude', 'a')?.state, 'failed', '更新的落盘结论换掉它')
+
+    store.put('claude', 'a', of('done', stale))
+    assert.equal(store.get('claude', 'a')?.state, 'failed', '旧的盖不掉新的')
   })
 
-  test('byCwd 认得出同一个目录的两种写法（/tmp 与 /private/tmp），且只认同一个 agent', () => {
-    const store = new HookStore()
-    const dir = join(TMP, 'agent-home')
-    mkdirSync(dir, { recursive: true })
-    store.record({ hook_event_name: 'PreToolUse', session_id: 'a', cwd: dir }, CLAUDE)
-    store.record({ hook_event_name: 'PreToolUse', session_id: 'b', cwd: dir }, { agent: 'codex' })
-    assert.equal(store.byCwd(realpathSync(dir), 'claude')?.activity, 'working')
-    assert.equal(store.byCwd(realpathSync(dir), 'codex')?.activity, 'working')
-    assert.equal(store.byCwd(join(TMP, '别的目录'), 'claude'), undefined)
+  test('板侧写的 idle 一直摆着，直到有更新的观察落下来', () => {
+    const store = new SessionStateStore()
+    const clicked = Date.now() - 31 * 60_000
+    store.put('claude', 'idle-1', idleStatus(clicked))
+    assert.equal(store.get('claude', 'idle-1')?.state, 'idle', '过了多久都还在')
+
+    // 更旧的落盘结论盖不掉它
+    store.put('claude', 'idle-1', { state: 'done', needsAction: '', observedAt: clicked - 1, detail: '旧的' })
+    assert.equal(store.get('claude', 'idle-1')?.state, 'idle')
+
+    recordHook({ hook_event_name: 'PreToolUse', session_id: 'idle-1', cwd: '/tmp' }, {}, store)
+    assert.equal(store.get('claude', 'idle-1')?.state, 'working', '更新的 hook 事件一到就覆盖')
   })
 })
 
@@ -3461,102 +3456,88 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
     writeFileSync(join(dir, `${sessionId}.json`), JSON.stringify({ sessionId, ...rec }), 'utf8')
   }
 
-  /** codex 的未读集合：官方那份，hook 不该把它顶掉 */
-  function codexUnread(ids: string[]): void {
-    mkdirSync(roots.codexHome, { recursive: true })
-    writeFileSync(
-      join(roots.codexHome, '.codex-global-state.json'),
-      JSON.stringify({
-        'electron-thread-read-state-v1': { unreadByIdentity: { identity: { 'local:host': ids } } },
-      }),
-      'utf8',
-    )
-  }
-
-  const statusOf = (agent: string, session: string, store: HookStore, cwd?: string): SessionStatus =>
-    withStatus([{ agent, session, cwd }], roots, store)[0].status
+  const statusOf = (agent: string, session: string, store: SessionStateStore): SessionStatus =>
+    withStatus([{ agent, session }], roots, store)[0].status
 
   test('hook 说在干活就顶掉落盘那份结论——同一 turn 内能看出切换', () => {
-    const store = new HookStore()
+    const store = new SessionStateStore()
     claudeRecord('local_working', {
       lastActivityAt: Date.now(),
       postTurnSummaryFor: 't1',
       lastAssistantUuid: 't1',
       postTurnSummary: { status_category: 'blocked', needs_action: '接着做吗？' },
     })
-    store.record({ hook_event_name: 'PreToolUse', session_id: 'local_working', cwd: '/tmp', tool_name: 'Bash' })
+    recordHook({ hook_event_name: 'PreToolUse', session_id: 'local_working', cwd: '/tmp', tool_name: 'Bash' }, {}, store)
     const working = statusOf('claude', 'local_working', store)
-    assert.deepEqual([working.state, working.activity], ['running', 'working'])
+    assert.equal(working.state, 'working')
 
-    store.record({ hook_event_name: 'PostToolUse', session_id: 'local_working', cwd: '/tmp', tool_name: 'Bash' })
+    recordHook({ hook_event_name: 'PostToolUse', session_id: 'local_working', cwd: '/tmp', tool_name: 'Bash' }, {}, store)
     const thinking = statusOf('claude', 'local_working', store)
-    assert.deepEqual([thinking.state, thinking.activity], ['running', 'thinking'], '写回「思考」，同一 turn 内切换可见')
+    assert.equal(thinking.state, 'thinking', '写回「思考」，同一 turn 内切换可见')
     assert.match(thinking.detail, /PostToolUse/)
   })
 
   test('登记 id 与 hook 报的 id 不同名时，靠记录的 cliSessionId 翻译', () => {
-    const store = new HookStore()
+    const store = new SessionStateStore()
     const cli = 'e6a1f0c2-1111-2222-3333-444455556666'
     claudeRecord('local_translated', { cliSessionId: cli })
-    store.record({ hook_event_name: 'PreToolUse', session_id: cli, cwd: '/tmp' })
-    assert.equal(statusOf('claude', 'local_translated', store).activity, 'working')
+    recordHook({ hook_event_name: 'PreToolUse', session_id: cli, cwd: '/tmp' }, {}, store)
+    assert.equal(statusOf('claude', 'local_translated', store).state, 'working')
   })
 
-  test('两个 id 都对不上时按 cwd 兜', () => {
-    const store = new HookStore()
+  test('两个 id 都对不上就退回落盘结论，不借同目录别的会话的 hook', () => {
+    const store = new SessionStateStore()
     const dir = join(TMP, 'hook-home', 'worktree')
     mkdirSync(dir, { recursive: true })
-    claudeRecord('local_bycwd')
-    store.record({ hook_event_name: 'PreToolUse', session_id: '别的会话', cwd: dir })
-    assert.equal(statusOf('claude', 'local_bycwd', store, dir).activity, 'working')
+    claudeRecord('local_bycwd', {
+      lastActivityAt: Date.now(),
+      postTurnSummaryFor: 't5',
+      lastAssistantUuid: 't5',
+      postTurnSummary: { status_category: 'completed' },
+    })
+    // 同目录另一个会话在干活：id 对不上，就不是这条的事
+    recordHook({ hook_event_name: 'PreToolUse', session_id: '别的会话', cwd: dir }, {}, store)
+    const got = statusOf('claude', 'local_bycwd', store)
+    assert.equal(got.state, 'done', '退回自己的落盘结论，不该是在干活')
   })
 
-  test('两种 agent 不能互相点亮——cwd 兜底也认来源', () => {
-    const store = new HookStore()
+  test('同目录并排跑多个会话时互不点亮，各自只认自己的 id', () => {
+    const store = new SessionStateStore()
     const dir = join(TMP, 'hook-home', 'shared-wt')
     mkdirSync(dir, { recursive: true })
-    store.record({ hook_event_name: 'PreToolUse', session_id: 'claude-x', cwd: dir })
-    const codex = statusOf('codex', 'cx-x', store, realpathSync(dir))
-    assert.equal(codex.state, 'unknown', 'claude 的事件不该落到 codex 会话上')
-    assert.equal(statusOf('claude', 'claude-y', store, realpathSync(dir)).activity, 'working', 'claude 这边照常')
-  })
-
-  test('codex 的未读仍按官方集合判，不让 hook 把「跑完没看」一律说成没看过', () => {
-    const store = new HookStore()
-    codexUnread(['cx-seen'])
-    store.record({ hook_event_name: 'Stop', session_id: 'cx-read', cwd: '/tmp' }, { agent: 'codex' })
-    store.record({ hook_event_name: 'Stop', session_id: 'cx-seen', cwd: '/tmp' }, { agent: 'codex' })
-    assert.equal(statusOf('codex', 'cx-read', store).fresh, false, '不在未读集合里就不该挂角标')
-    assert.equal(statusOf('codex', 'cx-seen', store).fresh, true)
+    recordHook({ hook_event_name: 'PreToolUse', session_id: 'claude-x', cwd: dir }, {}, store)
+    assert.equal(statusOf('claude', 'claude-x', store).state, 'working', '自己的照常')
+    assert.equal(statusOf('claude', 'claude-y', store).state, 'unknown', '同目录的别人不沾光')
+    assert.equal(statusOf('codex', 'claude-x', store).state, 'unknown', '两种 agent 也不互相点亮')
   })
 
   test('在跑的状态太久没动静就当它没了——进程崩了不会有收尾事件', () => {
-    const store = new HookStore()
+    const store = new SessionStateStore()
     claudeRecord('local_stale', {
       lastActivityAt: Date.now(),
       postTurnSummaryFor: 't2',
       lastAssistantUuid: 't2',
       postTurnSummary: { status_category: 'completed' },
     })
-    store.record({ hook_event_name: 'PreToolUse', session_id: 'local_stale', cwd: '/tmp' }, {
+    recordHook({ hook_event_name: 'PreToolUse', session_id: 'local_stale', cwd: '/tmp' }, {
       agent: 'claude',
       at: Date.now() - 31 * 60_000,
-    })
+    }, store)
     assert.equal(statusOf('claude', 'local_stale', store).state, 'done', '过期的 running 不该压住落盘结论')
   })
 
   test('过期的 blocked 也一样让位', () => {
-    const store = new HookStore()
+    const store = new SessionStateStore()
     claudeRecord('local_stale_blocked', {
       lastActivityAt: Date.now(),
       postTurnSummaryFor: 't4',
       lastAssistantUuid: 't4',
       postTurnSummary: { status_category: 'completed' },
     })
-    store.record({ hook_event_name: 'PermissionRequest', session_id: 'local_stale_blocked', cwd: '/tmp' }, {
+    recordHook({ hook_event_name: 'PermissionRequest', session_id: 'local_stale_blocked', cwd: '/tmp' }, {
       agent: 'claude',
       at: Date.now() - 31 * 60_000,
-    })
+    }, store)
     assert.equal(statusOf('claude', 'local_stale_blocked', store).state, 'done')
   })
 
@@ -3567,26 +3548,16 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
       lastAssistantUuid: 't3',
       postTurnSummary: { status_category: 'review_ready' },
     })
-    const got = statusOf('claude', 'local_disk', new HookStore())
+    const got = statusOf('claude', 'local_disk', new SessionStateStore())
     assert.equal(got.state, 'done')
-    assert.equal(got.activity, '')
     assert.equal(got.detail, '桌面应用结论：review_ready')
-  })
-
-  test('落库的会话带 cwd，cwd 兜底才用得上——登记时的目录就是它', () => {
-    const store = new HookStore()
-    claudeRecord('local_cwd')
-    const dir = join(TMP, 'hook-home', 'wt-cwd')
-    mkdirSync(dir, { recursive: true })
-    store.record({ hook_event_name: 'UserPromptSubmit', session_id: 'x', cwd: dir })
-    assert.equal(statusOf('claude', 'local_cwd', store, realpathSync(dir)).activity, 'thinking')
   })
 })
 
 // -------------------------------------------- 未读事件：卡片角标该挂哪条会话
 
 describe('未读事件：角标挂哪些会话', () => {
-  function sess(agent: string, state: string, fresh: boolean): Session {
+  function sess(agent: string, state: string): Session {
     return {
       requirementId: 'req-x',
       agent,
@@ -3596,93 +3567,64 @@ describe('未读事件：角标挂哪些会话', () => {
       link: '',
       created: '',
       updated: '',
-      status: { state: state as Session['status']['state'], activity: '', fresh, needsAction: '', at: '', detail: '' },
+      status: { state: state as Session['status']['state'], needsAction: '', observedAt: 0, detail: '' },
     }
   }
 
-  test('没读过的完成 / 卡住 / 失败都挂角标', () => {
+  test('完成 / 卡住 / 失败都挂角标——它们会一直挂着，点过 pet 变成 idle 才消', () => {
     for (const s of ['done', 'blocked', 'failed']) {
-      assert.equal(badgesOf([sess('claude', s, true)]).length, 1, `${s} 该挂`)
+      assert.equal(badgesOf([sess('claude', s)]).length, 1, `${s} 该挂`)
     }
   })
 
-  test('读过了就不挂——IM 的未读是一个意思，事件被消费掉了', () => {
-    for (const s of ['done', 'blocked', 'failed']) {
-      assert.deepEqual(badgesOf([sess('claude', s, false)]), [], `${s} 读过之后不该挂`)
-    }
+  test('正在跑也挂；idle（点过的）与 unknown（读不到）不挂', () => {
+    assert.equal(badgesOf([sess('claude', 'thinking')]).length, 1)
+    assert.deepEqual(badgesOf([sess('claude', 'idle')]), [])
+    assert.deepEqual(badgesOf([sess('cursor', 'unknown')]), [])
   })
 
-  test('一个事件只能消费一次：消掉之后卡片上不留任何残迹', () => {
-    // 告警色、原文、可点的角标三者同判据，所以读过之后连入口一起消失——
-    // 不能出现「还亮着告警、却点不到会话」的卡片
-    const read = badgesOf([sess('claude', 'blocked', false)])
-    assert.deepEqual(read, [])
-    assert.equal(badgesOf([sess('claude', 'blocked', true)]).length, 1)
-  })
-
-  test('正在跑不受已读影响：它不是事件，自己会结束，不用人消费', () => {
-    assert.equal(badgesOf([sess('claude', 'running', false)]).length, 1)
+  test('告警色、原文、可点的角标三者同判据——要亮一起亮，要消一起消', () => {
+    assert.equal(badgesOf([sess('claude', 'blocked')]).length, 1)
+    assert.equal(badgesOf([sess('claude', 'thinking')]).length, 1)
   })
 
   test('读不到的、以及一条会话都没有时都不挂', () => {
-    assert.deepEqual(badgesOf([sess('cursor', 'unknown', true)]), [])
+    assert.deepEqual(badgesOf([sess('cursor', 'unknown')]), [])
     assert.deepEqual(badgesOf([]), [])
   })
 
   test('每个会话各挂一个，按急缓排序——同时开着几个 agent 时看得出是哪个在等', () => {
     const got = badgesOf([
-      sess('codex', 'running', false),
-      sess('claude', 'done', true),
-      sess('codex', 'blocked', true),
+      sess('codex', 'working'),
+      sess('claude', 'done'),
+      sess('codex', 'blocked'),
     ])
     assert.deepEqual(
       got.map((s) => s.status.state),
-      ['blocked', 'done', 'running'],
+      ['blocked', 'done', 'working'],
     )
   })
 
-  test('读过的事件不占位，只剩正在跑的那条', () => {
-    const got = badgesOf([sess('claude', 'done', false), sess('codex', 'running', false)])
+  test('点过的（idle）不占位，剩下的照旧按急缓排', () => {
+    const got = badgesOf([sess('claude', 'idle'), sess('claude', 'done'), sess('codex', 'working')])
     assert.deepEqual(
       got.map((s) => s.status.state),
-      ['running'],
+      ['done', 'working'],
     )
   })
 
-  test('isEventState 只认会攒未读的那三种，running 与 unknown 不是事件', () => {
+  test('isEventState 只认一轮结束抛给人的那三种，在干活与 unknown 不是事件', () => {
     assert.deepEqual(
-      (['done', 'blocked', 'failed', 'running', 'unknown'] as const).filter(isEventState),
+      (['done', 'blocked', 'failed', 'thinking', 'working', 'idle', 'unknown'] as const).filter(isEventState),
       ['done', 'blocked', 'failed'],
     )
   })
 })
 
-describe('pet：粗粒度状态映射与抢注意力挑选', () => {
-  test('会话状态落到最贴近的 pet 状态，读不到的不给 pet', () => {
-    assert.equal(petStateOf('running', false), 'working')
-    assert.equal(petStateOf('done', true), 'done')
-    assert.equal(petStateOf('blocked', false), 'blocked')
-    assert.equal(petStateOf('failed', true), 'failed')
-    assert.equal(petStateOf('unknown', true), null)
-  })
-
-  test('读过的 done 落静止，blocked 不降档（看过 ≠ 答过）', () => {
-    assert.equal(petStateOf('done', false), 'idle')
-    assert.equal(petStateOf('blocked', false), 'blocked')
-    assert.equal(petStateOf('failed', false), 'failed')
-    // running 不是事件，fresh 对它没有意义
-    assert.equal(petStateOf('running', false), 'working')
-  })
-
-  test('文案比姿势说得细：读过的 done 姿势静止、文案「跑完已看」', () => {
-    assert.equal(petLabelOf('done', false, 'idle'), '跑完已看')
-    assert.equal(petLabelOf('done', true, 'done'), '跑完待看')
-    assert.equal(petLabelOf('blocked', false, 'blocked'), '等你')
-    assert.equal(petLabelOf('running', false, 'working'), '干活')
-  })
-
-  test('六档状态齐备', () => {
-    assert.deepEqual([...PET_STATES].sort(), ['blocked', 'done', 'failed', 'idle', 'thinking', 'working'])
+describe('pet：姿势与抢注意力挑选', () => {
+  test('状态字面量与状态层同一套，一个不多一个不少', () => {
+    assert.deepEqual([...THREAD_STATES].sort(), ['blocked', 'done', 'failed', 'idle', 'thinking', 'unknown', 'working'])
+    assert.deepEqual(Object.keys(PET_LABEL).sort(), [...THREAD_STATES].sort(), '每一档都得有名字')
   })
 
   test('急缓顺序：卡住 > 失败 > 跑完 > 干活 > 思考 > 静止', () => {
@@ -3715,14 +3657,14 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
   const PETS_DIR = join(REPO_ROOT, 'src/renderer/public/pets')
 
   /** 走 <img> 的素材：拿它的 src，顺带钉住通道 */
-  const imgSrc = (agent: string, state: PetState, opt = art) => {
+  const imgSrc = (agent: string, state: Pose, opt = art) => {
     const got = petArt(agent, state, opt)
     assert.equal(got.channel, 'img')
     return got.channel === 'img' ? got.src : ''
   }
 
   /** 云宝内联：拿它那份 SVG 原文，顺带钉住通道 */
-  const cloudlingSvg = (state: PetState, opt = art) => {
+  const cloudlingSvg = (state: Pose, opt = art) => {
     const got = petArt('codex', state, opt)
     assert.equal(got.channel, 'inline')
     return got.channel === 'inline' ? got.svg : ''
@@ -3738,7 +3680,7 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
   })
 
   test('Codex 用 cloudling，内联成 <svg>：六档各一张、互不重样', () => {
-    const files: Record<PetState, string> = {
+    const files: Record<Pose, string> = {
       idle: 'cloudling-idle.svg',
       thinking: 'cloudling-thinking.svg',
       working: 'cloudling-typing.svg',
@@ -3746,10 +3688,11 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
       done: 'cloudling-attention.svg',
       failed: 'cloudling-error.svg',
     }
-    for (const state of PET_STATES) {
+    const poses = THREAD_STATES.filter((s) => s !== 'unknown')
+    for (const state of poses) {
       assert.equal(cloudlingSvg(state), CLOUDLING_SVG[files[state]], state)
     }
-    assert.equal(new Set(PET_STATES.map((s) => cloudlingSvg(s))).size, PET_STATES.length)
+    assert.equal(new Set(poses.map((s) => cloudlingSvg(s))).size, poses.length)
   })
 
   test('认不出的 agent 落到 clawd（默认那只），不染不动', () => {
@@ -3779,7 +3722,8 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
 
   test('走 <img> 的素材都真的落在 public/pets 里（生成物没漏）', () => {
     for (const agent of ['claude', 'cursor']) {
-      for (const state of PET_STATES) {
+      // unknown 不画 pet，没有素材
+      for (const state of THREAD_STATES.filter((s) => s !== 'unknown')) {
         for (const compact of [false, true]) {
           for (const still of [false, true]) {
             const src = imgSrc(agent, state, { compact, still })
@@ -3856,26 +3800,26 @@ describe('云宝内联：按实例改写 id', () => {
 })
 
 describe('pet：一行 pet 的排布', () => {
-  function sess(agent: string, state: Session['status']['state'], fresh: boolean): Session {
+  function sess(agent: string, state: Session['status']['state']): Session {
     return {
       requirementId: 'req-x',
       agent,
-      session: `${agent}-${state}-${fresh}`,
+      session: `${agent}-${state}`,
       title: '',
       cwd: '',
       link: '',
       created: '',
       updated: '',
-      status: { state, activity: '', fresh, needsAction: '', at: '', detail: '' },
+      status: { state, needsAction: '', observedAt: 0, detail: '' },
     }
   }
-  // 五个都读得到的会话：两条在跑 + 一条卡住 + 跑完没看 + 失败（都挂 pet）
+  // 五个都读得到的会话：两条在干活 + 一条卡住 + 跑完没看 + 失败（都挂 pet）
   const pool: Session[] = [
-    sess('claude', 'blocked', true),
-    sess('codex', 'running', false),
-    sess('claude', 'done', true),
-    sess('codex', 'failed', true),
-    sess('claude', 'running', false),
+    sess('claude', 'blocked'),
+    sess('codex', 'working'),
+    sess('claude', 'done'),
+    sess('codex', 'failed'),
+    sess('claude', 'thinking'),
   ]
 
   test('1/2/3/4 个会话出等量 pet，5 个收成 4 只 + 1（不破版）', () => {
@@ -3892,47 +3836,41 @@ describe('pet：一行 pet 的排布', () => {
     assert.equal(items.find((p) => p.focus)?.state, 'blocked')
   })
 
-  test('都只有正在跑时谁也不抢注意力', () => {
-    const { items } = planPetRow([sess('claude', 'running', false), sess('codex', 'running', false)])
-    assert.deepEqual(items.map((p) => p.state), ['working', 'working'])
+  test('都只在干活时谁也不抢注意力', () => {
+    const { items } = planPetRow([sess('claude', 'thinking'), sess('codex', 'working')])
+    assert.deepEqual(items.map((p) => p.state), ['thinking', 'working'])
     assert.equal(items.some((p) => p.focus), false)
   })
 
-  test('pet 长期留着：读过的事件也画 pet，且点得到——但姿势降成静止', () => {
-    const read = planPetRow([sess('claude', 'done', false)])
+  test('pet 长期留着：读得到的会话都画 pet，且点得到', () => {
+    const read = planPetRow([sess('claude', 'done')])
     assert.equal(read.items.length, 1)
-    assert.equal(read.items[0].state, 'idle')
-    assert.equal(read.items[0].label, '跑完已看')
-    assert.equal(read.items[0].event, false)
+    assert.equal(read.items[0].state, 'done')
+    assert.equal(read.items[0].event, true)
   })
 
-  test('没读过的 done 姿势与文案都不变', () => {
-    const unread = planPetRow([sess('claude', 'done', true)]).items[0]
+  test('点过的（idle 档）落静止、不带事件样式、也不抢注意力', () => {
+    const clicked = planPetRow([sess('claude', 'idle')]).items[0]
+    assert.equal(clicked.state, 'idle')
+    assert.equal(clicked.event, false)
+    assert.equal(clicked.focus, false)
+  })
+
+  test('没读过的 done 姿势不变', () => {
+    const unread = planPetRow([sess('claude', 'done')]).items[0]
     assert.equal(unread.state, 'done')
-    assert.equal(unread.label, '跑完待看')
     assert.equal(unread.event, true)
   })
 
-  test('事件样式只跟 fresh 走：未读 done 带 event，读过的不带', () => {
-    assert.equal(planPetRow([sess('claude', 'done', true)]).items[0].event, true)
-    assert.equal(planPetRow([sess('claude', 'done', false)]).items[0].event, false)
-  })
-
-  test('读过的 blocked 仍摆「等你」，姿势与文案都不降档', () => {
-    const read = planPetRow([sess('claude', 'blocked', false)]).items[0]
-    assert.equal(read.state, 'blocked')
-    assert.equal(read.label, '等你')
-  })
-
-  test('读过的 pet 留着，但不抢注意力', () => {
-    const items = planPetRow([sess('claude', 'blocked', false)]).items
-    assert.equal(items.length, 1)
-    assert.equal(items[0].event, false)
-    assert.equal(items[0].focus, false)
+  test('事件样式跟状态走：事件型三档带 event，干活 / 静止不带', () => {
+    assert.equal(planPetRow([sess('claude', 'done')]).items[0].event, true)
+    assert.equal(planPetRow([sess('claude', 'blocked')]).items[0].event, true)
+    assert.equal(planPetRow([sess('claude', 'thinking')]).items[0].event, false)
+    assert.equal(planPetRow([sess('claude', 'idle')]).items[0].event, false)
   })
 
   test('读不到的会话不画 pet，空列表也不破', () => {
-    assert.deepEqual(planPetRow([sess('cursor', 'unknown', true)]).items, [])
+    assert.deepEqual(planPetRow([sess('cursor', 'unknown')]).items, [])
     assert.deepEqual(planPetRow([]), { items: [], more: 0 })
   })
 })

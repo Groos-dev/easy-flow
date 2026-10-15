@@ -16,3 +16,14 @@ export function parseStamp(s: string): number {
   const t = Date.parse(s.trim().replace(' ', 'T'))
   return Number.isNaN(t) ? 0 : t
 }
+
+/**
+ * epoch ms → 库里的 "yyyy-mm-dd HH:mm" 口径（本机时区）。会话状态的时间是 ms，
+ * 展示时才转——服务端只发 ms，不再把字符串发出去又解析回来。
+ */
+export function formatStamp(ms: number): string {
+  if (!ms || !Number.isFinite(ms)) return ''
+  const d = new Date(ms)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}

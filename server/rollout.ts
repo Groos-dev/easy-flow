@@ -20,8 +20,7 @@
 import { closeSync, openSync, readSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { readdirOrEmpty } from './fsutil.ts'
-import type { HookStatus, SessionActivity } from './hook.ts'
-import type { ThreadState } from './threads.ts'
+import type { SessionStatus, ThreadState } from './session-state.ts'
 
 /** rollout 落在 <codexHome>/sessions/<年>/<月>/<日>/ 这层日期目录下 */
 const SESSION_DIR = 'sessions'
@@ -63,26 +62,25 @@ interface RolloutLine {
  * task_started 起一轮、task_complete 收一轮、turn_aborted 是打断（同 hook 的 Interrupt → blocked）。
  * session_meta 是第一行，落在「会话活着、还没干活」——与 hook 的 SessionStart 同义。
  */
-export function rolloutStatusOf(line: RolloutLine, at: number): HookStatus | null {
+export function rolloutStatusOf(line: RolloutLine, at: number): SessionStatus | null {
   const type = str(line.type)
   const sub = str(line.payload?.type)
-  const of = (state: ThreadState, activity: SessionActivity | ''): HookStatus => ({
+  const of = (state: ThreadState): SessionStatus => ({
     state,
-    activity,
     needsAction: '',
-    at,
-    event: sub ? `${type}/${sub}` : type,
+    observedAt: at,
+    detail: `rollout 事件：${sub ? `${type}/${sub}` : type}`,
   })
-  if (type === 'session_meta') return of('running', 'idle')
+  if (type === 'session_meta') return of('idle')
   if (type === 'event_msg') {
     switch (sub) {
       case 'task_started':
-        return of('running', 'thinking')
+        return of('thinking')
       case 'task_complete':
         // 带 error 的这轮没跑完（如 stream disconnected）：落到 failed，不假装 done
-        return line.payload?.error ? of('failed', '') : of('done', '')
+        return line.payload?.error ? of('failed') : of('done')
       case 'turn_aborted':
-        return of('blocked', '')
+        return of('blocked')
       default:
         return null
     }
@@ -91,10 +89,10 @@ export function rolloutStatusOf(line: RolloutLine, at: number): HookStatus | nul
     switch (sub) {
       case 'reasoning':
       case 'function_call_output':
-        return of('running', 'thinking')
+        return of('thinking')
       case 'function_call':
       case 'web_search_call':
-        return of('running', 'working')
+        return of('working')
       default:
         return null
     }
@@ -108,7 +106,7 @@ interface Tracked {
   /** 已读到的字节数，只到最后一个换行——写了一半的尾行留到下次 */
   offset: number
   /** fold 出来的最新状态；只有认不出的事件时保持 undefined */
-  status?: HookStatus
+  status?: SessionStatus
 }
 
 /**
@@ -141,7 +139,7 @@ export class RolloutStore {
   }
 
   /** 某条会话的最新状态。没读到 / 认不出返回 undefined，调用方自己给 unknown */
-  get(id: string): HookStatus | undefined {
+  get(id: string): SessionStatus | undefined {
     return this.byId.get(id)?.status
   }
 
