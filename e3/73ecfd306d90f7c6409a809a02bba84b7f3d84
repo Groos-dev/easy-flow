@@ -1,0 +1,71 @@
+src/renderer/src/lib/projectIcon.ts
+  s_64878040b951a1::t_672a38225645f1 1-22
+src/renderer/src/components/icons.tsx
+  s_64878040b951a1::t_4fddb580aa7ef3 109-154
+README.md
+  s_5799a8bcf20c1b::t_91b371c3fc401a 20
+server/http.ts
+  s_5799a8bcf20c1b::t_b9110dcaea95c7 14
+server/index.ts
+  s_5799a8bcf20c1b::t_c4f818deeca168 43
+vite.web.config.ts
+  s_5799a8bcf20c1b::t_493110b84fc9c3 14
+src/renderer/src/components/MindMap.tsx
+  s_64878040b951a1::t_3ac1af2c948a90 87-93,96,99-100,102,104,107
+src/renderer/src/components/LeftRail.tsx
+  s_64878040b951a1::t_5a27a3d7cbac66 119,124-125
+  s_64878040b951a1::t_da2a3481025e76 123,134
+  s_64878040b951a1::t_3518f17a25b267 181
+  s_64878040b951a1::t_92efe2510d5369 142-147,151
+  s_64878040b951a1::t_fc5eb1acb582f4 1-50,52-54,56-58,61-118,120-121,126-133,135-141,148-150,152-180,182-196
+  s_64878040b951a1::t_a4b440e5d6c504 51,55,59-60
+  s_64878040b951a1::t_099974b54c382a 122
+scripts/app.mjs
+  s_5799a8bcf20c1b::t_dadec0f6786e22 38
+electron.vite.config.ts
+  s_5799a8bcf20c1b::t_bf6df83dd7958e 30
+src/renderer/src/App.tsx
+  s_64878040b951a1::t_210edfc137d552 421-427
+  s_64878040b951a1::t_be0c6115f0d619 156,158-159
+  s_64878040b951a1::t_b5af7283c35d78 138-149
+  s_64878040b951a1::t_31641b3e206589 23
+  s_64878040b951a1::t_94d6869db106be 608-620,622
+  s_64878040b951a1::t_49204befe4bcb6 201-204
+  s_64878040b951a1::t_8161953283c607 407-409
+src/renderer/src/styles.css
+  s_64878040b951a1::t_cbede6b8afe822 298-325,328
+  s_64878040b951a1::t_4c09e8edd66df9 234-250,252,255-260,263-266,271,278,280-281,284,287-297,326-327,329-486
+  s_64878040b951a1::t_62866a3117a038 12-15
+  s_64878040b951a1::t_883d6c55227685 267-269
+  s_64878040b951a1::t_da5960b505d62f 87-88,102,111-112
+test/project-icon.test.ts
+  s_64878040b951a1::t_7404b33442fe33 1-47
+scripts/codex-hook.mjs
+  s_5799a8bcf20c1b::t_b217f4e8792284 14,19,23
+src/renderer/src/lib/api.ts
+  s_5799a8bcf20c1b::t_054c6a14c7c388 21,25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "e373ecfd306d90f7c6409a809a02bba84b7f3d84",
+  "prompts": {},
+  "sessions": {
+    "s_5799a8bcf20c1b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "27a1b605-132f-43c5-b7cf-b7f1f8163d20",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    },
+    "s_64878040b951a1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bdca7711-9d33-4f47-996c-00526f29655a",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
