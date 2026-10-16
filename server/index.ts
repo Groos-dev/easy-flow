@@ -40,7 +40,7 @@ import {
   writeRequirementDoc,
 } from './http.ts'
 
-export const DEFAULT_PORT = 3210
+export const DEFAULT_PORT = 29170
 
 /**
  * 后台兜底重扫的间隔。看板读取路径上不再重扫目录

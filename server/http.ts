@@ -11,7 +11,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 /**
  * 允许的跨源来源：本机的 Vite dev server，以及打包后渲染进程的 file 协议源。
  * 这个服务能删目录、写文件、调 open，因此不能对任意网页开放
- * （否则任何网站都能向 127.0.0.1:3210 发请求）。
+ * （否则任何网站都能向 127.0.0.1:29170 发请求）。
  */
 const ALLOWED_ORIGIN = new RegExp(
   '^(file://|https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?)$',
