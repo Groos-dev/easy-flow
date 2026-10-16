@@ -346,12 +346,6 @@ export default function Settings({ onBack, onApplied }: Props) {
             {hookError && <div className="notice">{hookError}</div>}
             {hookNotice && <div className="notice ok">{hookNotice}</div>}
 
-            <p className="hint">
-              把 easy-flow 的 hook 装进两个 agent 的用户配置，会话状态才能细到每次工具调用。
-              只往事件数组里追加自己那条，卸载只摘自己那条——别人的 hook 原样不动；改配置前会留一份 .bak。
-              端口变了，装出来的地址会跟着更新。
-            </p>
-
             <div className="section-label">安装状态</div>
             {hook ? (
               hook.agents.map((a) => (
