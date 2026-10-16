@@ -59,8 +59,16 @@ export function focusIndex(states: ThreadState[]): number {
   return PET_RANK[states[best]] <= PET_ATTENTION ? best : -1
 }
 
-/** 一张卡最多挂几只 pet：卡片内容宽约 310px，再多就挤了，多的收成 +N */
-export const MAX_PETS = 4
+/** 一张卡最多挂几只 pet：卡片内容宽约 310px，一行 3 只每只约 99px——一句「动词 + 一个关键字段」的气泡一行写完所需的下限，再多就折行、多的收成 +N */
+export const MAX_PETS = 3
+
+/** 真在动的三档（与 server/session-state.ts 的 isActive 同口径）：只有它们可能显示实时动作 */
+const ACTIVE: Pose[] = ['thinking', 'working', 'sweeping']
+
+const NEEDS_YOU: Pose[] = ['blocked', 'failed']
+
+/** 气泡的调子：动作一档、退回 title 一档，事件三档用自己的状态色 */
+export type BubbleTone = 'act' | 'title' | 'blocked' | 'done' | 'failed'
 
 export interface PetItem {
   session: Session
@@ -69,6 +77,9 @@ export interface PetItem {
   event: boolean
   /** 唯一抢动效的那只（只对 blocked 的脉冲有效）；其余为 false */
   focus: boolean
+  /** 气泡里那句话：卡住且有原文时报那句原文，干活且有动作时报动作，其余报会话 title */
+  bubble: string
+  tone: BubbleTone
 }
 
 export interface PetRowPlan {
@@ -76,6 +87,8 @@ export interface PetRowPlan {
   items: PetItem[]
   /** 收成 +N 的数量 */
   more: number
+  /** 收起的里头有几个要人介入的（卡住 / 失败） */
+  moreNeedsYou: number
 }
 
 /**
@@ -89,6 +102,7 @@ export function planPetRow(sessions: Session[]): PetRowPlan {
   const pets = sessions
     .map((session) => ({ session, state: session.status.state }))
     .filter((p): p is { session: Session; state: Pose } => p.state !== 'unknown')
+    .sort((a, b) => PET_RANK[a.state] - PET_RANK[b.state])
 
   // 抢动效仍按 badgesOf 挑（事件 + 在干活），再映射回整排的坐标——
   // 消费掉的 pet 留着，但不抢注意力。badgesOf 已按急缓排序，focusIndex 只认 attention 三档。
@@ -97,13 +111,25 @@ export function planPetRow(sessions: Session[]): PetRowPlan {
   const focusSession = focusAt >= 0 ? attentive[focusAt] : undefined
 
   const shown = pets.slice(0, MAX_PETS)
+  const hidden = pets.slice(MAX_PETS)
   return {
     items: shown.map((p) => ({
       session: p.session,
       state: p.state,
       event: isEventState(p.session.status.state),
       focus: p.session === focusSession,
+      ...bubbleOf(p.session, p.state),
     })),
-    more: pets.length - shown.length,
+    more: hidden.length,
+    moreNeedsYou: hidden.filter((p) => NEEDS_YOU.includes(p.state)).length,
+  }
+}
+
+function bubbleOf(session: Session, state: Pose): { bubble: string; tone: BubbleTone } {
+  const { needsAction } = session.status
+  const act = ACTIVE.includes(state) ? session.action?.text ?? '' : ''
+  return {
+    bubble: (state === 'blocked' && needsAction) || act || session.title,
+    tone: state === 'blocked' || state === 'done' || state === 'failed' ? state : act ? 'act' : 'title',
   }
 }

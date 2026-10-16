@@ -15,7 +15,40 @@
   --status-review: #ff9f43;
   --status-done: #34c759;
 
+  --danger: #ff5c5c;
+  --pet-bg: #232830;
+  --bubble-bg: #2a3038;
+  --bubble-border: #2f3a4a;
+  --bubble-shadow: none;
+  --bubble-title-bg: #232830;
+  --bubble-title-border: #262c36;
+  --bubble-title-text: #8b93a1;
+  --bubble-blocked-bg: #2b2620;
+  --bubble-blocked-border: #6a4a26;
+  --bubble-blocked-text: #e8b48a;
+  --bubble-done-border: #2c4a35;
+  --bubble-failed-border: #5a2f2f;
+  --bubble-failed-text: #ffb0b0;
+
   color-scheme: dark;
+}
+
+/* 浅色主题的气泡与 pet。整应用的主题切换是后面的需求（现在只有深色），先把浅色值按 token 备在这儿 */
+:root[data-theme='light'] {
+  --danger: #d64545;
+  --pet-bg: #eef0f4;
+  --bubble-bg: #ffffff;
+  --bubble-border: #dfe3e9;
+  --bubble-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --bubble-title-bg: #f2f4f7;
+  --bubble-title-border: #e3e6eb;
+  --bubble-title-text: #6b7482;
+  --bubble-blocked-bg: #fff7ea;
+  --bubble-blocked-border: #f0c48a;
+  --bubble-blocked-text: #8a5a1a;
+  --bubble-done-border: #a9d9bb;
+  --bubble-failed-border: #f0b4b4;
+  --bubble-failed-text: #a03030;
 }
 
 * {
@@ -642,30 +675,9 @@ body {
   opacity: 0.4;
 }
 
-/*
- * 会话信号压到卡片上：卡住（未读的 blocked）用橙，其余未读事件用蓝。
- * 用左侧色条而不是整块底色——四列扫过去能认出哪几张在等你，又不至于吵。
- */
-.card.needs-you {
-  border-color: #4a3a28;
-  box-shadow: inset 3px 0 0 var(--status-review);
-}
-
 .card.unread {
   border-color: #2b3a55;
   box-shadow: inset 3px 0 0 var(--accent);
-}
-
-/* 需要人介入的那句话原文。卡片上给两行就够——它是一句话，不是一段 */
-.card-need {
-  margin-top: 4px;
-  color: #e8b48a;
-  font-size: 12px;
-  line-height: 1.4;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
 }
 
 /* 父需求收成一行：只留标题与子需求完成度，点一下才铺开。与「已完成」列同一套收窄语言 */
@@ -1046,8 +1058,22 @@ body {
 .pets {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 6px;
+  align-items: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* 每只 pet 一格：气泡在上、pet 在下，尾巴指着自己那只。78px 是「一句动作一行写完」的下限，
+   卡片窄到 3 只挤不下就折成 2 只一行；120px 是气泡的宽度上限，再宽就不像一句话了 */
+.slot {
+  flex: 1 1 78px;
+  min-width: 44px;
+  max-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .pet {
@@ -1059,7 +1085,7 @@ body {
   place-items: center;
   padding: 0;
   border-radius: 14px;
-  background: #232830;
+  background: var(--pet-bg);
   border: 1px solid var(--border);
 }
 
@@ -1091,7 +1117,7 @@ body {
 }
 
 .pet.event.s-failed {
-  border-color: #ff5c5c;
+  border-color: var(--danger);
 }
 
 /* 失败整体暗一档：这是姿势本身的样子，不跟事件走 */
@@ -1102,6 +1128,77 @@ body {
 /* 静止/下线：整个人淡下去，不抢眼 */
 .pet.s-idle {
   opacity: 0.42;
+}
+
+/* 气泡：宽度内容自适应、受所在格约束；两行封顶再省略号——裁短是源头的事，这儿只兜底 */
+.bubble {
+  position: relative;
+  max-width: 100%;
+  padding: 4px 7px;
+  border-radius: 10px;
+  background: var(--bubble-bg);
+  border: 1px solid var(--bubble-border);
+  box-shadow: var(--bubble-shadow);
+  color: var(--text);
+  font-size: 10.5px;
+  line-height: 1.32;
+  animation: bubble-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* 夹两行的是内层：overflow 放在气泡本身会把尾巴一起裁掉 */
+.bubble-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+/* 尾巴：底色与边框都继承气泡，换调子不用另写一份 */
+.bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 7px;
+  height: 7px;
+  background: inherit;
+  border: solid;
+  border-width: 0 1px 1px 0;
+  border-color: inherit;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.bubble.t-title {
+  background: var(--bubble-title-bg);
+  border-color: var(--bubble-title-border);
+  color: var(--bubble-title-text);
+}
+
+.bubble.t-blocked {
+  background: var(--bubble-blocked-bg);
+  border-color: var(--bubble-blocked-border);
+  color: var(--bubble-blocked-text);
+}
+
+.bubble.t-done {
+  border-color: var(--bubble-done-border);
+}
+
+.bubble.t-failed {
+  border-color: var(--bubble-failed-border);
+  color: var(--bubble-failed-text);
+}
+
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* 有 deeplink 的才可点：没有的只报状态，不给一个点了没反应的按钮 */
@@ -1156,12 +1253,13 @@ button.pet:hover {
 @media (prefers-reduced-motion: reduce) {
   .pet,
   .pet img,
-  .pet .pet-art {
+  .pet .pet-art,
+  .bubble {
     animation: none !important;
   }
 }
 
-/* 超过四只的收成一个占位：卡片内容宽约 310px，再多就挤了 */
+/* 超过上限的收成一个占位：卡片内容宽约 310px，再多就挤了 */
 .pet-more {
   width: 44px;
   height: 44px;
@@ -1175,11 +1273,35 @@ button.pet:hover {
   font-variant-numeric: tabular-nums;
 }
 
+.pet-more.attention {
+  position: relative;
+  border-color: var(--status-review);
+  color: var(--status-review);
+}
+
+.pet-more.attention::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-review);
+  box-shadow: 0 0 0 2px var(--card);
+}
+
 /* 折叠的父需求窄条塞不下 44px：收成小号，只当「一眼看出谁在等 / 点一下跳回去」的入口，
-   表情细节让位给紧凑 */
+   表情细节让位给紧凑；那档不挂气泡，挂了就把一行窄条撑成三层高 */
 .pets.compact {
   gap: 4px;
   margin-top: 4px;
+}
+
+.pets.compact .slot {
+  flex: none;
+  min-width: 0;
+  max-width: none;
 }
 
 .pet.compact {

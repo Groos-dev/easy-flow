@@ -2,14 +2,12 @@ import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import type { ChildStat, Requirement, Session } from '../lib/types'
 import { STATUS_CLASS } from '../lib/labels'
-import { isEventState } from '../lib/threads'
 import { relTime } from '../lib/time'
 import { PetRow } from './Pet'
 
 interface Props {
   req: Requirement
-  /** 这条需求名下的全部会话。挂不挂 pet 由 PetRow 自己按 badgesOf 判——卡片的待处理
-   *  状态要比角标宽一点（读过但没回答的 blocked 也算），拿不到全量就漏掉那种 */
+  /** 这条需求名下的全部会话。谁挂 pet、谁在等人都由 PetRow 判——卡片自己不再单独高亮 */
   sessions?: Session[]
   /** 有子需求才传：卡片默认收成一行窄条，点一下铺开 */
   childStat?: ChildStat
@@ -41,23 +39,12 @@ export default function Card({ req, sessions, childStat, kids, onJumpChild, flas
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined
 
-  /**
-   * 卡片自己的状态：卡住了优先，其余事件型状态次之。判据与角标同一套（`needsBadge`）——
-   * 要亮一起亮、要消一起消，不会出现只报警、点不到会话的卡片。
-   */
-  const all = sessions ?? []
-  const blocked = all.find((s) => s.status.state === 'blocked')
-  const need = blocked?.status.needsAction ?? ''
-  const waiting = !blocked && all.some((s) => isEventState(s.status.state))
-
   return (
     <div
       ref={setNodeRef}
       style={style}
       data-slug={req.slug}
-      className={`card${folded ? ' folded' : ''}${isDragging ? ' dragging' : ''}${
-        need ? ' needs-you' : waiting ? ' waiting' : ''
-      }${flash ? ' flash' : ''}`}
+      className={`card${folded ? ' folded' : ''}${isDragging ? ' dragging' : ''}${flash ? ' flash' : ''}`}
       onClick={() => (folded ? setOpen(true) : !overlay && onOpen?.(req.slug))}
       title={folded ? '展开' : undefined}
       {...listeners}
@@ -92,12 +79,10 @@ export default function Card({ req, sessions, childStat, kids, onJumpChild, flas
           </span>
         )}
       </div>
-      {/* 收窄也照挂：父需求名下常有自己的会话，收窄不该把信号一起收掉 */}
-      {!overlay && need && <div className="card-need">{need}</div>}
-      {/* 每个会话一只 pet：姿势看出哪个 agent 在等你、哪个跑完了。
+      {/* 每个会话一只 pet：姿势看出哪个 agent 在等你、哪个跑完了；要人回答的那句话在它头顶的气泡里。
           收窄的父需求窄条也挂，只是收成小号——pet 是卡上唯一能直接跳回会话的入口，
           不能逼人先展开；拖拽浮层只负责跟手，那一层不挂 */}
-      {!overlay && <PetRow sessions={all} compact={folded} />}
+      {!overlay && <PetRow sessions={sessions ?? []} compact={folded} />}
       {!folded && (
         <>
           {req.summary && <div className="card-summary">{req.summary}</div>}

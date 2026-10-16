@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { AGENT_LABELS } from '../lib/labels'
 import { petArt, scopeCloudling, idleMoodOf, type IdleMood } from '../lib/pet-art'
-import { PET_LABEL, planPetRow, type Pose } from '../lib/pets'
+import { PET_LABEL, planPetRow, type BubbleTone, type Pose } from '../lib/pets'
 import type { Session } from '../lib/types'
 
 /**
@@ -168,41 +168,58 @@ function petTip(session: Session, state: Pose): string {
     .join('\n')
 }
 
+function Bubble({ text, tone }: { text: string; tone: BubbleTone }) {
+  return (
+    <div className={`bubble${tone === 'act' ? '' : ` t-${tone}`}`} key={text} title={text}>
+      <span className="bubble-text">{text}</span>
+    </div>
+  )
+}
+
+function moreTip(more: number, needsYou: number): string {
+  return `还有 ${more} 个会话未展示${needsYou > 0 ? `，其中 ${needsYou} 个在等你处理` : ''}`
+}
+
 /**
  * 卡片上的那排 pet：把一条需求名下的会话译成 pet 并排开。
  *
  * 挂哪些会话、最多几只、谁带事件样式、谁抢注意力都在 planPetRow 里算好：pet 长期留着
  * （读得到状态就挂），姿势就是状态本身；点过 pet 会被写成 idle，边框与动效跟着消失。
- * `compact` 给折叠的父需求窄条用——44px 塞不进去，收成小号。
+ * `compact` 给折叠的父需求窄条用——44px 塞不进去，收成小号，那档不挂气泡。
  */
 export function PetRow({ sessions, compact = false }: { sessions: Session[]; compact?: boolean }) {
-  const { items, more } = planPetRow(sessions)
+  const { items, more, moreNeedsYou } = planPetRow(sessions)
   const still = usePrefersReducedMotion()
   if (items.length === 0) return null
 
   return (
     <div className={`pets${compact ? ' compact' : ''}`}>
       {items.map((p) => (
-        <Pet
-          key={`${p.session.agent}:${p.session.session}`}
-          agent={p.session.agent}
-          state={p.state}
-          mood={p.state === 'idle' ? idleMoodOf(p.session.status.observedAt) : undefined}
-          event={p.event}
-          focus={p.focus}
-          compact={compact}
-          still={still}
-          tip={petTip(p.session, p.state)}
-          link={p.session.link || undefined}
-          // 点一下 = 这条会话此刻「静止」：服务端写成一条状态事件，下一个 hook 事件直接覆盖。
-          // 记不下不该拦住人打开会话，所以不等它、也不报错
-          onOpen={() => {
-            api.markSessionClicked(p.session.agent, p.session.session).catch(() => {})
-          }}
-        />
+        <div className="slot" key={`${p.session.agent}:${p.session.session}`}>
+          {!compact && p.bubble && <Bubble text={p.bubble} tone={p.tone} />}
+          <Pet
+            agent={p.session.agent}
+            state={p.state}
+            mood={p.state === 'idle' ? idleMoodOf(p.session.status.observedAt) : undefined}
+            event={p.event}
+            focus={p.focus}
+            compact={compact}
+            still={still}
+            tip={petTip(p.session, p.state)}
+            link={p.session.link || undefined}
+            // 点一下 = 这条会话此刻「静止」：服务端写成一条状态事件，下一个 hook 事件直接覆盖。
+            // 记不下不该拦住人打开会话，所以不等它、也不报错
+            onOpen={() => {
+              api.markSessionClicked(p.session.agent, p.session.session).catch(() => {})
+            }}
+          />
+        </div>
       ))}
       {more > 0 && (
-        <span className={`pet-more${compact ? ' compact' : ''}`} title={`还有 ${more} 个会话未展示`}>
+        <span
+          className={`pet-more${moreNeedsYou > 0 ? ' attention' : ''}${compact ? ' compact' : ''}`}
+          title={moreTip(more, moreNeedsYou)}
+        >
           +{more}
         </span>
       )}

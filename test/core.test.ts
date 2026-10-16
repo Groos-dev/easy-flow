@@ -34,6 +34,7 @@ import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
 import { PET_LABEL, PET_RANK, MAX_PETS, focusIndex, planPetRow, type Pose } from '../src/renderer/src/lib/pets.ts'
+import type { SessionAction } from '../src/renderer/src/lib/types.ts'
 import { petArt, scopeCloudling, idleMoodOf, type IdleMood } from '../src/renderer/src/lib/pet-art.ts'
 import { CLOUDLING_SVG } from '../src/renderer/src/lib/pet-cloudling-art.ts'
 import { childStatsOf, childrenOf } from '../src/renderer/src/lib/children.ts'
@@ -3967,20 +3968,27 @@ describe('云宝内联：按实例改写 id', () => {
 })
 
 describe('pet：一行 pet 的排布', () => {
-  function sess(agent: string, state: Session['status']['state']): Session {
+  function sess(
+    agent: string,
+    state: Session['status']['state'],
+    title = '',
+    action: SessionAction | null = null,
+    needsAction = '',
+  ): Session {
     return {
       requirementId: 'req-x',
       agent,
-      session: `${agent}-${state}`,
-      title: '',
+      session: `${agent}-${state}-${title}`,
+      title,
       cwd: '',
       link: '',
       created: '',
       updated: '',
-      status: { state, needsAction: '', observedAt: 0, detail: '' },
-      action: null,
+      status: { state, needsAction, observedAt: 0, detail: '' },
+      action,
     }
   }
+  const act = (text: string): SessionAction => ({ text, calledAt: 1 })
   // 五个都读得到的会话：两条在干活 + 一条卡住 + 跑完没看 + 失败（都挂 pet）
   const pool: Session[] = [
     sess('claude', 'blocked'),
@@ -3990,12 +3998,40 @@ describe('pet：一行 pet 的排布', () => {
     sess('claude', 'thinking'),
   ]
 
-  test('1/2/3/4 个会话出等量 pet，5 个收成 4 只 + 1（不破版）', () => {
+  test('1/2/3 个会话出等量 pet，多的收成 +N（一行 3 只）', () => {
     for (const n of [1, 2, 3, 4, 5]) {
       const { items, more } = planPetRow(pool.slice(0, n))
       assert.equal(items.length, Math.min(n, MAX_PETS), `${n} 个会话`)
       assert.equal(more, Math.max(0, n - MAX_PETS), `${n} 个会话的 +N`)
     }
+  })
+
+  test('截断按急缓：最先被收起的是在干活的，不是登记最早的', () => {
+    // 登记顺序把最急的放在最后（会话来自 updated DESC，卡住不动的往往最早登记）
+    const late: Session[] = [
+      sess('claude', 'working'),
+      sess('codex', 'thinking'),
+      sess('claude', 'idle'),
+      sess('codex', 'blocked'),
+    ]
+    const { items, more, moreNeedsYou } = planPetRow(late)
+    assert.deepEqual(items.map((p) => p.state), ['blocked', 'working', 'thinking'])
+    assert.equal(more, 1)
+    assert.equal(moreNeedsYou, 0)
+  })
+
+  test('收起的里头有卡住 / 失败的，+N 要能提示', () => {
+    const urgent: Session[] = [
+      sess('claude', 'blocked'),
+      sess('codex', 'failed'),
+      sess('claude', 'blocked'),
+      sess('codex', 'failed'),
+      sess('claude', 'failed'),
+    ]
+    const { items, more, moreNeedsYou } = planPetRow(urgent)
+    assert.deepEqual(items.map((p) => p.state), ['blocked', 'blocked', 'failed'])
+    assert.equal(more, 2)
+    assert.equal(moreNeedsYou, 2)
   })
 
   test('最多一只抢注意力，且只落在 attention 三档上', () => {
@@ -4006,7 +4042,7 @@ describe('pet：一行 pet 的排布', () => {
 
   test('都只在干活时谁也不抢注意力', () => {
     const { items } = planPetRow([sess('claude', 'thinking'), sess('codex', 'working')])
-    assert.deepEqual(items.map((p) => p.state), ['thinking', 'working'])
+    assert.deepEqual(items.map((p) => p.state), ['working', 'thinking'])
     assert.equal(items.some((p) => p.focus), false)
   })
 
@@ -4039,7 +4075,37 @@ describe('pet：一行 pet 的排布', () => {
 
   test('读不到的会话不画 pet，空列表也不破', () => {
     assert.deepEqual(planPetRow([sess('cursor', 'unknown')]).items, [])
-    assert.deepEqual(planPetRow([]), { items: [], more: 0 })
+    assert.deepEqual(planPetRow([]), { items: [], more: 0, moreNeedsYou: 0 })
+  })
+
+  test('气泡那句话：干活且有实时动作报动作，其余报 title', () => {
+    assert.equal(planPetRow([sess('claude', 'working', '收口 hook 管道', act('改 hook.ts'))]).items[0].bubble, '改 hook.ts')
+    assert.equal(planPetRow([sess('claude', 'thinking', '想下一步')]).items[0].bubble, '想下一步')
+    assert.equal(planPetRow([sess('claude', 'idle', '补单测', act('改 hook.ts'))]).items[0].bubble, '补单测')
+    assert.equal(planPetRow([sess('claude', 'done', '跑完了', act('改 hook.ts'))]).items[0].bubble, '跑完了')
+  })
+
+  test('卡住且要人回答：气泡报那句话原文，压过动作与 title', () => {
+    const asked = sess('claude', 'blocked', '1N-WS 出票重试', act('改 hook.ts'), '要不要把重试次数提到 3 次？')
+    assert.equal(planPetRow([asked]).items[0].bubble, '要不要把重试次数提到 3 次？')
+    assert.equal(planPetRow([asked]).items[0].tone, 'blocked')
+  })
+
+  test('没写原文的卡住（打断 / 等授权那两条路径）退回 title', () => {
+    assert.equal(planPetRow([sess('claude', 'blocked', '等你确认', act('改 hook.ts'))]).items[0].bubble, '等你确认')
+  })
+
+  test('气泡调子：事件三档用自己的状态色，其余按动作 / 标题分两档', () => {
+    assert.equal(planPetRow([sess('claude', 'blocked', '等你确认')]).items[0].tone, 'blocked')
+    assert.equal(planPetRow([sess('claude', 'done', '跑完了')]).items[0].tone, 'done')
+    assert.equal(planPetRow([sess('claude', 'failed', '挂了')]).items[0].tone, 'failed')
+    assert.equal(planPetRow([sess('claude', 'working', '干活', act('改 hook.ts'))]).items[0].tone, 'act')
+    assert.equal(planPetRow([sess('claude', 'working', '没动作')]).items[0].tone, 'title')
+    assert.equal(planPetRow([sess('claude', 'idle', '补单测')]).items[0].tone, 'title')
+  })
+
+  test('title 与动作都空就不给气泡', () => {
+    assert.equal(planPetRow([sess('claude', 'idle')]).items[0].bubble, '')
   })
 })
 

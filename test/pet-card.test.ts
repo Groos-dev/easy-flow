@@ -11,22 +11,32 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import Card from '../src/renderer/src/components/Card.tsx'
 import { PetRow } from '../src/renderer/src/components/Pet.tsx'
-import type { Requirement, Session } from '../src/renderer/src/lib/types.ts'
+import type { Requirement, Session, SessionAction } from '../src/renderer/src/lib/types.ts'
 
-function sess(agent: string, state: Session['status']['state'], link = '', observedAt = 0): Session {
+function sess(
+  agent: string,
+  state: Session['status']['state'],
+  link = '',
+  observedAt = 0,
+  title = '',
+  action: SessionAction | null = null,
+  needsAction = '',
+): Session {
   return {
     requirementId: 'req-x',
     agent,
-    session: `${agent}-${state}`,
-    title: '',
+    session: `${agent}-${state}-${title}`,
+    title,
     cwd: '',
     link,
     created: '',
     updated: '',
-    status: { state, needsAction: '', observedAt, detail: '' },
-    action: null,
+    status: { state, needsAction, observedAt, detail: '' },
+    action,
   }
 }
+
+const act = (text: string): SessionAction => ({ text, calledAt: 1 })
 
 function req(patch: Partial<Requirement> = {}): Requirement {
   return {
@@ -68,11 +78,11 @@ const moreCount = (html: string) => html.match(/class="pet-more[^"]*"[^>]*>\+(\d
 const render = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el)
 
 describe('PetRow 渲染', () => {
-  test('1/2/3/4 个会话出等量 pet、无 +N；5 个出 4 只 + 1', () => {
+  test('1/2/3 个会话出等量 pet、无 +N；4 个出 3 只 + 1', () => {
     for (const n of [1, 2, 3, 4, 5]) {
       const html = render(createElement(PetRow, { sessions: pool.slice(0, n) }))
-      assert.equal(petCount(html), Math.min(n, 4), `${n} 个会话`)
-      assert.equal(moreCount(html), n > 4 ? String(n - 4) : '', `${n} 个会话的 +N`)
+      assert.equal(petCount(html), Math.min(n, 3), `${n} 个会话`)
+      assert.equal(moreCount(html), n > 3 ? String(n - 3) : '', `${n} 个会话的 +N`)
     }
   })
 
@@ -137,12 +147,91 @@ describe('PetRow 渲染', () => {
   test('compact 变体整排带 compact 类（折叠卡用的小号）', () => {
     const html = render(createElement(PetRow, { sessions: pool, compact: true }))
     assert.match(html, /class="pets compact"/)
-    assert.equal(html.match(/class="pet compact /g)?.length ?? 0, 4)
+    assert.equal(html.match(/class="pet compact /g)?.length ?? 0, 3)
     assert.match(html, /class="pet-more compact"/)
   })
 })
 
+describe('PetRow 的气泡', () => {
+  const bubbleOf = (html: string) => html.match(/<div class="(bubble[^"]*)" title="([^"]*)"/) ?? []
+
+  test('干活且有实时动作：气泡报动作，位置在 pet 头顶那一格', () => {
+    const html = render(
+      createElement(PetRow, { sessions: [sess('claude', 'working', '', 0, '收口 hook 管道', act('改 hook.ts'))] }),
+    )
+    assert.deepEqual(bubbleOf(html).slice(1), ['bubble', '改 hook.ts'])
+    assert.match(html, /<div class="slot"><div class="bubble"/)
+    assert.match(html, /<span class="bubble-text">改 hook\.ts<\/span>/)
+  })
+
+  test('没有实时动作、或不在干活：气泡报 title', () => {
+    const idle = render(createElement(PetRow, { sessions: [sess('claude', 'idle', '', 0, '补单测')] }))
+    assert.deepEqual(bubbleOf(idle).slice(1), ['bubble t-title', '补单测'])
+    const blocked = render(createElement(PetRow, { sessions: [sess('claude', 'blocked', '', 0, '等你确认')] }))
+    assert.deepEqual(bubbleOf(blocked).slice(1), ['bubble t-blocked', '等你确认'])
+  })
+
+  test('卡住那句原文进气泡：压过 title 与动作', () => {
+    const html = render(
+      createElement(PetRow, {
+        sessions: [sess('claude', 'blocked', '', 0, '1N-WS 出票重试', act('改 hook.ts'), '要不要把重试次数提到 3 次？')],
+      }),
+    )
+    assert.deepEqual(bubbleOf(html).slice(1), ['bubble t-blocked', '要不要把重试次数提到 3 次？'])
+  })
+
+  test('调子跟状态走：跑完绿边、失败红字、干活没动作退回暗调', () => {
+    const tone = (s: Session) => bubbleOf(render(createElement(PetRow, { sessions: [s] })))[1]
+    assert.equal(tone(sess('claude', 'done', '', 0, '跑完了')), 'bubble t-done')
+    assert.equal(tone(sess('claude', 'failed', '', 0, '挂了')), 'bubble t-failed')
+    assert.equal(tone(sess('claude', 'working', '', 0, '没动作')), 'bubble t-title')
+  })
+
+  test('title 与动作都空就不画气泡', () => {
+    const html = render(createElement(PetRow, { sessions: [sess('claude', 'idle')] }))
+    assert.doesNotMatch(html, /class="bubble/)
+    assert.equal(petCount(html), 1)
+  })
+
+  test('读不到状态的会话不画 pet，也就不留空气泡', () => {
+    const html = render(createElement(PetRow, { sessions: [sess('cursor', 'unknown', '', 0, '读不到的')] }))
+    assert.equal(html, '')
+  })
+
+  test('收起的里头有卡住 / 失败的，+N 那格带 attention', () => {
+    const urgent: Session[] = [
+      sess('claude', 'blocked', '', 0, '等你确认'),
+      sess('codex', 'failed', '', 0, '挂了'),
+      sess('claude', 'blocked', '', 0, '另一条等你'),
+      sess('codex', 'failed', '', 0, '又挂了'),
+      sess('claude', 'failed', '', 0, '还挂了'),
+    ]
+    const html = render(createElement(PetRow, { sessions: urgent }))
+    assert.match(html, /class="pet-more attention" title="还有 2 个会话未展示，其中 2 个在等你处理"/)
+    const calm = render(createElement(PetRow, { sessions: pool }))
+    assert.match(calm, /class="pet-more" title="还有 2 个会话未展示"/)
+  })
+
+  test('折叠卡的小号 pet 不挂气泡——挂了就把一行窄条撑成三层高', () => {
+    const html = render(createElement(PetRow, { sessions: [sess('claude', 'working', '', 0, '收口', act('改 hook.ts'))], compact: true }))
+    assert.doesNotMatch(html, /class="bubble/)
+    assert.equal(petCount(html), 1)
+  })
+})
+
 describe('Card 挂 pet', () => {
+  test('卡片不再单独高亮：要人回答的那句话只从气泡出', () => {
+    const html = render(
+      createElement(Card, {
+        req: req(),
+        sessions: [sess('claude', 'blocked', '', 0, '等你确认', null, '要不要把重试次数提到 3 次？')],
+      }),
+    )
+    assert.doesNotMatch(html, /card-need/)
+    assert.doesNotMatch(html, /needs-you/)
+    assert.match(html, /class="bubble t-blocked" title="要不要把重试次数提到 3 次？"/)
+  })
+
   test('普通卡挂完整尺寸的 pet', () => {
     const html = render(createElement(Card, { req: req(), sessions: [sess('claude', 'blocked')] }))
     assert.match(html, /class="pets"/)
