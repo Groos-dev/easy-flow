@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import { acceleratorFromEvent, formatAccelerator } from '../lib/shortcut'
+import { acceleratorFromEvent, acceleratorKeys, formatAccelerator } from '../lib/shortcut'
 import type { HookPlan, SettingsPayload, SkillPayload, SyncResult } from '../lib/types'
-import { AgentIcon, PencilIcon, ResetIcon, TerminalIcon } from './icons'
+import { AgentIcon, KeyGlyph, PencilIcon, ResetIcon, TerminalIcon } from './icons'
 
 interface Props {
   onBack: () => void
@@ -316,7 +316,11 @@ export default function Settings({ onBack, onApplied }: Props) {
                 {recording
                   ? '按下组合键…（Esc 取消）'
                   : hotkey
-                    ? formatAccelerator(hotkey.shortcut, platform)
+                    ? acceleratorKeys(hotkey.shortcut, platform).map((k, i) => (
+                        <span className="keycap" key={`${k}-${i}`}>
+                          <KeyGlyph mark={k} />
+                        </span>
+                      ))
                     : '读取中…'}
               </button>
               <button className="icon-btn" title="改绑" onClick={toggleRecording}>
@@ -331,10 +335,6 @@ export default function Settings({ onBack, onApplied }: Props) {
                 <ResetIcon />
               </button>
             </div>
-            <p className="hint">
-              点键位开始录制，在任意应用里按它呼出 / 收起面板。组合要带 ⌘ / ⌃ / ⌥；
-              被别的应用占用时会改绑失败，换一个再试。
-            </p>
           </>
         )}
 

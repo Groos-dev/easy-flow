@@ -73,6 +73,28 @@ export function TerminalIcon() {
   )
 }
 
+/**
+ * 修饰键的矢量写法：⌘ ⌃ ⌥ ⇧ 这几个字符在不同字体里大小与位置都不一样，
+ * 画出来才跟旁边的键帽齐平。
+ */
+const MODIFIER_MARKS: Record<string, string> = {
+  '⌘': 'M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3',
+  '⌃': 'm5 15 7-6 7 6',
+  '⌥': 'M3 5h6l6 14h6M14.5 5H21',
+  '⇧': 'M12 19V5m-6 6 6-6 6 6',
+}
+
+/** 键帽里的那个符号：修饰键画成图标，其余键（字母、数字、Space）原样显示 */
+export function KeyGlyph({ mark }: { mark: string }) {
+  const d = MODIFIER_MARKS[mark]
+  if (!d) return <>{mark}</>
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
+    </svg>
+  )
+}
+
 /** 复制成功的短暂反馈：换成勾 */
 export function CheckIcon() {
   return (

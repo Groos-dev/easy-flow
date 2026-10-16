@@ -91,16 +91,15 @@ const MAC_KEY_SYMBOLS: Record<string, string> = {
   Enter: '↩',
 }
 
-/** accelerator → 人看的写法：mac 是 ⌘⇧E，其它平台是 Ctrl+Shift+E */
-export function formatAccelerator(accel: string, platform: string): string {
+export function acceleratorKeys(accel: string, platform: string): string[] {
   const mac = platform === 'darwin'
-  const parts = accel
+  return accel
     .split('+')
     .map((p) => p.trim())
     .filter(Boolean)
-    .map((p) => {
-      if (mac) return MAC_SYMBOLS[p] ?? MAC_KEY_SYMBOLS[p] ?? p
-      return PC_NAMES[p] ?? p
-    })
-  return parts.join(mac ? '' : '+')
+    .map((p) => (mac ? MAC_SYMBOLS[p] ?? MAC_KEY_SYMBOLS[p] ?? p : PC_NAMES[p] ?? p))
+}
+
+export function formatAccelerator(accel: string, platform: string): string {
+  return acceleratorKeys(accel, platform).join(platform === 'darwin' ? '' : '+')
 }
