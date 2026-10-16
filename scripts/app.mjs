@@ -35,7 +35,7 @@ const LOG_ROTATED = join(TMP, 'app.log.1')
 const LOG_MAX_BYTES = 5 * 1024 * 1024
 
 /** 内嵌服务端口，用来判断应用有没有起来（见 server/index.ts 的 DEFAULT_PORT） */
-const PORT = 3210
+const PORT = 29170
 /** 启动最多等这么久：electron-vite 要先编主进程与 preload，再拉 electron */
 const BOOT_TIMEOUT_MS = 40_000
 /** 停止时留给进程的退出时间，超时就 SIGKILL */

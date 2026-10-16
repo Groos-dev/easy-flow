@@ -17,11 +17,11 @@ import type {
 } from './types'
 
 // 渲染层走 HTTP 访问本地服务，开发与打包共用同一套代码：
-//   dev（浏览器）  → 相对路径，由 Vite proxy 转发到 127.0.0.1:3210
+//   dev（浏览器）  → 相对路径，由 Vite proxy 转发到 127.0.0.1:29170
 //   dev/build（Electron）→ 主进程内嵌同一服务，直连回环地址
 // 可选链是给 node 测试留的：那些用例用 react-dom/server 直接渲染组件，没有 Vite 的 import.meta.env
 const BASE: string =
-  import.meta.env?.VITE_API_BASE ?? (import.meta.env?.DEV ? '' : 'http://127.0.0.1:3210')
+  import.meta.env?.VITE_API_BASE ?? (import.meta.env?.DEV ? '' : 'http://127.0.0.1:29170')
 
 async function request<T>(
   path: string,

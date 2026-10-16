@@ -11,16 +11,16 @@
  *   - 带 `?agent=codex`：/api/hook 是 claude 与 codex 共用的入口，缺省算 claude；
  *     不标来源，codex 的事件会落进 claude 那一格，看板照旧读不到
  *
- * 端口默认 3210（应用固定用这个，见 server/index.ts 的 DEFAULT_PORT）；真要改端口，
+ * 端口默认 29170（应用固定用这个，见 server/index.ts 的 DEFAULT_PORT）；真要改端口，
  * 在 hook 命令里显式给 `EASY_FLOW_PORT`——hook 进程不继承看板的 env，别指望自动对上。
  *
  * 接法见需求 docs/easy-flow/codex-hook.md。同等的 curl 一行接法（连 node 都不用）：
  *   curl -s -m 3 -X POST -H 'content-type: application/json' --data-binary @- \
- *     'http://127.0.0.1:3210/api/hook?agent=codex' >/dev/null 2>&1; echo '{}'
+ *     'http://127.0.0.1:29170/api/hook?agent=codex' >/dev/null 2>&1; echo '{}'
  */
 import { request } from 'node:http'
 
-const PORT = process.env.EASY_FLOW_PORT ?? '3210'
+const PORT = process.env.EASY_FLOW_PORT ?? '29170'
 const PATH = '/api/hook?agent=codex'
 const TIMEOUT_MS = 3000
 

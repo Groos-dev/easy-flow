@@ -27,7 +27,7 @@ export default defineConfig({
     server: {
       // 渲染层用相对路径访问 /api，必须转发到内嵌服务；
       // 缺了这条会落到 SPA fallback 返回 index.html，前端 JSON 解析失败整页白屏。
-      proxy: { '/api': 'http://127.0.0.1:3210' },
+      proxy: { '/api': 'http://127.0.0.1:29170' },
     },
     build: {
       rollupOptions: {
