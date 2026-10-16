@@ -2,7 +2,7 @@
  * 卡上 pet 的渲染回归。
  *
  * pets.ts 的纯函数（状态映射、一行怎么排）在 core.test.ts 里测；这里只管「真渲染出来的
- * markup 对不对」——4 + N、唯一 .focus、折叠卡也挂入口。用 react-dom/server 直接渲染组件，
+ * markup 对不对」——4 + N、唯一 .focus、父需求卡不再收成小号。用 react-dom/server 直接渲染组件，
  * 不需要 DOM 环境。
  */
 import { test, describe } from 'node:test'
@@ -252,20 +252,28 @@ describe('Card 挂 pet', () => {
     assert.doesNotMatch(html, /class="pets compact"/)
   })
 
-  test('折叠的父需求卡仍挂会话入口，收成小号', () => {
+  test('父需求卡不再整体折叠：pet 跟普通卡一样是完整尺寸', () => {
     const html = render(
       createElement(Card, { req: req(), sessions: [sess('claude', 'blocked')], childStat: { total: 1, done: 0 } }),
     )
-    assert.match(html, /class="card[^"]*folded/)
-    assert.match(html, /class="pets compact"/)
+    assert.doesNotMatch(html, /folded/)
+    assert.match(html, /class="pets"/)
+    assert.doesNotMatch(html, /class="pets compact"/)
   })
 
-  test('折叠卡的小号 pet 也长期存在——点过的会话照样能点回去', () => {
+  test('默认收起的是子需求清单，不是卡片本身：摘要、日期、展开键都在', () => {
     const html = render(
-      createElement(Card, { req: req(), sessions: [sess('claude', 'idle')], childStat: { total: 1, done: 0 } }),
+      createElement(Card, {
+        req: req({ summary: '一句话摘要' }),
+        sessions: [sess('claude', 'idle')],
+        childStat: { total: 1, done: 0 },
+        kids: [req({ slug: 'kid', title: '子需求', status: '澄清' })],
+      }),
     )
-    assert.match(html, /class="pet compact s-idle"/)
-    assert.equal(eventCount(html), 0)
+    assert.match(html, /class="card-summary"/)
+    assert.match(html, /class="card-foot"/)
+    assert.match(html, /class="card-kids-caret"/)
+    assert.doesNotMatch(html, /class="card-kids-list"/)
   })
 
   test('拖拽浮层不挂 pet', () => {
