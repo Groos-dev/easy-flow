@@ -10,7 +10,9 @@ export function str(v: unknown): string {
   return typeof v === 'string' ? v : ''
 }
 
-/** JSON 解不开就当没有：空串、半截、根本不是 JSON 都走这条路 */
+/**
+ * JSON 解不开就当没有：空串、半截、根本不是 JSON 都走这条路。
+ */
 export function parseJsonOrNull(text: string): unknown {
   try {
     return JSON.parse(text)

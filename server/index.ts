@@ -18,7 +18,7 @@ import {
   type Priority,
   type TodoStatus,
 } from './db.ts'
-import { hookKeyOf, PULL_INTERVAL_MS, pullStatuses, readObservations } from './threads.ts'
+import { hookKeyOf, PULL_INTERVAL_MS, pullStatuses, pullTitles, readObservations } from './threads.ts'
 import { recordHook } from './hook.ts'
 import { idleStatus, SessionStateStore } from './session-state.ts'
 import type { SourceTable } from './source-file.ts'
@@ -603,7 +603,9 @@ export function startBoardServer({
 
   const pull = () => {
     try {
-      pullStatuses(app.db.listSessions(), app.store, app.sources)
+      const sessions = app.db.listSessions()
+      pullStatuses(sessions, app.store, app.sources)
+      pullTitles(sessions, app.db)
     } catch (err) {
       log.warn(`pull failed: ${(err as Error).message}`)
     }

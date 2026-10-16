@@ -82,7 +82,9 @@ export interface StateTable {
 export class SessionStateStore {
   constructor(private readonly table: StateTable) {}
 
-  /** 写一条观察。状态必给，动作可选——不给就沿用旧动作（见 keepAction），不是清掉它 */
+  /**
+   * 写一条观察。状态必给，动作可选——不给就沿用旧动作（见 keepAction），不是清掉它。
+   */
   put(agent: string, session: string, status: SessionStatus, action: SessionAction | null = null): boolean {
     const old = this.table.get(agent, session)
     if (old && !newer(status, old.status)) return false

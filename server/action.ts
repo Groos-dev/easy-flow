@@ -31,7 +31,9 @@ interface Rule {
   cut: (raw: string) => string
 }
 
-/** 认得的工具。claude 的参数位置见它自己的 hook 文档；codex 的 exec_command 参数是 cmd */
+/**
+ * 认得的工具。claude 的参数位置见它自己的 hook 文档；codex 的 exec_command 参数是 cmd。
+ */
 const RULES: Record<string, Rule> = {
   Edit: { verb: '改', field: 'file_path', cut: tailPath },
   Write: { verb: '写', field: 'file_path', cut: tailPath },
@@ -45,7 +47,10 @@ const RULES: Record<string, Rule> = {
   view_image: { verb: '看', field: 'path', cut: tailPath },
 }
 
-/** 一次工具调用 → 一句动作文案。认不出的工具、取不到参数、取到空，都返回空串 */
+/**
+ * 一次工具调用 → 一句动作文案。
+ * 认不出的工具、取不到参数、取到空，都返回空串。
+ */
 export function actionTextOf(tool: string, input: unknown): string {
   const rule = RULES[tool]
   if (!rule || !input || typeof input !== 'object') return ''
@@ -61,7 +66,9 @@ export function actionOf(tool: string, input: unknown, calledAt: number): Sessio
   return text ? { text, calledAt } : null
 }
 
-/** 路径取末段：一行里放得下的是文件名，不是整条路径 */
+/**
+ * 路径取末段：一行里放得下的是文件名，不是整条路径。
+ */
 function tailPath(raw: string): string {
   const trimmed = collapse(raw).replace(/\/+$/, '')
   return trimmed.slice(trimmed.lastIndexOf('/') + 1)
@@ -89,12 +96,16 @@ function clipText(raw: string): string {
   return body.length > DESC_MAX ? `${body.slice(0, DESC_MAX).trimEnd()}…` : body
 }
 
-/** 搜索词原样：pattern 本身就是要看的东西，长度交给整句封顶 */
+/**
+ * 搜索词原样：pattern 本身就是要看的东西，长度交给整句封顶。
+ */
 function raw(text: string): string {
   return collapse(text)
 }
 
-/** 整句封顶：本机取样里超过两行的有 23%，最长的 409 个半角宽 */
+/**
+ * 整句封顶：本机取样里超过两行的有 23%，最长的 409 个半角宽。
+ */
 function clip(text: string): string {
   if (width(text) <= ACTION_MAX_WIDTH) return text
   let cut = ''

@@ -29,8 +29,10 @@ import {
   type SessionStatus,
 } from './session-state.ts'
 import type { SessionAction } from './action.ts'
+import { str } from './util.ts'
 import { RolloutStore } from './rollout.ts'
 import { codexUnread } from './codex-unread.ts'
+import { codexTitles } from './codex-titles.ts'
 import { changed, type SourceTable } from './source-file.ts'
 
 /** 停在「在干活」多久没新事件就当它没了：会话崩了不会有收尾事件 */
@@ -79,11 +81,50 @@ export function pullStatuses(
   }
 }
 
-/** codex 的「跑完没看」：读过的落成静止。只动状态那一半 */
+/**
+ * codex 的「跑完没看」：读过的落成静止。只动状态那一半。
+ */
 function codexSeen(id: string, observation: SessionObservation, unread: Set<string> | null): SessionObservation {
   const { status } = observation
   if (status.state !== 'done' || !unread || unread.has(id)) return observation
   return { ...observation, status: { ...status, state: 'idle' } }
+}
+
+/** 标题往哪写。index.ts 传 db，测试传一个收集器 */
+export interface TitleTable {
+  setSessionTitle(agent: string, session: string, title: string): void
+}
+
+/**
+ * 把 agent 应用里的标题同步进登记记录（session 表的 title）。
+ *
+ * claude 读桌面记录的 `title`，桌面记录没有时退到 CLI 进程文件的 `name`（终端会话只有这个）；
+ * codex 读它自己 threads 表里的 `name`。原样写，不裁剪。应用里还没起名、或者读不到，
+ * 就不写——保留登记时那句。
+ */
+export function pullTitles(
+  sessions: readonly { agent: string; session: string }[],
+  titles: TitleTable,
+  roots: ThreadRoots = defaultRoots(),
+): void {
+  const claude = sessions.filter((s) => s.agent === 'claude')
+  if (claude.length) {
+    const records = claudeRecords(roots, claude.map((s) => s.session))
+    const live = claudeLive(roots)
+    for (const s of claude) {
+      const title = str(records.get(s.session)?.title) || str(live.get(s.session)?.name)
+      if (title) titles.setSessionTitle('claude', s.session, title)
+    }
+  }
+
+  const codex = sessions.filter((s) => s.agent === 'codex')
+  if (codex.length) {
+    const found = codexTitles(roots.codexHome)
+    for (const s of codex) {
+      const title = found.get(s.session)
+      if (title) titles.setSessionTitle('codex', s.session, title)
+    }
+  }
 }
 
 /**
@@ -158,7 +199,9 @@ function pullClaude(
   if (path) sources.touchSource(path, { mtimeMs: statSync(path).mtimeMs })
 }
 
-/** 落一条落盘观察：先写，再收尾（停在半途太久要降档） */
+/**
+ * 落一条落盘观察：先写，再收尾（停在半途太久要降档）。
+ */
 function putSettled(
   states: SessionStateStore,
   agent: string,
@@ -235,6 +278,8 @@ interface ClaudeRecord {
   sessionId?: string
   /** CLI 那一层的会话 id（transcript / hook 的 session_id）；桌面记录里与 sessionId 不同名 */
   cliSessionId?: string
+  /** 应用里显示的会话标题 */
+  title?: string
   /** 最后一轮活动的时刻。桌面记录这条观察的时刻就是它（进 observedAt） */
   lastActivityAt?: number
   lastFocusedAt?: number
@@ -250,6 +295,10 @@ interface ClaudeLive {
   pid?: number
   sessionId?: string
   hostSessionId?: string
+  /**
+   * 会话名。桌面会话与记录里的 title 是同一句，终端会话只有这个。
+   */
+  name?: string
   status?: string
   statusUpdatedAt?: number
 }

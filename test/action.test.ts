@@ -18,7 +18,9 @@ import { hookActionOf, normalizeHookEvent } from '../server/hook.ts'
 import { rolloutActionOf, rolloutStatusOf } from '../server/rollout.ts'
 import { readObservations } from '../server/threads.ts'
 
-/** 状态层与读位置都落在 sqlite 上：动作要跟着状态一起落库，用真库才测得到那一层 */
+/**
+ * 状态层与读位置都落在 sqlite 上：动作要跟着状态一起落库，用真库才测得到那一层。
+ */
 let storeSeq = 0
 function newStore(): { db: BoardDatabase; store: SessionStateStore } {
   const db = new BoardDatabase(join(tmpdir(), `easy-flow-test-action-${process.pid}`, String(storeSeq++)), 'p')

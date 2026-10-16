@@ -1168,6 +1168,17 @@ export class BoardDatabase {
     return Number(info.changes) > 0
   }
 
+  /**
+   * 把 agent 应用里的标题写进登记记录。
+   * 与库里那句相同就不动，省得每两秒空转一次。
+   */
+  setSessionTitle(agent: string, session: string, title: string): boolean {
+    const info = this.db
+      .prepare('UPDATE session SET title = ? WHERE agent = ? AND session = ? AND title IS NOT ?')
+      .run(title, agent, session, title)
+    return Number(info.changes) > 0
+  }
+
   listSessionObservations(): Array<{ agent: string; session: string; observation: SessionObservation }> {
     const rows = this.db.prepare('SELECT * FROM session_state').all() as unknown as SessionStateRow[]
     return rows.map((row) => ({ agent: row.agent, session: row.session, observation: toObservation(row) }))
