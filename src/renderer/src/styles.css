@@ -680,25 +680,13 @@ body {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-/* 父需求收成一行：只留标题与子需求完成度，点一下才铺开。与「已完成」列同一套收窄语言 */
-.card.folded {
-  padding: 7px 10px;
-}
-
-.card.folded .card-title {
-  -webkit-line-clamp: 1;
-}
-
-.card.folded .card-top {
-  margin-bottom: 0;
-}
-
-.card-fold-caret {
+/* 子需求清单的展开键：跟完成度一起靠右，收的是清单那一块 */
+.card-kids-caret {
   flex: none;
   color: var(--text-faint);
 }
 
-.card:hover .card-fold-caret {
+.card:hover .card-kids-caret {
   color: var(--text);
 }
 
@@ -711,7 +699,7 @@ body {
 }
 
 /*
- * 铺开的父卡片上的子需求清单。点一行由看板滚到那条子需求，
+ * 展开的父卡片上的子需求清单。点一行由看板滚到那条子需求，
  * 所以这里看着要像能点的样子，但比卡片本身轻——它是个目录，不是卡片。
  */
 .card-kids-list {
@@ -736,14 +724,6 @@ body {
   color: var(--text);
 }
 
-/* 尺寸只在这里给，状态色共用看板那组 .dot.s-* */
-.kid .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex: none;
-}
-
 .kid-title {
   flex: 1;
   min-width: 0;
@@ -752,7 +732,7 @@ body {
   white-space: nowrap;
 }
 
-/* 子需求不在父需求这一列，状态得写出来——光靠圆点认不出是哪一列 */
+/* 子需求不在父需求这一列，状态得写出来——光靠颜色认不出是哪一列 */
 .kid-status {
   flex: none;
   color: var(--text-faint);
