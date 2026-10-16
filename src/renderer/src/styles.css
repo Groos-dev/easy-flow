@@ -862,32 +862,6 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* ------------------------------------------------------- 右下角齿轮按钮 */
-
-.gear-btn {
-  position: fixed;
-  left: 18px;
-  bottom: 18px;
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--column);
-  color: var(--text-faint);
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, transform 0.12s;
-  z-index: 20;
-}
-
-.gear-btn:hover {
-  color: var(--text);
-  border-color: #38404c;
-  transform: rotate(30deg);
-}
-
 /* ------------------------------------------------------------ 设置面板 */
 
 .row {

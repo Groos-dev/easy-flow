@@ -245,8 +245,8 @@ function registerIpc(): void {
 }
 
 /**
- * Cmd+, 是 macOS 的系统级约定，挂在应用菜单里最正统
- * （从菜单栏也能打开，不只是快捷键）。
+ * 设置入口就在这里：Cmd+, 是 macOS 的系统级约定，挂在应用菜单里最正统
+ * （从菜单栏也能打开，不只是快捷键）。渲染层不再自绘入口。
  */
 function registerMenu(): void {
   const send = () => win?.webContents.send('easy-flow:open-settings')
@@ -256,7 +256,7 @@ function registerMenu(): void {
       submenu: [
         { role: 'about' },
         { type: 'separator' },
-        { label: '偏好设置…', accelerator: 'CommandOrControl+,', click: send },
+        { label: '设置…', accelerator: 'CommandOrControl+,', click: send },
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },

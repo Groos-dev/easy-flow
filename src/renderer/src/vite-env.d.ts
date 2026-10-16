@@ -11,7 +11,7 @@ interface ImportMeta {
 /** preload 通过 contextBridge 暴露的能力；浏览器开发时不存在 */
 interface EasyFlowBridge {
   pickDirectory?: () => Promise<string | null>
-  /** 订阅菜单里的「偏好设置 ⌘,」，返回取消订阅函数 */
+  /** 订阅菜单里的「设置 ⌘,」，返回取消订阅函数 */
   onOpenSettings?: (handler: () => void) => () => void
   /** mini 面板点「详情」：主窗口前置并跳到该需求 */
   openRequirement?: (payload: { project: string; slug: string }) => Promise<void>
