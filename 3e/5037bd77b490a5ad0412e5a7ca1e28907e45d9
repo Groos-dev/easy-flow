@@ -1,0 +1,21 @@
+src/main/index.ts
+  s_f9e7fdc9019b34::t_5a4c442c20c513 248-249
+src/renderer/src/vite-env.d.ts
+  s_f9e7fdc9019b34::t_068de35d084c01 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "3e5037bd77b490a5ad0412e5a7ca1e28907e45d9",
+  "prompts": {},
+  "sessions": {
+    "s_f9e7fdc9019b34": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "874128aa-62cf-4a63-b7fb-5bd6ed340f24",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": null
+    }
+  }
+}
