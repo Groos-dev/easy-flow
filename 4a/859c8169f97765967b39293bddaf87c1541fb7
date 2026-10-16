@@ -1,0 +1,38 @@
+server/db.ts
+  s_74e93cd2efe2d1::t_93f28949fc5edf 1171,1174,1177-1181
+server/threads.ts
+  s_74e93cd2efe2d1::t_ea5aced9dc8700 93-129
+  s_74e93cd2efe2d1::t_d25acbc9b7b795 32,35
+server/codex-titles.ts
+  s_74e93cd2efe2d1::t_412766b6504c73 1-16,18-44,46-52
+  h_61ecb41619cb4e 45
+test/titles.test.ts
+  s_74e93cd2efe2d1::t_6ad0db7f4e1ec1 1-26,28-35,37-44,46-48,52-158
+  s_74e93cd2efe2d1::t_705f9398ef5baf 49-51
+test/core.test.ts
+  s_74e93cd2efe2d1::t_6006f9e34901b7 3398-3402,3405-3407,3410-3417
+server/rollout.ts
+  s_74e93cd2efe2d1::t_f27746ad786d9a 225-235
+  s_74e93cd2efe2d1::t_03c0f676e90f0c 135-143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "4a859c8169f97765967b39293bddaf87c1541fb7",
+  "prompts": {},
+  "humans": {
+    "h_61ecb41619cb4e": {
+      "author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  },
+  "sessions": {
+    "s_74e93cd2efe2d1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ecfa21db-4c8e-4ebe-a9f9-aea99e4c9aa8",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
