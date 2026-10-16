@@ -9,7 +9,7 @@
  */
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync, readdirSync, cpSync, realpathSync, lstatSync, readlinkSync } from 'node:fs'
+import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync, readdirSync, cpSync, realpathSync, lstatSync, readlinkSync, statSync } from 'node:fs'
 import { join, basename, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:http'
@@ -3393,6 +3393,26 @@ describe('rollout 兜底：事件译状态、增量读、只扫近几天', () =>
     // 补全那条半行（整份重写、末尾带换行）。offset 停在最后一个换行，前面不重读
     writeFileSync(file, [start, meta, call, done].join('\n') + '\n', 'utf8')
     assert.equal(store.refresh(['cx-half']).get('cx-half')?.status.state, 'done', '补全的尾行接上')
+  })
+
+  test('缓存形状对不上就当没有：从头重读，而不是拿着它往下走', () => {
+    const home = join(HOME, 'stale-cache')
+    const { sources } = newState()
+    const store = new RolloutStore(home, sources)
+    const dir = sessionDirFor(home, new Date())
+    // 上一版把状态直接缓存在 source_file 这一列里；这一版读的是 { status, action }。
+    // offset 记成文件读完的位置——真实场景就是这样，不重读时旧形状会直接漏出去
+    const file = writeRollout(dir, 'cx-stale', line('event_msg', { type: 'task_complete' }) + '\n')
+    const stats = statSync(file)
+    sources.touchSource(file, {
+      mtimeMs: stats.mtimeMs,
+      offset: stats.size,
+      state: { state: 'working', needsAction: '', observedAt: 1, detail: '上一版写下的形状' },
+    })
+
+    const got = store.refresh(['cx-stale']).get('cx-stale')
+    assert.equal(got?.status.state, 'done', '认不出缓存就归零 offset，重新 fold 出状态')
+    assert.equal(got?.action, null)
   })
 
   test('只扫近几天：窗口外的日期目录靠缓存继续扫到，没进过缓存的就不扫', () => {

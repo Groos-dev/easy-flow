@@ -132,14 +132,15 @@ export class RolloutStore {
     const tracked = new Map<string, Track>()
     for (const row of this.sources.listSources()) {
       const id = threadIdOf(basename(row.path))
-      if (id) {
-        tracked.set(id, {
-          path: row.path,
-          offset: row.offset,
-          mtimeMs: row.mtimeMs,
-          observation: row.state as SessionObservation | null,
-        })
-      }
+      if (!id) continue
+      // 缓存认不出就从头读：offset 一起归零，让这一轮把状态重新 fold 出来
+      const observation = cachedObservation(row.state)
+      tracked.set(id, {
+        path: row.path,
+        offset: observation ? row.offset : 0,
+        mtimeMs: row.mtimeMs,
+        observation,
+      })
     }
 
     for (const dir of this.candidateDirs(now, tracked)) {
@@ -219,6 +220,17 @@ export class RolloutStore {
       this.sources.touchSource(path, { mtimeMs: stats.mtimeMs, offset, state: observation })
     }
   }
+}
+
+/**
+ * source_file 里缓存的那份观察。形状对不上就当没有——那是上一版写下的（当时还是裸的一条
+ * SessionStatus），或者被人改坏了；调用方据此从头重读，而不是拿着半截数据往下走。
+ */
+function cachedObservation(raw: unknown): SessionObservation | null {
+  if (!raw || typeof raw !== 'object') return null
+  const { status, action } = raw as { status?: unknown; action?: unknown }
+  if (!status || typeof status !== 'object') return null
+  return { status: status as SessionStatus, action: (action as SessionAction | null) ?? null }
 }
 
 /** 从 from 起读 length 字节。读不到返回 null——调用方当没读到，不抛 */
