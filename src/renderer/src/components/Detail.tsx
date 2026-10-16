@@ -1,18 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { api } from '../lib/api'
-import { TODO_STATUS_LABEL, type ContextPayload, type Requirement, type Todo } from '../lib/types'
+import { type ContextPayload, type Requirement, type Todo } from '../lib/types'
 import InfoPanel from './InfoPanel'
-import SelectMenu from './SelectMenu'
+import MarkdownEditor from './MarkdownEditor'
 import TodoPanel from './TodoPanel'
-import { CodeIcon, InfoIcon } from './icons'
+import { InfoIcon } from './icons'
 
 /**
  * 详情页的三种挂载点：
- *   requirement —— 需求（含优先级/状态控制）
+ *   requirement —— 需求（一份 md 标签栏 + 只读的信息浮窗）
  *   project     —— 项目（展示并编辑项目总规范）
- *   todo        —— 待办（状态控制 + 一份 md；内容源在文件里，编辑即写回）
+ *   todo        —— 待办（一份 md；内容源在文件里，编辑即写回）
  */
 export interface DocTarget {
   kind: 'requirement' | 'project' | 'todo'
@@ -28,39 +26,19 @@ export interface DocTarget {
 
 interface Props {
   target: DocTarget
-  /** 由服务端下发的状态枚举，避免这里再维护一份 */
-  statuses: string[]
-  priorities: string[]
-  /** 待办的状态枚举，同样是服务端下发的 */
-  todoStatuses: string[]
   onBack: () => void
-  /** 改了状态后通知看板刷新 */
-  onUpdated: () => void
   /** 需求页的「关联待办」块：点一条即在详情页打开它 */
   onOpenTodo: (id: string) => void
   /** 待办页浮窗的「需求」段：点一下跳到它挂的需求 */
   onOpenRequirement: (project: string, slug: string) => void
 }
 
-const PRIORITY_DESC: Record<string, string> = {
-  p0: '重要且紧急',
-  p1: '重要不紧急',
-  p2: '紧急不重要',
-  p3: '都不',
-}
-
-type ViewMode = 'preview' | 'source'
-
 /** 停止输入后多久落盘 */
 const AUTOSAVE_DELAY = 600
 
 export default function Detail({
   target,
-  statuses,
-  priorities,
-  todoStatuses,
   onBack,
-  onUpdated,
   onOpenTodo,
   onOpenRequirement,
 }: Props) {
@@ -71,12 +49,11 @@ export default function Detail({
   const [docs, setDocs] = useState<string[]>([])
   /** 当前打开的文档；空串表示还没定（列表在异步加载）或这个挂载点没有文档 */
   const [activeDoc, setActiveDoc] = useState('')
-  /** draft 是唯一事实源：预览渲染它、源码编辑它、自动保存提交它 */
+  /** draft 是唯一事实源：编辑器渲染它、自动保存提交它 */
   const [draft, setDraft] = useState('')
   /** 上次成功保存的内容，用来判断是否真有改动 */
   const savedRef = useRef('')
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [mode, setMode] = useState<ViewMode>('preview')
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'error'>('idle')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   /** 需求上下文（含工作区列表）。项目页用不到，保持 null */
@@ -84,8 +61,6 @@ export default function Detail({
   /** 待办挂的需求：待办上只有 id，标题与跳转目标要按它换回来 */
   const [todoReq, setTodoReq] = useState<Requirement | null>(null)
   const [infoOpen, setInfoOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const infoRef = useRef<HTMLDivElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** 文档加载序号：快速切标签时丢弃过期响应 */
@@ -225,7 +200,7 @@ export default function Detail({
       else if (isTodo) await api.saveTodoDoc(todo!.id, content)
       else await api.saveDoc(target.slug!, activeDoc, content, target.project)
       savedRef.current = content
-      setSaveState('saved')
+      setSaveState('idle')
     } catch (e) {
       setSaveState('error')
       setError(`自动保存失败：${(e as Error).message}`)
@@ -266,7 +241,7 @@ export default function Detail({
     return () => document.removeEventListener('mousedown', onDown)
   }, [infoOpen])
 
-  // ⌘E 在预览/源码间切换；⌘S 立即保存；Esc 返回看板
+  // ⌘S 立即保存；Esc 返回看板
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) {
@@ -290,39 +265,17 @@ export default function Detail({
         e.preventDefault()
         if (saveTimer.current) clearTimeout(saveTimer.current)
         void flushSave()
-      } else if (e.key === 'e') {
-        e.preventDefault()
-        setMode((m) => (m === 'source' ? 'preview' : 'source'))
       }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [flushSave, onBack, infoOpen])
 
-  // 源码模式进入时聚焦；预览模式下双击进入编辑
-  useEffect(() => {
-    if (mode === 'source' && textareaRef.current) {
-      const el = textareaRef.current
-      el.focus()
-      el.setSelectionRange(el.value.length, el.value.length)
-    }
-  }, [mode])
-
-  async function apply(patch: { status?: string; priority?: string }) {
-    setBusy(true)
-    setError('')
-    try {
-      if (isTodo) await api.updateTodo(todo!.id, patch)
-      else if (req) await api.update(req.slug, patch, target.project)
-      else return
-      onUpdated()
-    } catch (e) {
-      // 失败必须让用户看到：之前只有 finally，失败会变成 unhandled rejection
-      setError(`更新失败：${(e as Error).message}`)
-    } finally {
-      setBusy(false)
-    }
-  }
+  /** 编辑器改一次就收一次：draft 仍是唯一事实源 */
+  const onDraftChange = useCallback((next: string) => {
+    draftRef.current = next
+    setDraft(next)
+  }, [])
 
   // 文档列表：只看需求根目录与 docs/ 下的文档。
   // tasks/ 之类的历史目录不进标签栏（同名文件多，且已不是主结构）。
@@ -379,41 +332,6 @@ export default function Detail({
         )}
       </header>
 
-      {!isProject && req && (
-      <div className="detail-controls">
-        <SelectMenu
-          value={req.priority}
-          placeholder="未设优先级"
-          disabled={busy}
-          options={priorities.map((p) => ({
-            value: p,
-            label: `${p.toUpperCase()} · ${PRIORITY_DESC[p] ?? ''}`,
-            dot: true,
-          }))}
-          onChange={(p) => void apply({ priority: p })}
-        />
-        <SelectMenu
-          value={req.status}
-          placeholder="未设状态"
-          disabled={busy}
-          options={statuses.map((s) => ({ value: s, label: s }))}
-          onChange={(s) => void apply({ status: s })}
-        />
-      </div>
-      )}
-
-      {isTodo && todo && (
-        <div className="detail-controls">
-          <SelectMenu
-            value={todo.status}
-            placeholder="未设状态"
-            disabled={busy}
-            options={todoStatuses.map((s) => ({ value: s, label: TODO_STATUS_LABEL[s] ?? s }))}
-            onChange={(s) => void apply({ status: s })}
-          />
-        </div>
-      )}
-
       <div className="detail-body">
         <section className="doc-pane">
           <div className="doc-bar">
@@ -429,51 +347,19 @@ export default function Detail({
                 </button>
               ))}
             </div>
-            {/* 保存状态在左、开关在右：开关是常驻的，让它贴着右上角，
-                保存提示出现/消失就不会把它推来推去 */}
+            {/* 只在「正在存」和「存不下」时出现；存好了不必报，版面也别被推来推去 */}
             <span className="save-state">
               {saveState === 'saving' && <span className="saving">保存中…</span>}
-              {saveState === 'saved' && <span className="saved">已自动保存</span>}
               {saveState === 'error' && <span className="failed">保存失败</span>}
             </span>
-            <button
-              className="mode-btn"
-              onClick={() => setMode((m) => (m === 'source' ? 'preview' : 'source'))}
-              title={mode === 'preview' ? '切换到源码（⌘E）' : '切换到预览（⌘E）'}
-              aria-label={mode === 'preview' ? '切换到源码' : '切换到预览'}
-            >
-              <CodeIcon />
-            </button>
           </div>
 
           {error && <div className="notice">{error}</div>}
 
-          {mode === 'source' ? (
-            <textarea
-              ref={textareaRef}
-              className="md-editor"
-              value={draft}
-              onChange={(e) => {
-                const next = e.target.value
-                draftRef.current = next
-                setDraft(next)
-              }}
-              spellCheck={false}
-            />
+          {loading ? (
+            <div className="loading">读取中…</div>
           ) : (
-            <div
-              className="doc-scroll"
-              title="双击进入编辑（⌘E）"
-              onDoubleClick={() => setMode('source')}
-            >
-              {/* 上面那个 title 不只是提示：样式表按 [title] 认出「这里能双击进编辑」并画出虚框 */}
-              {loading && <div className="loading">读取中…</div>}
-              {!loading && (
-                <article className="markdown-body">
-                  <Markdown remarkPlugins={[remarkGfm]}>{draft}</Markdown>
-                </article>
-              )}
-            </div>
+            <MarkdownEditor value={draft} onChange={onDraftChange} />
           )}
         </section>
       </div>

@@ -3,25 +3,6 @@
  * 详情页、mini 面板各用一部分，合在一起是因为同属一类，不是因为共享。
  */
 
-/** 源码图标（尖括号） */
-export function CodeIcon() {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="16 18 22 12 16 6" />
-      <polyline points="8 6 2 12 8 18" />
-    </svg>
-  )
-}
-
 /** 信息浮窗图标：带侧栏的面板 */
 export function InfoIcon() {
   return (
