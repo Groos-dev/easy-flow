@@ -1,0 +1,19 @@
+src/renderer/src/components/Pet.tsx
+  s_7c29b198e0f1c9::t_adaad4d75083d8 135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "91a152c5823093672294ec77f439a71480970bae",
+  "prompts": {},
+  "sessions": {
+    "s_7c29b198e0f1c9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39313c32-1c61-4972-93f4-4cda3e713081",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
