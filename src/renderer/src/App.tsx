@@ -167,7 +167,6 @@ export default function App() {
   const [reqView, setReqView] = useState<'board' | 'next' | 'map'>('board')
   /** 详情页挂载点：需求或项目。slugs 用 'project:<slug>' 区分 */
   const [detail, setDetail] = useState<{ project: string; slug: string | null } | null>(null)
-  const [priorities, setPriorities] = useState<string[]>([])
   const [items, setItems] = useState<Requirement[]>([])
   /** 全部会话（含实时状态）。卡片角标与详情页的「会话」块共用 */
   const [sessions, setSessions] = useState<Session[]>([])
@@ -177,7 +176,6 @@ export default function App() {
   const [nextError, setNextError] = useState('')
   /** 待办：全局的，不分项目 */
   const [todos, setTodos] = useState<Todo[]>([])
-  const [todoStatuses, setTodoStatuses] = useState<string[]>([])
   /** 打开的待办详情。只存 id，对象从 todos 里取——改完状态详情页跟着变 */
   const [todoId, setTodoId] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -304,7 +302,6 @@ export default function App() {
       const data = await api.list()
       setItems(data.requirements)
       setStatuses(data.statuses)
-      setPriorities(data.priorities)
       setProject(data.project)
       setProjectName(data.projectName)
       setError('')
@@ -319,7 +316,6 @@ export default function App() {
     try {
       const data = await api.todos()
       setTodos(data.todos)
-      setTodoStatuses(data.statuses)
       setError('')
     } catch (err) {
       setError((err as Error).message)
@@ -578,28 +574,20 @@ export default function App() {
         ) : todoTarget ? (
           <Detail
             target={todoTarget}
-            statuses={statuses}
-            priorities={priorities}
-            todoStatuses={todoStatuses}
             onBack={() => {
               setTodoId(null)
               refresh()
             }}
-            onUpdated={() => void loadTodos()}
             onOpenTodo={setTodoId}
             onOpenRequirement={openRequirement}
           />
         ) : detailTarget ? (
           <Detail
             target={detailTarget}
-            statuses={statuses}
-            priorities={priorities}
-            todoStatuses={todoStatuses}
             onBack={() => {
               setDetail(null)
               refresh()
             }}
-            onUpdated={refresh}
             onOpenTodo={setTodoId}
             onOpenRequirement={openRequirement}
           />

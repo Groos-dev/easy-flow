@@ -1701,16 +1701,6 @@ button.pet:hover {
 }
 
 
-.detail-controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  background: #12151b;
-}
-
 .detail-body {
   flex: 1;
   display: grid;
@@ -1729,8 +1719,8 @@ button.pet:hover {
 }
 
 /*
- * 标签多到换行时，右侧的开关与保存状态不该被带着走——所以换行交给 .doc-tabs，
- * 这一层不换行、顶部对齐，开关就钉在右上角。
+ * 标签多到换行时，右侧的保存提示不该被带着走——所以换行交给 .doc-tabs，
+ * 这一层不换行、顶部对齐，提示就钉在右上角。
  */
 .doc-bar {
   display: flex;
@@ -1769,23 +1759,6 @@ button.pet:hover {
   color: var(--text);
   background: var(--column);
   border-color: var(--border);
-}
-
-.doc-scroll {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px 28px 48px;
-}
-
-/* 预览区可双击进入编辑，给一点暗示 */
-.doc-scroll[title] {
-  cursor: text;
-}
-
-.doc-scroll[title]:hover .markdown-body {
-  outline: 1px dashed #2b323c;
-  outline-offset: 12px;
-  border-radius: 4px;
 }
 
 /* ------------------------------------------------------ markdown 渲染 */
@@ -1910,43 +1883,180 @@ button.pet:hover {
   max-width: 100%;
 }
 
-/* ------------------------------------------------- 文档模式切换 / 编辑 */
+/* --------------------------------------------- 正文编辑器（所见即所得） */
 
-/* 单图标切换：点一下在预览/源码之间切 */
-.mode-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--column);
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s;
-}
-
-.mode-btn:hover {
-  color: var(--text);
-  border-color: #38404c;
-}
-
-.md-editor {
+.md-live {
   flex: 1;
-  width: 100%;
   min-height: 0;
-  padding: 18px 22px;
-  border: none;
-  outline: none;
-  resize: none;
+  display: flex;
+  overflow: hidden;
+}
+
+.md-live .cm-editor {
+  flex: 1;
+  min-height: 0;
   background: var(--bg);
   color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.72;
+}
+
+.md-live .cm-editor.cm-focused {
+  outline: none;
+}
+
+.md-live .cm-scroller {
+  padding: 24px 28px 48px;
+  font-family: inherit;
+  line-height: inherit;
+}
+
+.md-live .cm-content {
+  max-width: 860px;
+  padding: 0;
+  caret-color: var(--accent);
+}
+
+.md-live .cm-line {
+  padding: 0;
+}
+
+/* 光标与选区：CodeMirror 自带的按浅色底给，这里按应用的深色底改一遍 */
+.md-live .cm-cursor,
+.md-live .cm-dropCursor {
+  border-left: 2px solid var(--accent);
+}
+
+.md-live .cm-selectionBackground {
+  background: #33507f;
+}
+
+.md-live .cm-focused .cm-selectionBackground,
+.md-live .cm-editor ::selection {
+  background: #3b5c93;
+}
+
+/* 渲染出来的样子：写法上仍是 md，看起来是文档 */
+.md-live .cm-md-h1 {
+  font-size: 20px;
+  font-weight: 600;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+
+.md-live .cm-md-h2 {
+  font-size: 16px;
+  font-weight: 600;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--border);
+}
+
+.md-live .cm-md-h3 {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.md-live .cm-md-h4,
+.md-live .cm-md-h5 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.md-live .cm-md-strong {
+  font-weight: 600;
+}
+
+.md-live .cm-md-em {
+  font-style: italic;
+}
+
+.md-live .cm-md-strike {
+  text-decoration: line-through;
+  color: var(--text-faint);
+}
+
+.md-live .cm-md-link {
+  color: var(--accent);
+}
+
+.md-live .cm-md-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px;
-  line-height: 1.65;
-  tab-size: 2;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--column);
+}
+
+/* 代码块整段一个底色，行内码那套内边距与圆角就不要了 */
+.md-live .cm-md-codeblock {
+  background: var(--column);
+}
+
+.md-live .cm-md-codeblock .cm-md-code {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.md-live .cm-md-fence {
+  color: var(--text-faint);
+}
+
+.md-live .cm-md-quote {
+  border-left: 2px solid var(--border);
+  padding-left: 12px;
+  color: var(--text-dim);
+}
+
+.md-live .cm-md-ordered {
+  color: var(--text-dim);
+}
+
+.md-live .cm-md-bullet {
+  margin-right: 6px;
+  color: var(--text-dim);
+}
+
+/* 任务项前面已经有方框了，圆点是多余的一层（其间隔着一个空格，所以用 ~ 而不是 +） */
+.md-live .cm-md-bullet:has(~ .cm-md-task) {
+  display: none;
+}
+
+.md-live .cm-md-taskmark {
+  color: var(--text-faint);
+}
+
+.md-live .cm-md-task {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  border: 1px solid var(--text-faint);
+  border-radius: 3px;
+  vertical-align: -1px;
+  cursor: pointer;
+}
+
+.md-live .cm-md-task.done {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.md-live .cm-md-rule {
+  display: inline-block;
+  width: 100%;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.md-live .cm-md-thead {
+  font-weight: 600;
+}
+
+.md-live .cm-md-delim,
+.md-live .cm-md-hr {
+  color: var(--text-faint);
 }
 
 .notice.ok {
@@ -1965,9 +2075,6 @@ button.pet:hover {
 
 .save-state .saving {
   color: var(--text-faint);
-}
-.save-state .saved {
-  color: #6f9f7f;
 }
 .save-state .failed {
   color: #ff9b9b;
@@ -2040,17 +2147,6 @@ button.pet:hover {
 .icon-btn:disabled {
   opacity: 0.5;
   cursor: default;
-}
-
-/* ------------------------------------------------- 详情页的取值选择器 */
-
-.detail-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  background: #12151b;
 }
 
 /* 只占位不撑高：浮层绝对定位，不挤动下方内容 */
