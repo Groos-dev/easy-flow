@@ -94,6 +94,26 @@ export default function Detail({
   const draftRef = useRef('')
   /** 项目页的规范原文。文档列表已经拿到，正文复用它——同一个接口不该拉两次 */
   const projectDoc = useRef<Promise<string> | null>(null)
+  /** 主动同步的次数：同步完回来把列表重拉一遍 */
+  const [synced, setSynced] = useState(0)
+
+  /**
+   * 点进需求详情页主动同步一次目录：看板轮询不再重扫，agent 改的 md 靠这一下补上。
+   * 不等它回来再渲染——详情页照常先开，同步完了再刷一遍列表；同步失败就维持现状。
+   */
+  useEffect(() => {
+    if (isProject || isTodo) return
+    let alive = true
+    api
+      .resync()
+      .then(() => {
+        if (alive) setSynced((n) => n + 1)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [target.project, target.slug, isProject, isTodo])
 
   useEffect(() => {
     let alive = true
@@ -133,7 +153,7 @@ export default function Detail({
     return () => {
       alive = false
     }
-  }, [target.project, target.slug, isProject, isTodo, todo?.id])
+  }, [target.project, target.slug, isProject, isTodo, todo?.id, synced])
 
   /** 项目页的规范原文：正常走上面那次请求，挂载顺序有变时兜一次新请求 */
   function projectContent(): Promise<string> {
