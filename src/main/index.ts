@@ -26,10 +26,12 @@ const CSP_NONCE = randomBytes(16).toString('base64')
  * CSP 必须按环境区分：
  *   dev  — Vite 会注入内联脚本（@react-refresh、@vite/client）并开 HMR WebSocket，
  *          script-src 必须放开 inline 与 ws，否则渲染层整页白/黑屏。
+ *          这里**不能**带 nonce：按 CSP 规范，script-src 里出现 nonce 时 'unsafe-inline' 直接失效，
+ *          内联的 @react-refresh 预置脚本会被拦掉，插件报「can't detect preamble」整页空白。
  *   prod — 渲染层是本地打包文件，内联脚本只放行带 CSP_NONCE 的那一条。
  */
 const CSP_DEV =
-  `default-src 'self'; script-src 'self' 'unsafe-inline' 'nonce-${CSP_NONCE}'; style-src 'self' 'unsafe-inline'; ` +
+  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
   "connect-src 'self' ws://localhost:* http://localhost:* http://127.0.0.1:*; img-src 'self' data:"
 const CSP_PROD =
   `default-src 'self'; script-src 'self' 'nonce-${CSP_NONCE}'; style-src 'self' 'unsafe-inline'; ` +
