@@ -1,0 +1,19 @@
+src/renderer/public/pets/README.md
+  s_ed313eed89e20f::t_0a563253e81dbc 16,18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "00be3c5e11e9b7642bf5004ba7e781cfb84b0f46",
+  "prompts": {},
+  "sessions": {
+    "s_ed313eed89e20f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0b4f72b-edf3-484e-b3bc-924ffef0e785",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
