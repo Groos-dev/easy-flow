@@ -7,7 +7,7 @@
  * 这里把「一行 pet 怎么排」算成纯数据（planPetRow）——渲染层只管贴 markup，
  * 排布规则才有回归保护。
  */
-import { badgesOf, isEventState } from './threads'
+import { badgesOf } from './threads'
 import type { Session, ThreadState } from './types'
 
 /** 会画出来的那些状态：`unknown` 是「读不到」，不给 pet——与角标口径一致 */
@@ -65,21 +65,20 @@ export const MAX_PETS = 3
 /** 真在动的三档（与 server/session-state.ts 的 isActive 同口径）：只有它们可能显示实时动作 */
 const ACTIVE: Pose[] = ['thinking', 'working', 'sweeping']
 
-const NEEDS_YOU: Pose[] = ['blocked', 'failed']
-
-/** 气泡的调子：动作一档、退回 title 一档，事件三档用自己的状态色 */
+/** 气泡的调子：事件三档用自己的状态色，静止一档暗，真在动的那几档亮 */
 export type BubbleTone = 'act' | 'title' | 'blocked' | 'done' | 'failed'
+
+export function bubbleToneOf(state: Pose): BubbleTone {
+  return state === 'idle' ? 'title' : state === 'blocked' || state === 'done' || state === 'failed' ? state : 'act'
+}
 
 export interface PetItem {
   session: Session
   state: Pose
-  /** 事件型状态（跑完 / 卡住 / 失败）：给边框与一次性动效。点过之后变 idle 就没有了 */
-  event: boolean
   /** 唯一抢动效的那只（只对 blocked 的脉冲有效）；其余为 false */
   focus: boolean
   /** 气泡里那句话：卡住且有原文时报那句原文，干活且有动作时报动作，其余报会话 title */
   bubble: string
-  tone: BubbleTone
 }
 
 export interface PetRowPlan {
@@ -116,20 +115,15 @@ export function planPetRow(sessions: Session[]): PetRowPlan {
     items: shown.map((p) => ({
       session: p.session,
       state: p.state,
-      event: isEventState(p.session.status.state),
       focus: p.session === focusSession,
-      ...bubbleOf(p.session, p.state),
+      bubble: bubbleTextOf(p.session, p.state),
     })),
     more: hidden.length,
-    moreNeedsYou: hidden.filter((p) => NEEDS_YOU.includes(p.state)).length,
+    moreNeedsYou: hidden.filter((p) => p.state === 'blocked' || p.state === 'failed').length,
   }
 }
 
-function bubbleOf(session: Session, state: Pose): { bubble: string; tone: BubbleTone } {
-  const { needsAction } = session.status
+function bubbleTextOf(session: Session, state: Pose): string {
   const act = ACTIVE.includes(state) ? session.action?.text ?? '' : ''
-  return {
-    bubble: (state === 'blocked' && needsAction) || act || session.title,
-    tone: state === 'blocked' || state === 'done' || state === 'failed' ? state : act ? 'act' : 'title',
-  }
+  return (state === 'blocked' && session.status.needsAction) || act || session.title
 }

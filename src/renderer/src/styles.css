@@ -1063,17 +1063,24 @@ body {
   margin-top: 8px;
 }
 
-/* 每只 pet 一格：气泡在上、pet 在下，尾巴指着自己那只。78px 是「一句动作一行写完」的下限，
-   卡片窄到 3 只挤不下就折成 2 只一行；120px 是气泡的宽度上限，再宽就不像一句话了 */
+/* 每只 pet 一格：气泡在上、pet 在下，尾巴指着自己那只。气泡不在时格子只有 pet 那么宽，
+   几只挤在一起；气泡出来才撑开，宽度跟着 .shown 过渡。
+   78px 是「一句动作一行写完」的下限，卡片窄到 3 只挤不下就折成 2 只一行；120px 是气泡的宽度上限 */
 .slot {
-  flex: 1 1 78px;
+  flex: 0 1 44px;
   min-width: 44px;
-  max-width: 120px;
+  max-width: 44px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 4px;
+  transition: flex-basis 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), max-width 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.slot.shown {
+  flex: 1 1 78px;
+  max-width: 120px;
 }
 
 .pet {
@@ -1130,6 +1137,29 @@ body {
   opacity: 0.42;
 }
 
+/* 气泡的高度也一起收：0fr → 1fr 是唯一能对「内容高度未知」做过渡的写法，pet 跟着上移。
+   收在这一层而不是气泡身上——放气泡身上会把尾巴一起裁掉。
+   底部内边距是给尾巴留的位置（4px 偏移 + 转角），收起时也得归零，不然它会撑着盒子的高度 */
+.bubble-box {
+  display: grid;
+  grid-template-rows: 0fr;
+  width: 100%;
+  padding-bottom: 0;
+  overflow: hidden;
+  transition: grid-template-rows 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), padding-bottom 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.slot.shown .bubble-box {
+  grid-template-rows: 1fr;
+  padding-bottom: 8px;
+}
+
+.bubble-clip {
+  display: flex;
+  justify-content: center;
+  min-height: 0;
+}
+
 /* 气泡：宽度内容自适应、受所在格约束；两行封顶再省略号——裁短是源头的事，这儿只兜底 */
 .bubble {
   position: relative;
@@ -1142,7 +1172,14 @@ body {
   color: var(--text);
   font-size: 10.5px;
   line-height: 1.32;
-  animation: bubble-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  opacity: 0;
+  transform: translateY(4px) scale(0.96);
+  transition: opacity 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), transform 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.slot.shown .bubble {
+  opacity: 1;
+  transform: none;
 }
 
 /* 夹两行的是内层：overflow 放在气泡本身会把尾巴一起裁掉 */
@@ -1152,6 +1189,17 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
+  animation: text-in 0.3s ease both;
+}
+
+/* 文案变了轻轻换一下，不重播整个入场（key 挂在文案上，见 Pet.tsx 的 Bubble） */
+@keyframes text-in {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* 尾巴：底色与边框都继承气泡，换调子不用另写一份 */
@@ -1188,17 +1236,6 @@ body {
 .bubble.t-failed {
   border-color: var(--bubble-failed-border);
   color: var(--bubble-failed-text);
-}
-
-@keyframes bubble-in {
-  from {
-    opacity: 0;
-    transform: translateY(3px) scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 /* 有 deeplink 的才可点：没有的只报状态，不给一个点了没反应的按钮 */
@@ -1254,8 +1291,15 @@ button.pet:hover {
   .pet,
   .pet img,
   .pet .pet-art,
-  .bubble {
+  .bubble,
+  .bubble-text {
     animation: none !important;
+  }
+
+  .slot,
+  .bubble-box,
+  .bubble {
+    transition: none !important;
   }
 }
 

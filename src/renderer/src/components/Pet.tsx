@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { AGENT_LABELS } from '../lib/labels'
 import { petArt, scopeCloudling, idleMoodOf, type IdleMood } from '../lib/pet-art'
-import { PET_LABEL, planPetRow, type BubbleTone, type Pose } from '../lib/pets'
+import { isEventState } from '../lib/threads'
+import { bubbleToneOf, PET_LABEL, planPetRow, type PetItem, type Pose } from '../lib/pets'
 import type { Session } from '../lib/types'
 
 /**
@@ -168,16 +169,84 @@ function petTip(session: Session, state: Pose): string {
     .join('\n')
 }
 
-function Bubble({ text, tone }: { text: string; tone: BubbleTone }) {
+function Bubble({ text, state }: { text: string; state: Pose }) {
+  const tone = bubbleToneOf(state)
   return (
-    <div className={`bubble${tone === 'act' ? '' : ` t-${tone}`}`} key={text} title={text}>
-      <span className="bubble-text">{text}</span>
+    <div className={`bubble${tone === 'act' ? '' : ` t-${tone}`}`} title={text}>
+      <span className="bubble-text" key={text}>
+        {text}
+      </span>
     </div>
   )
 }
 
+/** 鼠标移开之后气泡还留多久 */
+const LINGER_MS = 30_000
+
+/**
+ * 气泡在不在：非静止那几档一到就一直挂着，直到状态变了；静止那档要鼠标停在这只 pet 上才出，
+ * 移开后再留 30 秒——点过 pet 会把它写成静止，所以点完也是「过一会儿才收」。
+ */
+function useBubbleShown(pinned: boolean, hovered: boolean): boolean {
+  const [shown, setShown] = useState(pinned)
+  useEffect(() => {
+    if (pinned || hovered) {
+      setShown(true)
+      return
+    }
+    // 本来就没露，不排这个队：不然一只静止的 pet 一挂载就白等 30 秒再走一遍 setState
+    if (!shown) return
+    const timer = setTimeout(() => setShown(false), LINGER_MS)
+    return () => clearTimeout(timer)
+  }, [pinned, hovered, shown])
+  return shown
+}
+
 function moreTip(more: number, needsYou: number): string {
   return `还有 ${more} 个会话未展示${needsYou > 0 ? `，其中 ${needsYou} 个在等你处理` : ''}`
+}
+
+/**
+ * 一只 pet 一格：气泡在上、pet 在下，尾巴指着自己那只。格子的宽度跟着气泡在不在变——
+ * 没气泡时收成 pet 的宽度挤在一起，有气泡时撑开（过渡在 styles.css 里）。
+ */
+function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; still: boolean }) {
+  const [hovered, setHovered] = useState(false)
+  const { session, state } = item
+  const hasBubble = item.bubble !== ''
+  const shown = hasBubble && useBubbleShown(state !== 'idle', hovered)
+
+  return (
+    <div
+      className={`slot${shown ? ' shown' : ''}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {!compact && hasBubble && (
+        <div className="bubble-box">
+          <div className="bubble-clip">
+            <Bubble text={item.bubble} state={state} />
+          </div>
+        </div>
+      )}
+      <Pet
+        agent={session.agent}
+        state={state}
+        mood={state === 'idle' ? idleMoodOf(session.status.observedAt) : undefined}
+        event={isEventState(state)}
+        focus={item.focus}
+        compact={compact}
+        still={still}
+        tip={petTip(session, state)}
+        link={session.link || undefined}
+        // 点一下 = 这条会话此刻「静止」：服务端写成一条状态事件，下一个 hook 事件直接覆盖。
+        // 记不下不该拦住人打开会话，所以不等它、也不报错
+        onOpen={() => {
+          api.markSessionClicked(session.agent, session.session).catch(() => {})
+        }}
+      />
+    </div>
+  )
 }
 
 /**
@@ -195,25 +264,7 @@ export function PetRow({ sessions, compact = false }: { sessions: Session[]; com
   return (
     <div className={`pets${compact ? ' compact' : ''}`}>
       {items.map((p) => (
-        <div className="slot" key={`${p.session.agent}:${p.session.session}`}>
-          {!compact && p.bubble && <Bubble text={p.bubble} tone={p.tone} />}
-          <Pet
-            agent={p.session.agent}
-            state={p.state}
-            mood={p.state === 'idle' ? idleMoodOf(p.session.status.observedAt) : undefined}
-            event={p.event}
-            focus={p.focus}
-            compact={compact}
-            still={still}
-            tip={petTip(p.session, p.state)}
-            link={p.session.link || undefined}
-            // 点一下 = 这条会话此刻「静止」：服务端写成一条状态事件，下一个 hook 事件直接覆盖。
-            // 记不下不该拦住人打开会话，所以不等它、也不报错
-            onOpen={() => {
-              api.markSessionClicked(p.session.agent, p.session.session).catch(() => {})
-            }}
-          />
-        </div>
+        <PetSlot key={`${p.session.agent}:${p.session.session}`} item={p} compact={compact} still={still} />
       ))}
       {more > 0 && (
         <span

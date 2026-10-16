@@ -33,7 +33,7 @@ import { codeLinkLabel } from '../src/renderer/src/lib/links.ts'
 import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib/shortcut.ts'
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
-import { PET_LABEL, PET_RANK, MAX_PETS, focusIndex, planPetRow, type Pose } from '../src/renderer/src/lib/pets.ts'
+import { bubbleToneOf, PET_LABEL, PET_RANK, MAX_PETS, focusIndex, planPetRow, type Pose } from '../src/renderer/src/lib/pets.ts'
 import type { SessionAction } from '../src/renderer/src/lib/types.ts'
 import { petArt, scopeCloudling, idleMoodOf, type IdleMood } from '../src/renderer/src/lib/pet-art.ts'
 import { CLOUDLING_SVG } from '../src/renderer/src/lib/pet-cloudling-art.ts'
@@ -4050,27 +4050,17 @@ describe('pet：一行 pet 的排布', () => {
     const read = planPetRow([sess('claude', 'done')])
     assert.equal(read.items.length, 1)
     assert.equal(read.items[0].state, 'done')
-    assert.equal(read.items[0].event, true)
   })
 
   test('点过的（idle 档）落静止、不带事件样式、也不抢注意力', () => {
     const clicked = planPetRow([sess('claude', 'idle')]).items[0]
     assert.equal(clicked.state, 'idle')
-    assert.equal(clicked.event, false)
     assert.equal(clicked.focus, false)
   })
 
   test('没读过的 done 姿势不变', () => {
     const unread = planPetRow([sess('claude', 'done')]).items[0]
     assert.equal(unread.state, 'done')
-    assert.equal(unread.event, true)
-  })
-
-  test('事件样式跟状态走：事件型三档带 event，干活 / 静止不带', () => {
-    assert.equal(planPetRow([sess('claude', 'done')]).items[0].event, true)
-    assert.equal(planPetRow([sess('claude', 'blocked')]).items[0].event, true)
-    assert.equal(planPetRow([sess('claude', 'thinking')]).items[0].event, false)
-    assert.equal(planPetRow([sess('claude', 'idle')]).items[0].event, false)
   })
 
   test('读不到的会话不画 pet，空列表也不破', () => {
@@ -4088,24 +4078,25 @@ describe('pet：一行 pet 的排布', () => {
   test('卡住且要人回答：气泡报那句话原文，压过动作与 title', () => {
     const asked = sess('claude', 'blocked', '1N-WS 出票重试', act('改 hook.ts'), '要不要把重试次数提到 3 次？')
     assert.equal(planPetRow([asked]).items[0].bubble, '要不要把重试次数提到 3 次？')
-    assert.equal(planPetRow([asked]).items[0].tone, 'blocked')
   })
 
   test('没写原文的卡住（打断 / 等授权那两条路径）退回 title', () => {
     assert.equal(planPetRow([sess('claude', 'blocked', '等你确认', act('改 hook.ts'))]).items[0].bubble, '等你确认')
   })
 
-  test('气泡调子：事件三档用自己的状态色，其余按动作 / 标题分两档', () => {
-    assert.equal(planPetRow([sess('claude', 'blocked', '等你确认')]).items[0].tone, 'blocked')
-    assert.equal(planPetRow([sess('claude', 'done', '跑完了')]).items[0].tone, 'done')
-    assert.equal(planPetRow([sess('claude', 'failed', '挂了')]).items[0].tone, 'failed')
-    assert.equal(planPetRow([sess('claude', 'working', '干活', act('改 hook.ts'))]).items[0].tone, 'act')
-    assert.equal(planPetRow([sess('claude', 'working', '没动作')]).items[0].tone, 'title')
-    assert.equal(planPetRow([sess('claude', 'idle', '补单测')]).items[0].tone, 'title')
+  test('气泡调子：事件三档用自己的状态色，静止一档暗，真在动的亮', () => {
+    assert.equal(bubbleToneOf('blocked'), 'blocked')
+    assert.equal(bubbleToneOf('done'), 'done')
+    assert.equal(bubbleToneOf('failed'), 'failed')
+    assert.equal(bubbleToneOf('idle'), 'title')
+    for (const state of ['thinking', 'working', 'sweeping'] as const) {
+      assert.equal(bubbleToneOf(state), 'act', `${state} 该是亮的那档`)
+    }
   })
 
   test('title 与动作都空就不给气泡', () => {
     assert.equal(planPetRow([sess('claude', 'idle')]).items[0].bubble, '')
+    assert.equal(planPetRow([sess('claude', 'working')]).items[0].bubble, '', '干活但没话说也一样')
   })
 })
 

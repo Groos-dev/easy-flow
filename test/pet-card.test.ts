@@ -160,8 +160,18 @@ describe('PetRow 的气泡', () => {
       createElement(PetRow, { sessions: [sess('claude', 'working', '', 0, '收口 hook 管道', act('改 hook.ts'))] }),
     )
     assert.deepEqual(bubbleOf(html).slice(1), ['bubble', '改 hook.ts'])
-    assert.match(html, /<div class="slot"><div class="bubble"/)
+    assert.match(html, /<div class="slot shown"><div class="bubble-box"><div class="bubble-clip"><div class="bubble"/)
     assert.match(html, /<span class="bubble-text">改 hook\.ts<\/span>/)
+  })
+
+  test('静止那档默认不露气泡（要 hover），非静止的一到就挂着', () => {
+    const idle = render(createElement(PetRow, { sessions: [sess('claude', 'idle', '', 0, '补单测')] }))
+    assert.match(idle, /<div class="slot">/)
+    assert.doesNotMatch(idle, /class="slot shown"/)
+    for (const state of ['working', 'blocked', 'done', 'failed'] as const) {
+      const html = render(createElement(PetRow, { sessions: [sess('claude', state, '', 0, '有话说')] }))
+      assert.match(html, /class="slot shown"/, `${state} 该一直挂着`)
+    }
   })
 
   test('没有实时动作、或不在干活：气泡报 title', () => {
@@ -180,17 +190,21 @@ describe('PetRow 的气泡', () => {
     assert.deepEqual(bubbleOf(html).slice(1), ['bubble t-blocked', '要不要把重试次数提到 3 次？'])
   })
 
-  test('调子跟状态走：跑完绿边、失败红字、干活没动作退回暗调', () => {
+  test('调子跟状态走：跑完绿边、失败红字、静止暗、真在动的亮', () => {
     const tone = (s: Session) => bubbleOf(render(createElement(PetRow, { sessions: [s] })))[1]
     assert.equal(tone(sess('claude', 'done', '', 0, '跑完了')), 'bubble t-done')
     assert.equal(tone(sess('claude', 'failed', '', 0, '挂了')), 'bubble t-failed')
-    assert.equal(tone(sess('claude', 'working', '', 0, '没动作')), 'bubble t-title')
+    assert.equal(tone(sess('claude', 'idle', '', 0, '补单测')), 'bubble t-title')
+    assert.equal(tone(sess('claude', 'working', '', 0, '没动作')), 'bubble', '干活那档亮，有没有动作都一样')
   })
 
   test('title 与动作都空就不画气泡', () => {
     const html = render(createElement(PetRow, { sessions: [sess('claude', 'idle')] }))
     assert.doesNotMatch(html, /class="bubble/)
     assert.equal(petCount(html), 1)
+    const silent = render(createElement(PetRow, { sessions: [sess('claude', 'working')] }))
+    assert.doesNotMatch(silent, /class="bubble/)
+    assert.doesNotMatch(silent, /slot shown/, '没话说就别撑格子')
   })
 
   test('读不到状态的会话不画 pet，也就不留空气泡', () => {
