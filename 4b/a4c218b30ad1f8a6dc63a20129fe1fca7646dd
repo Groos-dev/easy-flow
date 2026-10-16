@@ -1,0 +1,22 @@
+server/hook-install.ts
+  s_ed313eed89e20f::t_860c11184f47fd 77-83
+test/hook-install.test.ts
+  s_ed313eed89e20f::t_c49ff3e24e3890 144-147
+  s_ed313eed89e20f::t_646b792f03a8bb 216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "4ba4c218b30ad1f8a6dc63a20129fe1fca7646dd",
+  "prompts": {},
+  "sessions": {
+    "s_ed313eed89e20f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0b4f72b-edf3-484e-b3bc-924ffef0e785",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
