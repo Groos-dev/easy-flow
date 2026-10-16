@@ -141,7 +141,10 @@ describe('hook 一键配置：只增不改', () => {
     assert.deepEqual(claude.env, jOthers.env)
     assert.deepEqual(claude.hooks.Notification, jOthers.hooks.Notification)
     assert.deepEqual(claude.hooks.PostToolUse.slice(0, 1), jOthers.hooks.PostToolUse)
-    assert.equal(claude.hooks.PostToolUse[1].hooks[0].url, 'http://127.0.0.1:3210/api/hook')
+    const ours = claude.hooks.PostToolUse[1].hooks[0]
+    assert.equal(ours.type, 'command')
+    assert.match(ours.command, /'http:\/\/127\.0\.0\.1:3210\/api\/hook'/)
+    assert.match(ours.command, /\|\| true$/)
 
     const plan = hookPlan({ port: 3210, home })
     assert.equal(plan.agents.find((a) => a.id === 'codex')!.installed, true)
@@ -210,7 +213,7 @@ describe('hook 一键配置：只增不改', () => {
     const claude = read(claudeFile)
     assert.match(codex, /127\.0\.0\.1:4000\/api\/hook\?agent=codex/)
     assert.doesNotMatch(codex, /:3210\//)
-    assert.match(claude, /http:\/\/127\.0\.0\.1:4000\/api\/hook"/)
+    assert.match(claude, /http:\/\/127\.0\.0\.1:4000\/api\/hook'/)
     assert.doesNotMatch(claude, /:3210\//)
     // 别人的还在、位置没动
     assert.deepEqual(JSON.parse(codex).hooks.Stop.slice(0, 2), codexOthers().hooks.Stop)

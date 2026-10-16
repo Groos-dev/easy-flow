@@ -71,11 +71,16 @@ const CODEX_EVENTS = [
 /** Claude 的工具类事件才要 matcher，照 hook-pipeline.md 实测的写法 */
 const CLAUDE_MATCHER_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure'])
 
-/** Claude 原生支持 http hook：直接把 JSON POST 过去，不用脚本 */
 function claudeBlock(event: string, port: number): Record<string, unknown> {
   return {
     ...(CLAUDE_MATCHER_EVENTS.has(event) ? { matcher: '*' } : {}),
-    hooks: [{ type: 'http', url: endpoint(port, 'claude'), timeout: 3 }],
+    hooks: [
+      {
+        type: 'command',
+        timeout: 3,
+        command: `curl -s -m 2 -X POST -H 'content-type: application/json' --data-binary @- '${endpoint(port, 'claude')}' >/dev/null 2>&1 || true`,
+      },
+    ],
   }
 }
 
