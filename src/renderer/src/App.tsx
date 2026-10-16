@@ -13,15 +13,13 @@ import {
 } from '@dnd-kit/core'
 import { api } from './lib/api'
 import { DONE_STATUS, childStatsOf, childrenOf } from './lib/children'
-import type { ChildStat, NextUpItem, Project, Requirement, Session, Status, Todo, TodoStatus } from './lib/types'
-import BoardSwitcher, { type BoardView } from './components/BoardSwitcher'
+import type { ChildStat, NextUpItem, Project, Requirement, Session, Status, Todo } from './lib/types'
 import MindMap from './components/MindMap'
 import Card from './components/Card'
 import NextUp from './components/NextUp'
 import Detail from './components/Detail'
 import SearchPanel from './components/SearchPanel'
 import Settings from './components/Settings'
-import TodoBoard from './components/TodoBoard'
 
 /** 空列的一句话：一个「—」说不出这一列是干什么的。认不出的状态回落到通用文案 */
 const COLUMN_HINT: Record<string, string> = {
@@ -138,8 +136,6 @@ const BOARD_POLL_MS = 1_000
 
 export default function App() {
   const [statuses, setStatuses] = useState<Status[]>([])
-  /** 当前看板：需求与待办是平级的两个看板 */
-  const [view, setView] = useState<BoardView>('req')
   /** 当前项目：看板数据按项目隔离 */
   const [project, setProject] = useState('')
   /** 当前项目显示名，取自项目根 AGENTS.md 的 frontmatter；缺省是目录名 */
@@ -152,7 +148,7 @@ export default function App() {
   const [pendingJump, setPendingJump] = useState<string | null>(null)
   /** 刚跳到的卡片：闪一下，好在一屏卡片里认出落点 */
   const [flashSlug, setFlashSlug] = useState<string | null>(null)
-  /** 需求板块里的视图：看板（默认）/ 下一步 / 导图；待办板块下不适用 */
+  /** 需求板块里的视图：看板（默认）/ 下一步 / 导图 */
   const [reqView, setReqView] = useState<'board' | 'next' | 'map'>('board')
   /** 详情页挂载点：需求或项目。slugs 用 'project:<slug>' 区分 */
   const [detail, setDetail] = useState<{ project: string; slug: string | null } | null>(null)
@@ -198,8 +194,6 @@ export default function App() {
   const openRequirement = useCallback(
     (proj: string, slug: string) => {
       setDetail({ project: proj, slug })
-      // 从别处点需求就是回到需求看板，别把详情页叠在待办看板上
-      setView('req')
       // 待办详情上也有跳需求的入口：那一层要摘掉，否则详情页被它盖着
       setTodoId(null)
       const local = items.find((r) => r.slug === slug && r.project === proj)
@@ -228,11 +222,11 @@ export default function App() {
   }, [openRequirement])
 
   /**
-   * 搜索面板只在看板与导图上开（它筛的就是这两处）。详情页、设置页、待办板，
+   * 搜索面板只在看板与导图上开（它筛的就是这两处）。详情页、设置页，
    * 以及不认筛选的「下一步」都不给这个入口——从那些地方开出来，人看到的是一个
    * 筛掉了卡片的界面自己却不在上面，不如不开。
    */
-  const onBoard = !showSettings && !detail && !todoId && view === 'req' && reqView !== 'next'
+  const onBoard = !showSettings && !detail && !todoId && reqView !== 'next'
 
   // 窗口级快捷键。⌘, 打开设置——Electron 里由应用菜单的加速键触发（见 main/registerMenu），
   // 浏览器开发时没有菜单，这里补一个键盘监听；⌘K 开合搜索面板。
@@ -513,19 +507,6 @@ export default function App() {
 
   const dragItem = items.find((r) => r.slug === dragSlug) ?? null
 
-  /** 待办拖到别的列：与需求一样先动卡片再落盘，失败回滚 */
-  async function handleTodoMove(id: string, status: string) {
-    const previous = todos
-    setTodos((list) => list.map((t) => (t.id === id ? { ...t, status: status as TodoStatus } : t)))
-    try {
-      const updated = await api.updateTodo(id, { status })
-      setTodos((list) => list.map((t) => (t.id === id ? updated : t)))
-    } catch (err) {
-      setTodos(previous)
-      setError(`移动失败：${(err as Error).message}`)
-    }
-  }
-
   if (loading) return <div className="loading">加载中…</div>
 
   // 详情页挂载点：需求（带 slug）或项目（slug 为 null）
@@ -597,43 +578,37 @@ export default function App() {
           <div className="app">
             <div className="topbar">
               <div className="topbar-side">
-                {/* 看板切换在左上角：需求与待办是平级的两个看板，都从这儿进 */}
-                <BoardSwitcher value={view} onChange={setView} />
                 {/* 项目切换：chip 常驻可见，点一下直接切；项目多了横向滚动 */}
-                {view === 'req' && (
-                  <>
-                    <div className="proj-chips">
-                      {projects.map((p) => (
-                        <button
-                          key={p.slug}
-                          className={`proj-chip${p.slug === project ? ' on' : ''}`}
-                          title={p.root}
-                          onClick={() => void switchProject(p.slug)}
-                        >
-                          {p.name || p.slug}
-                        </button>
-                      ))}
-                    </div>
+                <div className="proj-chips">
+                  {projects.map((p) => (
                     <button
-                      className="icon-btn"
-                      title="项目详情（总规范）"
-                      aria-label="项目详情"
-                      onClick={() => setDetail({ project, slug: null })}
+                      key={p.slug}
+                      className={`proj-chip${p.slug === project ? ' on' : ''}`}
+                      title={p.root}
+                      onClick={() => void switchProject(p.slug)}
                     >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="9" />
-                        <line x1="12" y1="11" x2="12" y2="16" />
-                        <line x1="12" y1="8" x2="12" y2="8" />
-                      </svg>
+                      {p.name || p.slug}
                     </button>
-                  </>
-                )}
+                  ))}
+                </div>
+                <button
+                  className="icon-btn"
+                  title="项目详情（总规范）"
+                  aria-label="项目详情"
+                  onClick={() => setDetail({ project, slug: null })}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <line x1="12" y1="11" x2="12" y2="16" />
+                    <line x1="12" y1="8" x2="12" y2="8" />
+                  </svg>
+                </button>
               </div>
 
               <div className="topbar-side right">
                 {/* 筛选标记常驻：关掉面板后看板上少了卡片，得有个东西解释为什么少。
-                    待办板不按需求筛，「下一步」也不吃这套筛，两处都不摆 */}
-                {view === 'req' && reqView !== 'next' && query.trim() && (
+                    「下一步」不吃这套筛，不摆 */}
+                {reqView !== 'next' && query.trim() && (
                   <button
                     className="filter-chip"
                     title="点一下继续改筛选词"
@@ -661,36 +636,26 @@ export default function App() {
                     </svg>
                   </button>
                 )}
-                {/* 看板 / 下一步 / 导图是需求板块里的三种呈现，待办板块下不摆 */}
-                {view === 'req' && (
-                  <div className="seg">
-                    <button
-                      className={reqView === 'board' ? 'on' : ''}
-                      onClick={() => setReqView('board')}
-                    >
-                      看板
-                    </button>
-                    <button className={reqView === 'next' ? 'on' : ''} onClick={() => setReqView('next')}>
-                      下一步
-                    </button>
-                    <button className={reqView === 'map' ? 'on' : ''} onClick={() => setReqView('map')}>
-                      导图
-                    </button>
-                  </div>
-                )}
+                <div className="seg">
+                  <button
+                    className={reqView === 'board' ? 'on' : ''}
+                    onClick={() => setReqView('board')}
+                  >
+                    看板
+                  </button>
+                  <button className={reqView === 'next' ? 'on' : ''} onClick={() => setReqView('next')}>
+                    下一步
+                  </button>
+                  <button className={reqView === 'map' ? 'on' : ''} onClick={() => setReqView('map')}>
+                    导图
+                  </button>
+                </div>
               </div>
             </div>
 
             {error && <div className="notice">{error}</div>}
 
-            {view === 'todo' ? (
-              <TodoBoard
-                todos={todos}
-                statuses={todoStatuses}
-                onOpen={setTodoId}
-                onMove={(id, status) => void handleTodoMove(id, status)}
-              />
-            ) : reqView === 'board' ? (
+            {reqView === 'board' ? (
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCorners}
