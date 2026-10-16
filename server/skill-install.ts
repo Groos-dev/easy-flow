@@ -19,13 +19,13 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
-  readlinkSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { configPath } from './config.ts'
@@ -141,13 +141,29 @@ function lstatOrNull(path: string) {
   }
 }
 
+function resolveOrNull(path: string): string | null {
+  try {
+    return realpathSync(path)
+  } catch {
+    return null
+  }
+}
+
 /**
- * Only a link pointing at the right target counts: missing, a real dir, or a wrong
- * target all mean "not installed".
+ * 比最终落到哪，不比中间那串字面量：应用可能从工作区（worktree）里跑，链接指的却是主 checkout，
+ * 两边其实是同一份 skill，不该报未安装。链接断了（目标被删）在这里也露馅——realpath 解不开。
  */
 function linkedTo(link: string, target: string): boolean {
   const st = lstatOrNull(link)
-  return !!st?.isSymbolicLink() && readlinkSync(link) === target
+  if (!st?.isSymbolicLink()) return false
+  const real = resolveOrNull(link)
+  return !!real && real === resolveOrNull(target)
+}
+
+/** ~/.agents/skills/<name> 要落在真的 skill 源上：解出来名字对得上，里面还有 SKILL.md */
+function homeLinked(name: string): boolean {
+  const real = resolveOrNull(homeLink(name))
+  return !!real && basename(real) === name && existsSync(join(real, 'SKILL.md'))
 }
 
 /**
@@ -244,11 +260,7 @@ export async function skillPlan(): Promise<SkillPlan> {
 
   // 一个 agent 算"装好了"，是它下面每个 skill 都链对了
   const linkedEverywhere = (agentDir: string) =>
-    !!source &&
-    SKILLS.every((name) => {
-      const home = homeLink(name)
-      return linkedTo(join(agentDir, name), home) && linkedTo(home, skillSource(name))
-    })
+    SKILLS.every((name) => homeLinked(name) && linkedTo(join(agentDir, name), homeLink(name)))
 
   const agents = agentDirs().map((a) => ({
     ...a,
