@@ -1,0 +1,77 @@
+server/util.ts
+  s_74e93cd2efe2d1::t_81ba223f59d197 1-3,6-20
+test/action.test.ts
+  s_74e93cd2efe2d1::t_bcf93544b46e8b 5,17-19,26-28,35-36,99,118,121-122,135,150,155-157,161-162,172,175,177,185-188,190-191,196,200-202
+  s_74e93cd2efe2d1::t_89951911824d1d 1,3,6-13,15-16,20-25,29-34,37-51,53-98,100-106,108-109,112-117,120,125,128-129,131,134,136-140,142,144-145,147-149,151,153-154,158-160,164-165,167,180-182,189,194-195,197,206-207
+server/session-state.ts
+  s_74e93cd2efe2d1::t_640a6c748cbde6 90-91
+  s_74e93cd2efe2d1::t_8abcdd4e8d2ea5 21
+  s_74e93cd2efe2d1::t_9396260c178609 56
+  s_74e93cd2efe2d1::t_895a574ec26caa 112,115-118,120-121,126,130,132
+  s_74e93cd2efe2d1::t_4470c42bc45c74 11,14,38,49,51,53-55,75-76,86,88-89,95,122-125,127-129,135-139
+server/db.ts
+  s_74e93cd2efe2d1::t_89420b73697d49 204,206-211
+  s_74e93cd2efe2d1::t_69385376537be8 189
+  s_74e93cd2efe2d1::t_9ab6e737af2f9a 29
+  s_74e93cd2efe2d1::t_878b9c7dd58a32 1136,1140,1143-1144,1161,1166,1171,1173
+  s_74e93cd2efe2d1::t_96af53b6d2b286 1148,1151,1154-1160
+server/action.ts
+  s_74e93cd2efe2d1::t_c7afb300b4a852 1,6-7,9,12-16,25-33,35-39,42-54,56-58,60,62-71,75-85,87-88,113-117
+  s_74e93cd2efe2d1::t_1b49f3456b9edf 34
+  s_74e93cd2efe2d1::t_f0741ceb24f3f9 89-91,93-96,98-112
+  s_74e93cd2efe2d1::t_4db373e9440c32 2,8,86,92,97
+  s_74e93cd2efe2d1::t_d2c0de4f0720e9 17,22-24,40-41,55
+server/hook.ts
+  s_74e93cd2efe2d1::t_b2ee092238d078 60,85-87
+  s_74e93cd2efe2d1::t_6c07210dd59f0e 20,27
+  s_74e93cd2efe2d1::t_2b49aa9d5d9eea 5-7
+  s_74e93cd2efe2d1::t_efda1c680e3ac7 119
+  s_74e93cd2efe2d1::t_9f65ea7d3f161b 19
+  s_74e93cd2efe2d1::t_9daeffe85eaf14 42,48
+server/schema.ts
+  s_74e93cd2efe2d1::t_1bb7446aecf946 199
+  h_61ecb41619cb4e 112,122,200
+  s_74e93cd2efe2d1::t_8f7d2f520cbbcb 121
+src/renderer/src/lib/types.ts
+  s_74e93cd2efe2d1::t_c9d7d3fe1f1f8f 202,237
+  s_74e93cd2efe2d1::t_dcbc786b8b25fa 213-216
+server/threads.ts
+  s_74e93cd2efe2d1::t_e263a037fc02f2 76-77,83-86,92,95,98
+  s_74e93cd2efe2d1::t_12d4ae277fa751 89,91
+  s_74e93cd2efe2d1::t_e9d7eed5242832 5
+  s_74e93cd2efe2d1::t_4b1bf625b632c2 136-137,148,157,166,169,171-172
+test/hook.test.ts
+  s_74e93cd2efe2d1::t_24e3fe9f55be86 73-78,81-84
+test/core.test.ts
+  s_74e93cd2efe2d1::t_e29e33bc9f1f48 3501
+server/rollout.ts
+  s_74e93cd2efe2d1::t_35be7731eb824d 7
+  s_74e93cd2efe2d1::t_65f72594b5873b 24
+  s_74e93cd2efe2d1::t_3be33919052ff1 52
+  h_61ecb41619cb4e 103-105,205-210
+  s_74e93cd2efe2d1::t_c0eb06a2b11b65 63,69
+  s_74e93cd2efe2d1::t_bac0e10bbe1d50 22-23
+  s_74e93cd2efe2d1::t_b44bac5271dbb7 101-102,106-112,119-120,129-130,135-142,154-155
+  s_74e93cd2efe2d1::t_b8ad58a304be9d 188,191,203-204,217,219
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "06cb2adec9903f5015e97ec9a92152ab4935d8af",
+  "prompts": {},
+  "humans": {
+    "h_61ecb41619cb4e": {
+      "author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  },
+  "sessions": {
+    "s_74e93cd2efe2d1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ecfa21db-4c8e-4ebe-a9f9-aea99e4c9aa8",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
