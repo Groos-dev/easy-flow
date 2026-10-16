@@ -319,3 +319,9 @@ export interface SkillPayload {
   /** Legacy MCP registrations still present; installing removes them */
   legacyMcp: Array<{ id: 'claude' | 'codex'; label: string; registered: boolean }>
 }
+
+/** 装 / 卸的结果：成功只给一句结论，没做成的步骤带原因（含路径） */
+export interface InstallOutcome {
+  summary: string
+  failed: string[]
+}

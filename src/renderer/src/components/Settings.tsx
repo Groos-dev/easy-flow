@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { acceleratorFromEvent, formatAccelerator } from '../lib/shortcut'
 import type { HookPlan, SettingsPayload, SkillPayload, SyncResult } from '../lib/types'
+import { AgentIcon, PencilIcon, ResetIcon, TerminalIcon } from './icons'
 
 interface Props {
   onBack: () => void
@@ -144,6 +145,13 @@ export default function Settings({ onBack, onApplied }: Props) {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [recording, platform, applyShortcut])
 
+  /** 键位与铅笔都走这里：录制中再点一次就是取消 */
+  function toggleRecording() {
+    setRecording((v) => !v)
+    setHotkeyError('')
+    setHotkeyNotice('')
+  }
+
   async function pick() {
     const picked = await window.easyFlow?.pickDirectory?.()
     if (picked) setDraft(picked)
@@ -155,17 +163,7 @@ export default function Settings({ onBack, onApplied }: Props) {
     setMessage('')
     try {
       const res = await api.switchDataDir(draft.trim())
-      if (res.unchanged) {
-        setMessage('目录未变化')
-      } else {
-        const lines = [
-          `已切换到 ${res.dataDir}`,
-          `数据库：${res.dbFile}`,
-          `同步：${describeSync(res.sync)}`,
-        ]
-        if (res.sync?.added.length) lines.push(`新增：${res.sync.added.join(', ')}`)
-        setMessage(lines.join('\n'))
-      }
+      setMessage(res.unchanged ? '目录未变化' : `已切换 · ${describeSync(res.sync)}`)
       await loadSettings()
       onApplied()
     } catch (e) {
@@ -180,7 +178,7 @@ export default function Settings({ onBack, onApplied }: Props) {
     setError('')
     try {
       const res = await api.resync()
-      setMessage(`重新扫描完成：${describeSync(res.sync)}`)
+      setMessage(`已重新扫描 · ${describeSync(res.sync)}`)
       await loadSettings()
       onApplied()
     } catch (e) {
@@ -197,7 +195,8 @@ export default function Settings({ onBack, onApplied }: Props) {
     try {
       const res = await api.installSkill()
       setSkill(res)
-      setSkillNotice(res.installed.length ? `已完成：${res.installed.join('；')}` : '没有需要安装的')
+      setSkillNotice(res.summary)
+      setSkillError(res.failed.join('\n'))
     } catch (e) {
       setSkillError(`安装失败：${(e as Error).message}`)
     } finally {
@@ -212,7 +211,8 @@ export default function Settings({ onBack, onApplied }: Props) {
     try {
       const res = await api.installHooks()
       setHook(res)
-      setHookNotice(res.installed.length ? `已完成：${res.installed.join('；')}` : '没有需要安装的')
+      setHookNotice(res.summary)
+      setHookError(res.failed.join('\n'))
     } catch (e) {
       setHookError(`安装失败：${(e as Error).message}`)
     } finally {
@@ -227,7 +227,8 @@ export default function Settings({ onBack, onApplied }: Props) {
     try {
       const res = await api.uninstallHooks()
       setHook(res)
-      setHookNotice(res.removed.join('；'))
+      setHookNotice(res.summary)
+      setHookError(res.failed.join('\n'))
     } catch (e) {
       setHookError(`卸载失败：${(e as Error).message}`)
     } finally {
@@ -262,7 +263,7 @@ export default function Settings({ onBack, onApplied }: Props) {
             <h1>数据目录</h1>
 
             {error && <div className="notice">{error}</div>}
-            {message && <pre className="ok-box">{message}</pre>}
+            {message && <div className="notice ok">{message}</div>}
 
             <div className="section-label">路径</div>
             <div className="row">
@@ -288,15 +289,11 @@ export default function Settings({ onBack, onApplied }: Props) {
             </div>
 
             <div className="section-label">当前状态</div>
-            <pre>
+            <div className="settings-status">
               {settings
-                ? [
-                    `数据目录：${settings.dataDir}`,
-                    `数据库：  ${settings.dbFile}`,
-                    `需求数：  ${settings.counts.requirements}`,
-                  ].join('\n')
+                ? `需求 ${settings.counts.requirements} · 项目 ${settings.counts.projects}`
                 : '读取中…'}
-            </pre>
+            </div>
           </>
         )}
 
@@ -307,15 +304,14 @@ export default function Settings({ onBack, onApplied }: Props) {
             {hotkeyError && <div className="notice">{hotkeyError}</div>}
             {hotkeyNotice && <div className="notice ok">{hotkeyNotice}</div>}
 
-            <div className="section-label">呼出面板</div>
-            <div className="row">
+            <div className="settings-row">
+              <div className="settings-row-text">
+                <div className="settings-row-title">呼出面板</div>
+                <div className="settings-row-desc">在任意应用里呼出 / 收起面板</div>
+              </div>
               <button
                 className={`shortcut-key${recording ? ' recording' : ''}`}
-                onClick={() => {
-                  setRecording((v) => !v)
-                  setHotkeyError('')
-                  setHotkeyNotice('')
-                }}
+                onClick={toggleRecording}
               >
                 {recording
                   ? '按下组合键…（Esc 取消）'
@@ -323,17 +319,21 @@ export default function Settings({ onBack, onApplied }: Props) {
                     ? formatAccelerator(hotkey.shortcut, platform)
                     : '读取中…'}
               </button>
+              <button className="icon-btn" title="改绑" onClick={toggleRecording}>
+                <PencilIcon />
+              </button>
               <button
-                className="btn"
+                className="icon-btn"
+                title="恢复默认"
                 disabled={!hotkey || hotkey.shortcut === hotkey.fallback}
                 onClick={() => hotkey && void applyShortcut(hotkey.fallback)}
               >
-                恢复默认
+                <ResetIcon />
               </button>
             </div>
             <p className="hint">
-              点上面的键位开始录制，在任意应用里按它呼出 / 收起面板。
-              组合要带 ⌘ / ⌃ / ⌥；被别的应用占用时会改绑失败，换一个再试。
+              点键位开始录制，在任意应用里按它呼出 / 收起面板。组合要带 ⌘ / ⌃ / ⌥；
+              被别的应用占用时会改绑失败，换一个再试。
             </p>
           </>
         )}
@@ -353,16 +353,18 @@ export default function Settings({ onBack, onApplied }: Props) {
             </p>
 
             <div className="section-label">安装状态</div>
-            {(hook?.agents ?? []).map((a) => (
-              <div className="row" key={a.id}>
-                <span>
-                  {a.label} ·{' '}
-                  {a.problem ? `读不了：${a.problem}` : a.installed ? `已安装（${a.events} 个事件）` : '未安装'}
-                </span>
-                <span>{a.url}</span>
-              </div>
-            ))}
-            {!hook && <div className="row"><span>读取中…</span></div>}
+            {hook ? (
+              hook.agents.map((a) => (
+                <div className="settings-status" key={a.id} title={a.label}>
+                  <AgentIcon agent={a.id} size={13} />
+                  <span>
+                    {a.problem ? `读不了：${a.problem}` : a.installed ? '已安装' : '未安装'}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="settings-status">读取中…</div>
+            )}
 
             <div className="row">
               <button className="btn primary" disabled={busy || !hook} onClick={() => void installHooks()}>
@@ -372,11 +374,6 @@ export default function Settings({ onBack, onApplied }: Props) {
                 一键卸载
               </button>
             </div>
-
-            <div className="section-label">写到哪</div>
-            <pre>
-              {(hook?.agents ?? []).map((a) => `${a.label}  ${a.file}`).join('\n') || '读取中…'}
-            </pre>
           </>
         )}
 
@@ -388,29 +385,24 @@ export default function Settings({ onBack, onApplied }: Props) {
             {skillNotice && <div className="notice ok">{skillNotice}</div>}
             {skill?.problem && <div className="notice">{skill.problem}</div>}
 
-            <div className="section-label">装什么</div>
-            <pre>
-              {[
-                `命令   ${skill?.shim.path ?? '—'}`,
-                `skill  ${skill?.source ?? '—'}`,
-                skill?.skills.length ? `       ${skill.skills.join('、')}` : '',
-                skill?.node ? `node   ${skill.node.version}（${skill.node.path}）` : 'node   读不到',
-              ]
-                .filter(Boolean)
-                .join('\n')}
-            </pre>
-
             <div className="section-label">安装状态</div>
-            <div className="row">
-              <span>命令行 · {skill?.shim.installed ? '已安装' : '未安装'}</span>
-            </div>
-            {(skill?.agents ?? []).map((a) => (
-              <div className="row" key={a.id}>
-                <span>
-                  {a.label} · {!a.available ? '未装这个 agent' : a.linked ? '已安装' : '未安装'}
-                </span>
-              </div>
-            ))}
+            {skill ? (
+              <>
+                <div className="settings-status" title="easy-flow 命令">
+                  <TerminalIcon />
+                  <span>{skill.shim.installed ? '已安装' : '未安装'}</span>
+                </div>
+                {skill.agents.map((a) => (
+                  <div className="settings-status" key={a.id} title={a.label}>
+                    <AgentIcon agent={a.id} size={13} />
+                    <span>{!a.available ? '未装这个 agent' : a.linked ? '已安装' : '未安装'}</span>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div className="settings-status">读取中…</div>
+            )}
+
             <div className="row">
               <button
                 className="btn primary"

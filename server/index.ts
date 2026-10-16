@@ -553,8 +553,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
       }
 
       if (url.pathname === '/api/skill/install' && req.method === 'POST') {
-        const installed = await installSkill()
-        json(req, res, 200, { installed, ...(await skillPlan()) })
+        const outcome = await installSkill()
+        json(req, res, 200, { ...outcome, ...(await skillPlan()) })
         return
       }
 
@@ -567,14 +567,14 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
       }
 
       if (url.pathname === '/api/hooks/install' && req.method === 'POST') {
-        const installed = installHooks({ port })
-        json(req, res, 200, { installed, ...hookPlan({ port }) })
+        const outcome = installHooks({ port })
+        json(req, res, 200, { ...outcome, ...hookPlan({ port }) })
         return
       }
 
       if (url.pathname === '/api/hooks/uninstall' && req.method === 'POST') {
-        const removed = uninstallHooks()
-        json(req, res, 200, { removed, ...hookPlan({ port }) })
+        const outcome = uninstallHooks()
+        json(req, res, 200, { ...outcome, ...hookPlan({ port }) })
         return
       }
 

@@ -272,11 +272,20 @@ export async function skillPlan(): Promise<SkillPlan> {
 }
 
 /**
+ * 装 / 卸的结果：成功只回一句结论（设置页不再回显每一步的路径），
+ * 没做成的步骤带原因，由界面照错误显示。
+ */
+export interface InstallOutcome {
+  summary: string
+  failed: string[]
+}
+
+/**
  * Remove legacy MCP registrations. Failing is fine (never registered);
  * report it honestly anyway.
  */
 async function removeLegacyMcp(): Promise<string[]> {
-  const done: string[] = []
+  const failed: string[] = []
   const targets: Array<{ id: 'claude' | 'codex'; label: string; args: string[] }> = [
     { id: 'claude', label: 'Claude Code', args: ['mcp', 'remove', '-s', 'user', NAME] },
     { id: 'codex', label: 'Codex', args: ['mcp', 'remove', NAME] },
@@ -286,21 +295,20 @@ async function removeLegacyMcp(): Promise<string[]> {
     if (!registered) continue
     try {
       await runAgent(t.id, t.args)
-      done.push(`已摘除 ${t.label} 的旧 MCP 注册`)
     } catch (err) {
-      done.push(
+      failed.push(
         `Failed to remove the legacy MCP registration for ${t.label} (${(err as Error).message}); run \`${t.id} mcp remove\` manually`,
       )
     }
   }
-  return done
+  return failed
 }
 
 /**
  * Install the CLI shim + skill links + remove legacy MCP registrations;
- * returns what each step did, for the settings page.
+ * 结果只回一句结论与没装上的那几步，供设置页直接显示。
  */
-export async function installSkill(): Promise<string[]> {
+export async function installSkill(): Promise<InstallOutcome> {
   const cli = cliEntry()
 
   const node = await nodeInfo()
@@ -309,21 +317,19 @@ export async function installSkill(): Promise<string[]> {
     throw new Error(`node ${node.version} is too old: running .ts directly needs Node >= 22.18`)
   }
 
-  const done: string[] = []
+  const failed: string[] = []
 
   const shim = shimPath()
   mkdirSync(dirname(shim), { recursive: true })
   writeFileSync(shim, shimScript(node.path, cli), { mode: 0o755 })
-  done.push(`CLI：${shim} → ${node.path} ${cli}`)
 
   // 一个 skill 装不上不该拖垮其余的：目标位置被用户自己的真目录占着是常见情况
   // （比如 todo skill 原先手写在 ~/.agents/skills/todo），报出来让人自己处置
   const link = (what: string, target: string, into: string) => {
     try {
       ensureLink(target, into)
-      done.push(`${what}：${target} → ${into}`)
     } catch (err) {
-      done.push(`${what} 没装上（${(err as Error).message}）`)
+      failed.push(`${what} 没装上（${(err as Error).message}）`)
     }
   }
 
@@ -337,6 +343,6 @@ export async function installSkill(): Promise<string[]> {
     }
   }
 
-  done.push(...(await removeLegacyMcp()))
-  return done
+  failed.push(...(await removeLegacyMcp()))
+  return { summary: '已安装', failed }
 }

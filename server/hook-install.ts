@@ -11,6 +11,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
+import type { InstallOutcome } from './skill-install.ts'
 
 export type HookAgentId = 'claude' | 'codex'
 
@@ -245,8 +246,9 @@ export function hookPlan({ port, home = homedir() }: { port: number; home?: stri
 }
 
 /** 一键装：两个 agent 各写一份，只追加自己那条；写完读一遍核对。 */
-export function installHooks({ port, home = homedir() }: { port: number; home?: string }): string[] {
-  return specs(home).map((spec) => {
+export function installHooks({ port, home = homedir() }: { port: number; home?: string }): InstallOutcome {
+  let changed = false
+  for (const spec of specs(home)) {
     const loaded = load(spec.file)
     if (loaded.kind === 'error') throw new Error(`没敢改 ${spec.file}：${loaded.message}`)
     const obj = loaded.kind === 'ok' ? clone(loaded.obj) : {}
@@ -257,7 +259,7 @@ export function installHooks({ port, home = homedir() }: { port: number; home?: 
     const before = loaded.kind === 'ok' ? render(loaded.obj, trailingNewline) : null
     apply(obj, spec, port, 'install')
     const after = render(obj, trailingNewline)
-    if (after === before) return `${spec.label}：已是最新，没有改动`
+    if (after === before) continue
 
     backup(spec.file)
     mkdirSync(dirname(spec.file), { recursive: true })
@@ -269,21 +271,26 @@ export function installHooks({ port, home = homedir() }: { port: number; home?: 
     if (events !== spec.events.length) {
       throw new Error(`${spec.label} 写入后核对不一致：只认出 ${events}/${spec.events.length} 个事件`)
     }
-    return `${spec.label}：${events} 个事件 → ${spec.file}`
-  })
+    changed = true
+  }
+  return { summary: changed ? '已安装' : '已是最新，没有改动', failed: [] }
 }
 
-/** 一键卸：只摘自己那条（按端点标记），别人的原样不动；没有就跳过，不报错。 */
-export function uninstallHooks({ home = homedir() }: { home?: string } = {}): string[] {
-  return specs(home).map((spec) => {
+/**
+ * 一键卸：只摘自己那条（按端点标记），别人的原样不动；没有就跳过，不报错。
+ * 配置文件不存在或读不了都算没得可卸——读不了的那份由设置页的状态行报出来。
+ */
+export function uninstallHooks({ home = homedir() }: { home?: string } = {}): InstallOutcome {
+  let removed = false
+  for (const spec of specs(home)) {
     const loaded = load(spec.file)
-    if (loaded.kind === 'missing') return `${spec.label}：配置文件不存在，无需卸载`
-    if (loaded.kind === 'error') return `${spec.label}：读不了，跳过（${loaded.message}）`
+    if (loaded.kind !== 'ok') continue
     const obj = clone(loaded.obj)
-    if (!apply(obj, spec, 0, 'uninstall')) return `${spec.label}：没有 easy-flow 的条目，无需卸载`
+    if (!apply(obj, spec, 0, 'uninstall')) continue
 
     backup(spec.file)
     writeFileSync(spec.file, render(obj, loaded.trailingNewline), 'utf8')
-    return `${spec.label}：已摘除，备份 ${spec.file}.bak`
-  })
+    removed = true
+  }
+  return { summary: removed ? '已卸载' : '没有需要卸载的条目', failed: [] }
 }

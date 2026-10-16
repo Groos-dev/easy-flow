@@ -2,6 +2,7 @@ import type {
   BoardData,
   ContextPayload,
   HookPlan,
+  InstallOutcome,
   LaunchAgent,
   LaunchProviderInfo,
   LaunchResult,
@@ -189,7 +190,7 @@ export const api = {
 
   skill: (): Promise<SkillPayload> => request('/api/skill'),
 
-  installSkill: (): Promise<SkillPayload & { installed: string[] }> =>
+  installSkill: (): Promise<SkillPayload & InstallOutcome> =>
     request('/api/skill/install', { method: 'POST' }),
 
   // ------------------------------------------------------------- Agent hook
@@ -197,9 +198,9 @@ export const api = {
   /** 两个 agent 的 hook 安装状态。读的是真文件 */
   hooks: (): Promise<HookPlan> => request('/api/hooks'),
 
-  installHooks: (): Promise<HookPlan & { installed: string[] }> =>
+  installHooks: (): Promise<HookPlan & InstallOutcome> =>
     request('/api/hooks/install', { method: 'POST' }),
 
-  uninstallHooks: (): Promise<HookPlan & { removed: string[] }> =>
+  uninstallHooks: (): Promise<HookPlan & InstallOutcome> =>
     request('/api/hooks/uninstall', { method: 'POST' }),
 }

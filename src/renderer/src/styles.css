@@ -1070,20 +1070,42 @@ body {
   border-radius: 4px;
 }
 
-/* 设置页里那几块「读出来的现状」（数据目录、装了什么）：等宽带底，
-   与旁边的说明文字分层——原先是个裸 pre，跟旁边的卡片不是一个语言 */
-.settings-main pre {
+/* 设置页的状态行：左边是「装了什么」的图标或标题，右边只给一句结论。
+   路径这类细节不再铺在这里——出错时才由 .notice 带出来 */
+.settings-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 6px 0;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+/* 快捷键那行：左边是什么、右边是键位与动作（桌面应用快捷键列表的排法） */
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 10px 12px;
   background: var(--column);
   border: 1px solid var(--border);
   border-radius: 8px;
-  color: var(--text-dim);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+}
+
+.settings-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-row-title {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.settings-row-desc {
+  margin-top: 2px;
+  color: var(--text-faint);
+  font-size: 11.5px;
 }
 
 /* ------------------------------------------------------------ 设置面板 */
@@ -1110,18 +1132,6 @@ body {
   font-size: 12px;
   line-height: 1.5;
   margin: 4px 0 6px;
-}
-
-.ok-box {
-  background: #16241c;
-  border: 1px solid #2b4a37;
-  color: #a8e6bf;
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin: 10px 0;
-  white-space: pre-wrap;
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 /* ------------------------------------------------------- 优先级选择器 */
@@ -1969,6 +1979,11 @@ button.pet:hover {
   border-color: var(--border);
 }
 
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* ------------------------------------------------- 详情页的取值选择器 */
 
 .detail-controls {
@@ -2425,7 +2440,6 @@ button.pet:hover {
   color: var(--text-dim);
   margin-top: 3px;
 }
-
 /* ------------------------------------------------------------- mini 面板 */
 
 /*
@@ -2596,14 +2610,14 @@ button.pet:hover {
 
 /* 设置页的快捷键录制框：看着像输入框，点一下进入录制 */
 .shortcut-key {
-  min-width: 190px;
-  padding: 7px 12px;
+  flex: none;
+  padding: 4px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--card);
   color: var(--text);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
+  font-size: 12px;
   text-align: center;
   cursor: pointer;
 }

@@ -187,7 +187,7 @@ describe('hook 一键配置：只增不改', () => {
     const afterFirst = read(codexFile)
     const second = installHooks({ port: 3210, home })
     assert.equal(read(codexFile), afterFirst, '第二次装不应改动文件')
-    assert.ok(second.some((line) => line.includes('已是最新')))
+    assert.match(second.summary, /已是最新/)
 
     const ours = JSON.parse(afterFirst).hooks.PreToolUse.filter((b: any) =>
       JSON.stringify(b).includes('/api/hook'),
@@ -198,7 +198,7 @@ describe('hook 一键配置：只增不改', () => {
     const cleaned = read(codexFile)
     const again = uninstallHooks({ home })
     assert.equal(read(codexFile), cleaned, '第二次卸不应改动文件')
-    assert.ok(again.every((line) => line.includes('无需卸载')))
+    assert.match(again.summary, /没有需要卸载的条目/)
   })
 
   test('端口变了，装出来的地址跟着更新', () => {
@@ -292,7 +292,8 @@ describe('/api/hooks 路由', () => {
     assert.ok(empty.agents.every((a: any) => a.installed === false))
 
     const installed = (await (await post('/api/hooks/install')).json()) as any
-    assert.ok(installed.installed.length)
+    assert.equal(installed.summary, '已安装')
+    assert.deepEqual(installed.failed, [])
     assert.deepEqual(
       installed.agents.map((a: any) => a.installed),
       [true, true],
@@ -300,7 +301,7 @@ describe('/api/hooks 路由', () => {
     assert.match(installed.agents[0].url, /:4321\/api\/hook/)
 
     const removed = (await (await post('/api/hooks/uninstall')).json()) as any
-    assert.ok(removed.removed.length)
+    assert.equal(removed.summary, '已卸载')
     assert.ok(removed.agents.every((a: any) => a.installed === false))
   })
 })

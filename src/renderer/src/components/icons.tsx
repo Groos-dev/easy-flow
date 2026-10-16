@@ -43,6 +43,36 @@ export function CopyIcon() {
   )
 }
 
+/** 改绑图标：一支笔 */
+export function PencilIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  )
+}
+
+/** 恢复默认图标：回头的箭头 */
+export function ResetIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5" />
+    </svg>
+  )
+}
+
+/** 命令行图标：终端里的提示符 */
+export function TerminalIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="5 8 9 12 5 16" />
+      <line x1="12" y1="16" x2="19" y2="16" />
+    </svg>
+  )
+}
+
 /** 复制成功的短暂反馈：换成勾 */
 export function CheckIcon() {
   return (
