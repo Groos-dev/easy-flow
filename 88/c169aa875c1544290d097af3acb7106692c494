@@ -1,0 +1,36 @@
+test/core.test.ts
+  s_edb025cd8aebfd::t_c92d05bc6226b7 3976,3987
+  s_edb025cd8aebfd::t_bb1d499c1d386b 4086-4095
+  s_edb025cd8aebfd::t_c731506dec9a47 4027-4028
+  s_edb025cd8aebfd::t_0660fb38fdf7e3 3971-3975,3977,3981-3982,3988,3991,4001,4009-4026,4029-4036,4045,4078-4085,4096-4108
+  s_edb025cd8aebfd::t_e3e150197d9e5e 37
+src/renderer/src/components/Card.tsx
+  s_edb025cd8aebfd::t_35258646ca18fd 82,85
+  s_edb025cd8aebfd::t_fe00b75ad3a4e5 47
+  s_edb025cd8aebfd::t_b6dcd29a8641a8 10
+src/renderer/src/lib/pets.ts
+  s_edb025cd8aebfd::t_3db59193c2759e 80
+  s_edb025cd8aebfd::t_323c7b0905ae34 129-132
+src/renderer/src/styles.css
+  s_edb025cd8aebfd::t_1ca393d92b7133 1076
+test/pet-card.test.ts
+  s_edb025cd8aebfd::t_d603995dd95845 223-234
+  s_edb025cd8aebfd::t_fdade991be0907 170-180
+  s_edb025cd8aebfd::t_c2804718f5b2bf 23-24,28-29,34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "88c169aa875c1544290d097af3acb7106692c494",
+  "prompts": {},
+  "sessions": {
+    "s_edb025cd8aebfd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6b43ad3c-ac7b-4088-a2ca-32a3c7a7ac95",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
