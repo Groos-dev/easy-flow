@@ -2426,42 +2426,6 @@ button.pet:hover {
   margin-top: 3px;
 }
 
-.mindmap-hint {
-  position: absolute;
-  right: 12px;
-  bottom: 10px;
-  padding: 4px 12px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: #12151b;
-  color: var(--text-faint);
-  font-size: 11px;
-  pointer-events: none;
-}
-
-/* 顶栏的「看板 / 导图」分段切换 */
-.seg {
-  display: flex;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.seg button {
-  border: none;
-  padding: 3px 12px;
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 12px;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.seg button.on {
-  background: var(--accent);
-  color: #fff;
-}
-
 /* ------------------------------------------------------------- mini 面板 */
 
 /*
