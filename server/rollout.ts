@@ -118,6 +118,8 @@ interface Track {
   mtimeMs: number
   /** fold 出来的最新观察；只有认不出的事件时保持上一次的 */
   observation: SessionObservation | null
+  /** 缓存里那份认不出、这轮必须写回：不然 offset 重算成一样，旧形状会一直留在库里 */
+  rewrite: boolean
 }
 
 export class RolloutStore {
@@ -140,6 +142,7 @@ export class RolloutStore {
         offset: observation ? row.offset : 0,
         mtimeMs: row.mtimeMs,
         observation,
+        rewrite: !observation && row.state != null,
       })
     }
 
@@ -186,7 +189,7 @@ export class RolloutStore {
     const known = tracked.get(id)
     // 同一条会话认领过的文件不同（fork / 重建）：认最早认领的那个，别把两条流混进一份 offset
     if (known && known.path !== path) return
-    const track: Track = known ?? { path, offset: 0, mtimeMs: 0, observation: null }
+    const track: Track = known ?? { path, offset: 0, mtimeMs: 0, observation: null, rewrite: false }
     tracked.set(id, track)
 
     let { offset, observation } = track
@@ -216,8 +219,9 @@ export class RolloutStore {
     track.offset = offset
     track.mtimeMs = stats.mtimeMs
     track.observation = observation
-    if (!known || known.offset !== offset || known.mtimeMs !== stats.mtimeMs) {
+    if (track.rewrite || !known || known.offset !== offset || known.mtimeMs !== stats.mtimeMs) {
       this.sources.touchSource(path, { mtimeMs: stats.mtimeMs, offset, state: observation })
+      track.rewrite = false
     }
   }
 }

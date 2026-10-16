@@ -3415,6 +3415,25 @@ describe('rollout 兜底：事件译状态、增量读、只扫近几天', () =>
     assert.equal(got?.action, null)
   })
 
+  test('认不出的缓存这一轮就写回：不然下一轮又从零重读一遍', () => {
+    const home = join(HOME, 'stale-rewrite')
+    const { sources } = newState()
+    const store = new RolloutStore(home, sources)
+    const dir = sessionDirFor(home, new Date())
+    const file = writeRollout(dir, 'cx-rewrite', line('event_msg', { type: 'task_complete' }) + '\n')
+    const stats = statSync(file)
+    sources.touchSource(file, {
+      mtimeMs: stats.mtimeMs,
+      offset: stats.size,
+      state: { state: 'working', needsAction: '', observedAt: 1, detail: '上一版写下的形状' },
+    })
+
+    store.refresh(['cx-rewrite'])
+    const cached = sources.source(file)
+    assert.equal((cached?.state as { status?: { state?: string } })?.status?.state, 'done', '旧形状被新观察顶掉')
+    assert.equal(cached?.offset, stats.size, 'offset 停在读完的位置，下一轮不用再重读')
+  })
+
   test('只扫近几天：窗口外的日期目录靠缓存继续扫到，没进过缓存的就不扫', () => {
     const home = join(HOME, 'window')
     const { sources } = newState()
