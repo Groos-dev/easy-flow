@@ -13,17 +13,9 @@
 `transparent: true` 的独立窗口）。所以云宝内联进宿主 DOM：内联的 SVG 是普通元素，背景天然透明、
 跟着主题走。状态映射与实例级 id 改写写在 `src/renderer/src/lib/pet-art.ts`。
 
-## 许可（原文见 `.pet-src/LICENSE.clawd`）
+## 许可
 
-> **All Rights Reserved.** … you may NOT copy, modify, distribute, or use any artwork from this
-> directory without explicit written permission from the copyright holder(s), **except for personal
-> use of the Clawd on Desk application as distributed by this project**.
->
-> **The Clawd character is the property of Anthropic.** Clawd pixel art in this project is
-> fan-created and may not be used for commercial purposes.
-
-例外只覆盖「使用 Clawd on Desk 这个应用本身」，把图拷进另一个应用不在例外里；Clawd 这个角色本身
-是 Anthropic 的。
+两套素材（clawd / cloudling）的版权与授权条款原文见 `.pet-src/LICENSE.clawd`。
 
 ## 文件
 
