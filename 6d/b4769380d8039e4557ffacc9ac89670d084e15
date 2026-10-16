@@ -1,0 +1,30 @@
+README.md
+  s_e84fe7688b026a::t_339d62afe79a6b 5
+  s_e84fe7688b026a::t_b8bb336cc2612b 65
+src/renderer/src/App.tsx
+  s_e84fe7688b026a::t_597461d2b9aa60 577-578,580-583,585,587-600
+  s_e84fe7688b026a::t_527c5be9d61691 634-647
+  s_e84fe7688b026a::t_f90bb3741f5d37 660
+  s_e84fe7688b026a::t_496c756abe6677 605-606
+  s_e84fe7688b026a::t_759f77e68041e2 151
+  s_e84fe7688b026a::t_75b9ae659c4347 16
+  s_e84fe7688b026a::t_1bbc26bfaf675b 225,229
+skill/todo/SKILL.md
+  s_e84fe7688b026a::t_46442f748417a3 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "6db4769380d8039e4557ffacc9ac89670d084e15",
+  "prompts": {},
+  "sessions": {
+    "s_e84fe7688b026a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c98c25a3-160a-4fd1-a1e4-53910b07405a",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
