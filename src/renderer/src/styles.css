@@ -95,12 +95,29 @@ body {
  * 靠 padding 撑高会随最高元素（搜索框）变化而偏。
  */
 .topbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
   height: 42px;
   padding: 0 16px;
-  border-bottom: 1px solid var(--border);
+}
+
+/*
+ * 底边改由 ::after 画：两头要与栏的竖线、窗口右缘接成圆角，直的 border-bottom 收不了口。
+ * 左端让开栏那一侧的圆角，右端一直拉到窗口下缘，右缘那条竖线正好压在窗口边框上。
+ */
+.topbar::after {
+  content: '';
+  position: absolute;
+  left: 9px; /* 栏宽 56 + 圆角 10 − 顶栏起点 56 */
+  right: 0;
+  top: 41px;
+  height: calc(100vh - 41px);
+  border-top: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-top-right-radius: 10px;
+  pointer-events: none;
 }
 
 .topbar > * {
@@ -246,6 +263,7 @@ body {
 }
 
 .rail-col {
+  position: relative;
   width: 56px;
   height: 100%;
   display: flex;
@@ -255,9 +273,30 @@ body {
   /* 顶部让开 macOS 红绿灯（中心 y=21） */
   padding: 46px 0 10px;
   background: var(--rail);
-  border-right: 1px solid var(--border);
   /* 栏的空白处是窗口拖拽区，按钮自己让开 */
   -webkit-app-region: drag;
+}
+
+/*
+ * 内容区的左边框：竖线照旧落在栏的最后一列，上下两头各收一个 10px 圆角（同列的圆角），
+ * 分别接上顶栏底边与窗口下缘——直角接上去太硬。
+ * 顶栏那一行（交通灯所在）仍然不画线：交通灯整组横跨 x=16~68，比栏还宽，
+ * 边框一路顶到窗口顶部就会切在第 3 个灯上。
+ */
+.rail-col::after {
+  content: '';
+  position: absolute;
+  /* 让开 1px 给竖线本身，再往右 10px 让给圆角 */
+  left: calc(100% - 1px);
+  top: 41px; /* 顶栏底边那一行 */
+  bottom: 0;
+  width: 11px;
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
+  pointer-events: none;
 }
 
 .rail-btn {
@@ -1612,11 +1651,30 @@ button.pet:hover {
 }
 
 .detail-head {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 46px 16px 10px; /* 顶部让开 macOS 红绿灯 */
-  border-bottom: 1px solid var(--border);
+}
+
+/*
+ * 底边改由 ::after 画：详情页铺满整窗，横线两头在窗口左右缘上，
+ * 直的 border-bottom 收不了口（同 .topbar，只是这页没有左栏，两端都要收）。
+ */
+.detail-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% - 1px);
+  height: calc(100vh - 100% + 1px);
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+  pointer-events: none;
 }
 
 .detail-head > * {
