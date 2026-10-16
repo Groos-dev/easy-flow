@@ -1,0 +1,19 @@
+src/renderer/src/components/MindMap.tsx
+  s_64878040b951a1::t_3ac1af2c948a90 87-93,96,99-100,102,104,107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "6362422fa8ddb27b9ff004af04e8b865fffe4967",
+  "prompts": {},
+  "sessions": {
+    "s_64878040b951a1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bdca7711-9d33-4f47-996c-00526f29655a",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
