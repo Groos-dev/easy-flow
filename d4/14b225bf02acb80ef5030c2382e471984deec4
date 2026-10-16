@@ -1,0 +1,29 @@
+test/skill-install.test.ts
+  s_cbaa9086e9036d::t_7f151ad73167fe 1-110
+server/skill-install.ts
+  s_cbaa9086e9036d::t_8bab4f2062afcc 28
+  s_cbaa9086e9036d::t_13de2086533cd3 22
+  s_cbaa9086e9036d::t_9335c21d430da0 144-151,153-154,158-166
+  s_cbaa9086e9036d::t_0364d3c437c0a3 263
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "d414b225bf02acb80ef5030c2382e471984deec4",
+  "prompts": {},
+  "humans": {
+    "h_61ecb41619cb4e": {
+      "author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  },
+  "sessions": {
+    "s_cbaa9086e9036d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0c11807d-9db2-4974-a0ad-f880d17031aa",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}

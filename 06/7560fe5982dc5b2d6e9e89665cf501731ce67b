@@ -1,0 +1,26 @@
+src/renderer/src/components/icons.tsx
+  s_cbaa9086e9036d::t_f79459cc814b0b 76-97
+src/renderer/src/styles.css
+  s_cbaa9086e9036d::t_e6d01b3bd88154 2611,2614-2621,2623,2628,2631-2646,2648,2651
+src/renderer/src/lib/shortcut.ts
+  s_cbaa9086e9036d::t_ea0792df9aeaf6 94,96,100-104
+src/renderer/src/components/Settings.tsx
+  s_cbaa9086e9036d::t_492dfdf26ad49d 319-323
+  s_cbaa9086e9036d::t_b7c33edb36c95b 3,5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "067560fe5982dc5b2d6e9e89665cf501731ce67b",
+  "prompts": {},
+  "sessions": {
+    "s_cbaa9086e9036d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0c11807d-9db2-4974-a0ad-f880d17031aa",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
