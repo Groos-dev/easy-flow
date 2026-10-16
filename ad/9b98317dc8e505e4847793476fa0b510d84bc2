@@ -1,0 +1,47 @@
+src/renderer/src/components/icons.tsx
+  s_cbaa9086e9036d::t_780bc69fb87b15 46-75
+src/renderer/src/lib/types.ts
+  s_cbaa9086e9036d::t_d92027b8c47495 322-327
+server/skill-install.ts
+  s_cbaa9086e9036d::t_3439c7b3fe7e9c 309,311,320,332,346-347
+  s_cbaa9086e9036d::t_0764e069dd2407 275-282,288,299,304
+server/hook-install.ts
+  s_cbaa9086e9036d::t_34e7c7d9f2a15c 249-251,262,274-276,279-285,287,289,293-295
+  s_cbaa9086e9036d::t_72abdf1e785414 14
+src/renderer/src/styles.css
+  s_cbaa9086e9036d::t_081474d173452b 1758-1762
+  s_cbaa9086e9036d::t_ed9c137e168aea 2413-2414,2420
+  s_cbaa9086e9036d::t_66ac74fe88f0a5 849-854,856-864,869-884
+test/hook-install.test.ts
+  s_cbaa9086e9036d::t_0bb3516f5e4f8e 295-296,304
+  s_cbaa9086e9036d::t_2a88669774801a 190,201
+server/index.ts
+  s_cbaa9086e9036d::t_aa0b74c587698b 556-557
+  s_cbaa9086e9036d::t_100af393bc9ece 570-571,576-577
+src/renderer/src/lib/api.ts
+  s_cbaa9086e9036d::t_022334edfe4122 5
+  s_cbaa9086e9036d::t_b36504ebb73652 193,201,204
+src/renderer/src/components/Settings.tsx
+  s_cbaa9086e9036d::t_19a832506d242c 266
+  s_cbaa9086e9036d::t_d39e260918a31f 389-404
+  s_cbaa9086e9036d::t_61370ba514c3eb 356-367
+  s_cbaa9086e9036d::t_69c4d554af233b 148-154,166,181,198-199,214-215,230-231
+  s_cbaa9086e9036d::t_fb8a4cf5295f39 292,294,296,307-311,314,322-324,326-327,331,335-336,405
+  s_cbaa9086e9036d::t_484c060a28efaf 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "ad9b98317dc8e505e4847793476fa0b510d84bc2",
+  "prompts": {},
+  "sessions": {
+    "s_cbaa9086e9036d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0c11807d-9db2-4974-a0ad-f880d17031aa",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
