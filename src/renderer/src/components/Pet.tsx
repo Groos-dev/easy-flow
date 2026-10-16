@@ -106,7 +106,6 @@ export default function Pet({
   focus = false,
   compact = false,
   still = false,
-  tip,
   link,
   onOpen,
 }: {
@@ -117,7 +116,6 @@ export default function Pet({
   focus?: boolean
   compact?: boolean
   still?: boolean
-  tip?: string
   link?: string
   onOpen?: () => void
 }) {
@@ -134,7 +132,7 @@ export default function Pet({
 
   if (!link) {
     return (
-      <span className={cls} title={tip ?? name} role="img" aria-label={name}>
+      <span className={cls} role="img" aria-label={name}>
         {body}
       </span>
     )
@@ -142,7 +140,6 @@ export default function Pet({
   return (
     <button
       className={cls}
-      title={tip ?? name}
       aria-label={name}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
@@ -154,19 +151,6 @@ export default function Pet({
       {body}
     </button>
   )
-}
-
-/** 悬停先答「这条会话在做什么」，再给状态与原文 */
-function petTip(session: Session, state: Pose): string {
-  const { needsAction, detail } = session.status
-  return [
-    session.title || session.session,
-    `${AGENT_LABELS[session.agent] ?? session.agent} · ${PET_LABEL[state]}`,
-    needsAction ? `需要你回答：${needsAction}` : detail,
-    session.link ? '点一下回到这个会话' : `没有会话级链接，会话 id：${session.session}`,
-  ]
-    .filter(Boolean)
-    .join('\n')
 }
 
 function Bubble({ text, state }: { text: string; state: Pose }) {
@@ -237,7 +221,6 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
         focus={item.focus}
         compact={compact}
         still={still}
-        tip={petTip(session, state)}
         link={session.link || undefined}
         // 点一下 = 这条会话此刻「静止」：服务端写成一条状态事件，下一个 hook 事件直接覆盖。
         // 记不下不该拦住人打开会话，所以不等它、也不报错
