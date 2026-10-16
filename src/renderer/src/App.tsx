@@ -20,6 +20,7 @@ import NextUp from './components/NextUp'
 import Detail from './components/Detail'
 import SearchPanel from './components/SearchPanel'
 import Settings from './components/Settings'
+import LeftRail from './components/LeftRail'
 
 /** 空列的一句话：一个「—」说不出这一列是干什么的。认不出的状态回落到通用文案 */
 const COLUMN_HINT: Record<string, string> = {
@@ -134,14 +135,28 @@ const PRIORITY_RANK: Record<string, number> = { p0: 0, p1: 1, p2: 2, p3: 3 }
  */
 const BOARD_POLL_MS = 1_000
 
+/** pin 的项目存浏览器本地：它是「这台机器上常看哪几个」，不是看板数据 */
+const PINNED_KEY = 'easy-flow.pinned-projects'
+
+function readPinned(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PINNED_KEY) ?? '[]')
+    return Array.isArray(raw) ? raw.filter((s) => typeof s === 'string') : []
+  } catch {
+    return []
+  }
+}
+
 export default function App() {
   const [statuses, setStatuses] = useState<Status[]>([])
   /** 当前项目：看板数据按项目隔离 */
   const [project, setProject] = useState('')
   /** 当前项目显示名，取自项目根 AGENTS.md 的 frontmatter；缺省是目录名 */
   const [projectName, setProjectName] = useState('')
-  /** 项目列表：顶栏的 chip 行用它。agent 在文件系统里建完目录后靠刷新带出来 */
+  /** 项目列表：左侧栏用它。agent 在文件系统里建完目录后靠刷新带出来 */
   const [projects, setProjects] = useState<Project[]>([])
+  /** 常驻左侧栏的项目（pin 的），顺序即栏里的顺序 */
+  const [pinned, setPinned] = useState<string[]>(readPinned)
   /** 「已完成」列是否展开。默认收成窄条：历史只增不减，全铺开会把活跃三列挤窄 */
   const [doneOpen, setDoneOpen] = useState(false)
   /** 从父卡片点过来的那条子需求：等它在版面上出现再滚过去 */
@@ -182,6 +197,10 @@ export default function App() {
   const [hits, setHits] = useState<Set<string> | null>(null)
   /** 正在等服务端返回：用来区分「还没查」与「查了没有」 */
   const [searching, setSearching] = useState(false)
+
+  useEffect(() => {
+    localStorage.setItem(PINNED_KEY, JSON.stringify(pinned))
+  }, [pinned])
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   /** 待打开的需求只取一次（主窗口刚重建时的那份交接） */
@@ -385,6 +404,9 @@ export default function App() {
     void loadNextUp()
   }, [load, loadTodos, loadProjects, loadSessions, loadNextUp])
 
+  /** 铃铛角标：agent 卡住等你、要人介入的需求数（档位 1 就是 level now） */
+  const agentCount = useMemo(() => nextItems.filter((i) => i.level === 'now').length, [nextItems])
+
   /** 需求 id → 名下的会话。需求没有 id 时不可能有会话，取不到正好 */
   const sessionsByReq = useMemo(() => {
     const map = new Map<string, Session[]>()
@@ -395,6 +417,13 @@ export default function App() {
     }
     return map
   }, [sessions])
+
+  /** pin 只动左栏常驻哪几个，不切当前项目 */
+  function togglePin(slug: string, next: boolean) {
+    setPinned((list) =>
+      next ? (list.includes(slug) ? list : [...list, slug]) : list.filter((s) => s !== slug),
+    )
+  }
 
   /** 切项目：写回 activeProject，再把看板换成新项目的数据 */
   async function switchProject(slug: string) {
@@ -576,34 +605,21 @@ export default function App() {
           />
         ) : (
           <div className="app">
+            <LeftRail
+              projects={projects}
+              active={project}
+              pinned={pinned}
+              view={reqView}
+              agentCount={agentCount}
+              onSwitchProject={(slug) => void switchProject(slug)}
+              onTogglePin={togglePin}
+              onOpenProject={(slug) => setDetail({ project: slug, slug: null })}
+              onSwitchView={(v) => setReqView(v)}
+              onAgentFocus={() => setReqView((v) => (v === 'next' ? 'board' : 'next'))}
+            />
+
             <div className="topbar">
-              <div className="topbar-side">
-                {/* 项目切换：chip 常驻可见，点一下直接切；项目多了横向滚动 */}
-                <div className="proj-chips">
-                  {projects.map((p) => (
-                    <button
-                      key={p.slug}
-                      className={`proj-chip${p.slug === project ? ' on' : ''}`}
-                      title={p.root}
-                      onClick={() => void switchProject(p.slug)}
-                    >
-                      {p.name || p.slug}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  className="icon-btn"
-                  title="项目详情（总规范）"
-                  aria-label="项目详情"
-                  onClick={() => setDetail({ project, slug: null })}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="9" />
-                    <line x1="12" y1="11" x2="12" y2="16" />
-                    <line x1="12" y1="8" x2="12" y2="8" />
-                  </svg>
-                </button>
-              </div>
+              <div className="topbar-side" />
 
               <div className="topbar-side right">
                 {/* 筛选标记常驻：关掉面板后看板上少了卡片，得有个东西解释为什么少。
@@ -636,20 +652,6 @@ export default function App() {
                     </svg>
                   </button>
                 )}
-                <div className="seg">
-                  <button
-                    className={reqView === 'board' ? 'on' : ''}
-                    onClick={() => setReqView('board')}
-                  >
-                    看板
-                  </button>
-                  <button className={reqView === 'next' ? 'on' : ''} onClick={() => setReqView('next')}>
-                    下一步
-                  </button>
-                  <button className={reqView === 'map' ? 'on' : ''} onClick={() => setReqView('map')}>
-                    导图
-                  </button>
-                </div>
               </div>
             </div>
 
