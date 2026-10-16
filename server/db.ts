@@ -26,7 +26,7 @@ import {
 import { readTextOrNull } from './fsutil.ts'
 import { applySchema } from './schema.ts'
 import { ensureTemplates, projectIssues } from './convention.ts'
-import type { SessionStatus, ThreadState } from './session-state.ts'
+import type { SessionObservation, ThreadState } from './session-state.ts'
 import type { SourceRow } from './source-file.ts'
 
 /**
@@ -186,6 +186,8 @@ interface SessionStateRow {
   needs_action: string
   observed_at: number
   detail: string
+  action_text: string
+  action_called_at: number
 }
 
 interface SourceFileRow {
@@ -199,12 +201,15 @@ function toSourceRow(row: SourceFileRow): SourceRow {
   return { mtimeMs: row.mtime_ms, offset: row.offset, state: row.state ? JSON.parse(row.state) : null }
 }
 
-function toSessionStatus(row: SessionStateRow): SessionStatus {
+function toObservation(row: SessionStateRow): SessionObservation {
   return {
-    state: row.state as ThreadState,
-    needsAction: row.needs_action,
-    observedAt: row.observed_at,
-    detail: row.detail,
+    status: {
+      state: row.state as ThreadState,
+      needsAction: row.needs_action,
+      observedAt: row.observed_at,
+      detail: row.detail,
+    },
+    action: row.action_text ? { text: row.action_text, calledAt: row.action_called_at } : null,
   }
 }
 
@@ -1128,33 +1133,44 @@ export class BoardDatabase {
     return this.sessionBy(input.agent, input.session)!
   }
 
-  getSessionState(agent: string, session: string): SessionStatus | undefined {
+  getSessionObservation(agent: string, session: string): SessionObservation | undefined {
     const row = this.db
       .prepare('SELECT * FROM session_state WHERE agent = ? AND session = ?')
       .get(agent, session) as unknown as SessionStateRow | undefined
-    return row ? toSessionStatus(row) : undefined
+    return row ? toObservation(row) : undefined
   }
 
-  putSessionState(agent: string, session: string, status: SessionStatus): void {
+  putSessionObservation(agent: string, session: string, observation: SessionObservation): void {
+    const { status, action } = observation
     this.db
       .prepare(
-        `INSERT INTO session_state (agent, session, state, needs_action, observed_at, detail)
-         VALUES (?, ?, ?, ?, ?, ?)
+        `INSERT INTO session_state (agent, session, state, needs_action, observed_at, detail, action_text, action_called_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(agent, session) DO UPDATE SET
            state = excluded.state, needs_action = excluded.needs_action,
-           observed_at = excluded.observed_at, detail = excluded.detail`,
+           observed_at = excluded.observed_at, detail = excluded.detail,
+           action_text = excluded.action_text, action_called_at = excluded.action_called_at`,
       )
-      .run(agent, session, status.state, status.needsAction, status.observedAt, status.detail)
+      .run(
+        agent,
+        session,
+        status.state,
+        status.needsAction,
+        status.observedAt,
+        status.detail,
+        action?.text ?? '',
+        action?.calledAt ?? 0,
+      )
   }
 
-  dropSessionState(agent: string, session: string): boolean {
+  dropSessionObservation(agent: string, session: string): boolean {
     const info = this.db.prepare('DELETE FROM session_state WHERE agent = ? AND session = ?').run(agent, session)
     return Number(info.changes) > 0
   }
 
-  listSessionStates(): Array<{ agent: string; session: string; status: SessionStatus }> {
+  listSessionObservations(): Array<{ agent: string; session: string; observation: SessionObservation }> {
     const rows = this.db.prepare('SELECT * FROM session_state').all() as unknown as SessionStateRow[]
-    return rows.map((row) => ({ agent: row.agent, session: row.session, status: toSessionStatus(row) }))
+    return rows.map((row) => ({ agent: row.agent, session: row.session, observation: toObservation(row) }))
   }
 
   source(path: string): SourceRow | undefined {

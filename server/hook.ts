@@ -2,8 +2,9 @@
  * agent 的 hook 事件 → 会话状态（**推送源**）。
  *
  * hook 是「推」：agent 每做一个动作就往 /api/hook POST 一条，比拉落盘文件（一轮才知道结果）
- * 细一个量级。这里只做两件事——把事件名归一成状态、写进状态层（见 session-state.ts）；
- * 拉不到、没装、事件认不出时，读侧自然落回拉取那条路（兜底不能省）。
+ * 细一个量级。这里只做三件事——把事件名归一成状态、把工具调用归一成一句动作（见 action.ts）、
+ * 写进状态层（见 session-state.ts）；拉不到、没装、事件认不出时，读侧自然落回拉取那条路
+ * （兜底不能省）。
  *
  * 四条纪律：
  *   - 认不出的事件名 / 缺 session_id 一律忽略，不报错——hook 是别人发来的，不能因为我们没接住就把它呛回去
@@ -15,18 +16,17 @@
  * session_id 等于 CLAUDE_CODE_SESSION_ID、主 agent 不带 agent_id）。
  */
 import { type SessionStateStore, type SessionStatus, type ThreadState } from './session-state.ts'
+import { actionOf, type SessionAction } from './action.ts'
+import { str } from './util.ts'
 
 /** hook 打过来的 JSON。字段随事件变，只挑我们认的；其余原样放着不关心 */
 export interface HookPayload {
   hook_event_name?: unknown
   session_id?: unknown
   tool_name?: unknown
+  tool_input?: unknown
   agent_id?: unknown
   [key: string]: unknown
-}
-
-function str(v: unknown): string {
-  return typeof v === 'string' ? v : ''
 }
 
 /**
@@ -39,13 +39,13 @@ function str(v: unknown): string {
  * 挑事件的口径：只有「主会话的形态变了」才记。`SubagentStart` / `SubagentStop` 带 agent_id，
  * 那是子 agent 的生死，不是主会话的状态——一张卡一只 pet，子 agent 不另开，所以这里不接。
  */
-export function normalizeHookEvent(payload: HookPayload, at = Date.now()): SessionStatus | null {
+export function normalizeHookEvent(payload: HookPayload, observedAt = Date.now()): SessionStatus | null {
   const event = str(payload.hook_event_name)
   if (!event) return null
   const of = (state: ThreadState): SessionStatus => ({
     state,
     needsAction: '',
-    observedAt: at,
+    observedAt,
     detail: `hook 事件：${event}`,
   })
   switch (event) {
@@ -57,7 +57,7 @@ export function normalizeHookEvent(payload: HookPayload, at = Date.now()): Sessi
       // 收到人话 / 工具跑完：模型在想下一步
       return of('thinking')
     case 'PreToolUse':
-      // 要调工具了：这是「干活」，tool_name 在 payload 里，不改状态形状
+      // 要调工具了：这是「干活」
       return of('working')
     case 'PreCompact':
       return of('sweeping')
@@ -80,6 +80,11 @@ export function normalizeHookEvent(payload: HookPayload, at = Date.now()): Sessi
     default:
       return null
   }
+}
+
+export function hookActionOf(payload: HookPayload, observedAt = Date.now()): SessionAction | null {
+  if (str(payload.hook_event_name) !== 'PreToolUse') return null
+  return actionOf(str(payload.tool_name), payload.tool_input, observedAt)
 }
 
 export interface RecordOptions {
@@ -111,6 +116,6 @@ export function recordHook(
   }
   const status = normalizeHookEvent(payload, at)
   if (!status) return null
-  store.put(agent, session, status)
+  store.put(agent, session, status, hookActionOf(payload, at))
   return status
 }

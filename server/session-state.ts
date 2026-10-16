@@ -6,14 +6,19 @@
  *   拉取  看板请求时读 agent 的落盘——claude 的桌面记录与 CLI 进程、codex 的 rollout jsonl
  *   交互  点一下 pet（板侧写「这条静止」，会话再动起来时被下一个事件覆盖）
  *
- * 全表只有一条规则——**时刻新的赢**。不能是「写得晚的赢」：拉取是快照、推送是事件，
- * 快照可能比事件旧，21:00 的 PreToolUse 不能被 18:00 的落盘结论盖掉。
+ * 一条观察里两样东西**平级**，各自带时刻：
+ *   status  这条会话现在什么形态——姿势、角标、看板列看它
+ *   action  最近一次工具调用是什么——气泡里那句「在干什么」（见 action.ts）
+ *
+ * 规则只有一条——**时刻新的覆盖时刻旧的**。不能是「后写的覆盖先写的」：拉取是快照、
+ * 推送是事件，快照可能比事件旧，21:00 的 PreToolUse 不能被 18:00 的落盘结论盖掉。
  *
  * key 用 agent 自己报的那个 id（claude 的内层 `<uuid>`、codex 的 thread id）。桌面会话的登记
  * id 是 `local_<uuid>`，与它不同名——写与读之前都拿记录里的 cliSessionId 翻一下
  * （见 threads.ts 的 hookKeyOf），这样点击与 hook 事件才落在同一个格子里。
  */
 import { createLogger } from './log.ts'
+import type { SessionAction } from './action.ts'
 
 const log = createLogger('state')
 
@@ -30,7 +35,7 @@ const log = createLogger('state')
 export const THREAD_STATES = ['idle', 'thinking', 'working', 'sweeping', 'done', 'blocked', 'failed', 'unknown'] as const
 export type ThreadState = (typeof THREAD_STATES)[number]
 
-/** 一条会话状态的观察。所有来源都写这个，写的人自己把判据拼进 detail */
+/** 会话形态的一条观察。所有来源都写这个，写的人自己把判据拼进 detail */
 export interface SessionStatus {
   state: ThreadState
   /** 需要人介入时，要人回答的那句话原文；其余为空串 */
@@ -39,6 +44,16 @@ export interface SessionStatus {
   observedAt: number
   /** 判据出处，详情页 hover 用 */
   detail: string
+}
+
+/**
+ * 一条会话的最新观察：状态与动作并排。
+ *
+ * 动作是可选的那一半——某次观察只说得清形态时就只写状态，旧动作留着。
+ */
+export interface SessionObservation {
+  status: SessionStatus
+  action: SessionAction | null
 }
 
 /** 读不到时的状态。调用方拿不到条目时也该拿到它，而不是自己拼一个 */
@@ -57,8 +72,8 @@ export function isActive(state: ThreadState): boolean {
 }
 
 export interface StateTable {
-  get(agent: string, session: string): SessionStatus | undefined
-  put(agent: string, session: string, status: SessionStatus): void
+  get(agent: string, session: string): SessionObservation | undefined
+  put(agent: string, session: string, observation: SessionObservation): void
   drop(agent: string, session: string): boolean
   keyOf(agent: string, session: string): string
   alias(agent: string, session: string, key: string): void
@@ -67,15 +82,17 @@ export interface StateTable {
 export class SessionStateStore {
   constructor(private readonly table: StateTable) {}
 
-  put(agent: string, session: string, status: SessionStatus): boolean {
+  /** 写一条观察。状态必给，动作可选——不给就沿用旧动作（见 keepAction），不是清掉它 */
+  put(agent: string, session: string, status: SessionStatus, action: SessionAction | null = null): boolean {
     const old = this.table.get(agent, session)
-    if (old && !newer(status, old)) return false
-    this.table.put(agent, session, status)
-    if (differs(old, status)) logPut(agent, session, status, old)
+    if (old && !newer(status, old.status)) return false
+    const next: SessionObservation = { status, action: keepAction(old?.action, action) }
+    this.table.put(agent, session, next)
+    if (differs(old, next)) logPut(agent, session, next, old)
     return true
   }
 
-  get(agent: string, session: string): SessionStatus | undefined {
+  get(agent: string, session: string): SessionObservation | undefined {
     return this.table.get(agent, session)
   }
 
@@ -92,13 +109,34 @@ export class SessionStateStore {
   }
 }
 
-function differs(old: SessionStatus | undefined, next: SessionStatus): boolean {
-  return !old || old.state !== next.state || old.observedAt !== next.observedAt || old.detail !== next.detail
+/**
+ * 新观察没带动作时把旧动作留着。不这么做的话，「动作来自 rollout、hook 只报事件名」
+ * 的兜底会被随后到的 hook 事件清掉。
+ */
+function keepAction(old: SessionAction | null | undefined, next: SessionAction | null): SessionAction | null {
+  if (!old) return next
+  if (!next) return old
+  return next.calledAt >= old.calledAt ? next : old
 }
 
-function logPut(agent: string, session: string, status: SessionStatus, old?: SessionStatus): void {
-  const from = old ? `  ← ${old.state} @${clock(old.observedAt)}` : ''
-  log.debug(`${agent}/${session} → ${status.state} @${clock(status.observedAt)}  ${status.detail}${from}`)
+function differs(old: SessionObservation | undefined, next: SessionObservation): boolean {
+  if (!old) return true
+  const before = old.status
+  const after = next.status
+  return (
+    before.state !== after.state ||
+    before.observedAt !== after.observedAt ||
+    before.detail !== after.detail ||
+    old.action?.text !== next.action?.text ||
+    old.action?.calledAt !== next.action?.calledAt
+  )
+}
+
+function logPut(agent: string, session: string, next: SessionObservation, old?: SessionObservation): void {
+  const status = next.status
+  const from = old ? `  ← ${old.status.state} @${clock(old.status.observedAt)}` : ''
+  const doing = next.action ? `  「${next.action.text}」` : ''
+  log.debug(`${agent}/${session} → ${status.state} @${clock(status.observedAt)}  ${status.detail}${doing}${from}`)
 }
 
 function clock(ms: number): string {

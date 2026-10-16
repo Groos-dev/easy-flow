@@ -4,7 +4,7 @@
  * hook（server/hook.ts）是「推」，但它对 Codex 覆盖不全——OpenAI 没公开事件表、subagent 也不报。
  * hook 没装 / 服务没开 / 事件丢了时，第二条腿读 Codex 自己写的 transcript，把「此刻在干什么」
  * 还原成与 hook 同一套字面量（activity: idle|thinking|working），不再退回 thread_turns.status
- * 那种 turn 级四档。
+ * 那种 turn 级四档。顺带把 function_call 里的工具名与参数归一成一句动作（见 action.ts）。
  *
  * 对齐 clawd-on-desk 的 logConfig：sessionDir=<codexHome>/sessions、filePattern=rollout-*.jsonl、
  * pollIntervalMs=1500。照抄它两件事：
@@ -19,7 +19,9 @@
 import { closeSync, openSync, readSync, statSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { readdirOrEmpty } from './fsutil.ts'
-import type { SessionStatus, ThreadState } from './session-state.ts'
+import { parseJsonOrNull, str } from './util.ts'
+import type { SessionObservation, SessionStatus, ThreadState } from './session-state.ts'
+import { actionOf, type SessionAction } from './action.ts'
 import type { SourceTable } from './source-file.ts'
 
 /** rollout 落在 <codexHome>/sessions/<年>/<月>/<日>/ 这层日期目录下 */
@@ -29,10 +31,6 @@ const FILE_PREFIX = 'rollout-'
 const FILE_SUFFIX = '.jsonl'
 /** 近几天：当天及前两天。跑了好几天、rollout 落在更早日期目录里的会话靠缓存兜住 */
 const RECENT_DAYS = 3
-
-function str(v: unknown): string {
-  return typeof v === 'string' ? v : ''
-}
 
 /** 文件名里的 thread id：rollout-<ISO 日期>-<id>.jsonl。认不出返回 null，不猜 */
 const THREAD_ID_RE = /^rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/
@@ -51,7 +49,7 @@ export function sessionDirFor(codexHome: string, at: Date): string {
 /** rollout 的一行。只挑认得的字段，其余原样不关心 */
 interface RolloutLine {
   type?: unknown
-  payload?: { type?: unknown; error?: unknown } | null
+  payload?: { type?: unknown; error?: unknown; name?: unknown; arguments?: unknown } | null
   timestamp?: unknown
 }
 
@@ -62,13 +60,13 @@ interface RolloutLine {
  * task_started 起一轮、task_complete 收一轮、turn_aborted 是打断（同 hook 的 Interrupt → blocked）。
  * session_meta 是第一行，落在「会话活着、还没干活」——与 hook 的 SessionStart 同义。
  */
-export function rolloutStatusOf(line: RolloutLine, at: number): SessionStatus | null {
+export function rolloutStatusOf(line: RolloutLine, observedAt: number): SessionStatus | null {
   const type = str(line.type)
   const sub = str(line.payload?.type)
   const of = (state: ThreadState): SessionStatus => ({
     state,
     needsAction: '',
-    observedAt: at,
+    observedAt,
     detail: `rollout 事件：${sub ? `${type}/${sub}` : type}`,
   })
   if (type === 'session_meta') return of('idle')
@@ -100,14 +98,26 @@ export function rolloutStatusOf(line: RolloutLine, at: number): SessionStatus | 
   return null
 }
 
+/**
+ * 一行 → 一句动作，认不出返回 null。
+ *
+ * 只有 function_call 有——hook 没接上时，气泡里那句「在干什么」就靠这儿。
+ * 动作的时刻就是这一行的时刻。
+ */
+export function rolloutActionOf(line: RolloutLine, observedAt: number): SessionAction | null {
+  if (str(line.type) !== 'response_item' || str(line.payload?.type) !== 'function_call') return null
+  // 参数存成一串 JSON，解不开就当没有——不猜里面长什么样
+  return actionOf(str(line.payload?.name), parseJsonOrNull(str(line.payload?.arguments)), observedAt)
+}
+
 interface Track {
   /** 认领的文件绝对路径。同一条会话换文件（fork / 重建）时不接新的 */
   path: string
   /** 已读到的字节数，只到最后一个换行——写了一半的尾行留到下次 */
   offset: number
   mtimeMs: number
-  /** fold 出来的最新状态；只有认不出的事件时保持上一次的 */
-  state: SessionStatus | null
+  /** fold 出来的最新观察；只有认不出的事件时保持上一次的 */
+  observation: SessionObservation | null
 }
 
 export class RolloutStore {
@@ -116,13 +126,20 @@ export class RolloutStore {
     private readonly sources: SourceTable,
   ) {}
 
-  /** 增量读一遍，返回认到的会话状态。只处理 ids 里的会话（外加已经跟过的） */
-  refresh(ids: Iterable<string>, now = Date.now()): Map<string, SessionStatus> {
+  /** 增量读一遍，返回认到的会话观察。只处理 ids 里的会话（外加已经跟过的） */
+  refresh(ids: Iterable<string>, now = Date.now()): Map<string, SessionObservation> {
     const want = new Set(ids)
     const tracked = new Map<string, Track>()
     for (const row of this.sources.listSources()) {
       const id = threadIdOf(basename(row.path))
-      if (id) tracked.set(id, { path: row.path, offset: row.offset, mtimeMs: row.mtimeMs, state: row.state as SessionStatus | null })
+      if (id) {
+        tracked.set(id, {
+          path: row.path,
+          offset: row.offset,
+          mtimeMs: row.mtimeMs,
+          observation: row.state as SessionObservation | null,
+        })
+      }
     }
 
     for (const dir of this.candidateDirs(now, tracked)) {
@@ -134,8 +151,8 @@ export class RolloutStore {
       }
     }
 
-    const out = new Map<string, SessionStatus>()
-    for (const [id, track] of tracked) if (track.state) out.set(id, track.state)
+    const out = new Map<string, SessionObservation>()
+    for (const [id, track] of tracked) if (track.observation) out.set(id, track.observation)
     return out
   }
 
@@ -168,10 +185,10 @@ export class RolloutStore {
     const known = tracked.get(id)
     // 同一条会话认领过的文件不同（fork / 重建）：认最早认领的那个，别把两条流混进一份 offset
     if (known && known.path !== path) return
-    const track: Track = known ?? { path, offset: 0, mtimeMs: 0, state: null }
+    const track: Track = known ?? { path, offset: 0, mtimeMs: 0, observation: null }
     tracked.set(id, track)
 
-    let { offset, state } = track
+    let { offset, observation } = track
     if (stats.size < offset) offset = 0 // 被截断 / 换过：从头再读，别拿旧 offset 跳字节
     if (stats.size > offset) {
       const buf = readBytes(path, offset, stats.size - offset)
@@ -183,17 +200,23 @@ export class RolloutStore {
           const ev = parseLine(line)
           if (!ev) continue // 空行 / 写坏的行 / 不是 JSON：忽略，不拖垮整条
           const parsed = Date.parse(str(ev.timestamp))
-          const status = rolloutStatusOf(ev, Number.isFinite(parsed) ? parsed : Date.now())
-          if (status) state = status
+          const observedAt = Number.isFinite(parsed) ? parsed : Date.now()
+          const status = rolloutStatusOf(ev, observedAt)
+
+          if (!status) {
+            continue
+          }
+          const action = rolloutActionOf(ev, observedAt) ?? observation?.action ?? null
+          observation = { status, action}
         }
       }
     }
 
     track.offset = offset
     track.mtimeMs = stats.mtimeMs
-    track.state = state
+    track.observation = observation
     if (!known || known.offset !== offset || known.mtimeMs !== stats.mtimeMs) {
-      this.sources.touchSource(path, { mtimeMs: stats.mtimeMs, offset, state })
+      this.sources.touchSource(path, { mtimeMs: stats.mtimeMs, offset, state: observation })
     }
   }
 }

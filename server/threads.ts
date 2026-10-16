@@ -2,7 +2,7 @@
  * 会话状态的**拉取源**与读口。
  *
  * 拉取时读一遍 agent 应用的落盘（只读、不写回），把观察写进状态层
- * （server/session-state.ts）；读口只查状态层，不碰文件。写的时候按「时刻新的赢」合并，
+ * （server/session-state.ts）；读口只查状态层，不碰文件。写的时候按「时刻新的覆盖旧的」合并，
  * 所以读的时候一次查表就够——没有优先级梯子，也没有第二个口径。
  *
  *   Claude 桌面会话 → 会话记录里的 postTurnSummary.status_category + CLI 进程文件
@@ -21,7 +21,14 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { existsSync, statSync } from 'node:fs'
 import { readdirOrEmpty, readTextOrNull } from './fsutil.ts'
-import { isActive, unknownStatus, type SessionStateStore, type SessionStatus } from './session-state.ts'
+import {
+  isActive,
+  unknownStatus,
+  type SessionObservation,
+  type SessionStateStore,
+  type SessionStatus,
+} from './session-state.ts'
+import type { SessionAction } from './action.ts'
 import { RolloutStore } from './rollout.ts'
 import { codexUnread } from './codex-unread.ts'
 import { changed, type SourceTable } from './source-file.ts'
@@ -66,24 +73,30 @@ export function pullStatuses(
     const rollouts = new RolloutStore(roots.codexHome, sources).refresh(codex.map((s) => s.session))
     const unread = codexUnread(roots.codexHome, sources)
     for (const s of codex) {
-      const status = rollouts.get(s.session) ?? unknownStatus('没有 codex 的 rollout 记录')
-      putSettled(states, 'codex', s.session, codexSeen(s.session, status, unread), false)
+      const observation = rollouts.get(s.session) ?? { status: unknownStatus('没有 codex 的 rollout 记录'), action: null }
+      putSettled(states, 'codex', s.session, codexSeen(s.session, observation, unread), false)
     }
   }
 }
 
-function codexSeen(id: string, status: SessionStatus, unread: Set<string> | null): SessionStatus {
-  if (status.state !== 'done' || !unread || unread.has(id)) return status
-  return { ...status, state: 'idle' }
+/** codex 的「跑完没看」：读过的落成静止。只动状态那一半 */
+function codexSeen(id: string, observation: SessionObservation, unread: Set<string> | null): SessionObservation {
+  const { status } = observation
+  if (status.state !== 'done' || !unread || unread.has(id)) return observation
+  return { ...observation, status: { ...status, state: 'idle' } }
 }
 
-export function readStatuses<T extends { agent: string; session: string }>(
+/**
+ * 读口：按登记 id 取每条会话的最新观察（状态 + 动作）。查不到就是 unknown。
+ */
+export function readObservations<T extends { agent: string; session: string }>(
   sessions: readonly T[],
   states: SessionStateStore,
-): Array<T & { status: SessionStatus }> {
+): Array<T & { status: SessionStatus; action: SessionAction | null }> {
   return sessions.map((s) => {
     const stored = states.get(s.agent, states.keyOf(s.agent, s.session))
-    return { ...s, status: stored ?? unknownStatus(`${s.agent} 没有可读的状态来源`) }
+    const status = stored?.status ?? unknownStatus(`${s.agent} 没有可读的状态来源`)
+    return { ...s, status, action: stored?.action ?? null }
   })
 }
 
@@ -120,8 +133,8 @@ function pullClaude(
   // 记录文件没变：库里那条就是对的，只收一次尾（停在半途太久要降档），不重算
   if (path && !changed(sources, path)) {
     const current = states.get('claude', key)
-    const settled = current ? settleActive(current, alive) : undefined
-    if (settled && settled !== current) states.put('claude', key, settled)
+    const settled = current ? settleActive(current.status, alive) : undefined
+    if (settled && settled !== current?.status) states.put('claude', key, settled)
     return
   }
 
@@ -132,7 +145,7 @@ function pullClaude(
   // 进程在跑是「此刻的事实」，不是一条带时刻的观察——所以时刻记现在，不是文件里的 statusUpdatedAt
   // （那个只在 busy/idle 切换时写，比记录里的 lastActivityAt 旧得多，拿它排序会被上一轮的结论顶掉）。
   // 表里已经在干活就让它说话：hook 分得出「思考 / 干活」，而进程文件只报 busy/idle，说不出是哪种。
-  if (alive && !isActive(states.get('claude', stateKey)?.state ?? 'unknown')) {
+  if (alive && !isActive(states.get('claude', stateKey)?.status.state ?? 'unknown')) {
     states.put('claude', stateKey, {
       state: 'working',
       needsAction: '',
@@ -141,21 +154,22 @@ function pullClaude(
     })
   }
 
-  putSettled(states, 'claude', stateKey, claudeRecordStatus(rec), alive)
+  putSettled(states, 'claude', stateKey, { status: claudeRecordStatus(rec), action: null }, alive)
   if (path) sources.touchSource(path, { mtimeMs: statSync(path).mtimeMs })
 }
 
+/** 落一条落盘观察：先写，再收尾（停在半途太久要降档） */
 function putSettled(
   states: SessionStateStore,
   agent: string,
   session: string,
-  derived: SessionStatus,
+  observation: SessionObservation,
   alive: boolean,
 ): void {
-  states.put(agent, session, derived)
+  states.put(agent, session, observation.status, observation.action)
   const current = states.get(agent, session)
-  const settled = current ? settleActive(current, alive) : undefined
-  if (settled && settled !== current) states.put(agent, session, settled)
+  const settled = current ? settleActive(current.status, alive) : undefined
+  if (settled && settled !== current?.status) states.put(agent, session, settled)
 }
 
 function recordPathFor(session: string, roots: ThreadRoots): string | null {

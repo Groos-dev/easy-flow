@@ -64,23 +64,29 @@ describe('/api/hook?agent=codex', () => {
       body: JSON.stringify(body),
     })
 
-  const statusOf = async (agent: string) => {
+  const rowOf = async (agent: string) => {
     const r = (await (await fetch(`${base}/api/sessions`)).json()) as any
-    return r.sessions.find((s: any) => s.session === 'cx-http' && s.agent === agent)?.status
+    return r.sessions.find((s: any) => s.session === 'cx-http' && s.agent === agent)
   }
 
   test('带 ?agent=codex 时落进 codex 那一格，跟着细粒度活动走', async () => {
-    const res = await post('/api/hook?agent=codex', { hook_event_name: 'PreToolUse', session_id: 'cx-http' })
+    const res = await post('/api/hook?agent=codex', {
+      hook_event_name: 'PreToolUse',
+      session_id: 'cx-http',
+      tool_name: 'exec_command',
+      tool_input: { cmd: 'cd /tmp && pnpm test' },
+    })
     assert.equal(res.status, 200)
     assert.equal((await res.json()).ok, true)
-    const codex = await statusOf('codex')
-    assert.equal(codex.state, 'working')
-    assert.equal(codex.detail, 'hook 事件：PreToolUse')
+    const codex = await rowOf('codex')
+    assert.equal(codex.status.state, 'working')
+    assert.equal(codex.status.detail, 'hook 事件：PreToolUse')
+    assert.equal(codex.action.text, '跑 pnpm test', 'codex 的工具名与参数一样归一成动作')
   })
 
   test('同一条 id 的 claude 会话不被 codex 的事件点亮——两条管道互不串味', async () => {
-    const claude = await statusOf('claude')
-    assert.equal(claude.state, 'unknown', '共用入口得认来源，否则会互相点亮')
+    const claude = await rowOf('claude')
+    assert.equal(claude.status.state, 'unknown', '共用入口得认来源，否则会互相点亮')
   })
 })
 

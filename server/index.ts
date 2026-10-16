@@ -18,7 +18,7 @@ import {
   type Priority,
   type TodoStatus,
 } from './db.ts'
-import { hookKeyOf, PULL_INTERVAL_MS, pullStatuses, readStatuses } from './threads.ts'
+import { hookKeyOf, PULL_INTERVAL_MS, pullStatuses, readObservations } from './threads.ts'
 import { recordHook } from './hook.ts'
 import { idleStatus, SessionStateStore } from './session-state.ts'
 import type { SourceTable } from './source-file.ts'
@@ -104,9 +104,9 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
   }
 
   const stateStore = new SessionStateStore({
-    get: (agent, session) => db.getSessionState(agent, session),
-    put: (agent, session, status) => db.putSessionState(agent, session, status),
-    drop: (agent, session) => db.dropSessionState(agent, session),
+    get: (agent, session) => db.getSessionObservation(agent, session),
+    put: (agent, session, observation) => db.putSessionObservation(agent, session, observation),
+    drop: (agent, session) => db.dropSessionObservation(agent, session),
     keyOf: (agent, session) => db.keyOf(agent, session),
     alias: (agent, session, key) => db.alias(agent, session, key),
   })
@@ -297,7 +297,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
           // 归属只存在库里，详情页要展示工作区就得从这儿带出去
           worktrees: db.listWorktrees(ctx.requirement.id),
           // 同理：会话只归库，详情页的「会话」块靠这一份；状态是读 agent 应用的落盘文件得来的
-          sessions: readStatuses(db.listSessions(ctx.requirement.id), stateStore),
+          sessions: readObservations(db.listSessions(ctx.requirement.id), stateStore),
           // 挂在这条需求上的待办（立项时由 todo 侧登记）。同样是只归库的关系
           todos: db.listTodos(ctx.requirement.id),
         })
@@ -307,7 +307,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
       // 全部会话（归属在每条的 requirementId 上）：mini 面板一次拉全，
       // 逐需求拉 context 太碎；排序交给库（最近登记的在前）
       if (url.pathname === '/api/sessions' && req.method === 'GET') {
-        json(req, res, 200, { sessions: readStatuses(db.listSessions(), stateStore) })
+        json(req, res, 200, { sessions: readObservations(db.listSessions(), stateStore) })
         return
       }
 
@@ -328,7 +328,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
       if (url.pathname === '/api/next-up' && req.method === 'GET') {
         const requirements = db.list()
         const ids = new Set(requirements.map((r) => r.id))
-        const sessions = readStatuses(db.listSessions(), stateStore).filter((s) => ids.has(s.requirementId))
+        const sessions = readObservations(db.listSessions(), stateStore).filter((s) => ids.has(s.requirementId))
         json(req, res, 200, { items: rankNextUp(requirements, sessions) })
         return
       }

@@ -199,7 +199,7 @@ export interface ContextPayload {
 /** 会话的实时状态。字面量与 server/session-state.ts 的 THREAD_STATES 一致 */
 export type ThreadState = 'idle' | 'thinking' | 'working' | 'sweeping' | 'done' | 'blocked' | 'failed' | 'unknown'
 
-/** 与 server/threads.ts 的 SessionStatus 对应。hook 驱动优先，落盘兜底 */
+/** 与 server/session-state.ts 的 SessionStatus 对应。hook 驱动优先，落盘兜底 */
 export interface SessionStatus {
   state: ThreadState
   /** 需要人介入时，要人回答的那句话原文；其余为空串 */
@@ -208,6 +208,14 @@ export interface SessionStatus {
   observedAt: number
   /** 判据出处 */
   detail: string
+}
+
+/** 与 server/action.ts 的 SessionAction 对应 */
+export interface SessionAction {
+  /** 展示文案，形如「改 hook.ts」 */
+  text: string
+  /** 这次工具调用发生的时刻（epoch ms） */
+  calledAt: number
 }
 
 /** 一条 agent 会话的登记（claude code / codex / cursor） */
@@ -225,6 +233,8 @@ export interface Session {
   created: string
   updated: string
   status: SessionStatus
+  /** 最近一次工具调用（气泡里那句「在干什么」）；没有就是 null */
+  action: SessionAction | null
 }
 
 /**

@@ -19,7 +19,7 @@ import { spawnSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { BoardDatabase, normalizeLinkList, normalizeCodeLinks, normalizeExtLinks } from '../server/db.ts'
-import { hookKeyOf, pullStatuses, readStatuses } from '../server/threads.ts'
+import { hookKeyOf, pullStatuses, readObservations } from '../server/threads.ts'
 import { RolloutStore, rolloutStatusOf, sessionDirFor } from '../server/rollout.ts'
 import type { SourceTable } from '../server/source-file.ts'
 import { normalizeHookEvent, recordHook } from '../server/hook.ts'
@@ -54,9 +54,9 @@ function newState(): { store: SessionStateStore; sources: SourceTable } {
   const db = new BoardDatabase(join(tmpdir(), `easy-flow-test-state-${process.pid}`, String(storeSeq++)), 'p')
   return {
     store: new SessionStateStore({
-      get: (agent, session) => db.getSessionState(agent, session),
-      put: (agent, session, status) => db.putSessionState(agent, session, status),
-      drop: (agent, session) => db.dropSessionState(agent, session),
+      get: (agent, session) => db.getSessionObservation(agent, session),
+      put: (agent, session, observation) => db.putSessionObservation(agent, session, observation),
+      drop: (agent, session) => db.dropSessionObservation(agent, session),
       keyOf: (agent, session) => db.keyOf(agent, session),
       alias: (agent, session, key) => db.alias(agent, session, key),
     }),
@@ -2612,7 +2612,7 @@ describe('HTTP 层', () => {
     assert.equal(one.link, 'codex://threads/th-ctx')
   })
 
-  test('会话都带实时状态——把 readStatuses 摘掉这条就会红', async () => {
+  test('会话都带实时状态——把读口摘掉这条就会红', async () => {
     for (const path of ['/api/sessions', '/api/context?slug=alpha']) {
       const r = await get(path)
       const list = r.sessions.filter((s: any) => s.session === 'th-ctx')
@@ -3052,7 +3052,7 @@ describe('会话状态', () => {
   function statusOf(agent: string, session: string): SessionStatus {
     const one = [{ agent, session }]
     pullStatuses(one, suiteStore, suiteSources, roots)
-    return readStatuses(one, suiteStore)[0].status
+    return readObservations(one, suiteStore)[0].status
   }
 
   test('桌面会话：CLI 进程在跑就是 running', () => {
@@ -3173,7 +3173,7 @@ describe('会话状态', () => {
     const at = () => {
       const one = [{ agent: 'claude', session: 'local_clicked' }]
       pullStatuses(one, store, sources, roots)
-      return readStatuses(one, store)[0].status
+      return readObservations(one, store)[0].status
     }
     assert.equal(at().state, 'blocked', '没点过就是落盘结论')
 
@@ -3317,7 +3317,7 @@ describe('会话状态', () => {
       { agent: 'cursor', session: 'conv-2' },
     ]
     pullStatuses(one, suiteStore, suiteSources, roots)
-    const got = readStatuses(one, suiteStore)
+    const got = readObservations(one, suiteStore)
     assert.deepEqual(
       got.map((s) => s.status.state),
       ['blocked', 'failed', 'unknown'],
@@ -3388,11 +3388,11 @@ describe('rollout 兜底：事件译状态、增量读、只扫近几天', () =>
     const file = writeRollout(dir, 'cx-half', [start, meta, call, done.slice(0, 24)].join('\n'))
 
     // 最后一条**完整**的是 function_call → 干活；半行与认不出的都不算
-    assert.equal(store.refresh(['cx-half']).get('cx-half')?.state, 'working')
+    assert.equal(store.refresh(['cx-half']).get('cx-half')?.status.state, 'working')
 
     // 补全那条半行（整份重写、末尾带换行）。offset 停在最后一个换行，前面不重读
     writeFileSync(file, [start, meta, call, done].join('\n') + '\n', 'utf8')
-    assert.equal(store.refresh(['cx-half']).get('cx-half')?.state, 'done', '补全的尾行接上')
+    assert.equal(store.refresh(['cx-half']).get('cx-half')?.status.state, 'done', '补全的尾行接上')
   })
 
   test('只扫近几天：窗口外的日期目录靠缓存继续扫到，没进过缓存的就不扫', () => {
@@ -3406,12 +3406,12 @@ describe('rollout 兜底：事件译状态、增量读、只扫近几天', () =>
     writeRollout(far, 'cx-far', line('event_msg', { type: 'task_complete' }, now - 10 * DAY) + '\n')
 
     const first = store.refresh(['cx-near', 'cx-far'], now)
-    assert.equal(first.get('cx-near')?.state, 'done')
+    assert.equal(first.get('cx-near')?.status.state, 'done')
     assert.equal(first.get('cx-far'), undefined, '窗口外的日期目录不该被遍历')
 
     // 20 天后：near 的目录早已出窗口，但读到过就继续扫
     const later = store.refresh(['cx-near', 'cx-far'], now + 20 * DAY)
-    assert.equal(later.get('cx-near')?.state, 'done', '跟过的日期目录继续扫')
+    assert.equal(later.get('cx-near')?.status.state, 'done', '跟过的日期目录继续扫')
     assert.equal(later.get('cx-far'), undefined)
   })
 
@@ -3468,7 +3468,7 @@ describe('hook 事件：归一与暂存', () => {
     const { store } = newState()
     recordHook({ hook_event_name: 'PreToolUse', session_id: 'a', cwd: '/tmp' }, CLAUDE, store)
     recordHook({ hook_event_name: 'PostToolUse', session_id: 'a', cwd: '/tmp' }, CLAUDE, store)
-    assert.equal(store.get('claude', 'a')?.state, 'thinking')
+    assert.equal(store.get('claude', 'a')?.status.state, 'thinking')
   })
 
   test('缺 session_id / 子 agent 的事件都不动主会话状态', () => {
@@ -3485,7 +3485,7 @@ describe('hook 事件：归一与暂存', () => {
   test('SessionEnd 把这条抹掉，读的时候自然退回落盘', () => {
     const { store } = newState()
     recordHook({ hook_event_name: 'Stop', session_id: 'a', cwd: '/tmp' }, CLAUDE, store)
-    assert.equal(store.get('claude', 'a')?.state, 'done')
+    assert.equal(store.get('claude', 'a')?.status.state, 'done')
     assert.equal(recordHook({ hook_event_name: 'SessionEnd', session_id: 'a', cwd: '/tmp' }, CLAUDE, store), null)
     assert.equal(store.get('claude', 'a'), undefined)
   })
@@ -3494,38 +3494,38 @@ describe('hook 事件：归一与暂存', () => {
     const { store } = newState()
     recordHook({ hook_event_name: 'PreToolUse', session_id: 'same', cwd: '/tmp' }, CLAUDE, store)
     recordHook({ hook_event_name: 'Stop', session_id: 'same', cwd: '/tmp' }, { agent: 'codex' }, store)
-    assert.equal(store.get('claude', 'same')?.state, 'working')
-    assert.equal(store.get('codex', 'same')?.state, 'done')
+    assert.equal(store.get('claude', 'same')?.status.state, 'working')
+    assert.equal(store.get('codex', 'same')?.status.state, 'done')
   })
 
-  test('时刻新的赢：陈年的 hook 事件盖不掉更新的落盘结论，反过来也不许', () => {
+  test('时刻新的覆盖旧的：陈年的 hook 事件盖不掉更新的落盘结论，反过来也不许', () => {
     const { store } = newState()
     const stale = Date.now() - 31 * 60_000
     const of = (state: SessionStatus['state'], observedAt: number): SessionStatus =>
       ({ state, needsAction: '', observedAt, detail: state })
 
     recordHook({ hook_event_name: 'Stop', session_id: 'a', cwd: '/tmp' }, { agent: 'claude', at: stale }, store)
-    assert.equal(store.get('claude', 'a')?.state, 'done')
+    assert.equal(store.get('claude', 'a')?.status.state, 'done')
 
     store.put('claude', 'a', of('failed', Date.now()))
-    assert.equal(store.get('claude', 'a')?.state, 'failed', '更新的落盘结论换掉它')
+    assert.equal(store.get('claude', 'a')?.status.state, 'failed', '更新的落盘结论换掉它')
 
     store.put('claude', 'a', of('done', stale))
-    assert.equal(store.get('claude', 'a')?.state, 'failed', '旧的盖不掉新的')
+    assert.equal(store.get('claude', 'a')?.status.state, 'failed', '旧的盖不掉新的')
   })
 
   test('板侧写的 idle 一直摆着，直到有更新的观察落下来', () => {
     const { store } = newState()
     const clicked = Date.now() - 31 * 60_000
     store.put('claude', 'idle-1', idleStatus(clicked))
-    assert.equal(store.get('claude', 'idle-1')?.state, 'idle', '过了多久都还在')
+    assert.equal(store.get('claude', 'idle-1')?.status.state, 'idle', '过了多久都还在')
 
     // 更旧的落盘结论盖不掉它
     store.put('claude', 'idle-1', { state: 'done', needsAction: '', observedAt: clicked - 1, detail: '旧的' })
-    assert.equal(store.get('claude', 'idle-1')?.state, 'idle')
+    assert.equal(store.get('claude', 'idle-1')?.status.state, 'idle')
 
     recordHook({ hook_event_name: 'PreToolUse', session_id: 'idle-1', cwd: '/tmp' }, {}, store)
-    assert.equal(store.get('claude', 'idle-1')?.state, 'working', '更新的 hook 事件一到就覆盖')
+    assert.equal(store.get('claude', 'idle-1')?.status.state, 'working', '更新的 hook 事件一到就覆盖')
   })
 })
 
@@ -3551,7 +3551,7 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
   const statusOf = (agent: string, session: string, store: SessionStateStore): SessionStatus => {
     const one = [{ agent, session }]
     pullStatuses(one, store, sources, roots)
-    return readStatuses(one, store)[0].status
+    return readObservations(one, store)[0].status
   }
 
   test('hook 说在干活就顶掉落盘那份结论——同一 turn 内能看出切换', () => {
@@ -3663,6 +3663,7 @@ describe('未读事件：角标挂哪些会话', () => {
       created: '',
       updated: '',
       status: { state: state as Session['status']['state'], needsAction: '', observedAt: 0, detail: '' },
+      action: null,
     }
   }
 
@@ -3938,6 +3939,7 @@ describe('pet：一行 pet 的排布', () => {
       created: '',
       updated: '',
       status: { state, needsAction: '', observedAt: 0, detail: '' },
+      action: null,
     }
   }
   // 五个都读得到的会话：两条在干活 + 一条卡住 + 跑完没看 + 失败（都挂 pet）

@@ -24,6 +24,7 @@ function sess(agent: string, state: Session['status']['state'], link = '', obser
     created: '',
     updated: '',
     status: { state, needsAction: '', observedAt, detail: '' },
+    action: null,
   }
 }
 

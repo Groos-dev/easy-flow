@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS session (
 /*
  * session_state：会话状态。三类来源都写它——hook 事件、拉取文件、板侧点击（点一下 pet = 这条静止）。
  * 状态一变就落库，所以重启后原样还在；读口只查这张表。
+ * action_text / action_called_at 是最近一次工具调用（气泡里那句「在干什么」），没有时是空串与 0。
  */
 CREATE TABLE IF NOT EXISTS session_state (
   agent        TEXT NOT NULL,
@@ -117,6 +118,8 @@ CREATE TABLE IF NOT EXISTS session_state (
   needs_action TEXT NOT NULL DEFAULT '',
   observed_at  INTEGER NOT NULL,
   detail       TEXT NOT NULL DEFAULT '',
+  action_text  TEXT NOT NULL DEFAULT '',
+  action_called_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (agent, session)
 );
 
@@ -193,6 +196,8 @@ function migrate(db: DatabaseSync): void {
   addIfMissing('requirement', 'ext_links', 'ext_links TEXT')
   // 会话角色：开工登记的 dev，review 会话是 review。老库里的会话都是开工时登记的
   addIfMissing('session', 'role', `role TEXT NOT NULL DEFAULT 'dev'`)
+  addIfMissing('session_state', 'action_text', `action_text TEXT NOT NULL DEFAULT ''`)
+  addIfMissing('session_state', 'action_called_at', 'action_called_at INTEGER NOT NULL DEFAULT 0')
 }
 
 /** 建表 + 升级，开库时跑一次 */
