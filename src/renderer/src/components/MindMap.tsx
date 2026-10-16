@@ -84,23 +84,27 @@ export default function MindMap({ requirements, projectName, hits, onOpen }: Pro
     return () => ro.disconnect()
   }, [])
 
+  /**
+   * 适应窗口只认画布的尺寸，不认 layout 对象本身：看板每秒轮询一次，
+   * requirements 每次都换新引用，依赖它等于每秒把正在拖的图拽回适应窗口。
+   */
+  const layoutW = layout.width
+  const layoutH = layout.height
+
   const fit = useCallback(() => {
     if (!size.w || !size.h) return
-    const zoom = Math.min(
-      1,
-      Math.min((size.w - FIT_MARGIN) / layout.width, (size.h - FIT_MARGIN) / layout.height),
-    )
+    const zoom = Math.min(1, Math.min((size.w - FIT_MARGIN) / layoutW, (size.h - FIT_MARGIN) / layoutH))
     setView({
       zoom,
-      x: (size.w - layout.width * zoom) / 2,
-      y: (size.h - layout.height * zoom) / 2,
+      x: (size.w - layoutW * zoom) / 2,
+      y: (size.h - layoutH * zoom) / 2,
     })
-  }, [size.w, size.h, layout])
+  }, [size.w, size.h, layoutW, layoutH])
 
-  // 换项目、搜索、改折叠，都重新摆一次
+  // 换项目、搜索、改折叠、拖窗口，都重新摆一次
   useEffect(() => {
     fit()
-  }, [fit])
+  }, [fit, projectName])
 
   // 滚轮要 preventDefault，而 React 的 onWheel 是被动的，只能挂原生监听
   useEffect(() => {
@@ -220,8 +224,6 @@ export default function MindMap({ requirements, projectName, hits, onOpen }: Pro
           <MapNodeBox key={node.req.slug} node={node} onOpen={onOpen} onToggle={toggle} />
         ))}
       </div>
-
-      <div className="mindmap-hint">滚轮缩放 · 拖拽平移 · 双击空白适应窗口</div>
     </div>
   )
 }
