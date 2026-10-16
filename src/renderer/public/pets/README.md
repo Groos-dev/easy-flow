@@ -23,7 +23,7 @@
 > fan-created and may not be used for commercial purposes.
 
 例外只覆盖「使用 Clawd on Desk 这个应用本身」，把图拷进另一个应用不在例外里；Clawd 这个角色本身
-是 Anthropic 的。这里按「本地自用、不公开分发」处理：素材留在本地仓库，**不要 push**。
+是 Anthropic 的。
 
 ## 文件
 
@@ -42,8 +42,7 @@
 node scripts/build-pets.mjs   # 需要 .pet-src/ 里有 clawd + cloudling 原始素材
 ```
 
-**仅本机可重跑**：脚本依赖的 `.pet-src/`（原始拷贝）被 `.gitignore` 忽略，且只有本机有；
-干净 clone 里跑不了，只能拿到已提交的生成物。脚本会重设 `viewBox`（原始留白过大，
+`.pet-src/` 里的原始素材与生成物都在仓库里，clone 下来就能重跑。脚本会重设 `viewBox`（原始留白过大，
 44px 里角色只有十几个像素），clawd 另写一份静态版。
 
 ## 已知差异（别当 bug）

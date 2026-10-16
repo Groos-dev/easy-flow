@@ -2,7 +2,6 @@
  * 生成文件，勿手改——由 scripts/build-pets.mjs 从 .pet-src/cloudling 生成。
  *
  * 来源：clawd-on-desk（https://github.com/rullerzhou-afk/clawd-on-desk）themes/cloudling（作者 stlabslogo）。
- * 许可：All Rights Reserved，仅授权用于 Clawd on Desk 应用本身。本仓库属本地自用，勿 push 到远端。
  * 完整许可见 .pet-src/LICENSE.clawd。
  *
  * 键是素材文件名，值是处理过 viewBox 的整份 SVG 原文（含驱动动画的 <script>）。

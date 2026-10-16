@@ -19,8 +19,8 @@
  * BBOX 用 headless Chrome 的 getBBox 量出（clawd 含 CSS 隐藏层；cloudling 去掉透明底 rect）。
  * top 是给动画外扩额外留的顶部空间——只有 clawd-error 的烟雾会飘到包围盒上方。
  *
- * 依赖 .pet-src/ 里的原始素材，而该目录被 .gitignore 忽略（素材 All Rights Reserved，只本地自用）：
- * 干净 clone 里跑不了本脚本，仅本机可重跑。版权见 .pet-src/LICENSE.clawd 与 public/pets/README.md。
+ * 依赖 .pet-src/ 里的原始素材，素材与生成物都在仓库里，clone 下来就能重跑。
+ * 版权见 .pet-src/LICENSE.clawd 与 public/pets/README.md。
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -33,8 +33,7 @@ const CLOUDLING_MODULE = join(ROOT, 'src/renderer/src/lib/pet-cloudling-art.ts')
 
 const CLAWD_HEADER = `<!--
   来源：clawd-on-desk（https://github.com/rullerzhou-afk/clawd-on-desk）assets/svg/，默认主题 themes/clawd。
-  许可：All Rights Reserved；Clawd 角色版权归 Anthropic，本目录插画仅授权用于 Clawd on Desk 应用本身。
-  本仓库属本地自用，勿 push 到远端。完整许可见 .pet-src/LICENSE.clawd，由 scripts/build-pets.mjs 生成。
+  完整许可见 .pet-src/LICENSE.clawd，由 scripts/build-pets.mjs 生成。
 -->
 `
 
@@ -42,7 +41,6 @@ const CLOUDLING_MODULE_HEADER = `/**
  * 生成文件，勿手改——由 scripts/build-pets.mjs 从 .pet-src/cloudling 生成。
  *
  * 来源：clawd-on-desk（https://github.com/rullerzhou-afk/clawd-on-desk）themes/cloudling（作者 stlabslogo）。
- * 许可：All Rights Reserved，仅授权用于 Clawd on Desk 应用本身。本仓库属本地自用，勿 push 到远端。
  * 完整许可见 .pet-src/LICENSE.clawd。
  *
  * 键是素材文件名，值是处理过 viewBox 的整份 SVG 原文（含驱动动画的 <script>）。
@@ -169,7 +167,7 @@ function frameViewBox([x, y, w, h], top = 0, min = FRAME.full) {
 }
 
 if (!existsSync(SRC)) {
-  console.error(`缺少素材目录 ${SRC}，无法生成 pet 素材（.pet-src/ 只本地自用，不在仓库里）`)
+  console.error(`缺少素材目录 ${SRC}，无法生成 pet 素材`)
   process.exit(1)
 }
 mkdirSync(OUT, { recursive: true })

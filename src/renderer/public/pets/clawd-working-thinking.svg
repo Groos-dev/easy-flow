@@ -1,7 +1,6 @@
 <!--
   来源：clawd-on-desk（https://github.com/rullerzhou-afk/clawd-on-desk）assets/svg/，默认主题 themes/clawd。
-  许可：All Rights Reserved；Clawd 角色版权归 Anthropic，本目录插画仅授权用于 Clawd on Desk 应用本身。
-  本仓库属本地自用，勿 push 到远端。完整许可见 .pet-src/LICENSE.clawd，由 scripts/build-pets.mjs 生成。
+  完整许可见 .pet-src/LICENSE.clawd，由 scripts/build-pets.mjs 生成。
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="-6 -9.17 28 28" width="500" height="500">
   <!-- clawd thinking bubble v25 (2026-05-15)
