@@ -42,7 +42,13 @@ import {
 
 export const DEFAULT_PORT = 3210
 
-/** 单条记录变更不涉及目录扫描，但仍然回一个空 sync：列表与单条接口的对象形状保持一致 */
+/**
+ * 后台兜底重扫的间隔。看板读取路径上不再重扫目录
+ * agent 直接改的 md 靠这个更新
+ */
+const RESCAN_INTERVAL_MS = 10_000
+
+/** 不涉及目录扫描的响应回一个空 sync：列表与单条接口的对象形状保持一致 */
 const NO_CHANGES = {
   added: [],
   updated: [],
@@ -96,6 +102,18 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
   let db = new BoardDatabase(currentDir, initial.activeProject)
   db.syncProjects()
   db.pickProject()
+
+  // 兜底重扫：读取路径上不再扫目录，md 的变化只能靠它带进来。
+  // 扫失败不呛到读取（看板照常用上一次的数据），下一次接着扫
+  const rescan = () => {
+    try {
+      db.syncProjects()
+    } catch (err) {
+      log.warn(`rescan failed: ${(err as Error).message}`)
+    }
+  }
+  const rescanTimer = setInterval(rescan, RESCAN_INTERVAL_MS)
+  rescanTimer.unref()
 
   const sources: SourceTable = {
     source: (path) => db.source(path),
@@ -174,8 +192,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
       }
 
       if (url.pathname === '/api/requirements' && req.method === 'GET') {
-        // 每次读取前同步一次：md 可能被 agent 改过
-        const sync = db.syncProjects()
+        // 读取不重扫目录：看板每秒轮询一次，而一次全量重扫要 250ms 以上（实测 1808 个目录）。
+        // md 的变化由后台兜底重扫与详情页的主动同步带进来，这里只查库
         json(req, res, 200, {
           requirements: db.list(),
           project: db.project,
@@ -183,7 +201,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
           projectName: db.listProjects().find((p) => p.slug === db.project)?.name ?? db.project,
           statuses: STATUSES,
           priorities: PRIORITIES,
-          sync,
+          sync: NO_CHANGES,
         })
         return
       }
@@ -576,7 +594,10 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
     store: stateStore,
     sources,
     handle,
-    close: () => db.close(),
+    close: () => {
+      clearInterval(rescanTimer)
+      db.close()
+    },
   }
 }
 

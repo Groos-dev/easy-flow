@@ -2480,6 +2480,38 @@ describe('HTTP 层', () => {
     assert.equal(r.project, 'onex')
   })
 
+  test('★ 读取不重扫目录：新增的需求要等一次同步才上板', async () => {
+    // 单独一个数据目录与 app：共享的那个跑了别的用例，而这里的断言要求「读到的是上次同步的库」
+    const dir2 = join(tmpdir(), `easy-flow-test-noscan-${process.pid}`)
+    rmSync(dir2, { recursive: true, force: true })
+    makeReq(dir2, 'onex', 'alpha', '# alpha\n\n## 需求\n\n甲需求内容')
+    const app2 = createBoardApp({ dataDir: dir2 })
+    const server2 = createServer((rq, rs) => void app2.handle(rq, rs))
+    await new Promise<void>((r) => server2.listen(0, '127.0.0.1', r))
+    const addr = server2.address()
+    const base2 = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`
+    const read = async () => (await fetch(`${base2}/api/requirements`)).json() as any
+
+    try {
+      makeReq(dir2, 'onex', 'beta', '# beta\n\n## 需求\n\n乙需求内容')
+      const before = await read()
+      assert.ok(!before.requirements.some((r: any) => r.slug === 'beta'))
+      assert.deepEqual(before.sync.added, [], '读接口不该顺带扫目录')
+
+      const synced = (await (
+        await fetch(`${base2}/api/settings/resync`, { method: 'POST' })
+      ).json()) as any
+      assert.ok(synced.sync.added.includes('onex/beta'))
+
+      const after = await read()
+      assert.ok(after.requirements.some((r: any) => r.slug === 'beta'))
+    } finally {
+      await new Promise<void>((r) => server2.close(() => r()))
+      app2.close()
+      rmSync(dir2, { recursive: true, force: true })
+    }
+  })
+
   test('GET /api/tree 返回项目树', async () => {
     const r = await get('/api/tree')
     assert.ok(Array.isArray(r.tree))

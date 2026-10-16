@@ -131,10 +131,10 @@ function statusOf(over: DragOverEvent['over']): Status | undefined {
 const PRIORITY_RANK: Record<string, number> = { p0: 0, p1: 1, p2: 2, p3: 3 }
 
 /**
- * 会话状态的轮询间隔。对齐 clawd 的 1.5s：细粒度 activity（思考 / 干活）要跟着每次工具调用动，
- * 20s 一轮就只能看见它在跑，看不出在干什么。接口只读、单次实测 8~10ms，这个频率不占什么。
+ * 看板自动刷新的间隔。顶栏的刷新按钮已经去掉，刷新全靠这条 tick：需求、待办、项目列表、
+ * 会话状态、下一步排名一起重拉。这些接口都是纯读（毫秒级），一秒一次不占什么。
  */
-const SESSION_POLL_MS = 1_500
+const BOARD_POLL_MS = 1_000
 
 export default function App() {
   const [statuses, setStatuses] = useState<Status[]>([])
@@ -350,26 +350,31 @@ export default function App() {
   }, [])
 
   /**
-   * 未读事件靠轮询浮上来：agent 跑完一轮时人在别处，不轮询就只能等他手动刷新——
-   * 那就不叫「感知到」了。窗口在后台时不拉（那时也没人看）。
+   * 看板每秒自己刷新一次：agent 改了什么、别的窗口动了哪条，不用点刷新就能看见。
+   * 不阻塞界面：上一轮没回来就跳过这一轮（不叠发）、拖拽中不刷（卡片列表不在手上换）、
+   * 窗口在后台时不拉（那时也没人看）。
    */
   useEffect(() => {
+    let inFlight = false
     const tick = () => {
-      if (document.hidden) return
-      void loadSessions()
-      // 会话状态是「下一步」的输入之一，跟着一起刷新
-      void loadNextUp()
+      if (document.hidden || inFlight || dragSlug) return
+      inFlight = true
+      void Promise.all([load(), loadTodos(), loadProjects(), loadSessions(), loadNextUp()]).finally(
+        () => {
+          inFlight = false
+        },
+      )
     }
-    const timer = setInterval(tick, SESSION_POLL_MS)
+    const timer = setInterval(tick, BOARD_POLL_MS)
     // 切回窗口立刻补一次，别让人盯着过期数据等下一轮
     document.addEventListener('visibilitychange', tick)
     return () => {
       clearInterval(timer)
       document.removeEventListener('visibilitychange', tick)
     }
-  }, [loadSessions, loadNextUp])
+  }, [load, loadTodos, loadProjects, loadSessions, loadNextUp, dragSlug])
 
-  /** 看板、待办、项目列表与会话一起重拉：agent 建完目录后不用重启应用就能看到 */
+  /** 动作之后立刻重拉一份（改完状态、退出设置页、从详情页返回）：不等下一次轮询 */
   const refresh = useCallback(() => {
     void load()
     void loadTodos()
@@ -673,13 +678,6 @@ export default function App() {
                     </button>
                   </div>
                 )}
-                <button className="icon-btn" title="刷新（重扫目录）" aria-label="刷新" onClick={refresh}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="23 4 23 10 17 10" />
-                    <polyline points="1 20 1 14 7 14" />
-                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                  </svg>
-                </button>
               </div>
             </div>
 
