@@ -1,0 +1,26 @@
+test/pet-card.test.ts
+  s_7c29b198e0f1c9::t_e368e32d0dbd39 5
+  s_7c29b198e0f1c9::t_331bd61ab759cc 255,259-261,264,266-271,273-276
+src/renderer/src/styles.css
+  s_7c29b198e0f1c9::t_a62b2aef2500ca 683-684,689
+  s_7c29b198e0f1c9::t_a39cc78cffc618 735
+  s_7c29b198e0f1c9::t_87dfff6f62f42e 702
+src/renderer/src/components/Card.tsx
+  s_7c29b198e0f1c9::t_fef078d07877e7 11,13,31-32,34,45-46,51-58,61,72,75-76,81-99,101-102,104-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "9a7eb3d08f6a33440264d59bceadfed116c47c35",
+  "prompts": {},
+  "sessions": {
+    "s_7c29b198e0f1c9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39313c32-1c61-4972-93f4-4cda3e713081",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
