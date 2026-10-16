@@ -1,0 +1,45 @@
+src/renderer/src/lib/projectIcon.ts
+  s_64878040b951a1::t_672a38225645f1 1-22
+src/renderer/src/styles.css
+  s_64878040b951a1::t_62866a3117a038 12-15
+  s_64878040b951a1::t_da5960b505d62f 87-88,102,111-112
+  s_64878040b951a1::t_883d6c55227685 267-269
+  s_64878040b951a1::t_cbede6b8afe822 298-325,328
+  s_64878040b951a1::t_4c09e8edd66df9 234-250,252,255-260,263-266,271,278,280-281,284,287-297,326-327,329-486
+src/renderer/src/components/icons.tsx
+  s_64878040b951a1::t_4fddb580aa7ef3 79-124
+src/renderer/src/App.tsx
+  s_64878040b951a1::t_94d6869db106be 608-620,622
+  s_64878040b951a1::t_be0c6115f0d619 156,158-159
+  s_64878040b951a1::t_b5af7283c35d78 138-149
+  s_64878040b951a1::t_8161953283c607 407-409
+  s_64878040b951a1::t_210edfc137d552 421-427
+  s_64878040b951a1::t_31641b3e206589 23
+  s_64878040b951a1::t_49204befe4bcb6 201-204
+src/renderer/src/components/LeftRail.tsx
+  s_64878040b951a1::t_fc5eb1acb582f4 1-50,52-54,56-58,61-118,120-121,126-133,135-141,148-150,152-180,182-196
+  s_64878040b951a1::t_5a27a3d7cbac66 119,124-125
+  s_64878040b951a1::t_099974b54c382a 122
+  s_64878040b951a1::t_92efe2510d5369 142-147,151
+  s_64878040b951a1::t_da2a3481025e76 123,134
+  s_64878040b951a1::t_3518f17a25b267 181
+  s_64878040b951a1::t_a4b440e5d6c504 51,55,59-60
+test/project-icon.test.ts
+  s_64878040b951a1::t_7404b33442fe33 1-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "130be1caf165b14c641976158abd24f32fba821a",
+  "prompts": {},
+  "sessions": {
+    "s_64878040b951a1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bdca7711-9d33-4f47-996c-00526f29655a",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
