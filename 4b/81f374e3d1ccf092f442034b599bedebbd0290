@@ -1,0 +1,33 @@
+scripts/codex-hook.mjs
+  s_5799a8bcf20c1b::t_b217f4e8792284 14,19,23
+scripts/app.mjs
+  s_5799a8bcf20c1b::t_dadec0f6786e22 38
+src/renderer/src/lib/api.ts
+  s_5799a8bcf20c1b::t_054c6a14c7c388 20,24
+server/index.ts
+  s_5799a8bcf20c1b::t_c4f818deeca168 43
+vite.web.config.ts
+  s_5799a8bcf20c1b::t_493110b84fc9c3 14
+electron.vite.config.ts
+  s_5799a8bcf20c1b::t_bf6df83dd7958e 30
+README.md
+  s_5799a8bcf20c1b::t_91b371c3fc401a 20
+server/http.ts
+  s_5799a8bcf20c1b::t_b9110dcaea95c7 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "4b81f374e3d1ccf092f442034b599bedebbd0290",
+  "prompts": {},
+  "sessions": {
+    "s_5799a8bcf20c1b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "27a1b605-132f-43c5-b7cf-b7f1f8163d20",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
