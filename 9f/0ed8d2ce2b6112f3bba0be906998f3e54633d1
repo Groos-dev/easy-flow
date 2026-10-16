@@ -1,0 +1,37 @@
+src/renderer/src/components/Detail.tsx
+  s_78f5bcd4de886b::t_7d3b96a6f7fb97 156
+  s_78f5bcd4de886b::t_77971688dc7cc3 97-116
+test/core.test.ts
+  s_78f5bcd4de886b::t_d476316b42bc65 2483-2514
+server/index.ts
+  s_78f5bcd4de886b::t_1cfe47cd9338d9 106-117
+  s_78f5bcd4de886b::t_dd8bdbe1739b43 195-196,204
+  s_78f5bcd4de886b::t_da792448e35230 51
+  h_61ecb41619cb4e 46-47
+  s_78f5bcd4de886b::t_a962f91bd670b9 45,48-50
+  s_78f5bcd4de886b::t_a1de52e2c44ce8 597-600
+src/renderer/src/App.tsx
+  s_78f5bcd4de886b::t_2ed7d1d6ae70b7 134-135,137
+  s_78f5bcd4de886b::t_d74ea3df0e695f 353-355,358,360-366,368,375,377
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "9f0ed8d2ce2b6112f3bba0be906998f3e54633d1",
+  "prompts": {},
+  "humans": {
+    "h_61ecb41619cb4e": {
+      "author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  },
+  "sessions": {
+    "s_78f5bcd4de886b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "962b25ea-c6a6-44ab-80ce-0a57f1c725d6",
+        "model": "deepseek-v4-1-flash-260910"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
