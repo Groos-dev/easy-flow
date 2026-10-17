@@ -1235,6 +1235,17 @@ function cliOk(configFile: string, args: string[], extraEnv: Record<string, stri
   return r.stdout
 }
 
+/**
+ * 当天待办 id。待办按本机日期编号（server/db.ts 的 localDay：人在哪儿，「今天」就是哪天），
+ * 这里也必须按本机算——用 toISOString 取的是 UTC 日期，东八区后半夜（本地已跨天、UTC 还没）
+ * 就取到昨天，整批用例跟着挂。
+ */
+function todayId(seq = '001'): string {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `T-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${seq}`
+}
+
 /** One failing call; returns the error text (stderr in text mode, usage included for usage errors) */
 function cliFail(configFile: string, args: string[], extraEnv: Record<string, string> = {}): string {
   const r = cli(configFile, args, extraEnv)
@@ -2224,7 +2235,7 @@ describe('CLI 层', () => {
 
     const db = new BoardDatabase(dataDir)
     db.syncTodos()
-    const t = db.todoById('T-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-001')!
+    const t = db.todoById(todayId())!
     assert.equal(t.title, '统计 MU 退票失败原因分布')
     assert.equal(t.source, 'chat')
     assert.equal(t.session, 'codex://threads/abc')
@@ -2265,7 +2276,7 @@ describe('CLI 层', () => {
   test('todo set：状态只改库，标题与摘要改 md', () => {
     scaffold()
     cliOk(configFile, ['todo', 'new', '原标题', '--source', 'manual', '--summary', '原摘要'])
-    const id = 'T-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-001'
+    const id = todayId()
 
     assert.match(cliOk(configFile, ['todo', 'set', id, '--status', 'in_progress']), /状态：in_progress/)
 
@@ -2301,8 +2312,7 @@ describe('CLI 层', () => {
     scaffold()
     cliOk(configFile, ['todo', 'new', '还开着的', '--source', 'manual'])
     cliOk(configFile, ['todo', 'new', '干完了的', '--source', 'manual'])
-    const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    cliOk(configFile, ['todo', 'set', `T-${day}-002`, '--status', 'done'])
+    cliOk(configFile, ['todo', 'set', todayId('002'), '--status', 'done'])
 
     const open = cliOk(configFile, ['todo', 'list'])
     assert.match(open, /未完成的待办（1）/)
@@ -2333,8 +2343,7 @@ describe('CLI 层', () => {
 
     cliOk(configFile, ['todo', 'new', '挂上去的待办', '--source', 'manual'])
     cliOk(configFile, ['todo', 'new', '没挂的待办', '--source', 'manual'])
-    const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    const id = `T-${day}-001`
+    const id = todayId()
 
     cliOk(configFile, ['todo', 'set', id, '--req', reqId])
     assert.match(cliOk(configFile, ['todo', 'show', id]), new RegExp(`需求：${reqId}`))
@@ -2358,8 +2367,7 @@ describe('CLI 层', () => {
   test('todo show 打出元数据、md 路径与全文', () => {
     scaffold()
     cliOk(configFile, ['todo', 'new', '要看的待办', '--source', 'agent', '--session', 'codex://threads/z', '--summary', '动作：看它'])
-    const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    const text = cliOk(configFile, ['todo', 'show', `T-${day}-001`])
+    const text = cliOk(configFile, ['todo', 'show', todayId()])
     assert.match(text, /待办：要看的待办/)
     assert.match(text, /状态：todo/)
     assert.match(text, /会话：codex:\/\/threads\/z/)
