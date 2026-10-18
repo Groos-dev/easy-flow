@@ -1,18 +1,19 @@
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import type { MouseEvent } from 'react'
 import { api } from '../lib/api'
-import { AGENT_LABELS, THREAD_STATE_CLASS, THREAD_STATE_LABEL } from '../lib/labels'
-import { codeLinkLabel } from '../lib/links'
-import { formatStamp } from '../lib/time'
-import { TODO_STATUS_LABEL, type ContextPayload, type Requirement } from '../lib/types'
-import { CopyButton, InfoBlock, OneLine } from './InfoBits'
+import { AGENT_LABELS } from '../lib/labels'
+import { codeLinkLabel, feishuTaskLabel } from '../lib/links'
+import { TODO_STATUS_LABEL, type ContextPayload, type Requirement, type Session } from '../lib/types'
+import { CopyButton, InfoBlock } from './InfoBits'
+import { AgentIcon } from './icons'
 import LaunchSession from './LaunchSession'
 
 /**
- * 需求详情页的头部浮窗：目录、工作区、会话、关联待办与链接。零件见 InfoBits，与待办的 TodoPanel 共用。
+ * 需求详情页的头部浮窗：会话、工作区、关联待办、链接，末行是需求目录。零件见 InfoBits，与待办的 TodoPanel 共用。
  *
- * 工作区、会话与关联待办来自详情页已加载的 /api/context；打开浮窗本身不发请求，
- * 展开新会话入口时才按需读取 provider 列表。关系存在 sqlite 里。
+ * 浮窗只回答「谁、在聊什么、点了去哪」：会话 id 与 cwd 是给程序用的句柄，状态在看板卡片与 mini
+ * 面板已经表达，都不在这里重复。
+ *
+ * 工作区、会话与关联待办来自详情页已加载的 /api/context；展开新会话入口时才按需读 provider。
  */
 export default function InfoPanel({
   req,
@@ -30,97 +31,60 @@ export default function InfoPanel({
   const openTodos = (ctx?.todos ?? []).filter((t) => t.status === 'todo' || t.status === 'in_progress')
 
   const groups = [
-    { title: '飞书任务', items: req.feishuTaskLinks.map((url) => ({ label: url, url })) },
+    { title: '飞书任务', items: req.feishuTaskLinks.map((url) => ({ label: feishuTaskLabel(url), url })) },
     { title: '代码链接', items: req.codeLinks.map((l) => ({ label: codeLinkLabel(l), url: l.url })) },
     { title: '扩展链接', items: req.extLinks.map((l) => ({ label: l.detail, url: l.url })) },
   ].filter((g) => g.items.length)
 
-  // md 里的那段（解析器把「链接」「相关链接」「文档索引」都收了进来）。
-  // 但「文档索引」常常只是一张文件/内容表——那是文档清单，文档标签栏已经有了，
-  // 不该冒充链接：整段里一个 http 都没有就不展示。
-  const mdLinks = /https?:\/\//i.test(req.links) ? req.links : ''
+  const openDir = () => void api.open(req.slug, req.project).catch(() => {})
 
   return (
     <div className="info-panel" role="dialog" aria-label="需求信息与链接">
-      <InfoBlock label="目录">
-        <div className="info-row">
-          <OneLine
-            className="info-path mono"
-            text={req.path}
-            title={req.path}
-            onClick={() => void api.open(req.slug, req.project).catch(() => {})}
-          />
-          <CopyButton text={req.path} label="路径" />
-        </div>
-      </InfoBlock>
+      {/* ctx 未到时不能把空列表误当成需求没有会话 */}
+      {ctx && (
+        <InfoBlock label="会话" count={sessions.length}>
+          {sessions.map((s) => (
+            <SessionRow key={`${s.agent}:${s.session}`} session={s} />
+          ))}
+          {/* 入口跟在会话列表后面 */}
+          <LaunchSession req={req} worktrees={worktrees} />
+        </InfoBlock>
+      )}
 
       {/* 没有工作区就整段不出现——空列表本身不携带信息 */}
       {worktrees.length > 0 && (
         <InfoBlock label="worktree" count={worktrees.length}>
           {worktrees.map((w) => (
-            <div className="wt" key={w.id}>
-              <div className="wt-head">
-                <span className="v mono">{w.repo}</span>
-                {w.missing && <span className="wt-missing">目录已失联</span>}
-                <span className="spacer" />
-                <CopyButton text={w.path} label="路径" />
-              </div>
-              <div className="wt-meta">
-                <OneLine className="mono" text={w.branch} title={w.branch} />
-              </div>
-              <OneLine
-                className="info-path mono"
-                text={w.path}
-                title={w.missing ? `目录已失联：${w.path}` : w.path}
-                disabled={w.missing}
-                onClick={() => void api.openWorktree(w.id).catch(() => {})}
-              />
+            <div
+              className={`path-row${w.missing ? ' off' : ''}`}
+              key={w.id}
+              role={w.missing ? undefined : 'button'}
+              tabIndex={w.missing ? undefined : 0}
+              title={w.missing ? `目录已失联：${w.path}` : `在目录里打开：${w.path}（右键或 ⌥ 选打开方式）`}
+              onClick={
+                w.missing
+                  ? undefined
+                  : (e) => openDirWith(e, w.path, () => void api.openWorktree(w.id).catch(() => {}))
+              }
+              onContextMenu={
+                w.missing
+                  ? undefined
+                  : (e) => {
+                      e.preventDefault()
+                      openWithMenu(w.path)
+                    }
+              }
+              onKeyDown={(e) => {
+                if (!w.missing && e.key === 'Enter') void api.openWorktree(w.id).catch(() => {})
+              }}
+            >
+              <span className="pr-name">
+                <span className="repo line mono">{w.repo}</span>
+                <span className="branch line">· {w.branch}</span>
+              </span>
+              {w.missing ? <span className="wt-missing">目录已失联</span> : <span className="go">↗</span>}
             </div>
           ))}
-        </InfoBlock>
-      )}
-
-      {/* ctx 未到时不能把空列表误当成需求没有工作区 */}
-      {ctx && (
-        <InfoBlock label="会话" count={sessions.length}>
-          {/* 新会话入口与已有会话放在一起，工作区选择和登记结果都能就近核对 */}
-          <LaunchSession req={req} worktrees={worktrees} />
-          {/* 有 deeplink 的点一行就回到原会话；新会话入口不碰已有回跳 */}
-          {sessions.map((s) => {
-            return (
-              <div className="wt" key={`${s.agent}:${s.session}`}>
-                <div className="wt-head">
-                  <span className="v">{AGENT_LABELS[s.agent] ?? s.agent}</span>
-                  {/* 状态是读 agent 应用的落盘文件得来的，hover 看判据出处 */}
-                  <span
-                    className={`thread-dot ${THREAD_STATE_CLASS[s.status.state] ?? ''}`}
-                    title={[s.status.detail, formatStamp(s.status.observedAt)].filter(Boolean).join(' · ')}
-                  />
-                  <span className="thread-state">
-                    {THREAD_STATE_LABEL[s.status.state] ?? s.status.state}
-                  </span>
-                  <span className="spacer" />
-                  <CopyButton text={s.session} label="会话 id" />
-                </div>
-                {/* 需要人介入时把那句话原文摆出来——看板上就能答，不用先进应用 */}
-                {s.status.needsAction && (
-                  <OneLine className="thread-need" text={s.status.needsAction} title={s.status.needsAction} />
-                )}
-                {s.title && (
-                  <div className="wt-meta">
-                    <OneLine className="" text={s.title} title={s.title} />
-                  </div>
-                )}
-                <OneLine
-                  className={`mono ${s.link ? 'info-path' : 'info-path disabled'}`}
-                  text={s.session}
-                  title={s.link ? `在 ${AGENT_LABELS[s.agent] ?? s.agent} 里打开：${s.link}` : s.session}
-                  href={s.link || undefined}
-                />
-                {s.cwd && <OneLine className="wt-meta mono" text={s.cwd} title={s.cwd} />}
-              </div>
-            )
-          })}
         </InfoBlock>
       )}
 
@@ -130,54 +94,123 @@ export default function InfoPanel({
           {openTodos.map((t) => {
             const label = TODO_STATUS_LABEL[t.status] ?? t.status
             return (
-              <div className="wt" key={t.id}>
-                <div className="wt-head">
-                  <span className="todo-dot" data-status={t.status} title={label} />
-                  <span className="v">{label}</span>
-                  <span className="spacer" />
-                  <span className="wt-meta mono">{t.id}</span>
-                </div>
-                <OneLine className="" text={t.title} title={t.title} onClick={() => onOpenTodo(t.id)} />
+              <div
+                className="sess"
+                key={t.id}
+                role="button"
+                tabIndex={0}
+                title="在详情页打开这条待办"
+                onClick={() => onOpenTodo(t.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') onOpenTodo(t.id)
+                }}
+              >
+                <span className="sess-agent">
+                  <span className="todo-dot" data-status={t.status} />
+                  {label}
+                </span>
+                <span className="sess-title line" title={t.title}>
+                  {t.title}
+                </span>
+                <span className="sess-go">↗</span>
               </div>
             )
           })}
         </InfoBlock>
       )}
 
-      {(groups.length > 0 || mdLinks) && (
-        <InfoBlock
-          label="链接"
-          count={groups.reduce((n, g) => n + g.items.length, 0) + (mdLinks ? 1 : 0)}
-        >
-          {groups.map((g) => (
-            <div className="info-row" key={g.title}>
-              <span className="k">{g.title}</span>
-              <span className="v">
-                {g.items.map((it) => (
-                  <OneLine
-                    key={it.url}
-                    className="info-link"
-                    text={it.label}
-                    title={it.url}
-                    href={it.url}
-                  />
-                ))}
-              </span>
-            </div>
-          ))}
-          {mdLinks && (
-            <article className="markdown-body info-md">
-              {/* 外链必须带 target：不带的话会在应用窗口里直接跳走 */}
-              <Markdown
-                remarkPlugins={[remarkGfm]}
-                components={{ a: (props) => <a href={props.href} target="_blank" rel="noreferrer">{props.children}</a> }}
-              >
-                {mdLinks}
-              </Markdown>
-            </article>
+      {groups.length > 0 && (
+        <InfoBlock label="链接" count={groups.reduce((n, g) => n + g.items.length, 0)}>
+          {groups.map((g) =>
+            g.items.map((it, index) => (
+              <div className="link-line" key={`${g.title}:${it.url}`}>
+                {/* 一组只标一次名，同组的其余几条跟着对齐 */}
+                <span className="k">{index === 0 ? g.title : ''}</span>
+                <a className="line info-link" href={it.url} target="_blank" rel="noreferrer" title={it.url}>
+                  {it.label}
+                </a>
+              </div>
+            )),
           )}
         </InfoBlock>
       )}
+
+      {/* 一条路径不值得再占一个小标题，压成末行 */}
+      <div className="path-row foot">
+        <span
+          className="foot-path line mono"
+          role="button"
+          tabIndex={0}
+          title={`${req.path}（右键或 ⌥ 选打开方式）`}
+          onClick={(e) => openDirWith(e, req.path, openDir)}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            openWithMenu(req.path)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') openDir()
+          }}
+        >
+          {req.path}
+        </span>
+        <CopyButton text={req.path} label="路径" />
+      </div>
     </div>
+  )
+}
+
+/**
+ * 目录那一行的「用什么打开」：右键或 ⌥ 点，弹主进程的原生菜单。
+ * 拿不到桥（浏览器开发）就当没这回事——浮窗里不为它多摆任何常驻元素。
+ */
+function openWithMenu(path: string): void {
+  void window.easyFlow?.openWithMenu?.({ path }).catch(() => {})
+}
+
+/** ⌥ 点 = 自己选打开方式；普通点 = 默认那个（访达） */
+function openDirWith(e: MouseEvent, path: string, openDefault: () => void): void {
+  if (e.altKey) {
+    openWithMenu(path)
+    return
+  }
+  openDefault()
+}
+
+/** 会话没登记标题时的兜底：拿登记目录的末段（通常就是工作区名），比留一行空的强 */
+function sessionTitle(s: Session): string {
+  return s.title || s.cwd.split('/').filter(Boolean).pop() || s.session
+}
+
+/**
+ * 没有 deeplink 的会话（终端里的 claude、cursor）不给假链接，整行只是"有这么条会话"。
+ */
+function SessionRow({ session }: { session: Session }) {
+  const agent = AGENT_LABELS[session.agent] ?? session.agent
+  const title = sessionTitle(session)
+  const body = (
+    <>
+      <span className="sess-agent">
+        <AgentIcon agent={session.agent} />
+        {agent}
+      </span>
+      <span className="sess-title line" title={title}>
+        {title}
+      </span>
+      {session.link && <span className="sess-go">↗</span>}
+    </>
+  )
+
+  if (!session.link) {
+    return (
+      <div className="sess sess-off" title={`这条会话没有会话级链接，去 ${agent} 里找：${session.session}`}>
+        {body}
+      </div>
+    )
+  }
+
+  return (
+    <a className="sess" href={session.link} target="_blank" rel="noreferrer" title={`在 ${agent} 里打开`}>
+      {body}
+    </a>
   )
 }

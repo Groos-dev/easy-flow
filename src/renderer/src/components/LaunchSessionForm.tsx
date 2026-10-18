@@ -1,9 +1,13 @@
-import type { FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { CopyButton } from './InfoBits'
-import SelectMenu from './SelectMenu'
+import { AgentIcon } from './icons'
 import { launchNeedsWorktree, launchResultFeedback, launchWorktreeSelection, worktreeCreationCommand } from '../lib/launch'
 import type { LaunchAgent, LaunchProviderInfo, LaunchResult, Worktree } from '../lib/types'
 
+/**
+ * 新会话表单：只有「用哪个 agent」是必答项，工作区在真有得选的时候才问。
+ * 结果态反过来——打开成功只说一句，提示词与手动登记命令留给「没打开成」那条路。
+ */
 export default function LaunchSessionForm({
   requirementId,
   worktrees,
@@ -33,86 +37,121 @@ export default function LaunchSessionForm({
   onAgentChange: (id: LaunchAgent) => void
   onLaunch: () => void
 }) {
+  /** 提示词平时折着：它只在「deeplink 没把提示词带过去」时才需要人看 */
+  const [promptOpen, setPromptOpen] = useState(false)
+
   const { available } = launchWorktreeSelection(worktrees, worktreeId)
-  const missing = worktrees.filter((w) => w.missing)
-  const feedback = result ? launchResultFeedback(requirementId, result) : null
-  // deeplink 只能带一个工作目录（Claude 当 folder、Codex 当 path）：有工作区就必须选一个
   const needsWorktree = launchNeedsWorktree(available)
   const canLaunch = !!agent && (!needsWorktree || !!worktreeId) && !busy
+  const picked = providers.find((p) => p.id === agent)
+  const feedback = result ? launchResultFeedback(requirementId, result) : null
+  const agentName = picked?.label ?? result?.agent ?? 'Agent'
 
   function submit(event: FormEvent) {
     event.preventDefault()
     if (canLaunch) onLaunch()
   }
 
+  if (loading) return <p className="launch-hint">正在读取可用 Agent…</p>
+  if (providerError) {
+    return (
+      <p className="launch-result bad" role="alert">
+        读取 Agent 失败：{providerError}
+      </p>
+    )
+  }
+  if (!providers.length) {
+    return <p className="launch-hint">当前没有可用的 Agent 启动方式；已有会话仍可从上面的列表回到原会话。</p>
+  }
+
   return (
-    <div className="launch-session-form">
+    <div className="launch-form">
       <form onSubmit={submit}>
-        {available.length === 0 && (
-          <p className="launch-help">
-            这条需求还没有工作区：新会话先按需求取上下文，改代码前自己开工作区——
-            <code>{worktreeCreationCommand(requirementId)}</code>
-          </p>
-        )}
-        {loading ? (
-          <p className="launch-help">正在读取可用 Agent…</p>
-        ) : providerError ? (
-          <p className="launch-error" role="alert">读取 Agent 失败：{providerError}</p>
-        ) : providers.length === 0 ? (
-          <p className="launch-help">当前没有可用的 Agent 启动方式；已有会话仍可从本页会话列表回到原会话。</p>
-        ) : (
-          <>
-            <div className="launch-select-row">
-              <span>Agent</span>
-              <SelectMenu
-                value={agent}
-                placeholder="选择 Agent"
-                options={providers.map((p) => ({ value: p.id, label: p.label }))}
-                onChange={(value) => onAgentChange(value as LaunchAgent)}
-              />
-            </div>
-            {needsWorktree && (
-              <div className="launch-select-row">
-                <span>工作区</span>
-                <SelectMenu
-                  value={worktreeId}
-                  placeholder="选择工作区"
-                  disabled={available.length === 1}
-                  options={available.map((w) => ({ value: w.id, label: `${w.repo} · ${w.branch}` }))}
-                  onChange={onWorktreeChange}
-                />
-              </div>
-            )}
-            {missing.length > 0 && (
-              <p className="launch-help">不可用工作区（目录已失联）：{missing.map((w) => `${w.repo} · ${w.branch}`).join('、')}</p>
-            )}
-            <button className="btn primary launch-submit" type="submit" disabled={!canLaunch}>
-              {busy ? '正在打开…' : '打开新会话草稿'}
+        <div className="agent-chips">
+          {providers.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={`agent-chip${p.id === agent ? ' on' : ''}`}
+              aria-pressed={p.id === agent}
+              onClick={() => onAgentChange(p.id)}
+            >
+              <AgentIcon agent={p.id} />
+              {p.label}
             </button>
-          </>
+          ))}
+        </div>
+
+        {available.length === 1 && (
+          <div className="wt-line">
+            <span className="wt-label">目录</span>
+            <span className="repo line mono">{available[0].repo}</span>
+            <span className="branch line">· {available[0].branch}</span>
+          </div>
         )}
+
+        {available.length > 1 && (
+          <div className="wt-pick" role="radiogroup" aria-label="在哪个工作区开始">
+            <div className="wt-prompt">在哪个工作区开始</div>
+            {available.map((w) => (
+              <div
+                key={w.id}
+                className={`wt-option${w.id === worktreeId ? ' on' : ''}`}
+                role="radio"
+                aria-checked={w.id === worktreeId}
+                tabIndex={0}
+                onClick={() => onWorktreeChange(w.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') onWorktreeChange(w.id)
+                }}
+              >
+                <span className="wt-radio" />
+                <span className="repo line mono">{w.repo}</span>
+                <span className="branch line">· {w.branch}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button className="launch-go" type="submit" disabled={!canLaunch}>
+          {busy ? '正在打开…' : `用 ${agentName} 打开新会话`}
+        </button>
+
+        {/* 正常不说「会发生什么」，按钮上写着；只有还没工作区时得给一条能往下走的路 */}
+        {!needsWorktree && <code className="launch-hint">{worktreeCreationCommand(requirementId)}</code>}
       </form>
 
-      {requestError && <p className="launch-error" role="alert">启动请求失败：{requestError}</p>}
+      {requestError && (
+        <p className="launch-result bad" role="alert">
+          <span className="mark">!</span>
+          启动请求失败：{requestError}
+        </p>
+      )}
 
-      {feedback && (
-        <div className={feedback.role === 'status' ? 'launch-result' : 'launch-error'} role={feedback.role}>
-          <p>{feedback.title}</p>
-          <p>{feedback.detail}</p>
-          {!feedback.opened && feedback.url && (
-            <a className="launch-retry" href={feedback.url} target="_blank" rel="noreferrer">
-              手动重试打开会话草稿
-            </a>
-          )}
-          {feedback.prompt && (
-            <div className="launch-prompt">
-              <pre>{feedback.prompt}</pre>
-              <CopyButton text={feedback.prompt} label="提示词" />
-            </div>
-          )}
-          <p className="launch-help">如需手动登记，请在所选工作区的新会话中执行：</p>
-          <code>{feedback.manualCommand}</code>
-        </div>
+      {/* 打开成功不说话：agent 应用已经弹出来了，那就是回执。
+          只有没打开成时才铺兜底——原因、重试、提示词、手动登记都在这儿 */}
+      {feedback && !feedback.opened && (
+        <>
+          <p className="launch-result bad" role="alert">
+            <span className="mark">!</span>
+            没能自动打开 {agentName}：{feedback.error || '未知错误'}
+          </p>
+          <div className="launch-actions">
+            <button className="launch-retry" type="button" onClick={onLaunch} disabled={!canLaunch}>
+              重试打开
+            </button>
+            <CopyButton text={feedback.prompt} label="提示词" showLabel />
+          </div>
+          <p className="launch-hint">手动兜底：在 {agentName} 里新建会话、把提示词贴过去；或自己跑一次登记。</p>
+          <code className="launch-manual">{feedback.manualCommand}</code>
+          {/* 能复制也得能看：剪贴板失败时眼里得有东西可抄 */}
+          <div className="launch-fold">
+            <button type="button" onClick={() => setPromptOpen((v) => !v)}>
+              {promptOpen ? '▾' : '▸'} 看提示词原文
+            </button>
+          </div>
+          {promptOpen && <pre className="launch-prompt">{feedback.prompt}</pre>}
+        </>
       )}
     </div>
   )

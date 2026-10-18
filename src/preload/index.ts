@@ -34,6 +34,10 @@ contextBridge.exposeInMainWorld('easyFlow', {
     return () => ipcRenderer.removeListener('easy-flow:open-requirement', listener)
   },
 
+  /** 目录那一行：右键或 ⌥ 点，弹主进程的原生「用什么打开」菜单；返回选了哪个（没选是 null） */
+  openWithMenu: (payload: { path: string }): Promise<string | null> =>
+    ipcRenderer.invoke('easy-flow:open-with-menu', payload),
+
   /** mini 面板：藏起自己（Esc 到顶 / 点完跳转之后） */
   hidePanel: (): void => {
     ipcRenderer.send('easy-flow:panel-hide')
