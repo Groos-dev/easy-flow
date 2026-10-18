@@ -17,3 +17,17 @@ export function codeLinkLabel(link: CodeLink): string {
   const path = link.url.replace(/[?#].*$/, '').replace(/\/+$/, '')
   return path.slice(path.lastIndexOf('/') + 1) || link.url
 }
+
+/**
+ * 飞书任务链接显示什么：整条 URL 摆在浮窗里又长又全一样，扫不出是哪条。
+ * 取域名之后的路径，并把详情页用的 /detail 段去掉（`/onex/story/detail/123` → `onex/story/123`）。
+ */
+export function feishuTaskLabel(url: string): string {
+  const path = url
+    .replace(/^https?:\/\/[^/]+/i, '')
+    .replace(/[?#].*$/, '')
+    .replace(/\/+$/, '')
+    .replace(/\/detail(?=\/|$)/i, '')
+    .replace(/^\//, '')
+  return path || url
+}

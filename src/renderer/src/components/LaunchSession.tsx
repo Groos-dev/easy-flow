@@ -39,9 +39,8 @@ export default function LaunchSession({ req, worktrees }: { req: Requirement; wo
       .then(({ providers: loaded }) => {
         if (!alive) return
         setProviders(loaded)
-        setAgent((current) => loaded.some((p) => p.id === current)
-          ? current
-          : loaded.length === 1 ? loaded[0].id : '')
+        // 默认选第一个：可用 agent 就两三个，选一次就够
+        setAgent((current) => loaded.some((p) => p.id === current) ? current : (loaded[0]?.id ?? ''))
         setProvidersLoaded(true)
       })
       .catch((error: Error) => {
@@ -95,27 +94,41 @@ export default function LaunchSession({ req, worktrees }: { req: Requirement; wo
     setRequestError('')
   }
 
+  // 首次展开时 provider 列表还没到：别让表单先闪一句「没有可用的 Agent」
+  const loadingProviders = loading || (open && !providersLoaded && !providerError)
+
   return (
     <div className="launch-session">
-      <button className="btn launch-trigger" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        {open ? '收起启动入口' : '新建 Agent 会话'}
-      </button>
-      {open && (
-        <LaunchSessionForm
-          requirementId={req.id}
-          worktrees={worktrees}
-          providers={providers}
-          worktreeId={worktreeId}
-          agent={agent}
-          loading={loading}
-          providerError={providerError}
-          requestError={requestError}
-          busy={busy}
-          result={result}
-          onWorktreeChange={changeWorktree}
-          onAgentChange={changeAgent}
-          onLaunch={() => void launch()}
-        />
+      {open ? (
+        <div className="new-sess">
+          <div className="new-sess-head">
+            新建会话
+            <span className="spacer" />
+            <button className="new-sess-x" onClick={() => setOpen(false)}>
+              收起
+            </button>
+          </div>
+          <LaunchSessionForm
+            requirementId={req.id}
+            worktrees={worktrees}
+            providers={providers}
+            worktreeId={worktreeId}
+            agent={agent}
+            loading={loadingProviders}
+            providerError={providerError}
+            requestError={requestError}
+            busy={busy}
+            result={result}
+            onWorktreeChange={changeWorktree}
+            onAgentChange={changeAgent}
+            onLaunch={() => void launch()}
+          />
+        </div>
+      ) : (
+        // 收起态就是一行入口，样式沿用会话行（.add-sess）
+        <button className="add-sess" onClick={() => setOpen(true)} aria-expanded={false}>
+          ＋ 新建会话
+        </button>
       )}
     </div>
   )

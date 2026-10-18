@@ -29,7 +29,7 @@ import { createProjectDir, createRequirementDir, setRequirementId } from '../ser
 import { createBoardApp } from '../server/index.ts'
 import { readConfig, writeConfig } from '../server/config.ts'
 import { buildTree, layoutTree, nodeWidth } from '../src/renderer/src/lib/mindmap.ts'
-import { codeLinkLabel } from '../src/renderer/src/lib/links.ts'
+import { codeLinkLabel, feishuTaskLabel } from '../src/renderer/src/lib/links.ts'
 import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib/shortcut.ts'
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
@@ -625,6 +625,24 @@ describe('渲染层 · 代码链接别名', () => {
   test('其余取路径末段，没有路径就用整条 URL', () => {
     assert.equal(codeLinkLabel({ label: '', url: 'https://example.com/a/b/' }), 'b')
     assert.equal(codeLinkLabel({ label: '', url: 'https://example.com' }), 'example.com')
+  })
+})
+
+describe('渲染层 · 飞书任务别名', () => {
+  test('去掉域名与详情页那段，只留认得出是哪条的路径', () => {
+    assert.equal(
+      feishuTaskLabel('https://project.feishu.cn/onex/story/detail/6712345678901234567'),
+      'onex/story/6712345678901234567',
+    )
+  })
+
+  test('查询串与结尾斜杠不影响', () => {
+    assert.equal(feishuTaskLabel('https://project.feishu.cn/onex/story/detail/123?from=chat'), 'onex/story/123')
+    assert.equal(feishuTaskLabel('https://project.feishu.cn/onex/story/detail/123/'), 'onex/story/123')
+  })
+
+  test('没有路径就退回整条 URL，不给空文案', () => {
+    assert.equal(feishuTaskLabel('https://project.feishu.cn'), 'https://project.feishu.cn')
   })
 })
 

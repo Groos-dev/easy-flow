@@ -1,6 +1,6 @@
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -155,7 +155,7 @@ describe('需求详情页启动会话', () => {
       import { renderToStaticMarkup } from 'react-dom/server'
       import Form from './src/renderer/src/components/LaunchSessionForm.tsx'
       const base = {
-        requirementId: 'req-alpha', providers: [{ id: 'codex', label: 'Codex' }],
+        requirementId: 'req-alpha', providers: [{ id: 'claude', label: 'Claude Code' }, { id: 'codex', label: 'Codex' }],
         worktreeId: '', agent: 'codex', loading: false, providerError: '', requestError: '',
         busy: false, result: null, onWorktreeChange() {}, onAgentChange() {}, onLaunch() {},
       }
@@ -171,6 +171,7 @@ describe('需求详情页启动会话', () => {
         emptyClaude: render({ worktrees: [], agent: 'claude' }),
         missing: render({ worktrees: [gone] }),
         failure: render({ worktrees: [one], worktreeId: 'wt-one', result: { agent: 'codex', url: 'codex-test://new-session', prompt: 'easy-flow context wt-one', opened: false, error: 'handler unavailable' } }),
+        success: render({ worktrees: [one], worktreeId: 'wt-one', result: { agent: 'codex', url: 'codex-test://new-session', prompt: 'easy-flow context wt-one', opened: true } }),
       }))
     `
     const rendered = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '--eval', renderScript], {
@@ -180,33 +181,42 @@ describe('需求详情页启动会话', () => {
     })
     assert.equal(rendered.status, 0, rendered.stderr)
     const markup = JSON.parse(rendered.stdout)
-    assert.match(markup.one, /easy-flow · feature-one/)
-    assert.match(markup.one, /type="button" class="select-trigger"/)
-    assert.match(markup.multiple, /选择工作区/)
-    assert.match(markup.multiple, /launch-submit" type="submit" disabled=""/)
+    // 唯一可用的工作区不是控件，只是告诉他这一把会开在哪；agent 与提交都能直接用
+    assert.match(markup.one, /class="wt-line"/)
+    assert.match(markup.one, /easy-flow/)
+    assert.match(markup.one, /feature-one/)
+    assert.match(markup.one, /用 Claude Code 打开新会话/)
+    assert.doesNotMatch(markup.one, /<select|wt-option/)
+    // 两个工作区就必须选：两行单选，没选之前提交是灰的
+    assert.match(markup.multiple, /在哪个工作区开始/)
+    assert.match(markup.multiple, /class="wt-option"/)
+    assert.match(markup.multiple, /class="launch-go" type="submit" disabled=""/)
     // 两个 agent 都要选工作区：deeplink 只能带一个目录（Claude 当 folder、Codex 当 path）
-    assert.match(markup.codex, /选择工作区/)
+    assert.match(markup.codex, /在哪个工作区开始/)
     // 没有工作区不再挡下入口：照常可选 agent、可提交，只提示先开工作区
     assert.match(markup.empty, /easy-flow wt new req-alpha/)
-    assert.match(markup.empty, /class="btn primary launch-submit" type="submit"/)
-    assert.doesNotMatch(markup.empty, /launch-submit" type="submit" disabled=""/)
-    // Claude 在没有工作区时不出现工作区选择，也不因此禁用提交
+    assert.match(markup.empty, /class="launch-go" type="submit"/)
+    assert.doesNotMatch(markup.empty, /class="launch-go" type="submit" disabled=""/)
     assert.match(markup.emptyClaude, /easy-flow wt new req-alpha/)
-    assert.doesNotMatch(markup.emptyClaude, /选择工作区/)
-    assert.doesNotMatch(markup.emptyClaude, /launch-submit" type="submit" disabled=""/)
-    // 只有失联工作区时同样放行，并把失联那几条列出来
-    assert.match(markup.missing, /feature-gone/)
-    assert.doesNotMatch(markup.missing, /launch-submit" type="submit" disabled=""/)
+    assert.doesNotMatch(markup.emptyClaude, /在哪个工作区开始/)
+    assert.doesNotMatch(markup.emptyClaude, /class="launch-go" type="submit" disabled=""/)
+    // 只有失联工作区时同样放行（那几条本来就不可选，不再单独列出来）
+    assert.doesNotMatch(markup.missing, /feature-gone/)
+    assert.doesNotMatch(markup.missing, /class="launch-go" type="submit" disabled=""/)
+    // 失败态：原因、重试、提示词、手动登记都在这一块里，且不许出现"已打开"
     assert.match(markup.failure, /role="alert"/)
     assert.match(markup.failure, /handler unavailable/)
-    assert.match(markup.failure, /easy-flow context wt-one/)
+    assert.match(markup.failure, /没能自动打开 Codex/)
+    assert.match(markup.failure, /重试打开/)
+    assert.match(markup.failure, /看提示词原文/)
     assert.match(markup.failure, /aria-label="复制提示词"/)
     assert.match(markup.failure, /easy-flow req session add req-alpha --agent codex/)
-    assert.match(markup.failure, /手动重试打开会话草稿/)
-    assert.match(markup.failure, /href="codex-test:\/\/new-session"/)
-    assert.doesNotMatch(markup.failure, /已创建成功/)
-    const selectMenu = readFileSync(join(repoRoot, 'src/renderer/src/components/SelectMenu.tsx'), 'utf8')
-    assert.equal((selectMenu.match(/type="button"/g) ?? []).length, 2)
+    assert.doesNotMatch(markup.failure, /已打开新会话草稿/)
+    // 打开成功不说话：agent 应用已经弹出来了，那就是回执；表单照旧
+    assert.match(markup.success, /用 Codex 打开新会话/)
+    assert.doesNotMatch(markup.success, /已在|草稿|提示词|登记/)
+    // agent 标签在 form 里，没有 type="button" 会变成提交——这条是防回归
+    assert.equal((markup.one.match(/type="button" class="agent-chip[^"]*"/g) ?? []).length, 2)
   })
 
   test('api.launch 将 HTTP 200 的启动失败保留为结果，并且 ctx 未加载时不显示启动入口', async () => {
@@ -242,7 +252,7 @@ describe('需求详情页启动会话', () => {
         onWorktreeChange: () => {}, onAgentChange: () => {}, onLaunch: () => {},
       }))
       assert.match(formHtml, /handler unavailable/)
-      assert.match(formHtml, /easy-flow context wt-alpha/)
+      assert.match(formHtml, /看提示词原文/)
       assert.match(formHtml, /aria-label="复制提示词"/)
       assert.match(formHtml, /easy-flow req session add req-alpha --agent codex/)
       await assert.rejects(
@@ -294,9 +304,8 @@ describe('需求详情页启动会话', () => {
     assert.equal(result.opened, true)
     assert.equal(result.error, undefined)
     const feedback = launchResultFeedback('req-alpha', result)
-    assert.equal(feedback.role, 'status')
-    assert.match(feedback.title, /待发送的新会话草稿/)
-    assert.match(feedback.title, /尚未登记会话/)
+    assert.equal(feedback.opened, true)
+    assert.equal(feedback.error, '')
     assert.doesNotMatch(result.prompt, new RegExp(worktreePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
     assert.equal(app.db.listSessions('req-alpha').some((s) => s.session === 'thread-launch-1'), false)
 
@@ -369,12 +378,10 @@ describe('需求详情页启动会话', () => {
     assert.match(result.prompt, /easy-flow req session add req-alpha --agent codex/)
     assert.deepEqual(app.db.listSessions('req-alpha').map((s) => s.session), before)
     const feedback = launchResultFeedback('req-alpha', result)
-    assert.equal(feedback.role, 'alert')
-    assert.match(feedback.title, /启动失败/)
-    assert.match(feedback.detail, /尚未创建会话记录/)
+    assert.equal(feedback.opened, false)
+    assert.match(feedback.error, /handler unavailable|42/)
     assert.equal(feedback.prompt, result.prompt)
     assert.match(feedback.manualCommand, /easy-flow req session add req-alpha --agent codex/)
-    assert.doesNotMatch(feedback.title, /已打开|已创建成功/)
   })
 
   test('provider 构建失败、未注册 agent、以及非本需求工作区都不误报打开成功', async () => {

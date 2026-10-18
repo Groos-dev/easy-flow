@@ -19,6 +19,8 @@ interface EasyFlowBridge {
   onPanelShown?: (handler: () => void) => () => void
   /** 主窗口订阅「打开需求详情」（来自 mini 面板），返回取消订阅函数 */
   onOpenRequirement?: (handler: (payload: { project: string; slug: string }) => void) => () => void
+  /** 目录那一行右键 / ⌥ 点：主进程弹原生「用什么打开」菜单，返回选了哪个（没选是 null） */
+  openWithMenu?: (payload: { path: string }) => Promise<string | null>
   /** mini 面板：藏起自己 */
   hidePanel?: () => void
   /** 取走待打开的需求（主窗口刚重建时用） */
