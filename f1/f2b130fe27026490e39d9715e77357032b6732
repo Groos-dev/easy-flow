@@ -1,0 +1,28 @@
+server/skill-install.ts
+  s_265d344cdb0e3c::t_8d6d804df64ccc 128,133-135
+  s_265d344cdb0e3c::t_e59733c864577c 94
+  s_265d344cdb0e3c::t_9435749f283031 268,271-272
+  s_265d344cdb0e3c::t_affd57aea2930b 357
+src/renderer/src/lib/types.ts
+  s_265d344cdb0e3c::t_33a4190c06eda1 278
+test/skill-install.test.ts
+  s_265d344cdb0e3c::t_78d42c594bf013 82-93
+test/core.test.ts
+  s_265d344cdb0e3c::t_507393f683e123 2856
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "f1f2b130fe27026490e39d9715e77357032b6732",
+  "prompts": {},
+  "sessions": {
+    "s_265d344cdb0e3c": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_2u6jagy45mja",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
