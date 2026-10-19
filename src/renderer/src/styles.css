@@ -1294,6 +1294,7 @@ body {
    几只挤在一起；气泡出来才撑开，宽度跟着 .shown 过渡。
    78px 是「一句动作一行写完」的下限，卡片窄到 3 只挤不下就折成 2 只一行；120px 是气泡的宽度上限 */
 .slot {
+  position: relative;
   flex: 0 1 44px;
   min-width: 44px;
   max-width: 44px;
@@ -1465,12 +1466,15 @@ body {
   color: var(--bubble-failed-text);
 }
 
-/* 有 deeplink 的才可点：没有的只报状态，不给一个点了没反应的按钮 */
-button.pet {
+/* 透明命中层盖住气泡与 pet，只消费鼠标点击；不占布局、不改变视觉 */
+.pet-hit-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   cursor: pointer;
 }
 
-button.pet:hover {
+.slot:hover .pet {
   border-color: var(--accent);
 }
 

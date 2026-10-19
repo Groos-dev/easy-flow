@@ -5,6 +5,7 @@ import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { RunningBoardServer } from '../../server/index.ts'
+import { createLogger } from '../../server/log.ts'
 import { appIconFile, externalOpenArgs, scanOpenTargets, type OpenTarget } from './open-with.ts'
 
 // 图标放在仓库根的 resources/（electron-vite 的约定），运行时从 out/main 往上两级
@@ -16,6 +17,7 @@ let panel: BrowserWindow | null = null
 /** 待主窗口渲染层取走的「打开需求」请求 */
 let pendingOpen: { project: string; slug: string } | null = null
 let boardServer: RunningBoardServer | null = null
+const log = createLogger('open')
 
 // 开发时开远程调试端口，便于用 CDP 检查渲染进程（黑屏/白屏排查）。
 // 必须在 app ready 之前设置。端口避开 Chrome 惯用的 9222。
@@ -237,11 +239,18 @@ function openInApp(appPath: string, dir: string): void {
  */
 function openExternal(url: string): void {
   const args = externalOpenArgs(url)
+  log.debug(`openExternal url=${url} args=${JSON.stringify(args)}`)
   if (args.length > 1) {
-    execFile('open', args, () => {})
+    execFile('open', args, (error, stdout, stderr) => {
+      if (error) log.error(`open failed code=${(error as NodeJS.ErrnoException).code ?? ''} stderr=${stderr.trim()} error=${error.message}`)
+      else log.debug(`open ok stdout=${stdout.trim()} stderr=${stderr.trim()}`)
+    })
     return
   }
-  void shell.openExternal(url)
+  void shell.openExternal(url).then(
+    () => log.debug('shell.openExternal ok'),
+    (error) => log.error(`shell.openExternal failed: ${(error as Error).message}`),
+  )
 }
 
 function registerIpc(): void {
@@ -322,7 +331,8 @@ function registerIpc(): void {
   })
 
   // 渲染层的外链统一走这里：Codex 会话深链需要指定 bundle，其它仍交给系统
-  ipcMain.handle('easy-flow:open-external', (_event, url: string) => {
+  ipcMain.handle('easy-flow:open-external', (event, url: string) => {
+    log.debug(`ipc open-external url=${String(url)} sender=${event.sender.getURL()}`)
     openExternal(String(url))
   })
 
@@ -451,8 +461,13 @@ async function createWindow(): Promise<void> {
     },
   })
 
+  win.webContents.on('console-message', (_event, level, message) => {
+    log.debug(`renderer[${level}] ${message}`)
+  })
+
   // 外链走系统浏览器，不在应用内打开
   win.webContents.setWindowOpenHandler(({ url }) => {
+    log.debug(`window.open url=${url}`)
     openExternal(url)
     return { action: 'deny' }
   })

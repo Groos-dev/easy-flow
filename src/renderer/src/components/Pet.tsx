@@ -94,9 +94,7 @@ function Cloudling({ svg, still }: { svg: string; still: boolean }) {
  * pet 本身不跟事件走，读过了照样留着（它是回到会话的入口）。
  * `focus` 由外面的 PetRow 选出，同一时刻最多一只（见 lib/pets.ts 的 focusIndex）；
  * `compact` 是折叠卡上的小号变体，`still` 换静态素材（减动效兜底）。
- * 有 `link` 就渲染成按钮，点一下跳回会话；没有的只报状态，不给一个点了没反应的按钮。
- * `onOpen` 在跳转前叫一声，调用方拿去记「这只 pet 我点过了」（见 lib/api.ts）。
- * 卡片是可拖拽的，所以这里把 pointerdown 拦掉。
+ * pet 只负责展示状态；跳转由外层透明命中层消费，避免内联 SVG 影响鼠标事件。
  */
 export default function Pet({
   agent,
@@ -106,8 +104,6 @@ export default function Pet({
   focus = false,
   compact = false,
   still = false,
-  link,
-  onOpen,
 }: {
   agent: string
   state: Pose
@@ -116,8 +112,6 @@ export default function Pet({
   focus?: boolean
   compact?: boolean
   still?: boolean
-  link?: string
-  onOpen?: () => void
 }) {
   const name = `${AGENT_LABELS[agent] ?? agent} · ${PET_LABEL[state]}`
   const art = petArt(agent, state, { compact, still, mood })
@@ -130,27 +124,10 @@ export default function Pet({
     )
   const cls = `pet${compact ? ' compact' : ''} s-${state}${event ? ' event' : ''}${focus ? ' focus' : ''}`
 
-  if (!link) {
-    return (
-      <span className={cls} role="img" aria-label={name}>
-        {body}
-      </span>
-    )
-  }
   return (
-    <button
-      className={cls}
-      aria-label={name}
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => {
-        e.stopPropagation()
-        onOpen?.()
-        if (window.easyFlow?.openExternal) void window.easyFlow.openExternal(link)
-        else window.open(link, '_blank')
-      }}
-    >
+    <span className={cls} role="img" aria-label={name}>
       {body}
-    </button>
+    </span>
   )
 }
 
@@ -191,6 +168,28 @@ function moreTip(more: number, needsYou: number): string {
   return `还有 ${more} 个会话未展示${needsYou > 0 ? `，其中 ${needsYou} 个在等你处理` : ''}`
 }
 
+function elementLabel(target: EventTarget | null): string {
+  if (!(target instanceof Element)) return String(target)
+  const cls = target.getAttribute('class') ?? ''
+  return `${target.tagName.toLowerCase()}${cls ? `.${cls.replace(/\s+/g, '.')}` : ''}`
+}
+
+function logPetHit(kind: string, e: { clientX: number; clientY: number; target: EventTarget | null }): void {
+  const hit = document.elementFromPoint(e.clientX, e.clientY)
+  console.debug(
+    '[pet-hit] ' +
+      JSON.stringify({
+        kind,
+        target: elementLabel(e.target),
+        hit: elementLabel(hit),
+        inButton: !!(e.target instanceof Element && e.target.closest('button.pet')),
+        inSlot: !!(e.target instanceof Element && e.target.closest('.slot')),
+        x: Math.round(e.clientX),
+        y: Math.round(e.clientY),
+      }),
+  )
+}
+
 /**
  * 一只 pet 一格：气泡在上、pet 在下，尾巴指着自己那只。格子的宽度跟着气泡在不在变——
  * 没气泡时收成 pet 的宽度挤在一起，有气泡时撑开（过渡在 styles.css 里）。
@@ -200,12 +199,35 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
   const { session, state } = item
   const hasBubble = item.bubble !== ''
   const shown = hasBubble && useBubbleShown(state !== 'idle', hovered)
+  const openFromSlot = () => {
+    if (!session.link) return
+    console.debug(
+      '[pet-click-ui] ' +
+        JSON.stringify({
+          at: new Date().toISOString(),
+          surface: 'slot',
+          agent: session.agent,
+          session: session.session,
+          title: session.title,
+          link: session.link,
+          cwd: session.cwd,
+          state,
+          page: window.location.pathname,
+          bridge: typeof window.easyFlow?.openExternal === 'function',
+        }),
+    )
+    api.markSessionClicked(session.agent, session.session).catch(() => {})
+    if (window.easyFlow?.openExternal) void window.easyFlow.openExternal(session.link)
+    else window.open(session.link, '_blank')
+  }
 
   return (
     <div
       className={`slot${shown ? ' shown' : ''}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onPointerDownCapture={(e) => logPetHit('pointerdown', e)}
+      onClickCapture={(e) => logPetHit('click', e)}
     >
       {!compact && hasBubble && (
         <div className="bubble-box">
@@ -213,6 +235,17 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
             <Bubble text={item.bubble} state={state} />
           </div>
         </div>
+      )}
+      {session.link && (
+        <span
+          className="pet-hit-layer"
+          aria-hidden="true"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            openFromSlot()
+          }}
+        />
       )}
       <Pet
         agent={session.agent}
@@ -222,12 +255,6 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
         focus={item.focus}
         compact={compact}
         still={still}
-        link={session.link || undefined}
-        // 点一下 = 这条会话此刻「静止」：服务端写成一条状态事件，下一个 hook 事件直接覆盖。
-        // 记不下不该拦住人打开会话，所以不等它、也不报错
-        onOpen={() => {
-          api.markSessionClicked(session.agent, session.session).catch(() => {})
-        }}
       />
     </div>
   )
