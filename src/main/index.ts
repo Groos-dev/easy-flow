@@ -5,7 +5,7 @@ import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { RunningBoardServer } from '../../server/index.ts'
-import { appIconFile, scanOpenTargets, type OpenTarget } from './open-with.ts'
+import { appIconFile, externalOpenArgs, scanOpenTargets, type OpenTarget } from './open-with.ts'
 
 // 图标放在仓库根的 resources/（electron-vite 的约定），运行时从 out/main 往上两级
 const ICON = join(__dirname, '../../resources/icon.png')
@@ -125,7 +125,7 @@ function createPanel(): void {
 
   // 外链走系统浏览器（会话 deeplink、MR 等链接），不在面板窗里开
   panel.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    openExternal(url)
     return { action: 'deny' }
   })
 
@@ -231,6 +231,19 @@ function openInApp(appPath: string, dir: string): void {
   execFile('open', ['-a', appPath, dir], () => {})
 }
 
+/**
+ * Codex 的会话深链要显式指定 bundle：裸 `open <url>` 在 Codex 已打开别的会话时
+ * 只把应用拉到前台，不再投递 URL；`open -b com.openai.codex` 才会稳定切到目标会话。
+ */
+function openExternal(url: string): void {
+  const args = externalOpenArgs(url)
+  if (args.length > 1) {
+    execFile('open', args, () => {})
+    return
+  }
+  void shell.openExternal(url)
+}
+
 function registerIpc(): void {
   ipcMain.handle('easy-flow:pick-directory', async () => {
     const result = await dialog.showOpenDialog(win ?? undefined!, {
@@ -306,6 +319,11 @@ function registerIpc(): void {
       // 点菜单外面关掉时也走到这儿：没选就是没选
       Menu.buildFromTemplate(template).popup({ window: win ?? undefined, callback: () => resolve(picked) })
     })
+  })
+
+  // 渲染层的外链统一走这里：Codex 会话深链需要指定 bundle，其它仍交给系统
+  ipcMain.handle('easy-flow:open-external', (_event, url: string) => {
+    openExternal(String(url))
   })
 
   // mini 面板 Esc 到顶（没展开、没过滤词）时藏起自己
@@ -435,7 +453,7 @@ async function createWindow(): Promise<void> {
 
   // 外链走系统浏览器，不在应用内打开
   win.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    openExternal(url)
     return { action: 'deny' }
   })
 

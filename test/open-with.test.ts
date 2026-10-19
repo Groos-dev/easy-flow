@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { appDirs, appIconFile, scanOpenTargets } from '../src/main/open-with.ts'
+import { appDirs, appIconFile, externalOpenArgs, scanOpenTargets } from '../src/main/open-with.ts'
 
 function fakeDirs(names: string[]): string {
   const dir = mkdtempSync(join(tmpdir(), 'easy-flow-open-with-'))
@@ -48,6 +48,12 @@ describe('打开方式 · 扫描本机 app', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+
+  test('Codex 深链固定指定 bundle，其它链接仍走系统默认', () => {
+    assert.deepEqual(externalOpenArgs('codex://threads/abc', 'darwin'), ['-b', 'com.openai.codex', 'codex://threads/abc'])
+    assert.deepEqual(externalOpenArgs('https://example.com', 'darwin'), ['https://example.com'])
+    assert.deepEqual(externalOpenArgs('codex://threads/abc', 'linux'), ['codex://threads/abc'])
   })
 
   test('app 目录带上了系统自带的终端与用户目录', () => {

@@ -38,6 +38,9 @@ contextBridge.exposeInMainWorld('easyFlow', {
   openWithMenu: (payload: { path: string }): Promise<string | null> =>
     ipcRenderer.invoke('easy-flow:open-with-menu', payload),
 
+  /** 打开外链；Codex 会话深链由主进程固定指定 bundle */
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke('easy-flow:open-external', url),
+
   /** mini 面板：藏起自己（Esc 到顶 / 点完跳转之后） */
   hidePanel: (): void => {
     ipcRenderer.send('easy-flow:panel-hide')

@@ -75,3 +75,11 @@ export function scanOpenTargets(dirs: string[] = appDirs()): OpenTarget[] {
     return []
   })
 }
+
+/** 外链用哪个 `open` 参数：Codex 的深链要显式指定 bundle，否则已有窗口时可能只被拉到前台 */
+export function externalOpenArgs(url: string, platform = process.platform): string[] {
+  if (platform === 'darwin' && url.startsWith('codex://')) {
+    return ['-b', 'com.openai.codex', url]
+  }
+  return [url]
+}
