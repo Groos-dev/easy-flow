@@ -59,9 +59,6 @@ export function focusIndex(states: ThreadState[]): number {
   return PET_RANK[states[best]] <= PET_ATTENTION ? best : -1
 }
 
-/** 一张卡最多挂几只 pet：卡片内容宽约 310px，一行 3 只每只约 99px——一句「动词 + 一个关键字段」的气泡一行写完所需的下限，再多就折行、多的收成 +N */
-export const MAX_PETS = 3
-
 /** 真在动的三档（与 server/session-state.ts 的 isActive 同口径）：只有它们可能显示实时动作 */
 const ACTIVE: Pose[] = ['thinking', 'working', 'sweeping']
 
@@ -82,16 +79,11 @@ export interface PetItem {
 }
 
 export interface PetRowPlan {
-  /** 已截到上限的那几只，超出部分在 more 里 */
   items: PetItem[]
-  /** 收成 +N 的数量 */
-  more: number
-  /** 收起的里头有几个要人介入的（卡住 / 失败） */
-  moreNeedsYou: number
 }
 
 /**
- * 一行 pet 的排布：挂哪些会话、截到几只、谁带事件样式、谁抢动效。
+ * 一行 pet 的排布：挂哪些会话、谁带事件样式、谁抢动效。
  * 渲染层只负责贴 markup，规则在这儿算好才测得动。
  *
  * pet 是**回到会话的入口**，只要读得到状态（unknown 之外）就长期留着；姿势就是状态本身。
@@ -109,17 +101,13 @@ export function planPetRow(sessions: Session[]): PetRowPlan {
   const focusAt = focusIndex(attentive.map((s) => s.status.state))
   const focusSession = focusAt >= 0 ? attentive[focusAt] : undefined
 
-  const shown = pets.slice(0, MAX_PETS)
-  const hidden = pets.slice(MAX_PETS)
   return {
-    items: shown.map((p) => ({
+    items: pets.map((p) => ({
       session: p.session,
       state: p.state,
       focus: p.session === focusSession,
       bubble: bubbleTextOf(p.session, p.state),
     })),
-    more: hidden.length,
-    moreNeedsYou: hidden.filter((p) => p.state === 'blocked' || p.state === 'failed').length,
   }
 }
 

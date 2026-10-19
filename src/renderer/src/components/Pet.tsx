@@ -164,10 +164,6 @@ function useBubbleShown(pinned: boolean, hovered: boolean): boolean {
   return shown
 }
 
-function moreTip(more: number, needsYou: number): string {
-  return `还有 ${more} 个会话未展示${needsYou > 0 ? `，其中 ${needsYou} 个在等你处理` : ''}`
-}
-
 function elementLabel(target: EventTarget | null): string {
   if (!(target instanceof Element)) return String(target)
   const cls = target.getAttribute('class') ?? ''
@@ -263,12 +259,12 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
 /**
  * 卡片上的那排 pet：把一条需求名下的会话译成 pet 并排开。
  *
- * 挂哪些会话、最多几只、谁带事件样式、谁抢注意力都在 planPetRow 里算好：pet 长期留着
+ * 挂哪些会话、谁带事件样式、谁抢注意力都在 planPetRow 里算好：pet 长期留着
  * （读得到状态就挂），姿势就是状态本身；点过 pet 会被写成 idle，边框与动效跟着消失。
  * `compact` 给折叠的父需求窄条用——44px 塞不进去，收成小号，那档不挂气泡。
  */
 export function PetRow({ sessions, compact = false }: { sessions: Session[]; compact?: boolean }) {
-  const { items, more, moreNeedsYou } = planPetRow(sessions)
+  const { items } = planPetRow(sessions)
   const still = usePrefersReducedMotion()
   if (items.length === 0) return null
 
@@ -277,14 +273,6 @@ export function PetRow({ sessions, compact = false }: { sessions: Session[]; com
       {items.map((p) => (
         <PetSlot key={`${p.session.agent}:${p.session.session}`} item={p} compact={compact} still={still} />
       ))}
-      {more > 0 && (
-        <span
-          className={`pet-more${moreNeedsYou > 0 ? ' attention' : ''}${compact ? ' compact' : ''}`}
-          title={moreTip(more, moreNeedsYou)}
-        >
-          +{more}
-        </span>
-      )}
     </div>
   )
 }

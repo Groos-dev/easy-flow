@@ -2,7 +2,7 @@
  * 卡上 pet 的渲染回归。
  *
  * pets.ts 的纯函数（状态映射、一行怎么排）在 core.test.ts 里测；这里只管「真渲染出来的
- * markup 对不对」——4 + N、唯一 .focus、父需求卡不再收成小号。用 react-dom/server 直接渲染组件，
+ * markup 对不对」——全部会话都出 pet、唯一 .focus、父需求卡不再收成小号。用 react-dom/server 直接渲染组件，
  * 不需要 DOM 环境。
  */
 import { test, describe } from 'node:test'
@@ -73,16 +73,15 @@ const pool: Session[] = [
 const petCount = (html: string) => html.match(/class="pet /g)?.length ?? 0
 const focusCount = (html: string) => html.match(/ focus"/g)?.length ?? 0
 const eventCount = (html: string) => html.match(/class="pet[^"]*?\bevent\b/g)?.length ?? 0
-const moreCount = (html: string) => html.match(/class="pet-more[^"]*"[^>]*>\+(\d+)</)?.[1] ?? ''
 
 const render = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el)
 
 describe('PetRow 渲染', () => {
-  test('1/2/3 个会话出等量 pet、无 +N；4 个出 3 只 + 1', () => {
+  test('1/2/3/4/5 个会话都出等量 pet，不藏会话', () => {
     for (const n of [1, 2, 3, 4, 5]) {
       const html = render(createElement(PetRow, { sessions: pool.slice(0, n) }))
-      assert.equal(petCount(html), Math.min(n, 3), `${n} 个会话`)
-      assert.equal(moreCount(html), n > 3 ? String(n - 3) : '', `${n} 个会话的 +N`)
+      assert.equal(petCount(html), n, `${n} 个会话`)
+      assert.doesNotMatch(html, /pet-more/, `${n} 个会话不该出现 +N`)
     }
   })
 
@@ -147,8 +146,8 @@ describe('PetRow 渲染', () => {
   test('compact 变体整排带 compact 类（折叠卡用的小号）', () => {
     const html = render(createElement(PetRow, { sessions: pool, compact: true }))
     assert.match(html, /class="pets compact"/)
-    assert.equal(html.match(/class="pet compact /g)?.length ?? 0, 3)
-    assert.match(html, /class="pet-more compact"/)
+    assert.equal(html.match(/class="pet compact /g)?.length ?? 0, pool.length)
+    assert.doesNotMatch(html, /pet-more/)
   })
 })
 
@@ -212,7 +211,7 @@ describe('PetRow 的气泡', () => {
     assert.equal(html, '')
   })
 
-  test('收起的里头有卡住 / 失败的，+N 那格带 attention', () => {
+  test('卡住 / 失败的会话都画出来，不靠 +N 占位提示', () => {
     const urgent: Session[] = [
       sess('claude', 'blocked', '', 0, '等你确认'),
       sess('codex', 'failed', '', 0, '挂了'),
@@ -221,9 +220,8 @@ describe('PetRow 的气泡', () => {
       sess('claude', 'failed', '', 0, '还挂了'),
     ]
     const html = render(createElement(PetRow, { sessions: urgent }))
-    assert.match(html, /class="pet-more attention" title="还有 2 个会话未展示，其中 2 个在等你处理"/)
-    const calm = render(createElement(PetRow, { sessions: pool }))
-    assert.match(calm, /class="pet-more" title="还有 2 个会话未展示"/)
+    assert.equal(petCount(html), urgent.length)
+    assert.doesNotMatch(html, /pet-more/)
   })
 
   test('折叠卡的小号 pet 不挂气泡——挂了就把一行窄条撑成三层高', () => {
