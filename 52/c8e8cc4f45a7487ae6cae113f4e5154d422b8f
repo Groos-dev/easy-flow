@@ -1,0 +1,14 @@
+src/renderer/src/components/Pet.tsx
+  h_61ecb41619cb4e 148-149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "52c8e8cc4f45a7487ae6cae113f4e5154d422b8f",
+  "prompts": {},
+  "humans": {
+    "h_61ecb41619cb4e": {
+      "author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
