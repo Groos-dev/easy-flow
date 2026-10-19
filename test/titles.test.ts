@@ -21,6 +21,7 @@ const roots: ThreadRoots = {
   appSupport: join(TMP, 'appSupport'),
   claudeHome: join(TMP, 'claude'),
   codexHome: join(TMP, 'codex'),
+  chengxiaobangHome: join(TMP, 'chengxiaobang'),
 }
 
 /**

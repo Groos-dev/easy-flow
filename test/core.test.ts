@@ -10,7 +10,7 @@
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync, readdirSync, cpSync, realpathSync, lstatSync, readlinkSync, statSync } from 'node:fs'
-import { join, basename, resolve } from 'node:path'
+import { join, basename, resolve, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:http'
 import { DatabaseSync } from 'node:sqlite'
@@ -3061,12 +3061,13 @@ describe('导图：布局', () => {
 // ---------------------------------------------- 会话状态：读 agent 应用的落盘文件
 
 describe('会话状态', () => {
-  /** 假装的用户主目录。三处外部数据都从这儿派生，测试不碰真机上的东西 */
+  /** 假装的用户主目录。各处外部数据都从这儿派生，测试不碰真机上的东西 */
   const HOME = join(TMP, 'agent-home')
   const roots = {
     appSupport: join(HOME, 'Library', 'Application Support'),
     claudeHome: join(HOME, '.claude'),
     codexHome: join(HOME, '.codex'),
+    chengxiaobangHome: join(HOME, '.chengxiaobang'),
   }
 
   const { store: suiteStore, sources: suiteSources } = newState()
@@ -3355,26 +3356,88 @@ describe('会话状态', () => {
     assert.equal(statusOf('cursor', 'conv-1').state, 'unknown')
   })
 
-  test('程小帮只有推送来源：干活太久没动静要降档，不能永远停在「干活」', () => {
+  test('程小帮：库里的落盘结论参与状态，推拉结合', () => {
     const { store } = newState()
-    const at = (ms: number, state: SessionStatus['state'] = 'working'): SessionStatus =>
-      ({ state, needsAction: '', observedAt: Date.now() - ms, detail: 'x' })
     const read = (session: string): SessionStatus => {
       const one = [{ agent: 'chengxiaobang', session }]
       pullStatuses(one, store, suiteSources, roots)
       return readObservations(one, store)[0].status
     }
 
-    store.put('chengxiaobang', 's_fresh', at(5 * 60_000))
-    assert.equal(read('s_fresh').state, 'working', '刚跑过的不动它')
+    // 按小帮自己的 schema 建一份库：sessions / messages / runs
+    const file = join(roots.chengxiaobangHome, 'data', 'chengxiaobang.sqlite')
+    rmSync(file, { force: true })
+    mkdirSync(dirname(file), { recursive: true })
+    const db = new DatabaseSync(file)
+    const now = new Date().toISOString()
+    db.exec(`
+      create table sessions (id text primary key, title text not null default '', created_at text not null, updated_at text not null, last_viewed_at text);
+      create table messages (id text primary key, session_id text not null, role text not null, content text not null, created_at text not null);
+      create table runs (id text primary key, session_id text not null, status text not null, error text, created_at text not null, updated_at text not null);
+    `)
+    const add = (id: string, status: string, extra: { error?: string; viewed?: string; at?: string } = {}): void => {
+      const at = extra.at ?? now
+      db.prepare('insert into sessions (id, created_at, updated_at) values (?, ?, ?)').run(id, at, at)
+      db.prepare('insert into runs (id, session_id, status, error, created_at, updated_at) values (?, ?, ?, ?, ?, ?)').run(
+        `r-${id}`,
+        id,
+        status,
+        extra.error ?? null,
+        at,
+        at,
+      )
+      if (extra.viewed) db.prepare('update sessions set last_viewed_at = ? where id = ?').run(extra.viewed, id)
+    }
+    add('s_running', 'running')
+    add('s_failed', 'failed', { error: 'model timeout' })
+    add('s_aborted', 'aborted')
+    add('s_unseen', 'completed')
+    add('s_seen', 'completed', { viewed: now })
+    // 崩溃前残留的 running：应用没来得及收尾，靠活跃超时兜底
+    add('s_stale_running', 'running', { at: new Date(Date.now() - 31 * 60_000).toISOString() })
+    db.close()
 
-    // 崩掉的会话不会有 Stop，只能靠超时兜底
-    store.put('chengxiaobang', 's_stale', at(31 * 60_000))
-    assert.equal(read('s_stale').state, 'unknown')
+    assert.equal(read('s_running').state, 'working')
+    assert.equal(read('s_failed').state, 'failed')
+    assert.match(read('s_failed').detail, /model timeout/)
+    assert.equal(read('s_aborted').state, 'blocked')
+    assert.equal(read('s_unseen').state, 'done', '跑完没看过：跑完待看')
+    assert.equal(read('s_seen').state, 'idle', '看过了就是静止')
+    assert.equal(read('s_stale_running').state, 'unknown', '库里停在 running 太久，不能一直显示在干活')
+    assert.equal(read('s_missing').state, 'unknown', '库里没有这条会话')
+  })
 
-    // 已经收尾的档不该被这条兜底改掉
-    store.put('chengxiaobang', 's_done', at(31 * 60_000, 'done'))
-    assert.equal(read('s_done').state, 'done')
+  test('程小帮：hook 推来的新结论盖过库里那份旧的', () => {
+    const { store } = newState()
+    const session = 's_push_wins'
+    const file = join(roots.chengxiaobangHome, 'data', 'chengxiaobang.sqlite')
+    const old = new Date(Date.now() - 60_000).toISOString()
+    rmSync(file, { force: true })
+    mkdirSync(dirname(file), { recursive: true })
+    const db = new DatabaseSync(file)
+    db.exec(`
+      create table sessions (id text primary key, title text not null default '', created_at text not null, updated_at text not null, last_viewed_at text);
+      create table messages (id text primary key, session_id text not null, role text not null, content text not null, created_at text not null);
+      create table runs (id text primary key, session_id text not null, status text not null, error text, created_at text not null, updated_at text not null);
+    `)
+    db.prepare('insert into sessions (id, created_at, updated_at) values (?, ?, ?)').run(session, old, old)
+    db.prepare('insert into runs (id, session_id, status, error, created_at, updated_at) values (?, ?, ?, ?, ?, ?)').run(
+      'r1',
+      session,
+      'completed',
+      null,
+      old,
+      old,
+    )
+    db.close()
+
+    const one = [{ agent: 'chengxiaobang', session }]
+    pullStatuses(one, store, suiteSources, roots)
+    assert.equal(readObservations(one, store)[0].status.state, 'done', '先读库：跑完了')
+
+    recordHook({ hook_event_name: 'PreToolUse', session_id: session }, { agent: 'chengxiaobang' }, store)
+    pullStatuses(one, store, suiteSources, roots)
+    assert.equal(readObservations(one, store)[0].status.state, 'working', 'hook 更新，拉取不能盖回去')
   })
 
   test('同一个会话 id 挂在两个 agent 上时互不串味', () => {
@@ -3662,6 +3725,7 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
     appSupport: join(HOME, 'Library', 'Application Support'),
     claudeHome: join(HOME, '.claude'),
     codexHome: join(HOME, '.codex'),
+    chengxiaobangHome: join(HOME, '.chengxiaobang'),
   }
 
   before(() => rmSync(HOME, { recursive: true, force: true }))

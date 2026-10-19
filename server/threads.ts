@@ -33,12 +33,13 @@ import { str } from './util.ts'
 import { RolloutStore } from './rollout.ts'
 import { codexUnread } from './codex-unread.ts'
 import { codexTitles } from './codex-titles.ts'
+import { chengxiaobangObservations } from './chengxiaobang.ts'
 import { changed, type SourceTable } from './source-file.ts'
 
 /** 停在「在干活」多久没新事件就当它没了：会话崩了不会有收尾事件 */
 const RUNNING_TTL_MS = 30 * 60_000
 
-/** 三处外部数据的位置。默认本机；测试传临时目录 */
+/** 外部数据的位置。默认本机；测试传临时目录 */
 export interface ThreadRoots {
   /** macOS 的 Application Support，Claude 桌面应用数据目录在它下面 */
   appSupport: string
@@ -46,6 +47,8 @@ export interface ThreadRoots {
   claudeHome: string
   /** ~/.codex */
   codexHome: string
+  /** ~/.chengxiaobang */
+  chengxiaobangHome: string
 }
 
 export function defaultRoots(): ThreadRoots {
@@ -54,6 +57,7 @@ export function defaultRoots(): ThreadRoots {
     appSupport: join(home, 'Library', 'Application Support'),
     claudeHome: join(home, '.claude'),
     codexHome: join(home, '.codex'),
+    chengxiaobangHome: join(home, '.chengxiaobang'),
   }
 }
 
@@ -67,16 +71,17 @@ export function pullStatuses(
 ): void {
   const claude = sessions.filter((s) => s.agent === 'claude')
   const codex = sessions.filter((s) => s.agent === 'codex')
+  const chengxiaobang = sessions.filter((s) => s.agent === 'chengxiaobang')
   const live = claude.length ? claudeLive(roots) : null
 
-  // 只有推送来源的 agent（程小帮）：没有落盘可读，但收尾的兜底不能少——
-  // 会话崩了不会有 Stop，状态会永远停在「干活」。
-  for (const s of sessions) {
-    if (s.agent === 'claude' || s.agent === 'codex') continue
-    const current = states.get(s.agent, states.keyOf(s.agent, s.session))
-    if (!current) continue
-    const settled = settleActive(current.status, false)
-    if (settled !== current.status) states.put(s.agent, s.session, settled)
+  // 程小帮：hook 推送 + 库里的落盘结论。服务重启后推送那条是空的，靠这里补回来
+  const cxb = chengxiaobang.length
+    ? chengxiaobangObservations(roots.chengxiaobangHome, chengxiaobang.map((s) => s.session))
+    : null
+  for (const s of chengxiaobang) {
+    const observation = cxb?.get(s.session) ?? { status: unknownStatus('程小帮库里没有这条会话的记录'), action: null }
+    // alive 一律 false：库里的 running 也可能是崩溃前残留，交给活跃超时兜底
+    putSettled(states, 'chengxiaobang', s.session, observation, false)
   }
 
   // 合并按时刻走，所以先后顺序无所谓
