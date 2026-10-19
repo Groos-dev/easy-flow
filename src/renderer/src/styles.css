@@ -1534,38 +1534,6 @@ body {
   }
 }
 
-/* 超过上限的收成一个占位：卡片内容宽约 310px，再多就挤了 */
-.pet-more {
-  width: 44px;
-  height: 44px;
-  flex: none;
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
-  border: 1px dashed var(--border);
-  color: var(--text-faint);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-.pet-more.attention {
-  position: relative;
-  border-color: var(--status-review);
-  color: var(--status-review);
-}
-
-.pet-more.attention::after {
-  content: '';
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--status-review);
-  box-shadow: 0 0 0 2px var(--card);
-}
-
 /* 折叠的父需求窄条塞不下 44px：收成小号，只当「一眼看出谁在等 / 点一下跳回去」的入口，
    表情细节让位给紧凑；那档不挂气泡，挂了就把一行窄条撑成三层高 */
 .pets.compact {
@@ -1589,13 +1557,6 @@ body {
 .pet.compact .pet-art {
   width: 21px;
   height: 21px;
-}
-
-.pet-more.compact {
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
-  font-size: 10px;
 }
 
 /* 未读标记：角标亮就是因为这个，读过了它会消失 */
