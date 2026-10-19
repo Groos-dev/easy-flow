@@ -21,6 +21,8 @@ interface EasyFlowBridge {
   onOpenRequirement?: (handler: (payload: { project: string; slug: string }) => void) => () => void
   /** 目录那一行右键 / ⌥ 点：主进程弹原生「用什么打开」菜单，返回选了哪个（没选是 null） */
   openWithMenu?: (payload: { path: string }) => Promise<string | null>
+  /** 打开外链；Codex 会话深链由主进程固定指定 bundle */
+  openExternal?: (url: string) => Promise<void>
   /** mini 面板：藏起自己 */
   hidePanel?: () => void
   /** 取走待打开的需求（主窗口刚重建时用） */

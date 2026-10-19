@@ -145,7 +145,8 @@ export default function Pet({
       onClick={(e) => {
         e.stopPropagation()
         onOpen?.()
-        window.open(link, '_blank')
+        if (window.easyFlow?.openExternal) void window.easyFlow.openExternal(link)
+        else window.open(link, '_blank')
       }}
     >
       {body}
