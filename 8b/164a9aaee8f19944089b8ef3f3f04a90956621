@@ -1,0 +1,36 @@
+server/threads.ts
+  s_265d344cdb0e3c::t_a5bfb9cdaca6e5 74,77-84
+  s_265d344cdb0e3c::t_d9778c7e711af9 42
+  s_265d344cdb0e3c::t_55aca72242d335 36
+  s_265d344cdb0e3c::t_30c53f998270d9 50-51,60
+server/chengxiaobang.ts
+  s_265d344cdb0e3c::t_230b82e665c294 16
+  s_265d344cdb0e3c::t_9317d64ae0b5ca 1-15,18-69,71-74,76-110,112-119
+  s_265d344cdb0e3c::t_254c5fc04872d3 17
+  s_265d344cdb0e3c::t_1e6f5f1fd1a6c3 70,75
+  s_265d344cdb0e3c::t_83731cb0f6703d 111
+test/core.test.ts
+  s_265d344cdb0e3c::t_83528c0e40e8e3 3378-3380,3386-3387,3396-3397,3406
+  s_265d344cdb0e3c::t_114fe21d5fcb35 3359,3367-3377,3381-3385,3388-3395,3398-3405,3407-3432,3434-3436,3438-3440
+  s_265d344cdb0e3c::t_5d55283efe4439 13
+  s_265d344cdb0e3c::t_2da11dd549bc06 3064,3070
+  s_265d344cdb0e3c::t_c2c6b41e82f368 3728
+test/titles.test.ts
+  s_265d344cdb0e3c::t_09eec0de991d48 24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "8b164a9aaee8f19944089b8ef3f3f04a90956621",
+  "prompts": {},
+  "sessions": {
+    "s_265d344cdb0e3c": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_2u6jagy45mja",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
