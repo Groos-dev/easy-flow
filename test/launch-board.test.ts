@@ -231,7 +231,7 @@ describe('需求详情页启动会话', () => {
     const previousOpenFail = process.env.EASY_FLOW_TEST_OPEN_FAIL
     try {
       const { api } = await vite.ssrLoadModule('/src/renderer/src/lib/api.ts') as {
-        api: { launch(input: { slug: string; project: string; worktreeId: string; agent: 'codex' | 'claude' }): Promise<any> }
+        api: { launch(input: { slug: string; project: string; worktreeId: string; agent: 'codex' | 'claude' | 'chengxiaobang' }): Promise<any> }
       }
       globalThis.fetch = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
         const path = new URL(String(input), base)

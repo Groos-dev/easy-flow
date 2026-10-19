@@ -80,6 +80,23 @@ function claudeOthers() {
   }
 }
 
+/** 程小帮的 hook 是扁平数组，保留一条用户自己的 hook 验证只增不改 */
+function cxbOthers() {
+  return {
+    enabled: true,
+    hooks: [
+      {
+        id: 'someone-else',
+        event: 'PreToolUse',
+        matcher: 'Write|Edit|Shell',
+        command: 'echo other',
+        timeoutSeconds: 30,
+        enabled: true,
+      },
+    ],
+  }
+}
+
 /** JSON.stringify 的缩进要跟真实文件一致，否则「逐字相等」的基线不是真基线 */
 function writeJson(file: string, obj: unknown, trailingNewline = true): void {
   mkdirSync(dirname(file), { recursive: true })
@@ -94,37 +111,42 @@ describe('hook 一键配置：只增不改', () => {
   let home: string
   let claudeFile: string
   let codexFile: string
+  let cxbFile: string
 
   beforeEach(() => {
     home = join(TMP, `home-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     claudeFile = join(home, '.claude', 'settings.json')
     codexFile = join(home, '.codex', 'hooks.json')
+    cxbFile = join(home, '.chengxiaobang', 'hooks.json')
   })
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true })
   })
 
-  test('未配置时两个 agent 都报未安装，地址带端口', () => {
+  test('未配置时三个 agent 都报未安装，地址带端口', () => {
     const plan = hookPlan({ port: 3210, home })
     assert.equal(plan.port, 3210)
-    assert.equal(plan.agents.length, 2)
+    assert.equal(plan.agents.length, 3)
     for (const a of plan.agents) {
       assert.equal(a.installed, false)
       assert.equal(a.events, 0)
       assert.match(a.url, /^http:\/\/127\.0\.0\.1:3210\/api\/hook/)
     }
     assert.equal(plan.agents.find((a) => a.id === 'codex')!.url, 'http://127.0.0.1:3210/api/hook?agent=codex')
+    assert.equal(plan.agents.find((a) => a.id === 'chengxiaobang')!.url, 'http://127.0.0.1:3210/api/hook?agent=chengxiaobang')
   })
 
   test('装完能读到：各装了自己那批事件，别人的 hook 深度不变', () => {
     writeJson(codexFile, codexOthers())
     writeJson(claudeFile, claudeOthers())
+    writeJson(cxbFile, cxbOthers())
 
     installHooks({ port: 3210, home })
 
     const codex = JSON.parse(read(codexFile))
     const claude = JSON.parse(read(claudeFile))
+    const cxb = JSON.parse(read(cxbFile))
     const cOthers = codexOthers()
     const jOthers = claudeOthers()
 
@@ -151,21 +173,32 @@ describe('hook 一键配置：只增不改', () => {
     assert.equal(plan.agents.find((a) => a.id === 'codex')!.events, 9)
     assert.equal(plan.agents.find((a) => a.id === 'claude')!.installed, true)
     assert.equal(plan.agents.find((a) => a.id === 'claude')!.events, 9)
+    assert.equal(plan.agents.find((a) => a.id === 'chengxiaobang')!.installed, true)
+    assert.equal(plan.agents.find((a) => a.id === 'chengxiaobang')!.events, 6)
+    assert.equal(cxb.enabled, true)
+    assert.equal(cxb.hooks.length, 7, '原有 1 条 + easy-flow 6 条')
+    assert.equal(cxb.hooks[0].id, 'someone-else')
+    assert.match(cxb.hooks[1].command, /\/api\/hook\?agent=chengxiaobang/)
+    assert.equal(cxb.hooks[1].event, 'SessionStart')
   })
 
   test('最要紧的一条：装完再卸完，两份配置逐字还原', () => {
     writeJson(codexFile, codexOthers())
     writeJson(claudeFile, claudeOthers())
+    writeJson(cxbFile, cxbOthers())
     const codexBefore = read(codexFile)
     const claudeBefore = read(claudeFile)
+    const cxbBefore = read(cxbFile)
 
     installHooks({ port: 3210, home })
     assert.notEqual(read(codexFile), codexBefore, '装完应当确实写进去了')
     assert.notEqual(read(claudeFile), claudeBefore)
+    assert.notEqual(read(cxbFile), cxbBefore)
 
     uninstallHooks({ home })
     assert.equal(read(codexFile), codexBefore, 'Codex：cmux 与 orca 必须逐字不变')
     assert.equal(read(claudeFile), claudeBefore, 'Claude：用户自己的 hook 必须逐字不变')
+    assert.equal(read(cxbFile), cxbBefore, '程小帮：原有 hook 必须逐字不变')
   })
 
   test('原文件没有行尾换行时，装完再卸完也不多出换行', () => {
@@ -178,6 +211,19 @@ describe('hook 一键配置：只增不改', () => {
 
     uninstallHooks({ home })
     assert.equal(read(claudeFile), before)
+  })
+
+  test('程小帮原本没有 hooks 字段时，卸完要留一份合法配置而不是空壳', () => {
+    // 小帮的 schema 要求 enabled 与 hooks 都在：删掉 hooks 会让整份配置被判「读不懂」而丢弃
+    writeJson(cxbFile, { enabled: true })
+
+    installHooks({ port: 3210, home })
+    assert.equal(JSON.parse(read(cxbFile)).hooks.length, 6)
+
+    uninstallHooks({ home })
+    const after = JSON.parse(read(cxbFile))
+    assert.deepEqual(after.hooks, [], '条目摘干净，但字段还在')
+    assert.equal(after.enabled, true)
   })
 
   test('幂等：连点两次装、连点两次卸，结果一致且不重复', () => {
@@ -204,6 +250,7 @@ describe('hook 一键配置：只增不改', () => {
   test('端口变了，装出来的地址跟着更新', () => {
     writeJson(codexFile, codexOthers())
     writeJson(claudeFile, claudeOthers())
+    writeJson(cxbFile, cxbOthers())
 
     installHooks({ port: 3210, home })
     assert.match(read(codexFile), /127\.0\.0\.1:3210\/api\/hook\?agent=codex/)
@@ -288,7 +335,7 @@ describe('/api/hooks 路由', () => {
   test('GET 反映真文件，POST 装 / 卸走同一条路径', async () => {
     const empty = (await (await fetch(`${base}/api/hooks`)).json()) as any
     assert.equal(empty.port, 4321)
-    assert.equal(empty.agents.length, 2)
+    assert.equal(empty.agents.length, 3)
     assert.ok(empty.agents.every((a: any) => a.installed === false))
 
     const installed = (await (await post('/api/hooks/install')).json()) as any
@@ -296,7 +343,7 @@ describe('/api/hooks 路由', () => {
     assert.deepEqual(installed.failed, [])
     assert.deepEqual(
       installed.agents.map((a: any) => a.installed),
-      [true, true],
+      [true, true, true],
     )
     assert.match(installed.agents[0].url, /:4321\/api\/hook/)
 

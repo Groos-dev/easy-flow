@@ -69,6 +69,16 @@ export function pullStatuses(
   const codex = sessions.filter((s) => s.agent === 'codex')
   const live = claude.length ? claudeLive(roots) : null
 
+  // 只有推送来源的 agent（程小帮）：没有落盘可读，但收尾的兜底不能少——
+  // 会话崩了不会有 Stop，状态会永远停在「干活」。
+  for (const s of sessions) {
+    if (s.agent === 'claude' || s.agent === 'codex') continue
+    const current = states.get(s.agent, states.keyOf(s.agent, s.session))
+    if (!current) continue
+    const settled = settleActive(current.status, false)
+    if (settled !== current.status) states.put(s.agent, s.session, settled)
+  }
+
   // 合并按时刻走，所以先后顺序无所谓
   if (live) for (const s of claude) pullClaude(s.session, roots, live, states, sources)
   if (codex.length) {

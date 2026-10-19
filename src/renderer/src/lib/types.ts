@@ -169,7 +169,7 @@ export interface Project {
 
 // ------------------------------------------------------------------ 载荷
 
-export type LaunchAgent = 'claude' | 'codex'
+export type LaunchAgent = 'claude' | 'codex' | 'chengxiaobang'
 
 export interface LaunchProviderInfo {
   id: LaunchAgent
@@ -218,7 +218,7 @@ export interface SessionAction {
   calledAt: number
 }
 
-/** 一条 agent 会话的登记（claude code / codex / cursor） */
+/** 一条 agent 会话的登记（claude code / codex / cursor / chengxiaobang） */
 export interface Session {
   requirementId: string
   agent: string
@@ -283,7 +283,7 @@ export interface AgentSkill {
   linked: boolean
 }
 
-export type HookAgentId = 'claude' | 'codex'
+export type HookAgentId = 'claude' | 'codex' | 'chengxiaobang'
 
 /** 与 server/hook-install.ts 的 HookAgentStatus 对应。status 一律读真文件得出 */
 export interface HookAgentStatus {

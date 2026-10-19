@@ -2131,6 +2131,12 @@ describe('CLI 层', () => {
       }),
       /没有会话级 deeplink/,
     )
+
+    // 程小帮：会话 id 在 CHENGXIAOBANG_SESSION_ID；链接当前至少能聚焦窗口
+    const cxb = cliOk(configFile, ['req', 'session', 'add', created.id, '--agent', 'chengxiaobang'], {
+      CHENGXIAOBANG_SESSION_ID: 's_abc123def456',
+    })
+    assert.match(cxb, /chengxiaobang:\/\/session\/s_abc123def456/)
     // 终端里的 claude 会话是裸 uuid：能登记，但没有 deeplink
     cliOk(configFile, ['req', 'session', 'add', created.id, '--agent', 'claude'], {
       CLAUDE_CODE_SESSION_ID: '87a7b66c',
@@ -2138,11 +2144,12 @@ describe('CLI 层', () => {
 
     const db = new BoardDatabase(dataDir)
     const byKey = Object.fromEntries(db.listSessions(created.id).map((s) => [`${s.agent}:${s.session}`, s]))
-    assert.equal(Object.keys(byKey).length, 4)
+    assert.equal(Object.keys(byKey).length, 5)
     assert.equal(byKey['claude:local_31c66ec4'].title, '实现会话登记')
     assert.equal(byKey['claude:local_31c66ec4'].link, 'claude://claude.ai/epitaxy/local_31c66ec4')
     assert.equal(byKey['codex:th-9'].link, 'codex://threads/th-9')
     assert.equal(byKey['cursor:conv-1'].link, '')
+    assert.equal(byKey['chengxiaobang:s_abc123def456'].link, 'chengxiaobang://session/s_abc123def456')
     assert.equal(byKey['claude:87a7b66c'].link, '')
     // --cwd 缺省是命令跑在哪儿
     assert.equal(byKey['codex:th-9'].cwd, resolve(REPO_ROOT))
@@ -3348,6 +3355,28 @@ describe('会话状态', () => {
     assert.equal(statusOf('cursor', 'conv-1').state, 'unknown')
   })
 
+  test('程小帮只有推送来源：干活太久没动静要降档，不能永远停在「干活」', () => {
+    const { store } = newState()
+    const at = (ms: number, state: SessionStatus['state'] = 'working'): SessionStatus =>
+      ({ state, needsAction: '', observedAt: Date.now() - ms, detail: 'x' })
+    const read = (session: string): SessionStatus => {
+      const one = [{ agent: 'chengxiaobang', session }]
+      pullStatuses(one, store, suiteSources, roots)
+      return readObservations(one, store)[0].status
+    }
+
+    store.put('chengxiaobang', 's_fresh', at(5 * 60_000))
+    assert.equal(read('s_fresh').state, 'working', '刚跑过的不动它')
+
+    // 崩掉的会话不会有 Stop，只能靠超时兜底
+    store.put('chengxiaobang', 's_stale', at(31 * 60_000))
+    assert.equal(read('s_stale').state, 'unknown')
+
+    // 已经收尾的档不该被这条兜底改掉
+    store.put('chengxiaobang', 's_done', at(31 * 60_000, 'done'))
+    assert.equal(read('s_done').state, 'done')
+  })
+
   test('同一个会话 id 挂在两个 agent 上时互不串味', () => {
     // claude 记录的文件名必须带 local_ 前缀，所以拿它当两边共用的 id
     const id = 'local_shared-id'
@@ -3898,6 +3927,12 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
   test('认不出的 agent 落到 clawd（默认那只），不染不动', () => {
     assert.equal(imgSrc('cursor', 'done'), imgSrc('claude', 'done'))
     assert.equal(petArt('some-new-agent', 'done', art).channel, 'img')
+  })
+
+  test('程小帮也用云宝，走同一条内联通道', () => {
+    const got = petArt('chengxiaobang', 'working', art)
+    assert.equal(got.channel, 'inline')
+    assert.equal(got.channel === 'inline' ? got.svg : '', CLOUDLING_SVG['cloudling-typing.svg'])
   })
 
   test('折叠卡换 mini 组（两套都有，failed 复用 alert）', () => {

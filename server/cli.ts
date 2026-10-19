@@ -156,6 +156,7 @@ const SESSION_ENV: Record<SessionAgent, string[]> = {
   claude: ['CLAUDE_CODE_HOST_SESSION_ID', 'CLAUDE_CODE_SESSION_ID'],
   codex: ['CODEX_THREAD_ID'],
   cursor: ['CURSOR_CONVERSATION_ID'],
+  chengxiaobang: ['CHENGXIAOBANG_SESSION_ID'],
 }
 
 /**
@@ -164,6 +165,8 @@ const SESSION_ENV: Record<SessionAgent, string[]> = {
  */
 function sessionLink(agent: SessionAgent, session: string): string {
   if (agent === 'codex') return `codex://threads/${session}`
+  // 程小帮当前的系统深链只会聚焦窗口；同一链接在客户端支持 session 路由后可直接打开会话
+  if (agent === 'chengxiaobang') return `chengxiaobang://session/${session}`
   // claude 的 desktop（Code 标签页）会话 id 形如 local_…；终端会话是裸 uuid，desktop 里打不开
   if (agent === 'claude' && session.startsWith('local_')) {
     return `claude://claude.ai/epitaxy/${session}`
@@ -360,16 +363,17 @@ id 必须显式传：需求 id 在需求目录 AGENTS.md 的 frontmatter 里，w
 --ext 的描述与链接按第一个 = 分隔；--mr 同理，别名可省——第一个 = 前面带 :// 就整条当 URL。
 同一条链接再传一次只更新别名（这次没给别名就留着旧的）。`,
 
-  'req session': `用法：easy-flow req session add <req-id> --agent <claude|codex|cursor> [--id <会话 id>] [--title <标题>] [--cwd <目录>] [--link <url>] [--json]
+  'req session': `用法：easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang> [--id <会话 id>] [--title <标题>] [--cwd <目录>] [--link <url>] [--json]
        easy-flow req session rm <req-id> --agent <…> --id <会话 id> [--json]
        easy-flow req session ls [<req-id>] [--json]
 
 把 agent 会话登记到需求上（只存库，不写进需求目录），看板据此一键回到那个会话。
 --id 省略时按 agent 从环境变量取：claude → CLAUDE_CODE_HOST_SESSION_ID / CLAUDE_CODE_SESSION_ID，
-codex → CODEX_THREAD_ID，cursor → CURSOR_CONVERSATION_ID；一个都没设就报错，不静默写空。
+codex → CODEX_THREAD_ID，cursor → CURSOR_CONVERSATION_ID，chengxiaobang → CHENGXIAOBANG_SESSION_ID；
+一个都没设就报错，不静默写空。
 --cwd 缺省用当前目录。--link 是 desktop 应用的 deeplink，缺省按 agent 与 id 推导：
-codex → codex://threads/<id>，claude 的 local_ 会话 → claude://claude.ai/epitaxy/<id>；
-cursor 与终端里的 claude 没有会话级 deeplink，只存 id。
+codex → codex://threads/<id>，claude 的 local_ 会话 → claude://claude.ai/epitaxy/<id>，
+chengxiaobang → chengxiaobang://session/<id>；cursor 与终端里的 claude 没有会话级 deeplink，只存 id。
 同一个会话重复 add 是幂等的：只刷新 title / cwd / link 与时间，不会长出第二条。`,
 
   'req session review': `用法：easy-flow req session review <req-id> [--handoff] [--prompt <文本> | --prompt-file <路径>] [--json]
@@ -755,7 +759,7 @@ async function cmdReqSessionAdd(argv: string[]): Promise<void> {
   if (bool(values.help)) return out(USAGE['req session'])
 
   const reqId = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req session'])
-  const agent = required(str(values.agent), 'Missing --agent (claude / codex / cursor)', USAGE['req session']) as SessionAgent
+  const agent = required(str(values.agent), 'Missing --agent (claude / codex / cursor / chengxiaobang)', USAGE['req session']) as SessionAgent
   oneOf(agent, SESSION_AGENTS, 'agent')
   const session = sessionIdFrom(values, agent)
   const title = str(values.title)?.trim() ?? ''
@@ -904,7 +908,7 @@ async function cmdReqSessionRm(argv: string[]): Promise<void> {
   if (bool(values.help)) return out(USAGE['req session'])
 
   const reqId = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req session'])
-  const agent = required(str(values.agent), 'Missing --agent (claude / codex / cursor)', USAGE['req session']) as SessionAgent
+  const agent = required(str(values.agent), 'Missing --agent (claude / codex / cursor / chengxiaobang)', USAGE['req session']) as SessionAgent
   oneOf(agent, SESSION_AGENTS, 'agent')
   const session = required(str(values.id), 'Missing --id (the session id)', USAGE['req session'])
 
@@ -950,7 +954,7 @@ async function cmdReqSessionLs(argv: string[]): Promise<void> {
     { requirementId: req.id, sessions, total: sessions.length },
     sessions.length
       ? `需求「${req.title}」的会话（${sessions.length}）：\n${sessions.map((s) => sessionLine(s)).join('\n')}`
-      : `需求「${req.title}」上还没有登记会话；在会话里跑 easy-flow req session add ${req.id} --agent <claude|codex|cursor>`,
+      : `需求「${req.title}」上还没有登记会话；在会话里跑 easy-flow req session add ${req.id} --agent <claude|codex|cursor|chengxiaobang>`,
   )
 }
 

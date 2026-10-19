@@ -5,7 +5,7 @@
  *
  * - Claude → clawd 像素螃蟹，走 `<img>`。每张 SVG 自带 `<style>` 与 `@keyframes`，内联到一张卡里会撞名，
  *   用 `<img>` 让每个文档独立、CSS 天然隔离（clawd 自己也是这么渲的）。
- * - Codex → cloudling 云宝，**内联成 `<svg>`**。它是脚本驱动的（素材自带 requestAnimationFrame 画眼睛、
+ * - Codex / 程小帮 → cloudling 云宝，**内联成 `<svg>`**。它是脚本驱动的（素材自带 requestAnimationFrame 画眼睛、
  *   驱动呼吸），`<img>` 会禁脚本、只剩一朵静止的云；而 `<object>` 的文档画布在 Chromium 里恒为不透明，
  *   暗色卡片上就是一块白方块。内联的 SVG 是普通元素，背景天然透明、跟着主题走。
  *
@@ -115,9 +115,9 @@ const CLOUDLING: Theme = {
   inline: true,
 }
 
-/** 认不出的 agent 落到 clawd（默认那只）；只有 codex 走 cloudling */
+/** 认不出的 agent 落到 clawd（默认那只）；Codex 与程小帮走 cloudling */
 function themeFor(agent: string): Theme {
-  return agent === 'codex' ? CLOUDLING : CLAWD
+  return agent === 'codex' || agent === 'chengxiaobang' ? CLOUDLING : CLAWD
 }
 
 function fileFor(theme: Theme, state: Pose, mood: IdleMood, compact: boolean): string {

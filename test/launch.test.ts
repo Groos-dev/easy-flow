@@ -31,12 +31,22 @@ describe('启动交接', () => {
     assert.ok(prompt.length < 400)
   })
 
-  test('两个 agent 都按所选工作区取上下文——会话实际只拿到那一个目录', () => {
-    const prompt = launchPrompt({ ...input, agent: 'codex' })
-    assert.match(prompt, /req-abc123/)
-    assert.match(prompt, /wt-xyz789/)
-    assert.match(prompt, /easy-flow context wt-xyz789/)
-    assert.match(prompt, /easy-flow req session add req-abc123 --agent codex/)
+  test('各 agent 都按所选工作区取上下文——会话实际只拿到那一个目录', () => {
+    for (const agent of ['codex', 'chengxiaobang'] as const) {
+      const prompt = launchPrompt({ ...input, agent })
+      assert.match(prompt, /req-abc123/)
+      assert.match(prompt, /wt-xyz789/)
+      assert.match(prompt, /easy-flow context wt-xyz789/)
+      assert.match(prompt, new RegExp(`easy-flow req session add req-abc123 --agent ${agent}`))
+    }
+  })
+
+  test('程小帮的链接带不了目录：提示词里写死路径，别让它在新会话的默认项目里动手', () => {
+    const prompt = launchPrompt({ ...input, agent: 'chengxiaobang' })
+    assert.match(prompt, /cd \/Users\/groos\/repo\/demo\.feature-x/)
+    // 另外两个 agent 的 deeplink 自己能带目录，不用多这句
+    assert.doesNotMatch(launchPrompt({ ...input, agent: 'codex' }), /cd /)
+    assert.doesNotMatch(launchPrompt({ ...input, agent: 'claude' }), /cd /)
   })
 
   test('需求还没有工作区时按需求取上下文，并写明先开工作区再动代码', () => {

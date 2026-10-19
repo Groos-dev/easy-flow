@@ -138,6 +138,13 @@ describe('PetRow 渲染', () => {
     assert.doesNotMatch(html, /<object/)
   })
 
+  test('程小帮也走云宝内联，并显示「程小帮」', () => {
+    const html = render(createElement(PetRow, { sessions: [sess('chengxiaobang', 'blocked')] }))
+    assert.match(html, /class="pet-art"/)
+    assert.doesNotMatch(html, /<img/)
+    assert.match(html, /aria-label="程小帮 · 等你"/)
+  })
+
   test('折叠卡换 mini 素材', () => {
     const html = render(createElement(PetRow, { sessions: [sess('claude', 'done')], compact: true }))
     assert.match(html, /src="pets\/clawd-mini-happy\.svg"/)
