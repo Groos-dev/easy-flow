@@ -2853,7 +2853,7 @@ describe('HTTP 层', () => {
     assert.ok(r.shim.path.endsWith('/.local/bin/easy-flow'))
     assert.deepEqual(
       r.agents.map((a: { id: string }) => a.id),
-      ['claude', 'cursor', 'codex'],
+      ['claude', 'cursor', 'codex', 'chengxiaobang'],
     )
     for (const a of r.agents) {
       assert.equal(typeof a.linked, 'boolean')

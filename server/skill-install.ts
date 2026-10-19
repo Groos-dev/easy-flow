@@ -91,7 +91,7 @@ function cliEntry(): string {
 }
 
 export interface AgentSkill {
-  id: 'claude' | 'cursor' | 'codex'
+  id: 'claude' | 'cursor' | 'codex' | 'chengxiaobang'
   label: string
   /** That agent's skills dir; it may not exist when the agent is not installed */
   dir: string
@@ -125,11 +125,14 @@ function homeLink(name: string): string {
   return join(homedir(), '.agents', 'skills', name)
 }
 
-function agentDirs(): Array<{ id: AgentSkill['id']; label: string; dir: string }> {
+function agentDirs(): Array<{ id: AgentSkill['id']; label: string; dir: string; shared?: boolean }> {
   return [
     { id: 'claude', label: 'Claude Code', dir: join(homedir(), '.claude', 'skills') },
     { id: 'cursor', label: 'Cursor', dir: join(homedir(), '.cursor', 'skills') },
     { id: 'codex', label: 'Codex', dir: join(homedir(), '.codex', 'skills') },
+    // 程小帮直接读 ~/.agents/skills（CHENGXIAOBANG_AGENTS_DIR 的默认值），
+    // 共享目录本身就是 home 链接，不用再套一层
+    { id: 'chengxiaobang', label: '程小帮', dir: join(homedir(), '.agents', 'skills'), shared: true },
   ]
 }
 
@@ -262,10 +265,11 @@ export async function skillPlan(): Promise<SkillPlan> {
   const linkedEverywhere = (agentDir: string) =>
     SKILLS.every((name) => homeLinked(name) && linkedTo(join(agentDir, name), homeLink(name)))
 
-  const agents = agentDirs().map((a) => ({
+  const agents = agentDirs().map(({ shared, ...a }) => ({
     ...a,
     available: existsSync(a.dir),
-    linked: linkedEverywhere(a.dir),
+    // 共享目录的 agent 没有自己那层链接：home 链接对了就算装好
+    linked: shared ? SKILLS.every((name) => homeLinked(name)) : linkedEverywhere(a.dir),
   }))
 
   return {
@@ -350,6 +354,7 @@ export async function installSkill(): Promise<InstallOutcome> {
     const home = homeLink(name)
     link(`skill ${name}`, home, source)
     for (const a of agentDirs()) {
+      if (a.shared) continue
       if (!existsSync(a.dir)) continue
       link(`${a.label} / ${name}`, join(a.dir, name), home)
     }

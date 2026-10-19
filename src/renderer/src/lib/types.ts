@@ -275,7 +275,7 @@ export interface SettingsPayload {
 }
 
 export interface AgentSkill {
-  id: 'claude' | 'cursor' | 'codex'
+  id: 'claude' | 'cursor' | 'codex' | 'chengxiaobang'
   label: string
   /** That agent's skills dir; it may not exist when the agent is not installed */
   dir: string
