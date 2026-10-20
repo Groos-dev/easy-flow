@@ -2580,6 +2580,38 @@ describe('HTTP 层', () => {
     assert.ok(onex && Array.isArray(onex.requirements))
   })
 
+  test('★ GET /api/tree 只读库：新目录要等一次同步才进树', async () => {
+    // 读接口不扫目录，同步交给 resync
+    const dir2 = join(tmpdir(), `easy-flow-test-tree-noscan-${process.pid}`)
+    rmSync(dir2, { recursive: true, force: true })
+    makeReq(dir2, 'onex', 'alpha', '# alpha\n\n## 需求\n\n甲需求内容')
+    const app2 = createBoardApp({ dataDir: dir2 })
+    const server2 = createServer((rq, rs) => void app2.handle(rq, rs))
+    await new Promise<void>((r) => server2.listen(0, '127.0.0.1', r))
+    const addr = server2.address()
+    const base2 = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`
+    const tree = async () => (await fetch(`${base2}/api/tree`)).json() as any
+    const inTree = (body: any, slug: string) =>
+      body.tree.find((p: any) => p.slug === 'onex').requirements.some((r: any) => r.slug === slug)
+
+    try {
+      makeReq(dir2, 'onex', 'beta', '# beta\n\n## 需求\n\n乙需求内容')
+      const before = await tree()
+      assert.ok(!inTree(before, 'beta'), '读接口不该顺带扫目录')
+      assert.deepEqual(before.sync.added, [])
+
+      const synced = (await (
+        await fetch(`${base2}/api/settings/resync`, { method: 'POST' })
+      ).json()) as any
+      assert.ok(synced.sync.added.includes('onex/beta'))
+      assert.ok(inTree(await tree(), 'beta'))
+    } finally {
+      await new Promise<void>((r) => server2.close(() => r()))
+      app2.close()
+      rmSync(dir2, { recursive: true, force: true })
+    }
+  })
+
   test('GET /api/todos 返回待办与枚举，且读取前会同步 md', async () => {
     makeTodo(dir, 'T-20260101-001', '看板上的待办', '动作：验证契约。')
     const r = await get('/api/todos')
@@ -2790,10 +2822,10 @@ describe('HTTP 层', () => {
   })
 
   test('项目接口：列表 / 切 / 删', async () => {
-    // 创建入口已移除：目录是事实源，扫描发现（GET /api/tree 会触发一次同步）
+    // 创建入口已移除：目录是事实源，扫描发现（POST /api/settings/resync 会触发一次同步）
     mkdirSync(join(dir, 'demo'), { recursive: true })
     writeFileSync(join(dir, 'demo', 'AGENTS.md'), '# 演示项目\n', 'utf8')
-    await get('/api/tree')
+    await post('/api/settings/resync', {})
 
     const listed = await get('/api/projects')
     assert.ok(listed.projects.some((p: any) => p.slug === 'demo'))

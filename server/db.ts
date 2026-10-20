@@ -723,99 +723,108 @@ export class BoardDatabase {
       return !owner || (owner.slug === slug && owner.project === project) ? id : null
     }
 
-    for (const proj of dirs) {
-      seenProjects.add(proj.slug)
-      const convention = readProjectConvention(proj.root)
-      const name = projectDisplayName(convention, proj.slug)
-      let projectMtime = Date.now()
+    // 整段一个事务：逐条自动提交时 102 个需求要 0.5s，几乎全花在 fsync 上
+    this.db.exec('BEGIN')
+    try {
+      for (const proj of dirs) {
+        seenProjects.add(proj.slug)
+        const convention = readProjectConvention(proj.root)
+        const name = projectDisplayName(convention, proj.slug)
+        let projectMtime = Date.now()
 
-      if (!selectProject.get(proj.slug)) {
-        insertProject.run(proj.slug, name, proj.root, convention ? 1 : 0, projectMtime, today())
-      } else {
-        touchProject.run(proj.root, name, convention ? 1 : 0, projectMtime, proj.slug)
-      }
-
-      // 本次扫描里 slug → 需求在库里的 id。子需求的 parent_id 直接从这里取——
-      // 父需求先于子需求入列（listRequirementDirs 先收录再下探）
-      const idBySlug = new Map<string, string>()
-
-      for (const { dir, slug: relSlug } of listRequirementDirs(proj.root)) {
-        const parsed = parseRequirement(dir, relSlug)
-        const key = `${proj.slug}/${parsed.slug}`
-        seenReqs.add(key)
-
-        const id = claimId(parsed.id, parsed.slug, proj.slug)
-        if (id) idBySlug.set(parsed.slug, id)
-        // 父需求 = slug 去掉最后一段。父需求自己还没 id 时留空，
-        // 层级仍能从 slug 推出来，不因为它缺 id 就把整棵树拆散
-        const cut = parsed.slug.lastIndexOf('/')
-        const parentId = cut === -1 ? '' : (idBySlug.get(parsed.slug.slice(0, cut)) ?? '')
-
-        clearDocs.run(parsed.slug, proj.slug)
-        for (const d of parsed.docs) insertDoc.run(parsed.slug, proj.slug, d.name, d.content)
-
-        // 取所有文档中最新的修改时间。
-        // 之前这里写的是 content.length 之和，于是「最近更新优先」实际变成「文档越长越靠前」。
-        const mtime = parsed.docs.reduce((latest, d) => Math.max(latest, d.mtime), 0)
-        const existing = selectReq.get(parsed.slug, proj.slug) as
-          | { slug: string; mtime: number; missing: number }
-          | undefined
-
-        if (!existing) {
-          // 新记录一律从「澄清」起步。曾经从 md 的 frontmatter 读初始状态，
-          // 但那套约定已废弃——状态（status/priority）只归 sqlite；
-          // title/name 这类「内容」仍从文件读，两者不要混。
-          insertReq.run(
-            parsed.slug,
-            proj.slug,
-            id,
-            parentId,
-            parsed.title,
-            dir,
-            '澄清',
-            null,
-            parsed.summary,
-            JSON.stringify(parsed.repos),
-            parsed.links,
-            mtime,
-            today(),
-          )
-          added.push(key)
+        if (!selectProject.get(proj.slug)) {
+          insertProject.run(proj.slug, name, proj.root, convention ? 1 : 0, projectMtime, today())
         } else {
-          updateReq.run(
-            id,
-            parentId,
-            parsed.title,
-            dir,
-            parsed.summary,
-            JSON.stringify(parsed.repos),
-            parsed.links,
-            mtime,
-            parsed.slug,
-            proj.slug,
-          )
-          if (existing.missing) restored.push(key)
-          else updated.push(key)
+          touchProject.run(proj.root, name, convention ? 1 : 0, projectMtime, proj.slug)
+        }
+
+        // 本次扫描里 slug → 需求在库里的 id。子需求的 parent_id 直接从这里取——
+        // 父需求先于子需求入列（listRequirementDirs 先收录再下探）
+        const idBySlug = new Map<string, string>()
+
+        for (const { dir, slug: relSlug } of listRequirementDirs(proj.root)) {
+          const parsed = parseRequirement(dir, relSlug)
+          const key = `${proj.slug}/${parsed.slug}`
+          seenReqs.add(key)
+
+          const id = claimId(parsed.id, parsed.slug, proj.slug)
+          if (id) idBySlug.set(parsed.slug, id)
+          // 父需求 = slug 去掉最后一段。父需求自己还没 id 时留空，
+          // 层级仍能从 slug 推出来，不因为它缺 id 就把整棵树拆散
+          const cut = parsed.slug.lastIndexOf('/')
+          const parentId = cut === -1 ? '' : (idBySlug.get(parsed.slug.slice(0, cut)) ?? '')
+
+          clearDocs.run(parsed.slug, proj.slug)
+          for (const d of parsed.docs) insertDoc.run(parsed.slug, proj.slug, d.name, d.content)
+
+          // 取所有文档中最新的修改时间。
+          // 之前这里写的是 content.length 之和，于是「最近更新优先」实际变成「文档越长越靠前」。
+          const mtime = parsed.docs.reduce((latest, d) => Math.max(latest, d.mtime), 0)
+          const existing = selectReq.get(parsed.slug, proj.slug) as
+            | { slug: string; mtime: number; missing: number }
+            | undefined
+
+          if (!existing) {
+            // 新记录一律从「澄清」起步。曾经从 md 的 frontmatter 读初始状态，
+            // 但那套约定已废弃——状态（status/priority）只归 sqlite；
+            // title/name 这类「内容」仍从文件读，两者不要混。
+            insertReq.run(
+              parsed.slug,
+              proj.slug,
+              id,
+              parentId,
+              parsed.title,
+              dir,
+              '澄清',
+              null,
+              parsed.summary,
+              JSON.stringify(parsed.repos),
+              parsed.links,
+              mtime,
+              today(),
+            )
+            added.push(key)
+          } else {
+            updateReq.run(
+              id,
+              parentId,
+              parsed.title,
+              dir,
+              parsed.summary,
+              JSON.stringify(parsed.repos),
+              parsed.links,
+              mtime,
+              parsed.slug,
+              proj.slug,
+            )
+            if (existing.missing) restored.push(key)
+            else updated.push(key)
+          }
         }
       }
-    }
 
-    const missing: string[] = []
-    const all = this.db
-      .prepare('SELECT slug, project, missing FROM requirement')
-      .all() as Array<{ slug: string; project: string; missing: number }>
-    const markMissing = this.db.prepare(
-      'UPDATE requirement SET missing = 1 WHERE slug = ? AND project = ?',
-    )
-    for (const r of all) {
-      if (!seenReqs.has(`${r.project}/${r.slug}`) && !r.missing) {
-        markMissing.run(r.slug, r.project)
-        missing.push(`${r.project}/${r.slug}`)
+      const missing: string[] = []
+      const all = this.db
+        .prepare('SELECT slug, project, missing FROM requirement')
+        .all() as Array<{ slug: string; project: string; missing: number }>
+      const markMissing = this.db.prepare(
+        'UPDATE requirement SET missing = 1 WHERE slug = ? AND project = ?',
+      )
+      for (const r of all) {
+        if (!seenReqs.has(`${r.project}/${r.slug}`) && !r.missing) {
+          markMissing.run(r.slug, r.project)
+          missing.push(`${r.project}/${r.slug}`)
+        }
       }
-    }
 
-    this.reconcileProject()
-    return { added, updated, missing, restored, worktrees: this.syncWorktrees() }
+      const worktrees = this.syncWorktrees()
+      this.db.exec('COMMIT')
+      this.reconcileProject()
+      return { added, updated, missing, restored, worktrees }
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
   }
 
   /** worktree 的存活校对：只 stat，不跑 git——这条路每次刷看板都会走 */

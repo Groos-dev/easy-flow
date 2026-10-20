@@ -2723,8 +2723,9 @@ a.sess,
   overflow: hidden;
 }
 
+/* 没有标题栏，窗口只能靠顶部空白拖；搜索框标 no-drag，否则点不进输入框 */
 .mini-drag {
-  height: 10px;
+  height: 16px;
   flex: none;
   -webkit-app-region: drag;
 }
@@ -2732,6 +2733,7 @@ a.sess,
 .mini-head {
   flex: none;
   padding: 0 12px 8px;
+  -webkit-app-region: drag;
 }
 
 .mini-search {
@@ -2744,6 +2746,7 @@ a.sess,
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text-faint);
+  -webkit-app-region: no-drag;
 }
 
 .mini-search:focus-within {
@@ -2790,6 +2793,48 @@ a.sess,
   padding: 16px 10px;
   text-align: center;
   color: var(--text-faint);
+}
+
+/* 首份数据没到时的占位骨架 */
+.mini-skel {
+  cursor: default;
+}
+
+.mini-skel:hover {
+  background: var(--card);
+  border-color: var(--border);
+}
+
+.mini-skel .mini-top {
+  height: 18px;
+}
+
+.mini-skel-bar {
+  display: block;
+  width: 58%;
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #232935 25%, #2e3542 37%, #232935 63%);
+  background-size: 400% 100%;
+  animation: mini-skel 1.2s ease-in-out infinite;
+}
+
+.mini-skel-bar.short {
+  width: 22%;
+}
+
+.mini-skel-bar.tiny {
+  width: 12%;
+  margin-left: auto;
+}
+
+@keyframes mini-skel {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
 }
 
 .mini-card {
