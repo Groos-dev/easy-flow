@@ -1,0 +1,19 @@
+server/session-state.ts
+  s_265d344cdb0e3c::t_7c36253538ccba 150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "c8738e0bbc15c707dd54257364c81deddbd2fccb",
+  "prompts": {},
+  "sessions": {
+    "s_265d344cdb0e3c": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_2u6jagy45mja",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
