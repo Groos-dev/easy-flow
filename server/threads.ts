@@ -33,7 +33,7 @@ import { str } from './util.ts'
 import { RolloutStore } from './rollout.ts'
 import { codexUnread } from './codex-unread.ts'
 import { codexTitles } from './codex-titles.ts'
-import { chengxiaobangObservations } from './chengxiaobang.ts'
+import { chengxiaobangObservations, chengxiaobangTitles } from './chengxiaobang.ts'
 import { changed, type SourceTable } from './source-file.ts'
 
 /** 停在「在干活」多久没新事件就当它没了：会话崩了不会有收尾事件 */
@@ -114,8 +114,8 @@ export interface TitleTable {
  * 把 agent 应用里的标题同步进登记记录（session 表的 title）。
  *
  * claude 读桌面记录的 `title`，桌面记录没有时退到 CLI 进程文件的 `name`（终端会话只有这个）；
- * codex 读它自己 threads 表里的 `name`。原样写，不裁剪。应用里还没起名、或者读不到，
- * 就不写——保留登记时那句。
+ * codex 读它自己 threads 表里的 `name`，程小帮读它自己 sessions 表里的 `title`。
+ * 原样写，不裁剪。应用里还没起名、或者读不到，就不写——保留登记时那句。
  */
 export function pullTitles(
   sessions: readonly { agent: string; session: string }[],
@@ -138,6 +138,18 @@ export function pullTitles(
     for (const s of codex) {
       const title = found.get(s.session)
       if (title) titles.setSessionTitle('codex', s.session, title)
+    }
+  }
+
+  const chengxiaobang = sessions.filter((s) => s.agent === 'chengxiaobang')
+  if (chengxiaobang.length) {
+    const found = chengxiaobangTitles(
+      roots.chengxiaobangHome,
+      chengxiaobang.map((s) => s.session),
+    )
+    for (const s of chengxiaobang) {
+      const title = found.get(s.session)
+      if (title) titles.setSessionTitle('chengxiaobang', s.session, title)
     }
   }
 }

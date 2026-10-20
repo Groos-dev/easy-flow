@@ -17,6 +17,17 @@ function chengxiaobangDbPath(root: string): string {
   return join(root, 'data', 'chengxiaobang.sqlite')
 }
 
+/** 只读打开；库没建或被锁时返回 null，调用方一律当「没有」 */
+function openDb(root: string): DatabaseSync | null {
+  const path = chengxiaobangDbPath(root)
+  if (!existsSync(path)) return null
+  try {
+    return new DatabaseSync(path, { readOnly: true })
+  } catch {
+    return null
+  }
+}
+
 interface Row {
   id?: unknown
   status?: unknown
@@ -72,15 +83,8 @@ export function chengxiaobangObservations(
 ): Map<string, SessionObservation> {
   const out = new Map<string, SessionObservation>()
   if (!sessions.length) return out
-  const path = chengxiaobangDbPath(root)
-  if (!existsSync(path)) return out
-
-  let db: DatabaseSync
-  try {
-    db = new DatabaseSync(path, { readOnly: true })
-  } catch {
-    return out
-  }
+  const db = openDb(root)
+  if (!db) return out
   try {
     const marks = sessions.map(() => '?').join(', ')
     // 每条会话各取最近一轮 run 与最后一条消息；子查询比窗口函数好读，会话数也不大
@@ -109,6 +113,40 @@ export function chengxiaobangObservations(
       if (!id) continue
       const observedAt = Math.max(at(row.run_at), at(row.message_at), at(row.session_at))
       out.set(id, { status: statusOf(row, observedAt), action: null })
+    }
+  } catch {
+    /* 表不在 / 库被锁 / 版本换过：当没有 */
+  } finally {
+    db.close()
+  }
+  return out
+}
+
+interface TitleRow {
+  id?: unknown
+  title?: unknown
+}
+
+/**
+ * 按登记 id 读小帮侧边栏里的标题。
+ *
+ * 应用里的 `sessions.title` 就是侧边栏显示的那个名字：新建时先写截断的占位，随后由 AI
+ * 总结覆盖。空串是「还没起名」，当没有——调用方保留登记时那句。
+ */
+export function chengxiaobangTitles(root: string, sessions: readonly string[]): Map<string, string> {
+  const out = new Map<string, string>()
+  if (!sessions.length) return out
+  const db = openDb(root)
+  if (!db) return out
+  try {
+    const marks = sessions.map(() => '?').join(', ')
+    const rows = db
+      .prepare(`SELECT id, title FROM sessions WHERE id IN (${marks})`)
+      .all(...sessions) as unknown as TitleRow[]
+    for (const row of rows) {
+      const id = typeof row.id === 'string' ? row.id : ''
+      const title = typeof row.title === 'string' ? row.title : ''
+      if (id && title) out.set(id, title)
     }
   } catch {
     /* 表不在 / 库被锁 / 版本换过：当没有 */
