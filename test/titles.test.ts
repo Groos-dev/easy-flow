@@ -21,6 +21,7 @@ const roots: ThreadRoots = {
   appSupport: join(TMP, 'appSupport'),
   claudeHome: join(TMP, 'claude'),
   codexHome: join(TMP, 'codex'),
+  chengxiaobangHome: join(TMP, 'chengxiaobang'),
 }
 
 /**
@@ -60,11 +61,31 @@ function newBoard(): BoardDatabase {
   return new BoardDatabase(join(TMP, `db-${seq++}`), 'p')
 }
 
-function registered(db: BoardDatabase, agent: string, session: string, title = '登记时那句'): void {
-  db.addSession({ requirementId: 'req-x', agent: agent as 'claude' | 'codex', session, title })
+/**
+ * 程小帮自己的库：sessions 表的 title 就是侧边栏那个名字。
+ * 按登记 id 逐条写，没给 title 的当「还没起名」。
+ */
+function writeCxbDb(rows: Array<[string, string]>): void {
+  const dir = join(roots.chengxiaobangHome, 'data')
+  mkdirSync(dir, { recursive: true })
+  const path = join(dir, 'chengxiaobang.sqlite')
+  for (const f of [path, `${path}-wal`, `${path}-shm`]) rmSync(f, { force: true })
+  const db = new DatabaseSync(path)
+  db.exec(
+    `create table sessions (id text primary key, title text not null default '', created_at text not null, updated_at text not null, last_viewed_at text);`,
+  )
+  const now = new Date().toISOString()
+  const insert = db.prepare('insert into sessions (id, title, created_at, updated_at) values (?, ?, ?, ?)')
+  for (const [id, title] of rows) insert.run(id, title, now, now)
+  db.close()
 }
 
-const titleOf = (db: BoardDatabase, agent: string, session: string) => db.sessionBy(agent as 'claude', session)?.title
+function registered(db: BoardDatabase, agent: string, session: string, title = '登记时那句'): void {
+  db.addSession({ requirementId: 'req-x', agent: agent as 'claude' | 'codex' | 'chengxiaobang', session, title })
+}
+
+const titleOf = (db: BoardDatabase, agent: string, session: string) =>
+  db.sessionBy(agent as 'claude', session)?.title
 
 before(() => rmSync(TMP, { recursive: true, force: true }))
 after(() => rmSync(TMP, { recursive: true, force: true }))
@@ -114,6 +135,46 @@ describe('标题同步：应用里那句覆盖登记那句', () => {
     assert.equal(titleOf(db, 'codex', 'cx-没登记过'), '登记时那句')
   })
 
+  test('程小帮：sessions 表的 title', () => {
+    writeCxbDb([['s_cxb1', '补齐小帮标题同步']])
+    const db = newBoard()
+    registered(db, 'chengxiaobang', 's_cxb1')
+
+    pullTitles(db.listSessions(), db, roots)
+    assert.equal(titleOf(db, 'chengxiaobang', 's_cxb1'), '补齐小帮标题同步')
+  })
+
+  test('程小帮：应用里还没起名（空标题）就不写', () => {
+    writeCxbDb([['s_cxb2', '']])
+    const db = newBoard()
+    registered(db, 'chengxiaobang', 's_cxb2', '先写一句占着')
+
+    pullTitles(db.listSessions(), db, roots)
+    assert.equal(titleOf(db, 'chengxiaobang', 's_cxb2'), '先写一句占着')
+  })
+
+  test('程小帮：库里没有这条会话就不写', () => {
+    writeCxbDb([['s_other', '别人的会话']])
+    const db = newBoard()
+    registered(db, 'chengxiaobang', 's_missing', '登记时那句')
+
+    pullTitles(db.listSessions(), db, roots)
+    assert.equal(titleOf(db, 'chengxiaobang', 's_missing'), '登记时那句')
+  })
+
+  test('程小帮：标题改了要跟着更新', () => {
+    writeCxbDb([['s_cxb3', '占位标题']])
+    const db = newBoard()
+    registered(db, 'chengxiaobang', 's_cxb3')
+
+    pullTitles(db.listSessions(), db, roots)
+    assert.equal(titleOf(db, 'chengxiaobang', 's_cxb3'), '占位标题')
+
+    writeCxbDb([['s_cxb3', 'AI 总结后的标题']])
+    pullTitles(db.listSessions(), db, roots)
+    assert.equal(titleOf(db, 'chengxiaobang', 's_cxb3'), 'AI 总结后的标题')
+  })
+
   test('原样写：换行与长句都不裁', () => {
     const raw = '在 easy-flow 需求 req-3b4f4675ce 上开始工作。\n\n先运行 easy-flow context'
     writeCodexDb([['cx-2', raw]])
@@ -154,5 +215,18 @@ describe('标题来源读不到时', () => {
 
     pullTitles(db.listSessions(), db, gone)
     assert.equal(titleOf(db, 'claude', 'local_a'), '登记时那句')
+  })
+
+  test('程小帮的库不存在 / 不是合法库，都当没有', () => {
+    const db = newBoard()
+    registered(db, 'chengxiaobang', 's_cxb_missing', '登记时那句')
+    pullTitles(db.listSessions(), db, { ...roots, chengxiaobangHome: join(TMP, '根本没有这个目录') })
+    assert.equal(titleOf(db, 'chengxiaobang', 's_cxb_missing'), '登记时那句')
+
+    const broken = join(TMP, 'cxb-broken')
+    mkdirSync(join(broken, 'data'), { recursive: true })
+    writeFileSync(join(broken, 'data', 'chengxiaobang.sqlite'), '这不是一个库', 'utf8')
+    pullTitles(db.listSessions(), db, { ...roots, chengxiaobangHome: broken })
+    assert.equal(titleOf(db, 'chengxiaobang', 's_cxb_missing'), '登记时那句')
   })
 })

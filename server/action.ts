@@ -32,13 +32,15 @@ interface Rule {
 }
 
 /**
- * 认得的工具。claude 的参数位置见它自己的 hook 文档；codex 的 exec_command 参数是 cmd。
+ * 认得的工具。claude 的参数位置见它自己的 hook 文档；codex 的 exec_command 参数是 cmd；
+ * 程小帮的 Shell 与 Bash 同形。
  */
 const RULES: Record<string, Rule> = {
   Edit: { verb: '改', field: 'file_path', cut: tailPath },
   Write: { verb: '写', field: 'file_path', cut: tailPath },
   Read: { verb: '读', field: 'file_path', cut: tailPath },
   Bash: { verb: '跑', field: 'command', cut: headWords },
+  Shell: { verb: '跑', field: 'command', cut: headWords },
   Grep: { verb: '搜', field: 'pattern', cut: raw },
   Glob: { verb: '搜', field: 'pattern', cut: raw },
   Agent: { verb: '派', field: 'description', cut: clipText },

@@ -33,12 +33,13 @@ import { str } from './util.ts'
 import { RolloutStore } from './rollout.ts'
 import { codexUnread } from './codex-unread.ts'
 import { codexTitles } from './codex-titles.ts'
+import { chengxiaobangObservations, chengxiaobangTitles } from './chengxiaobang.ts'
 import { changed, type SourceTable } from './source-file.ts'
 
 /** 停在「在干活」多久没新事件就当它没了：会话崩了不会有收尾事件 */
 const RUNNING_TTL_MS = 30 * 60_000
 
-/** 三处外部数据的位置。默认本机；测试传临时目录 */
+/** 外部数据的位置。默认本机；测试传临时目录 */
 export interface ThreadRoots {
   /** macOS 的 Application Support，Claude 桌面应用数据目录在它下面 */
   appSupport: string
@@ -46,6 +47,8 @@ export interface ThreadRoots {
   claudeHome: string
   /** ~/.codex */
   codexHome: string
+  /** ~/.chengxiaobang */
+  chengxiaobangHome: string
 }
 
 export function defaultRoots(): ThreadRoots {
@@ -54,6 +57,7 @@ export function defaultRoots(): ThreadRoots {
     appSupport: join(home, 'Library', 'Application Support'),
     claudeHome: join(home, '.claude'),
     codexHome: join(home, '.codex'),
+    chengxiaobangHome: join(home, '.chengxiaobang'),
   }
 }
 
@@ -67,7 +71,18 @@ export function pullStatuses(
 ): void {
   const claude = sessions.filter((s) => s.agent === 'claude')
   const codex = sessions.filter((s) => s.agent === 'codex')
+  const chengxiaobang = sessions.filter((s) => s.agent === 'chengxiaobang')
   const live = claude.length ? claudeLive(roots) : null
+
+  // 程小帮：hook 推送 + 库里的落盘结论。服务重启后推送那条是空的，靠这里补回来
+  const cxb = chengxiaobang.length
+    ? chengxiaobangObservations(roots.chengxiaobangHome, chengxiaobang.map((s) => s.session))
+    : null
+  for (const s of chengxiaobang) {
+    const observation = cxb?.get(s.session) ?? { status: unknownStatus('程小帮库里没有这条会话的记录'), action: null }
+    // alive 一律 false：库里的 running 也可能是崩溃前残留，交给活跃超时兜底
+    putSettled(states, 'chengxiaobang', s.session, observation, false)
+  }
 
   // 合并按时刻走，所以先后顺序无所谓
   if (live) for (const s of claude) pullClaude(s.session, roots, live, states, sources)
@@ -99,8 +114,8 @@ export interface TitleTable {
  * 把 agent 应用里的标题同步进登记记录（session 表的 title）。
  *
  * claude 读桌面记录的 `title`，桌面记录没有时退到 CLI 进程文件的 `name`（终端会话只有这个）；
- * codex 读它自己 threads 表里的 `name`。原样写，不裁剪。应用里还没起名、或者读不到，
- * 就不写——保留登记时那句。
+ * codex 读它自己 threads 表里的 `name`，程小帮读它自己 sessions 表里的 `title`。
+ * 原样写，不裁剪。应用里还没起名、或者读不到，就不写——保留登记时那句。
  */
 export function pullTitles(
   sessions: readonly { agent: string; session: string }[],
@@ -123,6 +138,18 @@ export function pullTitles(
     for (const s of codex) {
       const title = found.get(s.session)
       if (title) titles.setSessionTitle('codex', s.session, title)
+    }
+  }
+
+  const chengxiaobang = sessions.filter((s) => s.agent === 'chengxiaobang')
+  if (chengxiaobang.length) {
+    const found = chengxiaobangTitles(
+      roots.chengxiaobangHome,
+      chengxiaobang.map((s) => s.session),
+    )
+    for (const s of chengxiaobang) {
+      const title = found.get(s.session)
+      if (title) titles.setSessionTitle('chengxiaobang', s.session, title)
     }
   }
 }

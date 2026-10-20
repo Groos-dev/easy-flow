@@ -26,15 +26,17 @@ export interface HookPayload {
   tool_name?: unknown
   tool_input?: unknown
   agent_id?: unknown
+  /** 程小帮的子 agent 标记；子 agent 事件不改主会话状态 */
+  subagent?: unknown
   [key: string]: unknown
 }
 
 /**
  * 事件名 → 状态。认不出返回 null（调用方忽略）。
  *
- * 表里两个 agent 的事件都要认（一条管道共用）：claude 发 `PostToolUseFailure`，
- * codex 发 `Interrupt` 与 `PreCompact` / `PostCompact`。少认一个的后果是状态卡在旧值上，
- * 比如打断后一直显示「干活」。
+ * 表里几个 agent 的事件都要认（一条管道共用）：claude 发 `PostToolUseFailure`，
+ * codex 发 `Interrupt` 与 `PreCompact` / `PostCompact`，程小帮发 `PostToolUseFailure` 与 `Stop`。
+ * 少认一个的后果是状态卡在旧值上，比如打断后一直显示「干活」。
  *
  * 挑事件的口径：只有「主会话的形态变了」才记。`SubagentStart` / `SubagentStop` 带 agent_id，
  * 那是子 agent 的生死，不是主会话的状态——一张卡一只 pet，子 agent 不另开，所以这里不接。
@@ -107,8 +109,8 @@ export function recordHook(
   const session = str(payload.session_id)
   const event = str(payload.hook_event_name)
   if (!session || !event) return null
-  // 子 agent 的事件不改主会话状态（SubagentStart / SubagentStop / 子 agent 的工具调用）
-  if (str(payload.agent_id)) return null
+  // 子 agent 的事件不改主会话状态（Claude 的 agent_id / 程小帮的 subagent 标记）
+  if (str(payload.agent_id) || payload.subagent === true) return null
   // 下线：会话没了，抹掉这条，读的时候自然退回拉取那条路
   if (event === 'SessionEnd') {
     store.remove(agent, session)

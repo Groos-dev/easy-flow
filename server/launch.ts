@@ -8,8 +8,8 @@
  * 各 provider 的 deeplink 构造在各自的 launch-<agent>.ts 里，由 server/index.ts 引入时注册进来。
  */
 
-/** 首期支持的 agent。cursor 没有验证过的新会话启动方式，不在其中 */
-export type LaunchAgent = 'claude' | 'codex'
+/** 支持新会话启动的 agent。cursor 没有验证过的新会话启动方式，不在其中 */
+export type LaunchAgent = 'claude' | 'codex' | 'chengxiaobang'
 
 /** 一次启动请求：详情页上选中的 agent 与工作区 */
 export interface LaunchInput {
@@ -54,8 +54,8 @@ export function sessionAddCommand(requirementId: string, agent: LaunchAgent): st
 /** 预填提示词：只带身份与下一步动作，实时内容由新会话自己用 easy-flow context 拉 */
 export function launchPrompt(input: LaunchInput): string {
   const register = sessionAddCommand(input.requirementId, input.agent)
-  // 有工作区就按工作区取上下文：两个 agent 的会话实际都只拿到这一个目录（Codex 的多仓库 project app 侧认不出）
-  // 没有工作区时两边都退到需求：Claude 的 deeplink 不带 folder，Codex 不建 project、也不带 path
+  // 有工作区就按工作区取上下文：新会话实际只拿到这一个目录
+  // 没有工作区时都退到需求：Claude 的 deeplink 不带 folder，Codex 不建 project、也不带 path
   const byWorktree = !!input.worktreeId
   const lines = [
     byWorktree
@@ -66,6 +66,10 @@ export function launchPrompt(input: LaunchInput): string {
   ]
   if (!input.requirementWorktreePaths.length) {
     lines.push('这条需求还没有工作区：要改代码先用 easy-flow wt new 开工作区，别直接改仓库主 checkout。')
+  }
+  // 程小帮的 open 深链只带文本，工作目录由 app 当前项目决定：不写死路径，新会话会在别处动手
+  if (input.agent === 'chengxiaobang' && input.worktreePath) {
+    lines.push(`程小帮的新会话不跟随链接切目录：先 cd ${input.worktreePath} 再动手。`)
   }
   lines.push(`发送首条消息、当前会话 ID 已产生后${byWorktree ? '，在这个工作区' : ''}运行 ${register}`)
   return lines.join('\n')

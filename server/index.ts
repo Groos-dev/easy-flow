@@ -32,6 +32,7 @@ import { hookPlan, installHooks, uninstallHooks } from './hook-install.ts'
 const log = createLogger('easy-flow')
 import { findLaunchProvider, launchPrompt, launchProviders } from './launch.ts'
 import './launch-codex.ts'
+import './launch-chengxiaobang.ts'
 import {
   allowOrigin,
   json,

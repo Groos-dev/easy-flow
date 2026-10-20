@@ -8,6 +8,7 @@ export const AGENT_LABELS: Record<string, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   cursor: 'Cursor',
+  chengxiaobang: '程小帮',
 }
 
 /** 状态圆点的配色，与看板列的语义对齐 */

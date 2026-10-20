@@ -168,15 +168,17 @@ description: >-
 会话是真正的工作现场（上下文、进度、下一步都在里面），但它只活在 agent 应用里，需求目录里看不到。
 登记到需求上，看板与 `context` 才找得到——过几天回来，点一下就能回到那个会话接着干。
 
-- 一条命令：`easy-flow req session add <req-…> --agent <claude|codex|cursor> --title "<在做什么>"`
+- 一条命令：`easy-flow req session add <req-…> --agent <claude|codex|cursor|chengxiaobang> --title "<在做什么>"`
 - 会话 id 不用自己查：`--agent` 传对就行，CLI 按 agent 读它注入的环境变量
   （claude：`CLAUDE_CODE_HOST_SESSION_ID` → `CLAUDE_CODE_SESSION_ID`；codex：`CODEX_THREAD_ID`；
-  cursor：`CURSOR_CONVERSATION_ID`），一个都没设会报错——说明 `--agent` 传错了，或不在会话里
+  cursor：`CURSOR_CONVERSATION_ID`；chengxiaobang：`CHENGXIAOBANG_SESSION_ID`），
+  一个都没设会报错——说明 `--agent` 传错了，或不在会话里
 - `--title` 写一句"在做什么"：应用里的会话标题读不到，看板上就靠这句认人
 - 看板详情页的「会话」块点一下即在 desktop 应用里打开（codex → `codex://threads/<id>`，
-  claude 的 Code 标签页会话 → `claude://claude.ai/epitaxy/<id>`）；cursor 与终端里的 claude
-  没有会话级链接，看板上只能复制 id，回到那个会话要靠应用自己的历史（codex 没装 desktop 时用
-  `codex resume <id>`）
+  claude 的 Code 标签页会话 → `claude://claude.ai/epitaxy/<id>`，chengxiaobang →
+  `chengxiaobang://session/<id>`）；cursor 与终端里的 claude 没有会话级链接，看板上只能复制 id，
+  回到那个会话要靠应用自己的历史（codex 没装 desktop 时用 `codex resume <id>`）。
+  程小帮当前版本收到 `session/<id>` 只会聚焦窗口，会话要自己点；客户端补上分支后同一链接即直达
 - 同一会话重复登记只刷新字段；换到别的需求做时重新登记一次，记录跟着走
 - 登记是留个指路牌，不是保活：会话换了、废了，用 `req session rm` 摘掉旧的
 

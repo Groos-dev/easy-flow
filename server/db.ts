@@ -59,9 +59,9 @@ export const TODO_CHANNELS = ['at_me', 'p2p'] as const
 
 /**
  * 会话的 agent 清单。取值与 skill 安装的 agent 目录同一套（claude / cursor / codex），
- * 免得同一个东西在两处叫两个名字。
+ * 外加程小帮；免得同一个东西在两处叫两个名字。
  */
-export const SESSION_AGENTS = ['claude', 'codex', 'cursor'] as const
+export const SESSION_AGENTS = ['claude', 'codex', 'cursor', 'chengxiaobang'] as const
 export type SessionAgent = (typeof SESSION_AGENTS)[number]
 
 /** 会话角色：开工登记的 dev；review 会话由 req session review 建，用来复用与展示 */

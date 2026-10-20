@@ -51,6 +51,7 @@ describe('工具动作：一次调用裁成一句文案', () => {
 
   test('命令类取前两个词，丢掉开关与后面的参数', () => {
     assert.equal(actionTextOf('Bash', { command: 'pnpm test --filter app' }), '跑 pnpm test')
+    assert.equal(actionTextOf('Shell', { command: 'pnpm test --filter app' }), '跑 pnpm test')
     assert.equal(actionTextOf('Bash', { command: 'rg -n "foo|bar" src/' }), '跑 rg "foo|bar"')
     assert.equal(actionTextOf('Bash', { command: '  pnpm   typecheck  ' }), '跑 pnpm typecheck', '多余空白不影响')
   })
