@@ -35,7 +35,7 @@ import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
 import { bubbleToneOf, PET_LABEL, PET_RANK, focusIndex, planPetRow, type Pose } from '../src/renderer/src/lib/pets.ts'
 import type { SessionAction } from '../src/renderer/src/lib/types.ts'
-import { petArt, scopeCloudling, idleMoodOf, type IdleMood } from '../src/renderer/src/lib/pet-art.ts'
+import { petArt, scopeCloudling, idleMoodOf, isWaking, type IdleMood } from '../src/renderer/src/lib/pet-art.ts'
 import { CLOUDLING_SVG } from '../src/renderer/src/lib/pet-cloudling-art.ts'
 import { childStatsOf, childrenOf } from '../src/renderer/src/lib/children.ts'
 import { parseStamp, relTime } from '../src/renderer/src/lib/time.ts'
@@ -3944,7 +3944,7 @@ describe('pet：姿势与抢注意力挑选', () => {
 
 describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => {
   const art = { compact: false, still: false }
-  type ArtOpt = { compact: boolean; still: boolean; mood?: IdleMood }
+  type ArtOpt = { compact: boolean; still: boolean; mood?: IdleMood; wake?: boolean }
   const PETS_DIR = join(REPO_ROOT, 'src/renderer/public/pets')
 
   /** 走 <img> 的素材：拿它的 src，顺带钉住通道 */
@@ -3993,13 +3993,24 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
     assert.equal(petArt('some-new-agent', 'done', art).channel, 'img')
   })
 
-  test('程小帮也用云宝，走同一条内联通道', () => {
-    const got = petArt('chengxiaobang', 'working', art)
-    assert.equal(got.channel, 'inline')
-    assert.equal(got.channel === 'inline' ? got.svg : '', CLOUDLING_SVG['cloudling-typing.svg'])
+  test('程小帮用专属 cxb，走 <img>：各档一张、互不重样', () => {
+    const files: Record<Pose, string> = {
+      idle: 'cxb-idle.webp',
+      thinking: 'cxb-thinking.webp',
+      working: 'cxb-working.webp',
+      sweeping: 'cxb-sweeping.webp',
+      blocked: 'cxb-blocked.webp',
+      done: 'cxb-done.webp',
+      failed: 'cxb-failed.webp',
+    }
+    const poses = THREAD_STATES.filter((s) => s !== 'unknown')
+    for (const state of poses) assert.equal(imgSrc('chengxiaobang', state), `pets/${files[state]}`, state)
+    assert.equal(new Set(poses.map((s) => imgSrc('chengxiaobang', s))).size, poses.length)
+    // 与另外两套不重样：一张 cxb 素材里不会出现 clawd / cloudling 的配色或文件名
+    assert.doesNotMatch(imgSrc('chengxiaobang', 'idle'), /clawd|cloudling/)
   })
 
-  test('折叠卡换 mini 组（两套都有，failed 复用 alert）', () => {
+  test('折叠卡换 mini 组（三套都有，failed 复用 alert）', () => {
     const mini = { compact: true, still: false }
     assert.equal(imgSrc('claude', 'idle', mini), 'pets/clawd-mini-idle.svg')
     assert.equal(imgSrc('claude', 'blocked', mini), 'pets/clawd-mini-alert.svg')
@@ -4009,6 +4020,13 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
     assert.equal(cloudlingSvg('working', mini), CLOUDLING_SVG['cloudling-mini-typing.svg'])
     assert.equal(cloudlingSvg('done', mini), CLOUDLING_SVG['cloudling-mini-happy.svg'])
     assert.equal(cloudlingSvg('failed', mini), CLOUDLING_SVG['cloudling-mini-alert.svg'])
+    assert.equal(imgSrc('chengxiaobang', 'idle', mini), 'pets/cxb-mini-idle.webp')
+    assert.equal(imgSrc('chengxiaobang', 'thinking', mini), 'pets/cxb-mini-peek.webp')
+    assert.equal(imgSrc('chengxiaobang', 'working', mini), 'pets/cxb-mini-typing.webp')
+    assert.equal(imgSrc('chengxiaobang', 'sweeping', mini), 'pets/cxb-mini-typing.webp')
+    assert.equal(imgSrc('chengxiaobang', 'blocked', mini), 'pets/cxb-mini-alert.webp')
+    assert.equal(imgSrc('chengxiaobang', 'done', mini), 'pets/cxb-mini-happy.webp')
+    assert.equal(imgSrc('chengxiaobang', 'failed', mini), 'pets/cxb-mini-alert.webp')
   })
 
   test('静止越久越困：20s 打哈欠、10min 打盹、50min 瘫倒一下再睡', () => {
@@ -4037,26 +4055,83 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
     assert.equal(imgSrc('claude', 'working', mini('sleeping')), 'pets/clawd-mini-typing.svg')
   })
 
-  test('reduced-motion：clawd 换静态版；云宝内联，由挂载时只放行首帧', () => {
+  test('程小帮的静止序列、醒来与折叠卡睡着，档档有图', () => {
+    const mood = (m: IdleMood): ArtOpt => ({ compact: false, still: false, mood: m })
+    assert.equal(imgSrc('chengxiaobang', 'idle', mood('awake')), 'pets/cxb-idle.webp')
+    assert.equal(imgSrc('chengxiaobang', 'idle', mood('yawning')), 'pets/cxb-idle-yawn.webp')
+    assert.equal(imgSrc('chengxiaobang', 'idle', mood('dozing')), 'pets/cxb-idle-doze.webp')
+    assert.equal(imgSrc('chengxiaobang', 'idle', mood('collapsing')), 'pets/cxb-collapse-sleep.webp')
+    assert.equal(imgSrc('chengxiaobang', 'idle', mood('sleeping')), 'pets/cxb-sleeping.webp')
+    assert.equal(imgSrc('chengxiaobang', 'idle', { compact: true, still: false, mood: 'sleeping' }), 'pets/cxb-mini-sleep.webp')
+
+    // 醒来只在「刚被叫醒」那一帧由组件传 wake；折叠卡没有小号版，退回目标姿势
+    assert.equal(imgSrc('chengxiaobang', 'working', { compact: false, still: false, wake: true }), 'pets/cxb-wake.webp')
+    assert.equal(imgSrc('chengxiaobang', 'working', { compact: true, still: false, wake: true }), 'pets/cxb-mini-typing.webp')
+    assert.equal(imgSrc('chengxiaobang', 'working', { compact: false, still: true, wake: true }), 'pets/cxb-wake.webp')
+    // 没有 wake 素材的 agent 不受影响
+    assert.equal(imgSrc('claude', 'working', { compact: false, still: false, wake: true }), 'pets/clawd-working-typing.svg')
+    assert.equal(cloudlingSvg('working', { compact: false, still: false, wake: true }), CLOUDLING_SVG['cloudling-typing.svg'])
+  })
+
+  test('isWaking：只在睡着 / 瘫倒后转出静止时为真，且只认有醒来素材的 agent', () => {
+    assert.equal(isWaking('chengxiaobang', { state: 'idle', mood: 'sleeping' }, 'working'), true)
+    assert.equal(isWaking('chengxiaobang', { state: 'idle', mood: 'collapsing' }, 'blocked'), true)
+    assert.equal(isWaking('chengxiaobang', { state: 'idle', mood: 'dozing' }, 'working'), false)
+    assert.equal(isWaking('chengxiaobang', { state: 'idle', mood: 'awake' }, 'working'), false)
+    assert.equal(isWaking('chengxiaobang', { state: 'idle', mood: 'sleeping' }, 'idle'), false)
+    assert.equal(isWaking('chengxiaobang', { state: 'working', mood: 'sleeping' }, 'blocked'), false)
+    assert.equal(isWaking('claude', { state: 'idle', mood: 'sleeping' }, 'working'), false)
+    assert.equal(isWaking('codex', { state: 'idle', mood: 'sleeping' }, 'working'), false)
+  })
+
+  test('reduced-motion：clawd 与程小帮换静态版；云宝内联，由挂载时只放行首帧', () => {
     const still = { compact: false, still: true }
     assert.equal(imgSrc('claude', 'done', still), 'pets/clawd-happy.still.svg')
     assert.equal(imgSrc('claude', 'done', { compact: true, still: true }), 'pets/clawd-mini-happy.still.svg')
+    assert.equal(imgSrc('chengxiaobang', 'done', still), 'pets/cxb-done.webp', '位图没有 still 版，减动效由宿主 CSS 停')
+    assert.equal(imgSrc('chengxiaobang', 'idle', { compact: true, still: true }), 'pets/cxb-mini-idle.webp')
     assert.equal(cloudlingSvg('failed', still), cloudlingSvg('failed'))
     assert.equal(cloudlingSvg('blocked', { compact: true, still: true }), cloudlingSvg('blocked', { compact: true, still: false }))
   })
 
   test('走 <img> 的素材都真的落在 public/pets 里（生成物没漏）', () => {
-    for (const agent of ['claude', 'cursor']) {
+    const MOODS: IdleMood[] = ['awake', 'yawning', 'dozing', 'collapsing', 'sleeping']
+    for (const agent of ['claude', 'cursor', 'chengxiaobang']) {
       // unknown 不画 pet，没有素材
       for (const state of THREAD_STATES.filter((s) => s !== 'unknown')) {
         for (const compact of [false, true]) {
           for (const still of [false, true]) {
-            const src = imgSrc(agent, state, { compact, still })
-            const rel = src.replace(/^pets\//, '')
-            assert.ok(existsSync(join(PETS_DIR, rel)), `${agent}/${state} compact=${compact} still=${still} → ${src}`)
+            const moods: (IdleMood | undefined)[] = state === 'idle' ? MOODS : [undefined]
+            for (const mood of moods) {
+              const src = imgSrc(agent, state, { compact, still, mood })
+              const rel = src.replace(/^pets\//, '')
+              assert.ok(existsSync(join(PETS_DIR, rel)), `${agent}/${state} compact=${compact} still=${still} mood=${mood} → ${src}`)
+            }
           }
         }
       }
+    }
+    // 醒来只挂在全尺寸上
+    for (const still of [false, true]) {
+      const src = imgSrc('chengxiaobang', 'working', { compact: false, still, wake: true })
+      assert.ok(existsSync(join(PETS_DIR, src.replace(/^pets\//, ''))), src)
+    }
+  })
+
+  test('程小帮素材是位图：12 档 + 6 张 mini 都是能认出来的 webp，体量压得住', () => {
+    const files = readdirSync(PETS_DIR).filter((f) => f.startsWith('cxb-'))
+    assert.equal(files.length, 18, `素材数量不对：${files.length}`)
+    assert.deepEqual(
+      files.filter((f) => f.includes('mini-')).sort(),
+      ['cxb-mini-alert.webp', 'cxb-mini-happy.webp', 'cxb-mini-idle.webp', 'cxb-mini-peek.webp', 'cxb-mini-sleep.webp', 'cxb-mini-typing.webp'],
+    )
+    for (const file of files) {
+      assert.match(file, /\.webp$/, file)
+      const buf = readFileSync(join(PETS_DIR, file))
+      assert.equal(buf.subarray(0, 4).toString('ascii'), 'RIFF', `${file}: 不是 RIFF 容器`)
+      assert.equal(buf.subarray(8, 12).toString('ascii'), 'WEBP', `${file}: 不是 WebP`)
+      assert.ok(buf.length > 2_000, `${file}: 文件太小，像是空图`)
+      assert.ok(buf.length < 60_000, `${file}: 单张超过 60KB，看板会变重`)
     }
   })
 
