@@ -1,0 +1,28 @@
+server/chengxiaobang.ts
+  s_265d344cdb0e3c::t_240eb9ad62ce84 124-157
+  s_265d344cdb0e3c::t_cbc250fdbda43f 20-30
+  s_265d344cdb0e3c::t_0bcf776ed889ef 86-87
+test/titles.test.ts
+  s_265d344cdb0e3c::t_7117cac1056588 219-231
+  s_265d344cdb0e3c::t_2dcc94f7069cbb 138-177
+  s_265d344cdb0e3c::t_f208e1ce3f131f 64-82,84,87-88
+server/threads.ts
+  s_265d344cdb0e3c::t_3bd19e1c4425e2 117-118,143-152
+  s_265d344cdb0e3c::t_4d5c0ca0e7ea7b 36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "952ac535f5b3aca6990ad66fa6fd69b4482b808c",
+  "prompts": {},
+  "sessions": {
+    "s_265d344cdb0e3c": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_2u6jagy45mja",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
