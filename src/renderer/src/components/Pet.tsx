@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { AGENT_LABELS } from '../lib/labels'
-import { petArt, scopeCloudling, idleMoodOf, type IdleMood } from '../lib/pet-art'
+import { petArt, scopeCloudling, idleMoodOf, isWaking, type IdleMood } from '../lib/pet-art'
 import { isEventState } from '../lib/threads'
 import { bubbleToneOf, PET_LABEL, planPetRow, type PetItem, type Pose } from '../lib/pets'
 import type { Session } from '../lib/types'
@@ -85,6 +85,33 @@ function Cloudling({ svg, still }: { svg: string; still: boolean }) {
   return <span ref={host} className="pet-art" aria-hidden="true" />
 }
 
+/** 醒来这一档停多久：素材本身是 1.6s 的循环，播一轮就切回目标姿势 */
+const WAKE_MS = 1600
+
+/**
+ * 从睡着里被叫醒时先亮一档「醒来」。
+ *
+ * 上一帧还停在静止（且已经困到瘫倒 / 睡着），这一帧不再静止，就说明它被叫醒了；
+ * 只对素材里有 wake 这一档的 agent 生效（程小帮），且折叠卡不放小号版。
+ * `prev` 用 ref 记：它只用来判断「上一帧是什么」，不进渲染。
+ */
+function useWake(agent: string, state: Pose, mood: IdleMood | undefined, enabled: boolean): boolean {
+  const prev = useRef({ state, mood: mood ?? 'awake' })
+  const [wake, setWake] = useState(false)
+  useEffect(() => {
+    const woke = enabled && isWaking(agent, prev.current, state)
+    prev.current = { state, mood: mood ?? 'awake' }
+    if (!woke) {
+      setWake(false)
+      return
+    }
+    setWake(true)
+    const timer = setTimeout(() => setWake(false), WAKE_MS)
+    return () => clearTimeout(timer)
+  }, [agent, state, mood, enabled])
+  return wake
+}
+
 /**
  * 一档状态一只 pet：一个 agent 一套素材，动作与表情都来自素材本身
  * （clawd 是 SVG 自带的 @keyframes，cloudling 是素材里的脚本；宿主不再另写）。
@@ -114,15 +141,16 @@ export default function Pet({
   still?: boolean
 }) {
   const name = `${AGENT_LABELS[agent] ?? agent} · ${PET_LABEL[state]}`
-  const art = petArt(agent, state, { compact, still, mood })
-  // cloudling 内联成 <svg>（脚本驱动，且 object 的文档画布不透明）；clawd 走 <img>（每张自带同名 @keyframes，内联会互相覆盖）
+  const wake = useWake(agent, state, mood, !compact)
+  const art = petArt(agent, state, { compact, still, mood, wake })
+  // cloudling 内联成 <svg>（脚本驱动，且 object 的文档画布不透明）；clawd / cxb 走 <img>（每张自带同名 @keyframes，内联会互相覆盖）
   const body =
     art.channel === 'inline' ? (
       <Cloudling svg={art.svg} still={still} />
     ) : (
       <img src={art.src} alt="" draggable={false} />
     )
-  const cls = `pet${compact ? ' compact' : ''} s-${state}${event ? ' event' : ''}${focus ? ' focus' : ''}`
+  const cls = `pet${agent === 'chengxiaobang' ? ' cxb' : ''}${compact ? ' compact' : ''} s-${state}${event ? ' event' : ''}${focus ? ' focus' : ''}`
 
   return (
     <span className={cls} role="img" aria-label={name}>

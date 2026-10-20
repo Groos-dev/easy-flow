@@ -138,11 +138,17 @@ describe('PetRow 渲染', () => {
     assert.doesNotMatch(html, /<object/)
   })
 
-  test('程小帮也走云宝内联，并显示「程小帮」', () => {
+  test('程小帮用专属 cxb 素材，走 <img>，并显示「程小帮」', () => {
     const html = render(createElement(PetRow, { sessions: [sess('chengxiaobang', 'blocked')] }))
-    assert.match(html, /class="pet-art"/)
-    assert.doesNotMatch(html, /<img/)
+    assert.match(html, /<img[^>]+src="pets\/cxb-blocked\.webp"/)
+    assert.match(html, /class="pet cxb s-blocked event focus"/, '带 cxb 类，宿主 CSS 才认得出位图那套轻动')
+    assert.doesNotMatch(html, /class="pet-art"/)
     assert.match(html, /aria-label="程小帮 · 等你"/)
+  })
+
+  test('折叠卡上的程小帮换 cxb mini', () => {
+    const html = render(createElement(PetRow, { sessions: [sess('chengxiaobang', 'working')], compact: true }))
+    assert.match(html, /src="pets\/cxb-mini-typing\.webp"/)
   })
 
   test('折叠卡换 mini 素材', () => {
