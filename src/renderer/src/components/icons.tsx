@@ -3,13 +3,12 @@
  * 详情页、mini 面板各用一部分，合在一起是因为同属一类，不是因为共享。
  */
 
-/** 信息浮窗图标：带侧栏的面板 */
+/** 信息浮窗图标：右侧栏面板，路径取自 Lucide 的 panel-right（ISC） */
 export function InfoIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <line x1="3" y1="9" x2="21" y2="9" />
-      <line x1="9.5" y1="9" x2="9.5" y2="20" />
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M15 3v18" />
     </svg>
   )
 }
