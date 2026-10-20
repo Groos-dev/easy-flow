@@ -308,6 +308,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
       if (url.pathname === '/api/context' && req.method === 'GET') {
         const slug = url.searchParams.get('slug') ?? ''
         const project = resolveProject(db, url.searchParams.get('project'))
+        // 只扫这一条需求，避免为一次打开做全量重扫
+        db.syncRequirement(slug, project)
         const ctx = db.context(slug, project)
         if (!ctx) throw new Error(`Requirement not found: ${slug}`)
         json(req, res, 200, {

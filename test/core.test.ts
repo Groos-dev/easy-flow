@@ -525,6 +525,34 @@ describe('数据层 · 状态读写', () => {
   })
 })
 
+// ------------------------------------------------------ 数据层：单个需求同步
+
+describe('数据层 · 单个需求同步', () => {
+  test('syncRequirement 只刷新这一条需求：新 md 进库，状态不动，别的需求不扫', () => {
+    const dir = fresh((d) => {
+      makeReq(d, 'onex', 'alpha', '# 旧标题\n\n## 需求\n\n旧描述', { id: 'req-alpha' })
+      makeReq(d, 'onex', 'beta', '# beta')
+    })
+    const db = new BoardDatabase(dir)
+    db.syncProjects()
+    db.setStatus('alpha', 'Review')
+
+    writeFileSync(join(dir, 'onex', 'alpha', 'NEW.md'), '# 新文档\n', 'utf8')
+    writeFileSync(join(dir, 'onex', 'alpha', 'requirement.md'), '# 新标题\n\n## 需求\n\n新描述', 'utf8')
+    writeFileSync(join(dir, 'onex', 'beta', 'requirement.md'), '# beta 改了\n', 'utf8')
+
+    assert.equal(db.syncRequirement('alpha', 'onex'), true)
+    const alpha = db.get('alpha')
+    assert.equal(alpha?.title, '新标题')
+    assert.equal(alpha?.summary, '新描述')
+    assert.equal(alpha?.status, 'Review', '状态只归库，同步不能碰')
+    assert.ok(db.context('alpha', 'onex')!.docs.some((d) => d.name === 'NEW.md'))
+    assert.equal(db.get('beta')?.title, 'beta', '别的需求不在这次同步范围内')
+    assert.equal(db.syncRequirement('nope', 'onex'), false)
+    db.close()
+  })
+})
+
 // ---------------------------------------------------------- 数据层：链接字段
 
 describe('数据层 · 链接字段', () => {
@@ -2625,6 +2653,12 @@ describe('HTTP 层', () => {
     const r = await get('/api/context?slug=alpha')
     assert.equal(r.requirement.slug, 'alpha')
     assert.match(r.requirementMd, /甲需求内容/)
+  })
+
+  test('GET /api/context 会带上 agent 刚写的 md（只扫这一条需求）', async () => {
+    writeFileSync(join(dir, 'onex', 'alpha', 'NEW.md'), '# 新文档\n', 'utf8')
+    const r = await get('/api/context?slug=alpha')
+    assert.ok(r.requirement.docs.some((d: any) => d.name === 'NEW.md'))
   })
 
   test('/api/context 带上该需求的工作区', async () => {

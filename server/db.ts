@@ -612,6 +612,53 @@ export class BoardDatabase {
 
   // ------------------------------------------------------------- 同步
 
+  /** 只同步一个需求目录（路径取自库里），不扫整个数据目录。 */
+  syncRequirement(slug: string, project = this.activeProject): boolean {
+    const existing = this.get(slug, project)
+    if (!existing) return false
+    let parsed: ReturnType<typeof parseRequirement>
+    try {
+      parsed = parseRequirement(existing.path, existing.slug)
+    } catch {
+      return false
+    }
+
+    let id = ''
+    if (parsed.id) {
+      const owner = this.db
+        .prepare('SELECT slug, project FROM requirement WHERE id = ?')
+        .get(parsed.id) as { slug: string; project: string } | undefined
+      if (!owner || (owner.slug === slug && owner.project === project)) id = parsed.id
+    }
+    const cut = existing.slug.lastIndexOf('/')
+    const parentId = cut === -1 ? '' : (this.get(existing.slug.slice(0, cut), project)?.id ?? '')
+    const mtime = parsed.docs.reduce((latest, d) => Math.max(latest, d.mtime), 0)
+
+    this.db
+      .prepare(
+        `UPDATE requirement SET id = ?, parent_id = ?, title = ?, path = ?, summary = ?, repos = ?, links = ?, mtime = ?, missing = 0
+         WHERE slug = ? AND project = ?`,
+      )
+      .run(
+        id,
+        parentId,
+        parsed.title,
+        existing.path,
+        parsed.summary,
+        JSON.stringify(parsed.repos),
+        parsed.links,
+        mtime,
+        slug,
+        project,
+      )
+    this.db.prepare('DELETE FROM doc WHERE slug = ? AND project = ?').run(slug, project)
+    const insertDoc = this.db.prepare(
+      'INSERT INTO doc (slug, project, name, content) VALUES (?, ?, ?, ?)',
+    )
+    for (const d of parsed.docs) insertDoc.run(slug, project, d.name, d.content)
+    return true
+  }
+
   /**
    * 把文件系统同步进数据库。目录结构：<dataDir>/<project>/<requirement>/
    *
