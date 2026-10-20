@@ -1,12 +1,13 @@
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, screen, session, shell } from 'electron'
 import { execFile, execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { readFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { RunningBoardServer } from '../../server/index.ts'
 import { createLogger } from '../../server/log.ts'
 import { appIconFile, externalOpenArgs, scanOpenTargets, type OpenTarget } from './open-with.ts'
+import { placePanel, readPanelPosition, writePanelPosition } from './panel-position.ts'
 
 // 图标放在仓库根的 resources/（electron-vite 的约定），运行时从 out/main 往上两级
 const ICON = join(__dirname, '../../resources/icon.png')
@@ -67,38 +68,17 @@ function panelPositionFile(): string {
   return join(process.env.EASY_FLOW_USER_DATA!, 'panel-position.json')
 }
 
-function loadPanelPosition(): { x: number; y: number } | null {
-  try {
-    const pos = JSON.parse(readFileSync(panelPositionFile(), 'utf8'))
-    if (typeof pos?.x === 'number' && typeof pos?.y === 'number') return pos
-  } catch {
-    // 没存过或文件损坏：回落到默认位置
-  }
-  return null
-}
-
-/** 存进文件前校验位置还落在某块屏幕的工作区内；拔了显示器的旧坐标直接作废 */
-function validPanelPosition(
-  pos: { x: number; y: number } | null,
-): { x: number; y: number } | null {
-  if (!pos) return null
-  const inside = screen.getAllDisplays().some(
-    (d) =>
-      pos.x >= d.workArea.x &&
-      pos.x < d.workArea.x + d.workArea.width &&
-      pos.y >= d.workArea.y &&
-      pos.y < d.workArea.y + d.workArea.height,
-  )
-  return inside ? pos : null
-}
-
 function savePanelPosition(): void {
   if (!panel || panel.isDestroyed()) return
-  try {
-    writeFileSync(panelPositionFile(), JSON.stringify(panel.getPosition()))
-  } catch {
-    // 存不下就算了：位置记忆不是关键路径
-  }
+  const [x, y] = panel.getPosition()
+  writePanelPosition(panelPositionFile(), { x, y })
+}
+
+/** 拖动不一定有 'moved'，收起来之前再落一次 */
+function hidePanel(): void {
+  if (!panel || panel.isDestroyed()) return
+  savePanelPosition()
+  panel.hide()
 }
 
 function createPanel(): void {
@@ -132,7 +112,7 @@ function createPanel(): void {
   })
 
   // launcher 的关键：焦点一走就藏。隐藏不销毁，再呼秒开
-  panel.on('blur', () => panel?.hide())
+  panel.on('blur', () => hidePanel())
   panel.on('closed', () => {
     panel = null
   })
@@ -150,19 +130,14 @@ function showPanel(): void {
   if (!panel || panel.isDestroyed()) createPanel()
   panel!.setAlwaysOnTop(true, 'floating')
 
-  const saved = validPanelPosition(loadPanelPosition())
-  if (saved) {
-    panel!.setPosition(saved.x, saved.y)
-  } else {
-    // 默认位置：鼠标所在屏幕、顶部居中约 20%
-    const cursor = screen.getCursorScreenPoint()
-    const display = screen.getDisplayNearestPoint(cursor)
-    const wa = display.workArea
-    panel!.setPosition(
-      wa.x + Math.round((wa.width - PANEL_SIZE.width) / 2),
-      wa.y + Math.round(wa.height * 0.2),
-    )
-  }
+  // 回到上次收起来的地方；越界由 placePanel 夹回屏幕内
+  const at = placePanel(
+    readPanelPosition(panelPositionFile()),
+    PANEL_SIZE,
+    screen.getAllDisplays().map((d) => d.workArea),
+    screen.getCursorScreenPoint(),
+  )
+  panel!.setPosition(at.x, at.y)
 
   panel!.show()
   panel!.focus()
@@ -172,7 +147,7 @@ function showPanel(): void {
 
 function togglePanel(): void {
   if (panel && !panel.isDestroyed() && panel.isVisible()) {
-    panel.hide()
+    hidePanel()
   } else {
     showPanel()
   }
@@ -337,7 +312,7 @@ function registerIpc(): void {
   })
 
   // mini 面板 Esc 到顶（没展开、没过滤词）时藏起自己
-  ipcMain.on('easy-flow:panel-hide', () => panel?.hide())
+  ipcMain.on('easy-flow:panel-hide', () => hidePanel())
 }
 
 /**

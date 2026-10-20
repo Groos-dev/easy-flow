@@ -1,6 +1,9 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { buildMiniBlocks, miniTime, needsHuman, sessionActive } from '../src/renderer/src/lib/mini.ts'
+import MiniApp from '../src/renderer/src/mini/MiniApp.tsx'
 import type { Requirement, Session, ThreadState } from '../src/renderer/src/lib/types.ts'
 
 const NOW = Date.parse('2026-10-20T12:00:00')
@@ -46,6 +49,14 @@ function sess(
 
 const rowsOf = (...reqs: Requirement[]) => reqs.map((r) => ({ req: r, projectName: 'easy-flow' }))
 const slugs = (blocks: ReturnType<typeof buildMiniBlocks>) => blocks.map((b) => b.req.slug)
+
+describe('mini 面板的首屏', () => {
+  test('数据还没到：画骨架，不先闪「没有匹配的需求」', () => {
+    const html = renderToStaticMarkup(createElement(MiniApp))
+    assert.match(html, /mini-skel/)
+    assert.ok(!html.includes('没有匹配的需求'))
+  })
+})
 
 describe('mini 面板的过滤', () => {
   test('默认只列执行中与 Review', () => {

@@ -24,8 +24,15 @@ export default function MiniApp() {
   const [selectedKey, setSelectedKey] = useState('')
   const [expanded, setExpanded] = useState('')
   const [error, setError] = useState('')
+  /** 首份数据到手前画骨架 */
+  const [ready, setReady] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const pointer = useRef({ x: -1, y: -1 })
+  const syncedAt = useRef(0)
+  /** 卡片与动作行的节点：展开、键盘移动时滚进视野 */
+  const rowRefs = useRef(new Map<string, HTMLElement>())
+  /** 只有键盘挪的选中才跟着滚，鼠标划过不让列表跳 */
+  const keyMoved = useRef(false)
 
   const load = useCallback(async () => {
     try {
@@ -39,8 +46,23 @@ export default function MiniApp() {
       setError('')
     } catch (e) {
       setError((e as Error).message)
+    } finally {
+      setReady(true)
     }
   }, [])
+
+  /** 先读库画骨架，再让服务端扫目录；两秒内重复呼出不重扫 */
+  const refresh = useCallback(async () => {
+    await load()
+    if (Date.now() - syncedAt.current < 2000) return
+    syncedAt.current = Date.now()
+    try {
+      await api.resync()
+    } catch {
+      return
+    }
+    await load()
+  }, [load])
 
   const reset = useCallback(() => {
     setQuery('')
@@ -50,14 +72,14 @@ export default function MiniApp() {
   }, [])
 
   useEffect(() => {
-    void load()
+    void refresh()
     inputRef.current?.focus()
     const off = window.easyFlow?.onPanelShown?.(() => {
-      void load()
+      void refresh()
       reset()
     })
     return () => off?.()
-  }, [load, reset])
+  }, [refresh, reset])
 
   const blocks = useMemo(
     () => buildMiniBlocks({ rows, sessions, query, expanded }),
@@ -79,6 +101,19 @@ export default function MiniApp() {
   useEffect(() => {
     setSelectedKey('')
   }, [query])
+
+  // 展开的卡片长高了，只滚到刚好看全
+  useEffect(() => {
+    if (!expanded) return
+    rowRefs.current.get(expanded)?.scrollIntoView({ block: 'nearest' })
+  }, [expanded])
+
+  // 鼠标 hover 也写 selectedKey，所以得分清来源
+  useEffect(() => {
+    if (!selectedKey || !keyMoved.current) return
+    keyMoved.current = false
+    rowRefs.current.get(selectedKey)?.scrollIntoView({ block: 'nearest' })
+  }, [selectedKey])
 
   function toggle(project: string, slug: string) {
     const key = `${project}:${slug}`
@@ -123,11 +158,13 @@ export default function MiniApp() {
   function onKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
+      keyMoved.current = true
       setSelectedKey(moveKey(keys, selectedKey, 1))
       return
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault()
+      keyMoved.current = true
       setSelectedKey(moveKey(keys, selectedKey, -1))
       return
     }
@@ -162,6 +199,10 @@ export default function MiniApp() {
     return (
       <div
         key={c.key}
+        ref={(el) => {
+          if (el) rowRefs.current.set(c.key, el)
+          else rowRefs.current.delete(c.key)
+        }}
         className={`mini-act${childOn ? ' on' : ''}${off ? ' off' : ''}`}
         title={title}
         onMouseEnter={(e) => hover(e, c.key)}
@@ -213,7 +254,8 @@ export default function MiniApp() {
 
       <div className="mini-list">
         {error && <div className="notice">{error}</div>}
-        {!error && blocks.length === 0 && <div className="mini-empty">没有匹配的需求</div>}
+        {!error && !ready && <MiniSkeleton />}
+        {!error && ready && blocks.length === 0 && <div className="mini-empty">没有匹配的需求</div>}
 
         {blocks.map((b) => {
           const on = selKey === b.key
@@ -229,6 +271,10 @@ export default function MiniApp() {
           return (
             <div
               key={b.key}
+              ref={(el) => {
+                if (el) rowRefs.current.set(b.key, el)
+                else rowRefs.current.delete(b.key)
+              }}
               className={`mini-card${on ? ' on' : ''}`}
               onMouseEnter={(e) => hover(e, b.key)}
               onMouseDown={(e) => e.preventDefault()}
@@ -292,6 +338,24 @@ export default function MiniApp() {
         })}
       </div>
     </div>
+  )
+}
+
+function MiniSkeleton() {
+  return (
+    <>
+      {[0, 1, 2].map((i) => (
+        <div className="mini-card mini-skel" key={i}>
+          <div className="mini-top">
+            <span className="mini-skel-bar" />
+          </div>
+          <div className="mini-foot">
+            <span className="mini-skel-bar short" />
+            <span className="mini-skel-bar tiny" />
+          </div>
+        </div>
+      ))}
+    </>
   )
 }
 
