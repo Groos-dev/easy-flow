@@ -214,10 +214,9 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
         return
       }
 
-      // 侧边栏树：所有项目 + 各自的需求，一次拉全
+      // 侧边栏树：所有项目 + 各自的需求，一次拉全。只读库——同步走后台重扫与 resync
       if (url.pathname === '/api/tree' && req.method === 'GET') {
-        const sync = db.syncProjects()
-        json(req, res, 200, { tree: db.tree(), active: db.project, sync })
+        json(req, res, 200, { tree: db.tree(), active: db.project, sync: NO_CHANGES })
         return
       }
 
