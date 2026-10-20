@@ -146,7 +146,9 @@ function clock(ms: number): string {
 }
 
 function newer(next: SessionStatus, old: SessionStatus): boolean {
-  if (next.observedAt !== old.observedAt) return next.observedAt > old.observedAt
+  if (next.observedAt !== old.observedAt) {
+    return next.observedAt > old.observedAt
+  }
   // 一样新：unknown 不许盖掉一条真的观察；两条都真就是「后到覆盖先到」
   return old.state === 'unknown' || next.state !== 'unknown'
 }
