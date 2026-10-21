@@ -1,0 +1,29 @@
+src/renderer/src/components/Card.tsx
+  s_b4db6563e219ae::t_1b79ecaaf577ed 57
+  s_b4db6563e219ae::t_82b67149af55ef 3
+  s_b4db6563e219ae::t_819b1b0bb02720 53-56,58-66,78
+  s_b4db6563e219ae::t_9a5382c9312d69 2
+test/board-focus.test.ts
+  s_b4db6563e219ae::t_1254eb0fc6b22f 88-97
+  s_b4db6563e219ae::t_50c92028ececad 5
+src/renderer/src/lib/keys.ts
+  s_b4db6563e219ae::t_83362a008d2df3 87
+src/renderer/src/lib/board-focus.ts
+  s_b4db6563e219ae::t_92efbd878980d0 62-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "cb912e7899e392b0c58ffb5b51564b5e901f7e88",
+  "prompts": {},
+  "sessions": {
+    "s_b4db6563e219ae": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_rvlno7etg16d",
+        "model": "auto(free)"
+      },
+      "human_author": null
+    }
+  }
+}
