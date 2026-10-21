@@ -1,0 +1,26 @@
+src/renderer/src/components/Pet.tsx
+  s_b4db6563e219ae::t_37dd2d6769e152 254-255,267-275
+src/renderer/src/components/Card.tsx
+  s_b4db6563e219ae::t_426c406876a95a 2
+  s_b4db6563e219ae::t_d0636f016b71a5 52-54,56-57,59,61-63,65-72,85-92
+src/renderer/src/lib/keys.ts
+  s_b4db6563e219ae::t_18df07e47f0f40 87-89
+test/keyboard.test.ts
+  s_b4db6563e219ae::t_cf1b608c7d9f55 155,159-167,169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "26993d03b10bf9b370844cd668819ff8e429cfcb",
+  "prompts": {},
+  "sessions": {
+    "s_b4db6563e219ae": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_rvlno7etg16d",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
