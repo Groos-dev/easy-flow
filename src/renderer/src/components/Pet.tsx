@@ -171,17 +171,18 @@ function Bubble({ text, state }: { text: string; state: Pose }) {
   )
 }
 
-/** 鼠标移开之后气泡还留多久 */
+/** 鼠标移开 / 焦点移走之后气泡还留多久 */
 const LINGER_MS = 30_000
 
 /**
- * 气泡在不在：非静止那几档一到就一直挂着，直到状态变了；静止那档要鼠标停在这只 pet 上才出，
- * 移开后再留 30 秒——点过 pet 会把它写成静止，所以点完也是「过一会儿才收」。
+ * 气泡在不在：非静止那几档一到就一直挂着，直到状态变了；静止那档要鼠标停在这只 pet 上
+ * （或 Tab 把焦点落上来）才出，移开后再留 30 秒——点过 pet 会把它写成静止，所以点完也是「过一会儿才收」。
+ * 悬停与焦点是同一个信号：两者都撤了才开始计时。
  */
-function useBubbleShown(pinned: boolean, hovered: boolean): boolean {
+function useBubbleShown(pinned: boolean, active: boolean): boolean {
   const [shown, setShown] = useState(pinned)
   useEffect(() => {
-    if (pinned || hovered) {
+    if (pinned || active) {
       setShown(true)
       return
     }
@@ -189,7 +190,7 @@ function useBubbleShown(pinned: boolean, hovered: boolean): boolean {
     if (!shown) return
     const timer = setTimeout(() => setShown(false), LINGER_MS)
     return () => clearTimeout(timer)
-  }, [pinned, hovered, shown])
+  }, [pinned, active, shown])
   return shown
 }
 
@@ -224,9 +225,8 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
   const [focused, setFocused] = useState(false)
   const { session, state } = item
   const hasBubble = item.bubble !== ''
-  // 留尾只属于鼠标：键盘一路 Tab 过去，每只都挂 30 秒会把整排撑乱
-  const lingered = useBubbleShown(state !== 'idle', hovered)
-  const shown = hasBubble && (focused || lingered)
+  // 焦点与悬停共用一条气泡规则：移开焦点和移开鼠标一样，气泡再留 30 秒
+  const shown = hasBubble && useBubbleShown(state !== 'idle', hovered || focused)
   // 没有链接的 pet 回车无处可去，就不进 Tab 顺序
   const focusable = !!session.link
   const openFromSlot = () => {
