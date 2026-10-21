@@ -1,4 +1,6 @@
 import { useDraggable } from '@dnd-kit/core'
+import type { KeyboardEvent } from 'react'
+import { cycleIndex } from '../lib/board-focus'
 import { shortcutLabel } from '../lib/keys'
 import type { ChildStat, Requirement, Session } from '../lib/types'
 import { relTime } from '../lib/time'
@@ -48,6 +50,20 @@ export default function Card({
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined
 
+  /**
+   * Tab 在卡片与它的 agent 头像之间转圈（Shift+Tab 反向），不往外走：
+   * 换卡交给 j/k，进了这张卡就在它的人和头像之间来回，鼠标焦点不会顺着 DOM 漂到隔壁。
+   */
+  function onTabCycle(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== 'Tab' || overlay) return
+    const stops = [e.currentTarget, ...e.currentTarget.querySelectorAll<HTMLElement>('.slot[tabindex]')]
+    if (stops.length < 2) return
+    const at = stops.indexOf(document.activeElement as HTMLElement)
+    if (at < 0) return
+    e.preventDefault()
+    stops[cycleIndex(stops.length, at, e.shiftKey ? -1 : 1)].focus()
+  }
+
   return (
     <div
       ref={setNodeRef}
@@ -59,6 +75,7 @@ export default function Card({
       tabIndex={overlay ? undefined : 0}
       onClick={() => !overlay && onOpen?.(req.slug)}
       onFocus={() => !overlay && onFocusCard?.(req.slug)}
+      onKeyDown={onTabCycle}
     >
       <div className="card-top">
         <span className="card-title">{req.title}</span>
