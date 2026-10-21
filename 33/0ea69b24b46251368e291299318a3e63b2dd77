@@ -1,0 +1,20 @@
+src/renderer/src/components/Pet.tsx
+  s_b4db6563e219ae::t_91eca53ff8558b 228-229
+  s_b4db6563e219ae::t_774aef6c96ad83 174,178-180,182,185,193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "330ea69b24b46251368e291299318a3e63b2dd77",
+  "prompts": {},
+  "sessions": {
+    "s_b4db6563e219ae": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_rvlno7etg16d",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
