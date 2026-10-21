@@ -84,7 +84,7 @@ export const SHORTCUTS: ShortcutDef[] = [
   { id: 'board.clear', context: 'board', keys: ['Escape'], label: '取消选中' },
 
   // ------------------------------------------------------------ agent 头像（卡片里的一格）
-  { id: 'pet.focus', context: 'pet', keys: ['Tab'], label: '从卡片移进 / 移出头像' },
+  { id: 'pet.focus', context: 'pet', keys: ['Tab'], label: '在卡片与头像之间循环焦点（Shift+Tab 反向）' },
   { id: 'pet.open', context: 'pet', keys: ['Return'], label: '回到这个 agent 的会话' },
   { id: 'pet.back', context: 'pet', keys: ['Escape'], label: '焦点回卡片' },
 
