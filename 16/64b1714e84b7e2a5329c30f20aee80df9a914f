@@ -1,0 +1,26 @@
+test/launch-keyboard.test.ts
+  s_9554bd962e20f3::t_20759ef2d9d64a 1
+src/renderer/src/components/LaunchSession.tsx
+  s_9554bd962e20f3::t_9633de0e772051 50
+  s_9554bd962e20f3::t_c85781d389fc55 38
+src/renderer/src/App.tsx
+  s_9554bd962e20f3::t_adb16583875c8c 269
+  s_9554bd962e20f3::t_2e8479041a8fd5 534
+  s_9554bd962e20f3::t_e196b4373a7458 565
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "1664b1714e84b7e2a5329c30f20aee80df9a914f",
+  "prompts": {},
+  "sessions": {
+    "s_9554bd962e20f3": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_564dhua2vqt2",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
