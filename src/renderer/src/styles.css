@@ -1563,8 +1563,20 @@ body {
   cursor: pointer;
 }
 
-.slot:hover .pet {
+/* 悬停与键盘焦点是同一套视觉：Tab 过来的焦点和鼠标停上去一样点亮边框、展开气泡 */
+.slot:hover .pet,
+.slot:focus-within .pet {
   border-color: var(--accent);
+}
+
+/* 焦点框跟卡片那套（2px accent）对齐，只是收在 pet 自己身上 */
+.slot:focus {
+  outline: none;
+}
+
+.slot:focus-visible .pet {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 @keyframes pet-pulse {

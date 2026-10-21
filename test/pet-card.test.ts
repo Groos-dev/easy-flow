@@ -292,3 +292,30 @@ describe('Card 挂 pet', () => {
     assert.doesNotMatch(html, /class="pets/)
   })
 })
+
+describe('agent 头像的键盘入口', () => {
+  /** 每只 pet 那一格的开始标签；Tab 顺序与语义都看它 */
+  const slotTag = (html: string) => {
+    const at = html.indexOf('<div class="slot')
+    return at < 0 ? '' : html.slice(at, html.indexOf('>', at) + 1)
+  }
+
+  test('有会话链接的 pet 进 Tab 顺序：tabindex=0、role=link、带上 agent 名', () => {
+    const tag = slotTag(render(createElement(PetRow, { sessions: [sess('claude', 'blocked', 'codex://threads/1')] })))
+    assert.match(tag, /tabindex="0"/)
+    assert.match(tag, /role="link"/)
+    assert.match(tag, /aria-label="回到 Claude Code 的会话"/)
+  })
+
+  test('没有链接的 pet 不进 Tab 顺序——回车无处可去', () => {
+    const tag = slotTag(render(createElement(PetRow, { sessions: [sess('claude', 'blocked')] })))
+    assert.doesNotMatch(tag, /tabindex/)
+    assert.doesNotMatch(tag, /role="link"/)
+  })
+
+  test('折叠卡上的小号 pet 也能键盘回到会话', () => {
+    const tag = slotTag(render(createElement(PetRow, { sessions: [sess('codex', 'done', 'codex://threads/2')], compact: true })))
+    assert.match(tag, /tabindex="0"/)
+    assert.match(tag, /aria-label="回到 Codex 的会话"/)
+  })
+})

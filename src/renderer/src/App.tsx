@@ -14,7 +14,7 @@ import {
 import { api } from './lib/api'
 import { DONE_STATUS, childStatsOf, childrenOf } from './lib/children'
 import { movePos, posOf, slugAt, type BoardColumn, type BoardPos } from './lib/board-focus'
-import { isInteractiveTarget, shortcut, shortcutLabel, shouldIgnore } from './lib/keys'
+import { isInteractiveTarget, isPetTarget, shortcut, shortcutLabel, shouldIgnore } from './lib/keys'
 import type { ChildStat, NextUpItem, Project, Requirement, Session, Status, Todo } from './lib/types'
 import MindMap from './components/MindMap'
 import Card from './components/Card'
@@ -552,7 +552,12 @@ export default function App() {
       (node) => node.dataset.slug === focusSlug,
     )
     if (!el) return
-    if (active !== el) el.focus({ preventScroll: true })
+    // 焦点已经在这张卡里（比如停在它的 agent 头像上）就别抢回来
+    if (active && el.contains(active)) {
+      el.scrollIntoView({ block: 'nearest' })
+      return
+    }
+    el.focus({ preventScroll: true })
     el.scrollIntoView({ block: 'nearest' })
   }, [focusSlug])
 
@@ -570,6 +575,8 @@ export default function App() {
       if (shouldIgnore(e)) return
       // 卡片也带 role=button，但它就是这里要接管的
       const el = e.target as HTMLElement | null
+      // 焦点停在卡片里的 agent 头像上：这时在头像之间走，单键不该把人带回卡片层
+      if (isPetTarget(el)) return
       if (!el?.closest?.('.card') && isInteractiveTarget(el)) return
       const cur = posOf(focusColumns, focusSlug ?? '')
       let next: BoardPos | null = null
