@@ -190,19 +190,19 @@ describe('需求详情页启动会话', () => {
     // 两个工作区就必须选：两行单选，没选之前提交是灰的
     assert.match(markup.multiple, /在哪个工作区开始/)
     assert.match(markup.multiple, /class="wt-option"/)
-    assert.match(markup.multiple, /class="launch-go" type="submit" disabled=""/)
+    assert.match(markup.multiple, /class="launch-go"[^>]*type="submit"[^>]*disabled=""/)
     // 两个 agent 都要选工作区：deeplink 只能带一个目录（Claude 当 folder、Codex 当 path）
     assert.match(markup.codex, /在哪个工作区开始/)
     // 没有工作区不再挡下入口：照常可选 agent、可提交，只提示先开工作区
     assert.match(markup.empty, /easy-flow wt new req-alpha/)
-    assert.match(markup.empty, /class="launch-go" type="submit"/)
-    assert.doesNotMatch(markup.empty, /class="launch-go" type="submit" disabled=""/)
+    assert.match(markup.empty, /class="launch-go"[^>]*type="submit"/)
+    assert.doesNotMatch(markup.empty, /class="launch-go"[^>]*type="submit"[^>]*disabled=""/)
     assert.match(markup.emptyClaude, /easy-flow wt new req-alpha/)
     assert.doesNotMatch(markup.emptyClaude, /在哪个工作区开始/)
-    assert.doesNotMatch(markup.emptyClaude, /class="launch-go" type="submit" disabled=""/)
+    assert.doesNotMatch(markup.emptyClaude, /class="launch-go"[^>]*type="submit"[^>]*disabled=""/)
     // 只有失联工作区时同样放行（那几条本来就不可选，不再单独列出来）
     assert.doesNotMatch(markup.missing, /feature-gone/)
-    assert.doesNotMatch(markup.missing, /class="launch-go" type="submit" disabled=""/)
+    assert.doesNotMatch(markup.missing, /class="launch-go"[^>]*type="submit"[^>]*disabled=""/)
     // 失败态：原因、重试、提示词、手动登记都在这一块里，且不许出现"已打开"
     assert.match(markup.failure, /role="alert"/)
     assert.match(markup.failure, /handler unavailable/)

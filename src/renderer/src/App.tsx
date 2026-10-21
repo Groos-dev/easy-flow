@@ -13,12 +13,15 @@ import {
 } from '@dnd-kit/core'
 import { api } from './lib/api'
 import { DONE_STATUS, childStatsOf, childrenOf } from './lib/children'
+import { movePos, posOf, slugAt, type BoardColumn, type BoardPos } from './lib/board-focus'
+import { isInteractiveTarget, shortcut, shortcutLabel, shouldIgnore } from './lib/keys'
 import type { ChildStat, NextUpItem, Project, Requirement, Session, Status, Todo } from './lib/types'
 import MindMap from './components/MindMap'
 import Card from './components/Card'
 import NextUp from './components/NextUp'
 import Detail from './components/Detail'
 import SearchPanel from './components/SearchPanel'
+import ProjectSwitcher from './components/ProjectSwitcher'
 import Settings from './components/Settings'
 import LeftRail from './components/LeftRail'
 
@@ -43,6 +46,10 @@ interface BoardColumnProps {
   onJumpChild: (slug: string) => void
   /** 刚跳过去的那条，闪一下 */
   flashSlug: string | null
+  focusSlug: string | null
+  kidsOpen: Set<string>
+  onToggleKids: (slug: string) => void
+  onFocusCard: (slug: string) => void
   onOpen: (slug: string) => void
   isOver: boolean
   /** 收成窄条（只有「已完成」列会） */
@@ -58,6 +65,10 @@ function ColumnView({
   childrenByParent,
   onJumpChild,
   flashSlug,
+  focusSlug,
+  kidsOpen,
+  onToggleKids,
+  onFocusCard,
   onOpen,
   isOver,
   collapsed,
@@ -111,6 +122,10 @@ function ColumnView({
               kids={childrenByParent.get(r.id)}
               onJumpChild={onJumpChild}
               flash={flashSlug === r.slug}
+              focused={focusSlug === r.slug}
+              kidsOpen={kidsOpen.has(r.slug)}
+              onToggleKids={onToggleKids}
+              onFocusCard={onFocusCard}
               onOpen={onOpen}
             />
           ))
@@ -195,6 +210,11 @@ export default function App() {
   const [hits, setHits] = useState<Set<string> | null>(null)
   /** 正在等服务端返回：用来区分「还没查」与「查了没有」 */
   const [searching, setSearching] = useState(false)
+  // 默认常开，第一次按键落到第一列第一张
+  const [focusSlug, setFocusSlug] = useState<string | null>(null)
+  const [kidsOpen, setKidsOpen] = useState<Set<string>>(new Set())
+  const [projectPicker, setProjectPicker] = useState(false)
+  const [hint, setHint] = useState('')
 
   useEffect(() => {
     localStorage.setItem(PINNED_KEY, JSON.stringify(pinned))
@@ -243,19 +263,54 @@ export default function App() {
    * 以及不认筛选的「下一步」都不给这个入口——从那些地方开出来，人看到的是一个
    * 筛掉了卡片的界面自己却不在上面，不如不开。
    */
-  const onBoard = !showSettings && !detail && !todoId && reqView !== 'next'
+  const inMain = !showSettings && !detail && !todoId
+  const onBoard = inMain && reqView !== 'next'
+
+  // 进详情 / 设置时收起项目面板，回来不再弹
+  useEffect(() => {
+    if (!inMain) setProjectPicker(false)
+  }, [inMain])
 
   // 窗口级快捷键。⌘, 打开设置——Electron 里由应用菜单的加速键触发（见 main/registerMenu），
-  // 浏览器开发时没有菜单，这里补一个键盘监听；⌘K 开合搜索面板。
+  // 浏览器开发没有菜单，这里补 ⌘,；其余组合只在主界面生效
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return
-      if (e.key === ',') {
+      if (e.isComposing) return
+      if (shortcut(e, 'global.settings')) {
         e.preventDefault()
-        setShowSettings(true)
-      } else if (e.key === 'k' && onBoard) {
+        setShowSettings((v) => !v)
+        return
+      }
+      if (!inMain) return
+      if (shortcut(e, 'global.clear-filter')) {
         e.preventDefault()
+        setQuery('')
+        setHits(null)
+        return
+      }
+      if (shortcut(e, 'global.search') && onBoard) {
+        e.preventDefault()
+        setProjectPicker(false)
         setSearchOpen((v) => !v)
+        return
+      }
+      const view = shortcut(e, 'global.view-board')
+        ? 'board'
+        : shortcut(e, 'global.view-next')
+          ? 'next'
+          : shortcut(e, 'global.view-map')
+            ? 'map'
+            : null
+      if (view) {
+        e.preventDefault()
+        setProjectPicker(false)
+        setReqView(view)
+        return
+      }
+      if (shortcut(e, 'global.project')) {
+        e.preventDefault()
+        setSearchOpen(false)
+        setProjectPicker((v) => !v)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -264,7 +319,7 @@ export default function App() {
       window.removeEventListener('keydown', onKey)
       off?.()
     }
-  }, [onBoard])
+  }, [inMain, onBoard])
 
   /**
    * 搜索交给服务端：它连文档正文一起搜（见 db.search），渲染层不做遍历。
@@ -460,14 +515,115 @@ export default function App() {
     return map
   }, [shown, statuses])
 
+  const focusColumns = useMemo<BoardColumn[]>(
+    () => statuses.map((s) => ({ status: s, slugs: (byStatus.get(s) ?? []).map((r) => r.slug) })),
+    [statuses, byStatus],
+  )
+
+  const childrenByParent = useMemo(() => childrenOf(items), [items])
+
+  const toggleKids = useCallback((slug: string) => {
+    setKidsOpen((prev) => {
+      const next = new Set(prev)
+      if (next.has(slug)) next.delete(slug)
+      else next.add(slug)
+      return next
+    })
+  }, [])
+
+  // 焦点进「已完成」列时自动展开，否则选中卡还在窄条里
+  useEffect(() => {
+    const pos = focusSlug ? posOf(focusColumns, focusSlug) : null
+    if (pos?.status === DONE_STATUS && !doneOpen) setDoneOpen(true)
+  }, [focusSlug, focusColumns, doneOpen])
+
+  useEffect(() => {
+    if (focusSlug && !posOf(focusColumns, focusSlug)) setFocusSlug(null)
+  }, [focusColumns, focusSlug])
+
+  // 选中框只跟 focusSlug：DOM 焦点也一起挪，旧卡片才不会留着第二个框
+  useEffect(() => {
+    const active = document.activeElement as HTMLElement | null
+    if (!focusSlug) {
+      if (active?.closest?.('.card')) active.blur()
+      return
+    }
+    const el = Array.from(document.querySelectorAll<HTMLElement>('.card')).find(
+      (node) => node.dataset.slug === focusSlug,
+    )
+    if (!el) return
+    if (active !== el) el.focus({ preventScroll: true })
+    el.scrollIntoView({ block: 'nearest' })
+  }, [focusSlug])
+
+  useEffect(() => {
+    if (!hint) return
+    const timer = setTimeout(() => setHint(''), 1600)
+    return () => clearTimeout(timer)
+  }, [hint])
+
+  const boardKeyboard = inMain && reqView === 'board' && !searchOpen
+
+  useEffect(() => {
+    if (!boardKeyboard) return
+    const onKey = (e: KeyboardEvent) => {
+      if (shouldIgnore(e)) return
+      // 卡片也带 role=button，但它就是这里要接管的
+      const el = e.target as HTMLElement | null
+      if (!el?.closest?.('.card') && isInteractiveTarget(el)) return
+      const cur = posOf(focusColumns, focusSlug ?? '')
+      let next: BoardPos | null = null
+      if (shortcut(e, 'board.next')) next = movePos(focusColumns, cur, 'down')
+      else if (shortcut(e, 'board.prev')) next = movePos(focusColumns, cur, 'up')
+      else if (shortcut(e, 'board.left')) next = movePos(focusColumns, cur, 'left')
+      else if (shortcut(e, 'board.right')) next = movePos(focusColumns, cur, 'right')
+      if (next) {
+        e.preventDefault()
+        setFocusSlug(slugAt(focusColumns, next))
+        return
+      }
+      if (shortcut(e, 'board.open') && focusSlug) {
+        e.preventDefault()
+        setDetail({ project, slug: focusSlug })
+        return
+      }
+      if (shortcut(e, 'board.kids') && focusSlug) {
+        e.preventDefault()
+        toggleKids(focusSlug)
+        return
+      }
+      if (shortcut(e, 'board.kid-n') && focusSlug) {
+        const parent = items.find((r) => r.slug === focusSlug)
+        const kids = parent ? childrenByParent.get(parent.id) : undefined
+        const kid = kidsOpen.has(focusSlug) ? kids?.[Number(e.key) - 1] : undefined
+        if (kid) {
+          e.preventDefault()
+          jumpToChild(kid.slug)
+        }
+        return
+      }
+      if (shortcut(e, 'board.copy-slug') && focusSlug) {
+        e.preventDefault()
+        void navigator.clipboard
+          ?.writeText(focusSlug)
+          .then(() => setHint(`已复制 slug：${focusSlug}`))
+          .catch(() => {})
+        return
+      }
+      if (shortcut(e, 'board.clear') && focusSlug) {
+        e.preventDefault()
+        setFocusSlug(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [boardKeyboard, focusColumns, focusSlug, project, toggleKids, items, childrenByParent, kidsOpen])
+
   /**
    * 父需求的子需求完成度。父子在版面上散在各列（`byStatus` 只按状态分列），
    * 卡片上这一行是唯一能看出「这串活还剩几块」的地方。
    */
   const childStats = useMemo(() => childStatsOf(items), [items])
-
-  /** 同上，铺开的父卡片要把子需求本身列出来：知道还剩几块，也得知道它们在哪 */
-  const childrenByParent = useMemo(() => childrenOf(items), [items])
 
   /**
    * 从父卡片点过来的那条子需求。等它出现在版面上再滚过去——子需求可能落在
@@ -500,10 +656,15 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [flashSlug])
 
+  useEffect(() => {
+    if (focusSlug && flashSlug && focusSlug !== flashSlug) setFlashSlug(null)
+  }, [focusSlug, flashSlug])
+
   /** 点父卡片上的子需求：先把它所在的那一列铺开，滚动交给上面的 effect */
   function jumpToChild(slug: string) {
     const child = items.find((r) => r.slug === slug)
     if (child?.status === DONE_STATUS && !doneOpen) setDoneOpen(true)
+    setFocusSlug(slug)
     setPendingJump(slug)
   }
 
@@ -580,6 +741,7 @@ export default function App() {
             }}
             onOpenTodo={setTodoId}
             onOpenRequirement={openRequirement}
+            projectRoot={projects.find((p) => p.slug === todoTarget.project)?.root}
           />
         ) : detailTarget ? (
           <Detail
@@ -590,6 +752,7 @@ export default function App() {
             }}
             onOpenTodo={setTodoId}
             onOpenRequirement={openRequirement}
+            projectRoot={projects.find((p) => p.slug === detailTarget.project)?.root}
           />
         ) : (
           <div className="app">
@@ -615,7 +778,7 @@ export default function App() {
                 {reqView !== 'next' && query.trim() && (
                   <button
                     className="filter-chip"
-                    title="点一下继续改筛选词"
+                    title={`点一下继续改筛选词（${shortcutLabel('global.clear-filter')} 清掉）`}
                     onClick={() => setSearchOpen(true)}
                   >
                     <span className="filter-chip-q">{query.trim()}</span>
@@ -644,12 +807,16 @@ export default function App() {
             </div>
 
             {error && <div className="notice">{error}</div>}
+            {hint && <div className="notice ok">{hint}</div>}
 
             {reqView === 'board' ? (
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCorners}
-                onDragStart={({ active }: DragStartEvent) => setDragSlug(String(active.id))}
+                onDragStart={({ active }: DragStartEvent) => {
+                  setDragSlug(String(active.id))
+                  setFocusSlug(String(active.id))
+                }}
                 onDragOver={({ over }: DragOverEvent) => setOverStatus(statusOf(over) ?? null)}
                 onDragEnd={(e) => void handleDragEnd(e)}
               >
@@ -664,6 +831,10 @@ export default function App() {
                       childrenByParent={childrenByParent}
                       onJumpChild={jumpToChild}
                       flashSlug={flashSlug}
+                      focusSlug={focusSlug}
+                      kidsOpen={kidsOpen}
+                      onToggleKids={toggleKids}
+                      onFocusCard={setFocusSlug}
                       onOpen={(slug) => setDetail({ project, slug })}
                       isOver={overStatus === status}
                       collapsed={status === DONE_STATUS && !doneOpen}
@@ -685,6 +856,7 @@ export default function App() {
                 projectName={projectName || project}
                 hits={hits}
                 onOpen={(slug) => setDetail({ project, slug })}
+                onBack={() => setReqView('board')}
               />
             )}
           </div>
@@ -698,11 +870,33 @@ export default function App() {
           onQuery={setQuery}
           results={hits ? shown : []}
           pending={searching}
-          onPick={(slug) => {
+          onPick={(slug, clear) => {
             setSearchOpen(false)
+            if (clear) {
+              setQuery('')
+              setHits(null)
+            }
             openRequirement(project, slug)
           }}
           onClose={() => setSearchOpen(false)}
+        />
+      )}
+
+      {projectPicker && inMain && (
+        <ProjectSwitcher
+          projects={projects}
+          active={project}
+          pinned={pinned}
+          onPick={(slug) => {
+            setProjectPicker(false)
+            void switchProject(slug)
+          }}
+          onOpen={(slug) => {
+            setProjectPicker(false)
+            setDetail({ project: slug, slug: null })
+          }}
+          onTogglePin={togglePin}
+          onClose={() => setProjectPicker(false)}
         />
       )}
     </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Project } from '../lib/types'
+import { shortcutLabel } from '../lib/keys'
 import { projectColor, projectInitial } from '../lib/projectIcon'
 import { BellIcon, BoardIcon, CheckIcon, InfoIcon, MapIcon, PinIcon } from './icons'
 
@@ -120,7 +121,11 @@ export default function LeftRail({
       <div className="rail-col">
         <button
           className="rail-btn cur"
-          aria-label={current ? `${nameOf(current)} · 悬停浏览全部项目` : '浏览全部项目'}
+          aria-label={
+            current
+              ? `${nameOf(current)} · 悬停浏览全部项目（${shortcutLabel('global.project')} 键盘切换）`
+              : `浏览全部项目（${shortcutLabel('global.project')}）`
+          }
           onMouseEnter={openSoon}
           onMouseLeave={closeSoon}
           onClick={() => setOpen((v) => !v)}
@@ -158,10 +163,10 @@ export default function LeftRail({
           className="rail-btn"
           title={
             view === 'map'
-              ? '当前：导图 · 点击切到看板'
+              ? `当前：导图 · 点击切到看板（${shortcutLabel('global.view-board')}）`
               : view === 'next'
-                ? '切回看板'
-                : '当前：看板 · 点击切到导图'
+                ? `切回看板（${shortcutLabel('global.view-board')}）`
+                : `当前：看板 · 点击切到导图（${shortcutLabel('global.view-map')}）`
           }
           onClick={() => onSwitchView(view === 'board' ? 'map' : 'board')}
         >
@@ -170,7 +175,11 @@ export default function LeftRail({
 
         <button
           className={`rail-btn${view === 'next' ? ' on' : ''}`}
-          title={view === 'next' ? 'agent 焦点：需要你介入的需求' : '切到 agent 焦点（需要你介入的需求）'}
+          title={
+            view === 'next'
+              ? `agent 焦点：需要你介入的需求（${shortcutLabel('global.view-next')}）`
+              : `切到 agent 焦点：需要你介入的需求（${shortcutLabel('global.view-next')}）`
+          }
           onClick={onAgentFocus}
         >
           <BellIcon />

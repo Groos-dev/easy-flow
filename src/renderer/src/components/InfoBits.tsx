@@ -22,7 +22,12 @@ export function InfoBlock({
   const [open, setOpen] = useState(true)
   return (
     <section className="info-block">
-      <button className="info-block-head" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <button
+        className="info-block-head"
+        data-info-row=""
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
         <span className="info-block-label">{label}</span>
         {count !== undefined && <span className="info-count">· {count}</span>}
         <svg
@@ -100,6 +105,7 @@ export function CopyButton({ text, label, showLabel = false }: { text: string; l
   return (
     <button
       className={`info-action${showLabel ? ' with-label' : ''}`}
+      data-info-row=""
       onClick={() => {
         navigator.clipboard
           ?.writeText(text)

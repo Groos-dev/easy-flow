@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
+import { isComposing, isEditableTarget, shortcut } from '../lib/keys'
 import type { Requirement } from '../lib/types'
 import { STATUS_CLASS } from '../lib/labels'
 import { buildTree, layoutTree, type LaidNode } from '../lib/mindmap'
@@ -17,6 +18,7 @@ interface Props {
   /** 搜索命中集合；不传表示没在搜索。当前没有搜索入口，留给以后的搜索面板 */
   hits?: Set<string> | null
   onOpen: (slug: string) => void
+  onBack: () => void
 }
 
 interface NodeProps {
@@ -31,7 +33,17 @@ function MapNodeBox({ node, onOpen, onToggle }: NodeProps) {
     <div
       className="map-node"
       style={{ left: node.x, top: node.y, width: node.width, height: node.height }}
+      tabIndex={0}
       onClick={() => onOpen(req.slug)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          onOpen(req.slug)
+        } else if ((e.key === ' ' || e.key === 'Spacebar') && collapsible) {
+          e.preventDefault()
+          onToggle(req.slug)
+        }
+      }}
     >
       <span className={`dot ${STATUS_CLASS[req.status] ?? 's-clarify'}`} />
       <span className="map-node-title">{req.title}</span>
@@ -60,7 +72,7 @@ function MapNodeBox({ node, onOpen, onToggle }: NodeProps) {
   )
 }
 
-export default function MindMap({ requirements, projectName, hits, onOpen }: Props) {
+export default function MindMap({ requirements, projectName, hits, onOpen, onBack }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const panRef = useRef<{ px: number; py: number; vx: number; vy: number } | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -105,6 +117,51 @@ export default function MindMap({ requirements, projectName, hits, onOpen }: Pro
   useEffect(() => {
     fit()
   }, [fit, projectName])
+
+  /** 键盘缩放以画布中心为锚点，和滚轮同一个手感 */
+  const zoomBy = useCallback(
+    (factor: number) => {
+      setView((v) => {
+        const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.zoom * factor))
+        const k = zoom / v.zoom
+        const px = size.w / 2
+        const py = size.h / 2
+        return { zoom, x: px - (px - v.x) * k, y: py - (py - v.y) * k }
+      })
+    },
+    [size.w, size.h],
+  )
+
+  const panBy = useCallback((dx: number, dy: number) => {
+    setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }))
+  }, [])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isComposing(e) || isEditableTarget(e.target)) return
+      if (shortcut(e, 'map.back')) {
+        e.preventDefault()
+        onBack()
+      } else if (shortcut(e, 'map.fit')) {
+        e.preventDefault()
+        fit()
+      } else if (shortcut(e, 'map.zoom-in')) {
+        e.preventDefault()
+        zoomBy(1.1)
+      } else if (shortcut(e, 'map.zoom-out')) {
+        e.preventDefault()
+        zoomBy(1 / 1.1)
+      } else if (shortcut(e, 'map.pan')) {
+        e.preventDefault()
+        if (e.key === 'ArrowLeft') panBy(60, 0)
+        else if (e.key === 'ArrowRight') panBy(-60, 0)
+        else if (e.key === 'ArrowUp') panBy(0, 60)
+        else if (e.key === 'ArrowDown') panBy(0, -60)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [fit, zoomBy, panBy, onBack])
 
   // 滚轮要 preventDefault，而 React 的 onWheel 是被动的，只能挂原生监听
   useEffect(() => {

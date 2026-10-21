@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import {
+  CONTEXT_LABEL,
+  CONTEXT_ORDER,
+  SHORTCUTS,
+  isComposing,
+  shortcut,
+} from '../lib/keys'
 import { acceleratorFromEvent, acceleratorKeys, formatAccelerator } from '../lib/shortcut'
 import type { HookPlan, SettingsPayload, SkillPayload, SyncResult } from '../lib/types'
 import { AgentIcon, KeyGlyph, PencilIcon, ResetIcon, TerminalIcon } from './icons'
@@ -63,10 +70,22 @@ export default function Settings({ onBack, onApplied }: Props) {
     void loadSettings().catch((e: Error) => setError(e.message))
   }, [loadSettings])
 
-  // Esc 返回看板。录制中要让位给「Esc 取消录制」
+  // Esc 返回看板；⌘1..4 切分区；⌘, 再按一次也返回。录制中全部让位给录制框
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !recording) onBack()
+      if (recording || isComposing(e)) return
+      if (shortcut(e, 'settings.back')) {
+        e.preventDefault()
+        onBack()
+        return
+      }
+      if (shortcut(e, 'settings.section')) {
+        const n = Number(e.key)
+        if (n >= 1 && n <= SECTIONS.length) {
+          e.preventDefault()
+          setSection(SECTIONS[n - 1].id)
+        }
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -101,7 +120,8 @@ export default function Settings({ onBack, onApplied }: Props) {
   /** 快捷键只对桌面端有意义：web 模式没有全局快捷键，这一节整个不出现 */
   const canSetShortcut = typeof window.easyFlow?.setShortcut === 'function'
   const platform = window.easyFlow?.platform ?? ''
-  const sections = SECTIONS.filter((s) => s.id !== 'shortcut' || canSetShortcut)
+  // 应用内键位表在浏览器预览里也有意义，所以「快捷键」分区不再按平台隐藏
+  const sections = SECTIONS
 
   /** 改绑：主进程注册不上（多半被占用）时把原因带回来 */
   const applyShortcut = useCallback(
@@ -242,10 +262,11 @@ export default function Settings({ onBack, onApplied }: Props) {
         {/* 顶部占位：让开 macOS 红绿灯，兼作窗口拖拽区 */}
         <div className="settings-nav-head" />
         <div className="settings-nav-title">设置</div>
-        {sections.map((s) => (
+        {sections.map((s, i) => (
           <button
             key={s.id}
             className={`settings-nav-item${section === s.id ? ' active' : ''}`}
+            title={`${s.label}（⌘${i + 1}）`}
             onClick={() => setSection(s.id)}
           >
             {s.label}
@@ -304,36 +325,62 @@ export default function Settings({ onBack, onApplied }: Props) {
             {hotkeyError && <div className="notice">{hotkeyError}</div>}
             {hotkeyNotice && <div className="notice ok">{hotkeyNotice}</div>}
 
-            <div className="settings-row">
-              <div className="settings-row-text">
-                <div className="settings-row-title">呼出面板</div>
-                <div className="settings-row-desc">在任意应用里呼出 / 收起面板</div>
+            {canSetShortcut ? (
+              <div className="settings-row">
+                <div className="settings-row-text">
+                  <div className="settings-row-title">呼出面板</div>
+                  <div className="settings-row-desc">在任意应用里呼出 / 收起面板</div>
+                </div>
+                <button
+                  className={`shortcut-key${recording ? ' recording' : ''}`}
+                  onClick={toggleRecording}
+                >
+                  {recording
+                    ? '按下组合键…（Esc 取消）'
+                    : hotkey
+                      ? acceleratorKeys(hotkey.shortcut, platform).map((k, i) => (
+                          <span className="keycap" key={`${k}-${i}`}>
+                            <KeyGlyph mark={k} />
+                          </span>
+                        ))
+                      : '读取中…'}
+                </button>
+                <button className="icon-btn" title="改绑" onClick={toggleRecording}>
+                  <PencilIcon />
+                </button>
+                <button
+                  className="icon-btn"
+                  title="恢复默认"
+                  disabled={!hotkey || hotkey.shortcut === hotkey.fallback}
+                  onClick={() => hotkey && void applyShortcut(hotkey.fallback)}
+                >
+                  <ResetIcon />
+                </button>
               </div>
-              <button
-                className={`shortcut-key${recording ? ' recording' : ''}`}
-                onClick={toggleRecording}
-              >
-                {recording
-                  ? '按下组合键…（Esc 取消）'
-                  : hotkey
-                    ? acceleratorKeys(hotkey.shortcut, platform).map((k, i) => (
-                        <span className="keycap" key={`${k}-${i}`}>
-                          <KeyGlyph mark={k} />
+            ) : (
+              <p className="hint">浏览器预览没有全局快捷键；下面是应用内键位。</p>
+            )}
+
+            <div className="section-label">应用内快捷键</div>
+            <div className="shortcut-list">
+              {CONTEXT_ORDER.map((ctx) => {
+                const items = SHORTCUTS.filter((s) => s.context === ctx && !s.hidden)
+                if (!items.length) return null
+                return (
+                  <section className="shortcut-group" key={ctx}>
+                    <div className="shortcut-group-name">{CONTEXT_LABEL[ctx]}</div>
+                    {items.map((s) => (
+                      <div className="shortcut-row" key={`${ctx}:${s.label}`}>
+                        <span className="shortcut-keys">
+                          {s.display ??
+                            s.keys.map((k) => formatAccelerator(k, platform)).join(' / ')}
                         </span>
-                      ))
-                    : '读取中…'}
-              </button>
-              <button className="icon-btn" title="改绑" onClick={toggleRecording}>
-                <PencilIcon />
-              </button>
-              <button
-                className="icon-btn"
-                title="恢复默认"
-                disabled={!hotkey || hotkey.shortcut === hotkey.fallback}
-                onClick={() => hotkey && void applyShortcut(hotkey.fallback)}
-              >
-                <ResetIcon />
-              </button>
+                        <span className="shortcut-label">{s.label}</span>
+                      </div>
+                    ))}
+                  </section>
+                )
+              })}
             </div>
           </>
         )}

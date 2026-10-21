@@ -1,5 +1,6 @@
-import type { MouseEvent } from 'react'
+import { useEffect, useRef, type MouseEvent } from 'react'
 import { api } from '../lib/api'
+import { isComposing, isEditableTarget, shortcut } from '../lib/keys'
 import { AGENT_LABELS } from '../lib/labels'
 import { codeLinkLabel, feishuTaskLabel } from '../lib/links'
 import { TODO_STATUS_LABEL, type ContextPayload, type Requirement, type Session } from '../lib/types'
@@ -8,22 +9,19 @@ import { AgentIcon } from './icons'
 import LaunchSession from './LaunchSession'
 
 /**
- * 需求详情页的头部浮窗：会话、工作区、关联待办、链接，末行是需求目录。零件见 InfoBits，与待办的 TodoPanel 共用。
- *
- * 浮窗只回答「谁、在聊什么、点了去哪」：会话 id 与 cwd 是给程序用的句柄，状态在看板卡片与 mini
- * 面板已经表达，都不在这里重复。
- *
- * 工作区、会话与关联待办来自详情页已加载的 /api/context；展开新会话入口时才按需读 provider。
+ * 需求详情页的信息浮窗。数据来自详情页已加载的 /api/context。
  */
 export default function InfoPanel({
   req,
   ctx,
   onOpenTodo,
+  launchSignal = 0,
 }: {
   req: Requirement
   ctx: ContextPayload | null
   /** 点一条关联待办即在详情页打开它 */
   onOpenTodo: (id: string) => void
+  launchSignal?: number
 }) {
   const worktrees = ctx?.worktrees ?? []
   const sessions = ctx?.sessions ?? []
@@ -38,8 +36,39 @@ export default function InfoPanel({
 
   const openDir = () => void api.open(req.slug, req.project).catch(() => {})
 
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // j/k 移动焦点；Enter 交给元素自己，输入框与编辑器里让位
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isComposing(e) || isEditableTarget(e.target)) return
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
+      const dir = shortcut(e, 'info.next') ? 1 : shortcut(e, 'info.prev') ? -1 : 0
+      if (!dir) return
+      const focused = document.activeElement as HTMLElement | null
+      const scope = focused?.closest?.('.new-sess') ?? panelRef.current
+      if (!scope) return
+      const rows = Array.from(
+        scope.querySelectorAll<HTMLElement>('[data-info-row]'),
+      ).filter((el) => !el.matches(':disabled'))
+      if (!rows.length) return
+      e.preventDefault()
+      const at = rows.indexOf(document.activeElement as HTMLElement)
+      const next = at < 0 ? 0 : Math.min(Math.max(at + dir, 0), rows.length - 1)
+      rows[next].focus()
+      rows[next].scrollIntoView({ block: 'nearest' })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
-    <div className="info-panel" role="dialog" aria-label="需求信息与链接">
+    <div
+      className="info-panel"
+      role="dialog"
+      aria-label="需求信息与链接"
+      ref={panelRef}
+    >
       {/* ctx 未到时不能把空列表误当成需求没有会话 */}
       {ctx && (
         <InfoBlock label="会话" count={sessions.length}>
@@ -47,7 +76,7 @@ export default function InfoPanel({
             <SessionRow key={`${s.agent}:${s.session}`} session={s} />
           ))}
           {/* 入口跟在会话列表后面 */}
-          <LaunchSession req={req} worktrees={worktrees} />
+          <LaunchSession req={req} worktrees={worktrees} openSignal={launchSignal} />
         </InfoBlock>
       )}
 
@@ -58,6 +87,7 @@ export default function InfoPanel({
             <div
               className={`path-row${w.missing ? ' off' : ''}`}
               key={w.id}
+              data-info-row={w.missing ? undefined : ''}
               role={w.missing ? undefined : 'button'}
               tabIndex={w.missing ? undefined : 0}
               title={w.missing ? `目录已失联：${w.path}` : `在目录里打开：${w.path}（右键或 ⌥ 选打开方式）`}
@@ -97,6 +127,7 @@ export default function InfoPanel({
               <div
                 className="sess"
                 key={t.id}
+                data-info-row=""
                 role="button"
                 tabIndex={0}
                 title="在详情页打开这条待办"
@@ -126,7 +157,14 @@ export default function InfoPanel({
               <div className="link-line" key={`${g.title}:${it.url}`}>
                 {/* 一组只标一次名，同组的其余几条跟着对齐 */}
                 <span className="k">{index === 0 ? g.title : ''}</span>
-                <a className="line info-link" href={it.url} target="_blank" rel="noreferrer" title={it.url}>
+                <a
+                  className="line info-link"
+                  data-info-row=""
+                  href={it.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={it.url}
+                >
                   {it.label}
                 </a>
               </div>
@@ -139,6 +177,7 @@ export default function InfoPanel({
       <div className="path-row foot">
         <span
           className="foot-path line mono"
+          data-info-row=""
           role="button"
           tabIndex={0}
           title={`${req.path}（右键或 ⌥ 选打开方式）`}
@@ -202,14 +241,26 @@ function SessionRow({ session }: { session: Session }) {
 
   if (!session.link) {
     return (
-      <div className="sess sess-off" title={`这条会话没有会话级链接，去 ${agent} 里找：${session.session}`}>
+      <div
+        className="sess sess-off"
+        data-info-row=""
+        tabIndex={0}
+        title={`这条会话没有会话级链接，去 ${agent} 里找：${session.session}`}
+      >
         {body}
       </div>
     )
   }
 
   return (
-    <a className="sess" href={session.link} target="_blank" rel="noreferrer" title={`在 ${agent} 里打开`}>
+    <a
+      className="sess"
+      data-info-row=""
+      href={session.link}
+      target="_blank"
+      rel="noreferrer"
+      title={`在 ${agent} 里打开`}
+    >
       {body}
     </a>
   )

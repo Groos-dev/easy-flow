@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { isComposing, shortcut } from '../lib/keys'
 import { STATUS_CLASS } from '../lib/labels'
 import type { Requirement } from '../lib/types'
 
@@ -10,7 +11,8 @@ interface Props {
   results: Requirement[]
   /** 正在等服务端返回，用来区分「还没查」与「查了没有」 */
   pending: boolean
-  onPick: (slug: string) => void
+  /** clear 为 true 时打开后把筛选一起清掉（⌘↵） */
+  onPick: (slug: string, clear?: boolean) => void
   onClose: () => void
 }
 
@@ -36,16 +38,21 @@ export default function SearchPanel({ query, onQuery, results, pending, onPick, 
   const active = idx >= 0 ? results[idx] : undefined
 
   function onKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'ArrowDown') {
+    // 中文输入法选词时的 Enter / ↑↓ 归输入法，不当快捷键
+    if (isComposing(e.nativeEvent)) return
+    if (shortcut(e, 'search.next')) {
       e.preventDefault()
       setCursor(Math.min(idx + 1, results.length - 1))
-    } else if (e.key === 'ArrowUp') {
+    } else if (shortcut(e, 'search.prev')) {
       e.preventDefault()
       setCursor(Math.max(idx - 1, 0))
-    } else if (e.key === 'Enter') {
+    } else if (shortcut(e, 'search.open-clear')) {
+      e.preventDefault()
+      if (active) onPick(active.slug, true)
+    } else if (shortcut(e, 'search.open')) {
       e.preventDefault()
       if (active) onPick(active.slug)
-    } else if (e.key === 'Escape') {
+    } else if (shortcut(e, 'search.close')) {
       e.preventDefault()
       onClose()
     }
@@ -87,6 +94,7 @@ export default function SearchPanel({ query, onQuery, results, pending, onPick, 
         <div className="palette-foot">
           <span>↑↓ 选择</span>
           <span>Enter 打开</span>
+          <span>⌘↵ 打开并清筛选</span>
           <span>Esc 关掉面板，筛选留着</span>
         </div>
       </div>
