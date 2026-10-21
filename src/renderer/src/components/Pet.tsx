@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { api } from '../lib/api'
 import { AGENT_LABELS } from '../lib/labels'
+import { shortcut } from '../lib/keys'
 import { petArt, scopeCloudling, idleMoodOf, isWaking, type IdleMood } from '../lib/pet-art'
 import { isEventState } from '../lib/threads'
 import { bubbleToneOf, PET_LABEL, planPetRow, type PetItem, type Pose } from '../lib/pets'
@@ -220,9 +221,14 @@ function logPetHit(kind: string, e: { clientX: number; clientY: number; target: 
  */
 function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; still: boolean }) {
   const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
   const { session, state } = item
   const hasBubble = item.bubble !== ''
-  const shown = hasBubble && useBubbleShown(state !== 'idle', hovered)
+  // 留尾只属于鼠标：键盘一路 Tab 过去，每只都挂 30 秒会把整排撑乱
+  const lingered = useBubbleShown(state !== 'idle', hovered)
+  const shown = hasBubble && (focused || lingered)
+  // 没有链接的 pet 回车无处可去，就不进 Tab 顺序
+  const focusable = !!session.link
   const openFromSlot = () => {
     if (!session.link) return
     console.debug(
@@ -245,11 +251,32 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
     else window.open(session.link, '_blank')
   }
 
+  // 焦点停在这一格：回车走和鼠标点击同一条路，Esc 交回卡片；看板那套单键由 App 让位
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (shortcut(e, 'pet.open')) {
+      e.preventDefault()
+      e.stopPropagation()
+      openFromSlot()
+      return
+    }
+    if (shortcut(e, 'pet.back')) {
+      e.preventDefault()
+      e.stopPropagation()
+      e.currentTarget.closest<HTMLElement>('.card')?.focus()
+    }
+  }
+
   return (
     <div
       className={`slot${shown ? ' shown' : ''}`}
+      tabIndex={focusable ? 0 : undefined}
+      role={focusable ? 'link' : undefined}
+      aria-label={focusable ? `回到 ${AGENT_LABELS[session.agent] ?? session.agent} 的会话` : undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onFocus={focusable ? () => setFocused(true) : undefined}
+      onBlur={focusable ? () => setFocused(false) : undefined}
+      onKeyDown={onKeyDown}
       onPointerDownCapture={(e) => logPetHit('pointerdown', e)}
       onClickCapture={(e) => logPetHit('click', e)}
     >
@@ -264,7 +291,11 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
         <span
           className="pet-hit-layer"
           aria-hidden="true"
-          onPointerDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => {
+            // 鼠标点一下就跳走了，别让这一格顺手拿走焦点——之后按 Esc 会落在错的层级
+            e.preventDefault()
+            e.stopPropagation()
+          }}
           onClick={(e) => {
             e.stopPropagation()
             openFromSlot()

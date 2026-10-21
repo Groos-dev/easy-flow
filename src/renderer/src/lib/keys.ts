@@ -5,6 +5,7 @@ import { formatAccelerator } from './shortcut'
 export type KeyContext =
   | 'global'
   | 'board'
+  | 'pet'
   | 'next'
   | 'detail'
   | 'info'
@@ -28,6 +29,7 @@ export interface ShortcutDef {
 export const CONTEXT_LABEL: Record<KeyContext, string> = {
   global: '全局',
   board: '看板',
+  pet: 'agent 头像',
   next: '下一步',
   detail: '详情页',
   info: '信息浮窗',
@@ -40,6 +42,7 @@ export const CONTEXT_LABEL: Record<KeyContext, string> = {
 export const CONTEXT_ORDER: KeyContext[] = [
   'global',
   'board',
+  'pet',
   'next',
   'detail',
   'info',
@@ -79,6 +82,11 @@ export const SHORTCUTS: ShortcutDef[] = [
     display: '1..9',
   },
   { id: 'board.clear', context: 'board', keys: ['Escape'], label: '取消选中' },
+
+  // ------------------------------------------------------------ agent 头像（卡片里的一格）
+  { id: 'pet.focus', context: 'pet', keys: ['Tab'], label: '从卡片移进 / 移出头像' },
+  { id: 'pet.open', context: 'pet', keys: ['Return'], label: '回到这个 agent 的会话' },
+  { id: 'pet.back', context: 'pet', keys: ['Escape'], label: '焦点回卡片' },
 
   // ------------------------------------------------------------ 下一步
   { id: 'next.next', context: 'next', keys: ['J', 'ArrowDown'], label: '下一条' },
@@ -261,6 +269,13 @@ export function isInteractiveTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
   if (!el || typeof el.closest !== 'function') return false
   return !!el.closest('button, a, input, textarea, select, [contenteditable="true"]')
+}
+
+/** 焦点停在卡片里的 agent 头像上：这时看板的单键让位，Enter / Esc 归头像自己 */
+export function isPetTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el || typeof el.closest !== 'function') return false
+  return !!el.closest('.slot')
 }
 
 /** 非组合键场景的统一入口：输入法里、输入控件里都不接 */

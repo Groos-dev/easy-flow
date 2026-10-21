@@ -5,6 +5,7 @@ import {
   SHORTCUTS,
   isComposing,
   isEditableTarget,
+  isPetTarget,
   matches,
   shortcut,
   shortcutLabel,
@@ -108,6 +109,13 @@ describe('输入守卫', () => {
     assert.equal(isComposing({ keyCode: 229 }), true)
     assert.equal(isComposing({ isComposing: false, keyCode: 74 }), false)
   })
+
+  test('卡片里的 agent 头像认得出：看板单键要让位给它', () => {
+    const inSlot = target({ tagName: 'DIV', closest: (sel: string) => (sel === '.slot' ? {} : null) })
+    assert.equal(isPetTarget(inSlot), true)
+    assert.equal(isPetTarget(target({ tagName: 'DIV', closest: () => null })), false)
+    assert.equal(isPetTarget(null), false)
+  })
 })
 
 describe('键位表', () => {
@@ -142,6 +150,14 @@ describe('键位表', () => {
     )
     assert.equal(shortcutLabel('board.next', 'darwin'), 'J / ↓')
     assert.equal(shortcutLabel('detail.tab-n', 'darwin'), '⌘1..9')
+  })
+
+  test('agent 头像那一组：Tab 停下、回车回会话、Esc 回卡片', () => {
+    assert.equal(shortcut(key('Tab'), 'pet.focus', 'darwin'), true)
+    assert.equal(shortcut(key('Enter'), 'pet.open', 'darwin'), true)
+    assert.equal(shortcut(key('Escape'), 'pet.back', 'darwin'), true)
+    // 头像自成一组：看板上同一个回车仍旧是「打开选中需求」
+    assert.equal(shortcut(key('Enter'), 'board.open', 'darwin'), true)
   })
 
   test('每个动作都有键和文案', () => {
