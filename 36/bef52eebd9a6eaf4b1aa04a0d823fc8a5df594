@@ -1,0 +1,41 @@
+test/pet-card.test.ts
+  s_b4db6563e219ae::t_29e8288b7a7cb6 295-297,302-321
+  s_b4db6563e219ae::t_82e4e03c25d482 298-301
+src/renderer/src/lib/keys.ts
+  s_b4db6563e219ae::t_fd7ba41032e81b 8
+  s_b4db6563e219ae::t_c94f3f203cda06 45,86-89
+  s_b4db6563e219ae::t_94218f26447460 32
+  s_b4db6563e219ae::t_9cf864cb23e70f 274-280
+src/renderer/src/App.tsx
+  s_b4db6563e219ae::t_8adc74565c3fa9 555-560
+  s_b4db6563e219ae::t_564c0b97c5c731 578-579
+  s_b4db6563e219ae::t_a0e7513559a1d6 17
+src/renderer/src/components/Pet.tsx
+  s_b4db6563e219ae::t_39bac3c05d4439 1,4
+  s_b4db6563e219ae::t_12aeac871521d4 254-268
+  s_b4db6563e219ae::t_b74081ef5df7fc 224,227-231
+  s_b4db6563e219ae::t_140d682302944b 272-274,277-279,294-298
+src/renderer/src/styles.css
+  s_b4db6563e219ae::t_2e1e5d990f9f14 1566-1568,1572,1577-1579
+  s_b4db6563e219ae::t_8557cabfef5e2a 1573-1576
+test/keyboard.test.ts
+  s_b4db6563e219ae::t_43dd1b4f77db38 8
+  s_b4db6563e219ae::t_8af2b86fa8263e 112-118
+  s_b4db6563e219ae::t_c674fd4cf6ee63 155-162
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "36bef52eebd9a6eaf4b1aa04a0d823fc8a5df594",
+  "prompts": {},
+  "sessions": {
+    "s_b4db6563e219ae": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_rvlno7etg16d",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
