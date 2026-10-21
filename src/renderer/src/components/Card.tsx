@@ -1,6 +1,5 @@
 import { useDraggable } from '@dnd-kit/core'
-import type { KeyboardEvent } from 'react'
-import { cycleIndex } from '../lib/board-focus'
+import { useRef, type KeyboardEvent } from 'react'
 import { shortcutLabel } from '../lib/keys'
 import type { ChildStat, Requirement, Session } from '../lib/types'
 import { relTime } from '../lib/time'
@@ -50,18 +49,27 @@ export default function Card({
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined
 
+  // Tab 回到卡片再按下去时，落回刚才那只头像；头一次进去是排第一个（Shift+Tab 是最后一个）
+  const lastPet = useRef<HTMLElement | null>(null)
+
   /**
-   * Tab 在卡片与它的 agent 头像之间转圈（Shift+Tab 反向），不往外走：
-   * 换卡交给 j/k，进了这张卡就在它的人和头像之间来回，鼠标焦点不会顺着 DOM 漂到隔壁。
+   * Tab 只在这一层的两档之间来回：卡片 ↔ 头像。
+   * 头像之间怎么走归 hjkl / 方向键（见 Pet 的 PetSlot），换卡仍是 j/k。
    */
-  function onTabCycle(e: KeyboardEvent<HTMLDivElement>) {
+  function onTabToggle(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key !== 'Tab' || overlay) return
-    const stops = [e.currentTarget, ...e.currentTarget.querySelectorAll<HTMLElement>('.slot[tabindex]')]
-    if (stops.length < 2) return
-    const at = stops.indexOf(document.activeElement as HTMLElement)
-    if (at < 0) return
+    const card = e.currentTarget
+    const pets = Array.from(card.querySelectorAll<HTMLElement>('.slot[tabindex]'))
+    if (!pets.length) return
     e.preventDefault()
-    stops[cycleIndex(stops.length, at, e.shiftKey ? -1 : 1)].focus()
+    const active = document.activeElement as HTMLElement | null
+    if (active && active.closest('.slot')) {
+      card.focus()
+      return
+    }
+    const remembered = lastPet.current
+    const back = remembered && card.contains(remembered) ? remembered : pets[e.shiftKey ? pets.length - 1 : 0]
+    back.focus()
   }
 
   return (
@@ -74,8 +82,14 @@ export default function Card({
       {...attributes}
       tabIndex={overlay ? undefined : 0}
       onClick={() => !overlay && onOpen?.(req.slug)}
-      onFocus={() => !overlay && onFocusCard?.(req.slug)}
-      onKeyDown={onTabCycle}
+      onFocus={(e) => {
+        if (overlay) return
+        // 焦点落进哪只头像就从哪只记起：Tab 出去再回来接得上
+        const slot = (e.target as HTMLElement).closest<HTMLElement>('.slot')
+        if (slot) lastPet.current = slot
+        onFocusCard?.(req.slug)
+      }}
+      onKeyDown={onTabToggle}
     >
       <div className="card-top">
         <span className="card-title">{req.title}</span>

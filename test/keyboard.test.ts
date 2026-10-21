@@ -152,12 +152,21 @@ describe('键位表', () => {
     assert.equal(shortcutLabel('detail.tab-n', 'darwin'), '⌘1..9')
   })
 
-  test('agent 头像那一组：Tab 停下、回车回会话、Esc 回卡片', () => {
+  test('agent 头像那一组：Tab 来回切、hjkl 与方向键走头像、回车回会话、Esc 回卡片', () => {
     assert.equal(shortcut(key('Tab'), 'pet.focus', 'darwin'), true)
     assert.equal(shortcut(key('Enter'), 'pet.open', 'darwin'), true)
     assert.equal(shortcut(key('Escape'), 'pet.back', 'darwin'), true)
-    // 头像自成一组：看板上同一个回车仍旧是「打开选中需求」
+    for (const k of ['h', 'ArrowLeft', 'k', 'ArrowUp']) {
+      assert.equal(shortcut(key(k), 'pet.prev', 'darwin'), true, `${k} 该是前一只`)
+      assert.equal(shortcut(key(k), 'pet.next', 'darwin'), false, `${k} 不该是后一只`)
+    }
+    for (const k of ['l', 'ArrowRight', 'j', 'ArrowDown']) {
+      assert.equal(shortcut(key(k), 'pet.next', 'darwin'), true, `${k} 该是后一只`)
+      assert.equal(shortcut(key(k), 'pet.prev', 'darwin'), false, `${k} 不该是前一只`)
+    }
+    // 头像自成一组：看板上同一个回车仍旧是「打开选中需求」、j/k 仍旧换卡
     assert.equal(shortcut(key('Enter'), 'board.open', 'darwin'), true)
+    assert.equal(shortcut(key('j'), 'board.next', 'darwin'), true)
   })
 
   test('每个动作都有键和文案', () => {
