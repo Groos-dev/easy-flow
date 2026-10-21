@@ -59,11 +59,3 @@ export function slugAt(columns: BoardColumn[], pos: BoardPos | null): string {
   if (!pos) return ''
   return columns.find((c) => c.status === pos.status)?.slugs[pos.index] ?? ''
 }
-
-/**
- * 一组停靠点里按 step 挪一格，走到头绕回另一头。
- * 卡片上的 Tab 循环用它：0 号是卡片本身，后面是卡片里的 agent 头像。
- */
-export function cycleIndex(count: number, at: number, step: 1 | -1): number {
-  return (at + step + count) % count
-}

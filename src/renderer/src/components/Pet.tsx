@@ -251,7 +251,8 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
     else window.open(session.link, '_blank')
   }
 
-  // 焦点停在这一格：回车走和鼠标点击同一条路，Esc 交回卡片；看板那套单键由 App 让位
+  // 焦点停在这一格：回车走和鼠标点击同一条路，Esc 交回卡片，hjkl / 方向键在同一排头像里走；
+  // 看板那套单键由 App 让位
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (shortcut(e, 'pet.open')) {
       e.preventDefault()
@@ -263,6 +264,15 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
       e.preventDefault()
       e.stopPropagation()
       e.currentTarget.closest<HTMLElement>('.card')?.focus()
+      return
+    }
+    if (shortcut(e, 'pet.prev') || shortcut(e, 'pet.next')) {
+      e.preventDefault()
+      e.stopPropagation()
+      // 只在同一排里走：到头停住，回卡片走 Tab / Esc
+      const pets = Array.from(e.currentTarget.parentElement?.querySelectorAll<HTMLElement>('.slot[tabindex]') ?? [])
+      const step = shortcut(e, 'pet.prev') ? -1 : 1
+      pets[pets.indexOf(e.currentTarget) + step]?.focus()
     }
   }
 
