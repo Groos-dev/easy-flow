@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
+import { isComposing, isEditableTarget, shortcut, shortcutLabel } from '../lib/keys'
 import { type ContextPayload, type Requirement, type Todo } from '../lib/types'
 import InfoPanel from './InfoPanel'
 import MarkdownEditor from './MarkdownEditor'
@@ -31,6 +32,7 @@ interface Props {
   onOpenTodo: (id: string) => void
   /** 待办页浮窗的「需求」段：点一下跳到它挂的需求 */
   onOpenRequirement: (project: string, slug: string) => void
+  projectRoot?: string
 }
 
 /** 停止输入后多久落盘 */
@@ -41,6 +43,7 @@ export default function Detail({
   onBack,
   onOpenTodo,
   onOpenRequirement,
+  projectRoot,
 }: Props) {
   const req = target.req
   const todo = target.todo
@@ -61,7 +64,11 @@ export default function Detail({
   /** 待办挂的需求：待办上只有 id，标题与跳转目标要按它换回来 */
   const [todoReq, setTodoReq] = useState<Requirement | null>(null)
   const [infoOpen, setInfoOpen] = useState(false)
+  const [hint, setHint] = useState('')
+  // ⌘⇧N 每按一次加一，让「新建会话」表单展开
+  const [launchSignal, setLaunchSignal] = useState(0)
   const infoRef = useRef<HTMLDivElement>(null)
+  const infoBtnRef = useRef<HTMLButtonElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** 文档加载序号：快速切标签时丢弃过期响应 */
   const docSeq = useRef(0)
@@ -221,42 +228,6 @@ export default function Detail({
     return () => document.removeEventListener('mousedown', onDown)
   }, [infoOpen])
 
-  // ⌘S 立即保存；Esc 返回看板
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) {
-        if (e.key === 'Escape') {
-          // 浮窗开着时先关浮窗，不然一次 Esc 既关浮窗又退出详情
-          if (infoOpen) {
-            setInfoOpen(false)
-            return
-          }
-          onBack()
-        }
-        return
-      }
-      // ⌘[ 是 macOS 的「返回」
-      if (e.key === '[') {
-        e.preventDefault()
-        onBack()
-        return
-      }
-      if (e.key === 's') {
-        e.preventDefault()
-        if (saveTimer.current) clearTimeout(saveTimer.current)
-        void flushSave()
-      }
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [flushSave, onBack, infoOpen])
-
-  /** 编辑器改一次就收一次：draft 仍是唯一事实源 */
-  const onDraftChange = useCallback((next: string) => {
-    draftRef.current = next
-    setDraft(next)
-  }, [])
-
   // 文档列表：只看需求根目录与 docs/ 下的文档。
   // tasks/ 之类的历史目录不进标签栏（同名文件多，且已不是主结构）。
   const docTabs = useMemo(() => {
@@ -274,10 +245,134 @@ export default function Detail({
     })
   }, [docs])
 
+  const goTab = useCallback(
+    (index: number) => {
+      const tab = docTabs[index]
+      if (tab) setActiveDoc(tab.name)
+    },
+    [docTabs],
+  )
+
+  const stepTab = useCallback(
+    (delta: 1 | -1) => {
+      if (!docTabs.length) return
+      const at = docTabs.findIndex((t) => t.name === activeDoc)
+      const index = ((at < 0 ? 0 : at) + delta + docTabs.length) % docTabs.length
+      setActiveDoc(docTabs[index].name)
+    },
+    [docTabs, activeDoc],
+  )
+
+  function openTargetDir() {
+    if (isProject) {
+      void api.openProject(target.project).catch((e: Error) => setError(e.message))
+    } else if (req) {
+      void api.open(req.slug, req.project).catch((e: Error) => setError(e.message))
+    }
+  }
+
+  // 待办是文件，取它所在的目录
+  function copyTargetPath() {
+    const path = req?.path || (todo ? todo.path.replace(/\/[^/]+$/, '') : projectRoot)
+    if (!path) return
+    void navigator.clipboard
+      ?.writeText(path)
+      .then(() => setHint(`已复制：${path}`))
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    if (!hint) return
+    const timer = setTimeout(() => setHint(''), 1600)
+    return () => clearTimeout(timer)
+  }, [hint])
+
+  // 捕获阶段先于编辑器拿到 Esc
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isComposing(e)) return
+
+      // 不 preventDefault：编辑器可以先用 Esc（例如关补全）
+      if (shortcut(e, 'detail.close')) {
+        // 焦点在新建会话表单里时这一下归表单：先收表单，再收浮窗
+        if ((e.target as HTMLElement | null)?.closest?.('.new-sess')) return
+        if (infoOpen) {
+          setInfoOpen(false)
+          // 浮窗是被键盘关掉的，焦点别掉到 body 上
+          requestAnimationFrame(() => infoBtnRef.current?.focus())
+          return
+        }
+        onBack()
+        return
+      }
+
+      // 单键 i：编辑器里要能正常打字
+      if (shortcut(e, 'detail.info') && !isEditableTarget(e.target)) {
+        e.preventDefault()
+        setInfoOpen((v) => !v)
+        return
+      }
+
+      if (shortcut(e, 'detail.back')) {
+        e.preventDefault()
+        onBack()
+        return
+      }
+      if (shortcut(e, 'detail.tab-prev')) {
+        e.preventDefault()
+        stepTab(-1)
+        return
+      }
+      if (shortcut(e, 'detail.tab-next')) {
+        e.preventDefault()
+        stepTab(1)
+        return
+      }
+      if (shortcut(e, 'detail.tab-n')) {
+        e.preventDefault()
+        goTab(Number(e.key) - 1)
+        return
+      }
+      if (shortcut(e, 'detail.save')) {
+        e.preventDefault()
+        if (saveTimer.current) clearTimeout(saveTimer.current)
+        void flushSave()
+        return
+      }
+      if (shortcut(e, 'detail.open-dir')) {
+        e.preventDefault()
+        openTargetDir()
+        return
+      }
+      if (shortcut(e, 'detail.copy-path')) {
+        e.preventDefault()
+        copyTargetPath()
+        return
+      }
+      if (shortcut(e, 'detail.new-session') && req) {
+        e.preventDefault()
+        setInfoOpen(true)
+        setLaunchSignal((n) => n + 1)
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [flushSave, onBack, infoOpen, goTab, stepTab, req, todo, isProject, projectRoot, target.project])
+
+  /** 编辑器改一次就收一次：draft 仍是唯一事实源 */
+  const onDraftChange = useCallback((next: string) => {
+    draftRef.current = next
+    setDraft(next)
+  }, [])
+
   return (
     <div className="detail-page">
       <header className="detail-head">
-        <button className="icon-btn" onClick={onBack} title="返回（Esc / ⌘[）">
+        <button
+          className="icon-btn"
+          onClick={onBack}
+          title={`返回（${shortcutLabel('detail.close')} / ${shortcutLabel('detail.back')}）`}
+        >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="19" y1="12" x2="5" y2="12" />
             <polyline points="12 19 5 12 12 5" />
@@ -289,7 +384,11 @@ export default function Detail({
         <span className="spacer" />
         {/* 需求页不放开目录按钮：那个目录在浮窗里可点（点路径即在访达里打开） */}
         {isProject && (
-          <button className="btn" onClick={() => void api.openProject(target.project).catch(() => {})}>
+          <button
+            className="btn"
+            title={`在访达打开项目目录（${shortcutLabel('detail.open-dir')}）`}
+            onClick={() => void api.openProject(target.project).catch(() => {})}
+          >
             打开目录
           </button>
         )}
@@ -297,14 +396,22 @@ export default function Detail({
           <div className="info-menu" ref={infoRef}>
             <button
               className={`icon-btn${infoOpen ? ' on' : ''}`}
+              ref={infoBtnRef}
               onClick={() => setInfoOpen((v) => !v)}
-              title={req ? '需求信息与链接' : '待办信息'}
+              title={`${req ? '需求信息与链接' : '待办信息'}（${shortcutLabel('detail.info')}）`}
               aria-haspopup="dialog"
               aria-expanded={infoOpen}
             >
               <InfoIcon />
             </button>
-            {infoOpen && req && <InfoPanel req={req} ctx={ctx} onOpenTodo={onOpenTodo} />}
+            {infoOpen && req && (
+              <InfoPanel
+                req={req}
+                ctx={ctx}
+                onOpenTodo={onOpenTodo}
+                launchSignal={launchSignal}
+              />
+            )}
             {infoOpen && !req && todo && (
               <TodoPanel todo={todo} req={todoReq} onOpenRequirement={onOpenRequirement} />
             )}
@@ -312,16 +419,18 @@ export default function Detail({
         )}
       </header>
 
+      {hint && <div className="notice ok">{hint}</div>}
+
       <div className="detail-body">
         <section className="doc-pane">
           <div className="doc-bar">
             <div className="doc-tabs">
-              {docTabs.map((tab) => (
+              {docTabs.map((tab, i) => (
                 <button
                   key={tab.name}
                   className={`doc-tab${tab.name === activeDoc ? ' active' : ''}`}
                   onClick={() => setActiveDoc(tab.name)}
-                  title={tab.name}
+                  title={i < 9 ? `${tab.name}（⌘${i + 1}）` : tab.name}
                 >
                   {tab.label}
                 </button>

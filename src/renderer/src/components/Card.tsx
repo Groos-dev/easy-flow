@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
+import { shortcutLabel } from '../lib/keys'
 import type { ChildStat, Requirement, Session } from '../lib/types'
 import { relTime } from '../lib/time'
 import { PetRow } from './Pet'
@@ -16,22 +16,33 @@ interface Props {
   onJumpChild?: (slug: string) => void
   /** 刚被跳过来的那条：闪一下，好让人在满屏卡片里认出落点 */
   flash?: boolean
+  focused?: boolean
+  kidsOpen?: boolean
+  onToggleKids?: (slug: string) => void
+  onFocusCard?: (slug: string) => void
   onOpen?: (slug: string) => void
   overlay?: boolean
 }
 
-export default function Card({ req, sessions, childStat, kids, onJumpChild, flash, onOpen, overlay = false }: Props) {
+export default function Card({
+  req,
+  sessions,
+  childStat,
+  kids,
+  onJumpChild,
+  flash,
+  focused = false,
+  kidsOpen = false,
+  onToggleKids,
+  onFocusCard,
+  onOpen,
+  overlay = false,
+}: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: req.slug,
     data: { type: 'card', slug: req.slug, status: req.status },
     disabled: overlay,
   })
-
-  /**
-   * 收的是子需求清单，不是卡片本身：父需求也是一条需求，标题、摘要、pet、日期都得跟同列的
-   * 普通卡片一样看得见。展开键只管清单那一块，不动它的状态，也不动它落在哪一列。
-   */
-  const [kidsOpen, setKidsOpen] = useState(false)
 
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
@@ -42,10 +53,12 @@ export default function Card({ req, sessions, childStat, kids, onJumpChild, flas
       ref={setNodeRef}
       style={style}
       data-slug={req.slug}
-      className={`card${isDragging ? ' dragging' : ''}${flash ? ' flash' : ''}`}
-      onClick={() => !overlay && onOpen?.(req.slug)}
+      className={`card${isDragging ? ' dragging' : ''}${flash ? ' flash' : ''}${focused ? ' focused' : ''}`}
       {...listeners}
       {...attributes}
+      tabIndex={overlay ? undefined : 0}
+      onClick={() => !overlay && onOpen?.(req.slug)}
+      onFocus={() => !overlay && onFocusCard?.(req.slug)}
     >
       <div className="card-top">
         <span className="card-title">{req.title}</span>
@@ -69,10 +82,10 @@ export default function Card({ req, sessions, childStat, kids, onJumpChild, flas
             strokeLinejoin="round"
             onClick={(e) => {
               e.stopPropagation()
-              setKidsOpen((v) => !v)
+              onToggleKids?.(req.slug)
             }}
           >
-            <title>{kidsOpen ? '收起子需求' : '展开子需求'}</title>
+            <title>{`${kidsOpen ? '收起' : '展开'}子需求（${shortcutLabel('board.kids')}）`}</title>
             <polyline points={kidsOpen ? '6 9 12 15 18 9' : '9 6 15 12 9 18'} />
           </svg>
         )}

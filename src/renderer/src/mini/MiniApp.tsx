@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
+import { isComposing, shortcut } from '../lib/keys'
 import { AGENT_LABELS, THREAD_STATE_CLASS } from '../lib/labels'
 import { buildMiniBlocks, miniTime, sessionActive, type MiniAction } from '../lib/mini'
 import { moveKey, resolveKey } from '../lib/selection'
@@ -155,26 +156,48 @@ export default function MiniApp() {
     window.easyFlow?.hidePanel?.()
   }
 
+  function openDetail(project: string, slug: string) {
+    void window.easyFlow?.openRequirement?.({ project, slug })
+    window.easyFlow?.hidePanel?.()
+  }
+
   function onKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'ArrowDown') {
+    // 输入法选词中的回车 / 方向键归输入法
+    if (isComposing(e.nativeEvent)) return
+    // ⌘↵ 直接开选中卡片的需求详情；⌘1..9 开第 N 张卡。数字不带 ⌘ 时照常输入搜索词
+    if (shortcut(e, 'mini.open-detail')) {
+      e.preventDefault()
+      const cur = items[selIdx]
+      if (!cur) return
+      if (cur.kind === 'req') openDetail(cur.project, cur.slug)
+      else activate(cur)
+      return
+    }
+    if (shortcut(e, 'mini.nth')) {
+      e.preventDefault()
+      const block = blocks[Number(e.key) - 1]
+      if (block) openDetail(block.req.project, block.req.slug)
+      return
+    }
+    if (shortcut(e, 'mini.next')) {
       e.preventDefault()
       keyMoved.current = true
       setSelectedKey(moveKey(keys, selectedKey, 1))
       return
     }
-    if (e.key === 'ArrowUp') {
+    if (shortcut(e, 'mini.prev')) {
       e.preventDefault()
       keyMoved.current = true
       setSelectedKey(moveKey(keys, selectedKey, -1))
       return
     }
-    if (e.key === 'ArrowRight') {
+    if (shortcut(e, 'mini.expand')) {
       e.preventDefault()
       const cur = items[selIdx]
       if (cur?.kind === 'req' && expanded !== `${cur.project}:${cur.slug}`) toggle(cur.project, cur.slug)
       return
     }
-    if (e.key === 'ArrowLeft') {
+    if (shortcut(e, 'mini.collapse')) {
       e.preventDefault()
       const cur = items[selIdx]
       if (!cur) return
@@ -183,12 +206,12 @@ export default function MiniApp() {
       else if (cur.kind === 'req' && expanded === key) setExpanded('')
       return
     }
-    if (e.key === 'Enter') {
+    if (shortcut(e, 'mini.activate')) {
       e.preventDefault()
       activate(items[selIdx])
       return
     }
-    if (e.key === 'Escape') {
+    if (shortcut(e, 'mini.close')) {
       if (query) setQuery('')
       else if (expanded) setExpanded('')
       else window.easyFlow?.hidePanel?.()
@@ -336,6 +359,14 @@ export default function MiniApp() {
             </div>
           )
         })}
+      </div>
+
+      <div className="mini-hints">
+        <span>↑↓ 选择</span>
+        <span>→ 展开</span>
+        <span>↵ 打开</span>
+        <span>⌘↵ 详情</span>
+        <span>esc 收起</span>
       </div>
     </div>
   )

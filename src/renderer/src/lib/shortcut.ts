@@ -89,6 +89,14 @@ const MAC_KEY_SYMBOLS: Record<string, string> = {
   ArrowRight: '→',
   Return: '↩',
   Enter: '↩',
+  Escape: 'Esc',
+}
+
+/** 键盘上印不出符号的键，两端用同一套短写法 */
+const PC_KEY_NAMES: Record<string, string> = {
+  Return: 'Enter',
+  Escape: 'Esc',
+  Space: 'Space',
 }
 
 export function acceleratorKeys(accel: string, platform: string): string[] {
@@ -97,7 +105,7 @@ export function acceleratorKeys(accel: string, platform: string): string[] {
     .split('+')
     .map((p) => p.trim())
     .filter(Boolean)
-    .map((p) => (mac ? MAC_SYMBOLS[p] ?? MAC_KEY_SYMBOLS[p] ?? p : PC_NAMES[p] ?? p))
+    .map((p) => (mac ? MAC_SYMBOLS[p] ?? MAC_KEY_SYMBOLS[p] ?? p : PC_NAMES[p] ?? PC_KEY_NAMES[p] ?? p))
 }
 
 export function formatAccelerator(accel: string, platform: string): string {

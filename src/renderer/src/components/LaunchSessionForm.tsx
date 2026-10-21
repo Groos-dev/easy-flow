@@ -73,6 +73,7 @@ export default function LaunchSessionForm({
               key={p.id}
               type="button"
               className={`agent-chip${p.id === agent ? ' on' : ''}`}
+              data-info-row=""
               aria-pressed={p.id === agent}
               onClick={() => onAgentChange(p.id)}
             >
@@ -97,6 +98,7 @@ export default function LaunchSessionForm({
               <div
                 key={w.id}
                 className={`wt-option${w.id === worktreeId ? ' on' : ''}`}
+                data-info-row=""
                 role="radio"
                 aria-checked={w.id === worktreeId}
                 tabIndex={0}
@@ -113,7 +115,12 @@ export default function LaunchSessionForm({
           </div>
         )}
 
-        <button className="launch-go" type="submit" disabled={!canLaunch}>
+        <button
+          className="launch-go"
+          type="submit"
+          data-info-row={canLaunch ? '' : undefined}
+          disabled={!canLaunch}
+        >
           {busy ? '正在打开…' : `用 ${agentName} 打开新会话`}
         </button>
 
@@ -137,7 +144,13 @@ export default function LaunchSessionForm({
             没能自动打开 {agentName}：{feedback.error || '未知错误'}
           </p>
           <div className="launch-actions">
-            <button className="launch-retry" type="button" onClick={onLaunch} disabled={!canLaunch}>
+            <button
+              className="launch-retry"
+              type="button"
+              data-info-row={canLaunch ? '' : undefined}
+              onClick={onLaunch}
+              disabled={!canLaunch}
+            >
               重试打开
             </button>
             <CopyButton text={feedback.prompt} label="提示词" showLabel />
@@ -146,7 +159,11 @@ export default function LaunchSessionForm({
           <code className="launch-manual">{feedback.manualCommand}</code>
           {/* 能复制也得能看：剪贴板失败时眼里得有东西可抄 */}
           <div className="launch-fold">
-            <button type="button" onClick={() => setPromptOpen((v) => !v)}>
+            <button
+              type="button"
+              data-info-row=""
+              onClick={() => setPromptOpen((v) => !v)}
+            >
               {promptOpen ? '▾' : '▸'} 看提示词原文
             </button>
           </div>
