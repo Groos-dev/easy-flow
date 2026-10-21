@@ -101,6 +101,8 @@ body {
   gap: 12px;
   height: 42px;
   padding: 0 16px;
+  /* 拖拽区挂在容器上：挂在空子块上会随内容塌成 0 高度 */
+  -webkit-app-region: drag;
 }
 
 /*
@@ -120,21 +122,13 @@ body {
   pointer-events: none;
 }
 
-.topbar > * {
-  -webkit-app-region: no-drag;
-}
-
-/*
- * 左块吃掉剩余宽度，右块按内容宽，两块兼作窗口拖拽区（红绿灯压在左块上）。
- * 里面的按钮要显式让开（见下一条）。
- */
+/* 左块吃掉剩余宽度，右块按内容宽 */
 .topbar-side {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
-  -webkit-app-region: drag;
 }
 
 /* 拖拽区会吞点击，里面的按钮必须显式让开 */
@@ -1702,6 +1696,8 @@ body {
   align-items: center;
   gap: 10px;
   padding: 46px 16px 10px; /* 顶部让开 macOS 红绿灯 */
+  /* 同 .topbar：整条头部兼作拖拽区 */
+  -webkit-app-region: drag;
 }
 
 /*
@@ -1723,13 +1719,10 @@ body {
   pointer-events: none;
 }
 
-.detail-head > * {
+/* 拖拽区会吞点击，里面的按钮必须显式让开；标题文字留给拖拽 */
+.detail-head > button,
+.detail-head > .info-menu {
   -webkit-app-region: no-drag;
-}
-
-/* 同 .topbar：拖拽区只给中部的弹性空白，整条设 drag 会在折叠时盖住左上角的侧边栏开关 */
-.detail-head > .spacer {
-  -webkit-app-region: drag;
 }
 
 .detail-title {
