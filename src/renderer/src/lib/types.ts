@@ -23,6 +23,17 @@ export interface CodeLink {
   url: string
 }
 
+/** 取不到时接口不返回该条，界面也就不挂状态 */
+export type CodeLinkState = 'open' | 'merged' | 'closed'
+
+/** 流水线只取汇总；没跑过或 PR 为 null */
+export type PipelineState = 'success' | 'failed' | 'running' | 'skipped'
+
+export interface CodeLinkStatus {
+  state: CodeLinkState
+  pipeline: PipelineState | null
+}
+
 /** 与 server/db.ts 的 Worktree 对应。归属只存在库里，UI 只读 */
 export interface Worktree {
   id: string

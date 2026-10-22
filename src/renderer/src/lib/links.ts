@@ -1,4 +1,25 @@
-import type { CodeLink } from './types'
+import type { CodeLink, CodeLinkStatus, PipelineState } from './types'
+
+/** 流水线汇总的图标：够小，跟状态列并排不抢戏 */
+export const PIPELINE_ICON: Record<PipelineState, string> = {
+  success: '✓',
+  failed: '✕',
+  running: '◔',
+  skipped: '–',
+}
+
+/** hover 用中文说清楚到哪一步，图标本身认不出来 */
+export const PIPELINE_LABEL: Record<PipelineState, string> = {
+  success: '通过',
+  failed: '失败',
+  running: '进行中或等待手动执行',
+  skipped: '已取消或跳过',
+}
+
+/** 合入/关闭的 MR 再看流水线是历史噪音，只有还开着的才带 */
+export function showsPipeline(status: CodeLinkStatus): boolean {
+  return status.state === 'open' && status.pipeline !== null
+}
 
 /**
  * 代码链接显示什么：显式别名优先，没给就从 URL 推一个。

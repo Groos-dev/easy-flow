@@ -31,6 +31,7 @@ import { hookPlan, installHooks, uninstallHooks } from './hook-install.ts'
 
 const log = createLogger('easy-flow')
 import { findLaunchProvider, launchPrompt, launchProviders } from './launch.ts'
+import { codeLinkStatuses } from './code-host.ts'
 import './launch-codex.ts'
 import './launch-chengxiaobang.ts'
 import {
@@ -300,6 +301,15 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
           requirements: db.list().filter((r) => hits.has(r.slug)),
           query: q,
         })
+        return
+      }
+
+      if (url.pathname === '/api/code-link-statuses' && req.method === 'POST') {
+        const body = await readBody(req)
+        const urls = Array.isArray(body.urls)
+          ? body.urls.filter((u): u is string => typeof u === 'string').slice(0, 50)
+          : []
+        json(req, res, 200, { statuses: await codeLinkStatuses(urls) })
         return
       }
 

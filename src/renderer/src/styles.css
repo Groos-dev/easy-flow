@@ -2545,6 +2545,53 @@ a.sess,
   min-width: 0;
 }
 
+.link-line .link-state {
+  flex: none;
+  width: 62px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.link-line .link-state .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.link-line .link-state[data-state='open'] {
+  color: var(--status-doing);
+}
+
+.link-line .link-state[data-state='merged'] {
+  color: var(--status-done);
+}
+
+.link-line .link-pipe {
+  flex: none;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.link-line .link-pipe[data-pipeline='success'] {
+  color: var(--status-done);
+}
+
+.link-line .link-pipe[data-pipeline='failed'] {
+  color: var(--danger);
+}
+
+.link-line .link-pipe[data-pipeline='running'] {
+  color: var(--status-doing);
+}
+
+.link-line .link-pipe[data-pipeline='skipped'] {
+  color: var(--text-faint);
+}
+
 /* 关联待办的状态点：只出现未完成的两种（待办 / 进行中），颜色沿用导图那组状态色 */
 .todo-dot {
   width: 8px;
