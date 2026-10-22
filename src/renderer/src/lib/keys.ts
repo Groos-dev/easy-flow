@@ -139,7 +139,7 @@ export const SHORTCUTS: ShortcutDef[] = [
 
   // ------------------------------------------------------------ 设置
   { id: 'settings.back', context: 'settings', keys: ['Escape', 'CommandOrControl+,'], label: '返回看板' },
-  { id: 'settings.section', context: 'settings', keys: SECTIONS, label: '切到第 N 个分区', display: '⌘1..4' },
+  { id: 'settings.section', context: 'settings', keys: SECTIONS, label: '切到第 N 个分区', display: '⌘1..5' },
 ]
 
 const BY_ID = new Map(SHORTCUTS.map((s) => [s.id, s]))

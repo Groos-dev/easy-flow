@@ -1,12 +1,12 @@
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, screen, session, shell } from 'electron'
-import { execFile, execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { readFileSync, mkdirSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { RunningBoardServer } from '../../server/index.ts'
 import { createLogger } from '../../server/log.ts'
-import { appIconFile, externalOpenArgs, scanOpenTargets, type OpenTarget } from './open-with.ts'
+import { appIconPng, scanOpenTargets } from '../../server/open-with.ts'
+import { externalOpenArgs } from './open-links.ts'
 import { placePanel, readPanelPosition, writePanelPosition } from './panel-position.ts'
 
 // 图标放在仓库根的 resources/（electron-vite 的约定），运行时从 out/main 往上两级
@@ -170,37 +170,22 @@ function rebindShortcut(accel: string): boolean {
   return true
 }
 
-/** 本机装了的打开方式：扫一次、图标转一次（装完新 app 重启应用即认） */
-let openWithItems: Array<OpenTarget & { icon?: Electron.NativeImage }> | null = null
+/** 2x 图在 16pt 菜单里才清晰；转换结果按 app 路径缓存 */
+const menuIcons = new Map<string, Electron.NativeImage>()
 
-/**
- * app 图标，两处都不能想当然：app.getFileIcon 在 macOS 上只给通用占位图（每个 app 同一张），
- * 得自己从 bundle 取 .icns 转 PNG；而单张 PNG 会被当成 1x 图按像素当点用，64px 的图标就画 64 点，
- * 所以 1x/2x 各给一张。读不出图标就少个图标，不影响打开。
- */
 function openTargetIcon(appPath: string): Electron.NativeImage | undefined {
-  const icns = appIconFile(appPath)
-  if (!icns) return undefined
+  const hit = menuIcons.get(appPath)
+  if (hit) return hit
   try {
-    const dir = join(tmpdir(), 'easy-flow-app-icons')
-    mkdirSync(dir, { recursive: true })
-    const base = basename(appPath, '.app')
-    const png1x = join(dir, `${base}@1x.png`)
-    const png2x = join(dir, `${base}@2x.png`)
-    execFileSync('sips', ['-s', 'format', 'png', '-Z', '16', icns, '--out', png1x])
-    execFileSync('sips', ['-s', 'format', 'png', '-Z', '32', icns, '--out', png2x])
+    const png = appIconPng(appPath)
+    if (!png) return undefined
     const image = nativeImage.createEmpty()
-    image.addRepresentation({ scaleFactor: 1, buffer: readFileSync(png1x) })
-    image.addRepresentation({ scaleFactor: 2, buffer: readFileSync(png2x) })
+    image.addRepresentation({ scaleFactor: 2, buffer: readFileSync(png) })
+    if (!image.isEmpty()) menuIcons.set(appPath, image)
     return image.isEmpty() ? undefined : image
   } catch {
     return undefined
   }
-}
-
-function loadOpenWithItems(): Array<OpenTarget & { icon?: Electron.NativeImage }> {
-  openWithItems ??= scanOpenTargets().map((t) => ({ ...t, icon: openTargetIcon(t.app) }))
-  return openWithItems
 }
 
 /** Electron 没有「用指定 app 打开」，macOS 上这条就是它 */
@@ -282,7 +267,9 @@ function registerIpc(): void {
   ipcMain.handle('easy-flow:open-with-menu', async (_event, payload: { path: string }) => {
     const dir = String(payload?.path ?? '')
     if (!dir) return null
-    const items = loadOpenWithItems()
+    const items = scanOpenTargets().map((t) => ({ ...t, icon: openTargetIcon(t.app) }))
+    const { readConfig } = await import('../../server/config.ts')
+    const defaultOpen = readConfig().openWith
     return new Promise<string | null>((resolve) => {
       let picked: string | null = null
       const pick = (id: string, run: () => void) => () => {
@@ -291,12 +278,23 @@ function registerIpc(): void {
         resolve(id)
       }
       const template: Electron.MenuItemConstructorOptions[] = [
-        { label: '在访达里打开', click: pick('finder', () => void shell.openPath(dir)) },
+        {
+          label: '在访达里打开',
+          type: 'checkbox',
+          checked: defaultOpen === '',
+          click: pick('finder', () => void shell.openPath(dir)),
+        },
       ]
       if (items.length) {
         template.push({ type: 'separator' })
         for (const t of items) {
-          template.push({ label: t.label, icon: t.icon, click: pick(t.id, () => openInApp(t.app, dir)) })
+          template.push({
+            label: t.label,
+            icon: t.icon,
+            type: 'checkbox',
+            checked: t.id === defaultOpen,
+            click: pick(t.id, () => openInApp(t.app, dir)),
+          })
         }
       }
       template.push({ type: 'separator' }, { label: '复制路径', click: pick('copy', () => clipboard.writeText(dir)) })

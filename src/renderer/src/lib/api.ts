@@ -7,6 +7,7 @@ import type {
   LaunchProviderInfo,
   LaunchResult,
   NextUpItem,
+  OpenWithPayload,
   Project,
   Requirement,
   Session,
@@ -181,6 +182,11 @@ export const api = {
     request('/api/launch', { method: 'POST', body: JSON.stringify(input) }, { errorIsResult: true }),
 
   settings: (): Promise<SettingsPayload> => request('/api/settings'),
+
+  openWith: (): Promise<OpenWithPayload> => request('/api/settings/open-with'),
+
+  setOpenWith: (id: string): Promise<OpenWithPayload> =>
+    request('/api/settings/open-with', { method: 'POST', body: JSON.stringify({ id }) }),
 
   switchDataDir: (dataDir: string): Promise<SwitchResult> =>
     request('/api/settings', { method: 'POST', body: JSON.stringify({ dataDir }) }),
