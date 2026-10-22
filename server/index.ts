@@ -26,6 +26,7 @@ import { rankNextUp } from './next-up.ts'
 import './launch-claude.ts'
 import { logLevel, createLogger } from './log.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
+import { appIconDataUrl, findOpenTarget, scanOpenTargets } from './open-with.ts'
 import { installSkill, skillPlan } from './skill-install.ts'
 import { hookPlan, installHooks, uninstallHooks } from './hook-install.ts'
 
@@ -95,6 +96,43 @@ function removeProjectData(db: BoardDatabase, slug: string): void {
   const project = db.listProjects().find((p) => p.slug === slug)
   if (project && existsSync(project.root)) {
     rmSync(project.root, { recursive: true, force: true })
+  }
+}
+
+function openDir(path: string): void {
+  const target = findOpenTarget(readConfig().openWith)
+  execFile('open', target ? ['-a', target.app, path] : [path], (error) => {
+    if (error) log.warn(`open failed path=${path} error=${error.message}`)
+  })
+}
+
+interface OpenWithOption {
+  id: string
+  label: string
+  kind: 'finder' | 'editor' | 'terminal'
+  icon: string
+}
+
+const FINDER_APP = '/System/Library/CoreServices/Finder.app'
+
+function openOptions(): OpenWithOption[] {
+  return [
+    { id: '', label: '访达', kind: 'finder', icon: appIconDataUrl(FINDER_APP) },
+    ...scanOpenTargets().map((t) => ({
+      id: t.id,
+      label: t.label,
+      kind: t.kind,
+      icon: appIconDataUrl(t.app),
+    })),
+  ]
+}
+
+function openWithPayload(options = openOptions()) {
+  const stored = readConfig().openWith
+  return {
+    default: stored,
+    missing: stored !== '' && !options.some((o) => o.id === stored),
+    options,
   }
 }
 
@@ -399,7 +437,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
         const { slug, project: projectRaw } = await readBody(req)
         const project = resolveProject(db, projectRaw ? String(projectRaw) : null)
         const target = db.get(String(slug), project)
-        if (target) execFile('open', [target.path], () => {})
+        if (target) openDir(target.path)
         json(req, res, 200, { ok: true })
         return
       }
@@ -468,7 +506,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
         const wt = db.worktreeById(String(id))
         if (!wt) throw new Error(`Worktree not found: ${id}`)
         if (!existsSync(wt.path)) throw new Error(`Directory no longer exists: ${wt.path}`)
-        execFile('open', [wt.path], () => {})
+        openDir(wt.path)
         json(req, res, 200, { ok: true, path: wt.path })
         return
       }
@@ -510,6 +548,23 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
       }
 
       // ----------------------------------------------------------- 设置
+
+      if (url.pathname === '/api/settings/open-with' && req.method === 'GET') {
+        json(req, res, 200, openWithPayload())
+        return
+      }
+
+      if (url.pathname === '/api/settings/open-with' && req.method === 'POST') {
+        const { id } = await readBody(req)
+        const next = String(id ?? '')
+        const options = openOptions()
+        if (!options.some((o) => o.id === next)) {
+          throw new Error(`Unknown open target: ${next}`)
+        }
+        writeConfig({ openWith: next })
+        json(req, res, 200, openWithPayload(options))
+        return
+      }
 
       if (url.pathname === '/api/settings' && req.method === 'GET') {
         json(req, res, 200, {

@@ -285,6 +285,20 @@ export interface SettingsPayload {
   counts: { requirements: number; projects: number }
 }
 
+/** 详情页默认打开方式。default 是配置里记的 id，空串 = 访达；missing 表示该 app 已不在本机 */
+export interface OpenWithOption {
+  id: string
+  label: string
+  kind: 'finder' | 'editor' | 'terminal'
+  icon: string
+}
+
+export interface OpenWithPayload {
+  default: string
+  missing: boolean
+  options: OpenWithOption[]
+}
+
 export interface AgentSkill {
   id: 'claude' | 'cursor' | 'codex' | 'chengxiaobang'
   label: string

@@ -7,7 +7,8 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { appDirs, appIconFile, externalOpenArgs, scanOpenTargets } from '../src/main/open-with.ts'
+import { appDirs, appIconFile, appIconDataUrl, findOpenTarget, scanOpenTargets } from '../server/open-with.ts'
+import { externalOpenArgs } from '../src/main/open-links.ts'
 
 function fakeDirs(names: string[]): string {
   const dir = mkdtempSync(join(tmpdir(), 'easy-flow-open-with-'))
@@ -21,6 +22,7 @@ describe('打开方式 · 扫描本机 app', () => {
     try {
       const found = scanOpenTargets([dir])
       assert.deepEqual(found.map((t) => t.id), ['idea', 'cursor', 'wezterm'])
+      assert.deepEqual(found.map((t) => t.kind), ['editor', 'editor', 'terminal'])
       assert.equal(found[0].app, join(dir, 'IntelliJ IDEA.app'))
       assert.equal(found[2].label, 'WezTerm')
     } finally {
@@ -50,6 +52,17 @@ describe('打开方式 · 扫描本机 app', () => {
     }
   })
 
+  test('按设置里的 id 找 app：空 id 是访达，配的 app 不在了给 undefined', () => {
+    const dir = fakeDirs(['Cursor.app'])
+    try {
+      assert.equal(findOpenTarget('', [dir]), undefined)
+      assert.equal(findOpenTarget('cursor', [dir])?.app, join(dir, 'Cursor.app'))
+      assert.equal(findOpenTarget('idea', [dir]), undefined)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   test('Codex / 程小帮深链固定指定 bundle，其它链接仍走系统默认', () => {
     assert.deepEqual(externalOpenArgs('codex://threads/abc', 'darwin'), ['-b', 'com.openai.codex', 'codex://threads/abc'])
     assert.deepEqual(externalOpenArgs('chengxiaobang://session/s_abc', 'darwin'), [
@@ -73,6 +86,8 @@ describe('打开方式 · 扫描本机 app', () => {
     // 系统终端每个 macOS 都在；app.getFileIcon 那条路给的是通用占位图，所以只剩 sips 这条路
     assert.ok(appIconFile('/System/Applications/Utilities/Terminal.app').endsWith('Terminal.icns'))
     assert.equal(appIconFile('/Applications/不存在的.app'), '')
+    assert.ok(appIconDataUrl('/System/Applications/Utilities/Terminal.app').startsWith('data:image/png;base64,'))
+    assert.equal(appIconDataUrl('/Applications/不存在的.app'), '')
   })
 
   test('真机扫一遍：macOS 上至少能扫到系统终端', { skip: process.platform !== 'darwin' }, () => {

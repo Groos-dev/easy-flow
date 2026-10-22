@@ -15,6 +15,8 @@ export interface AppConfig {
   activeProject: string
   /** 呼出 mini 面板的全局快捷键（Electron accelerator）；空串表示用默认值 */
   panelShortcut: string
+  /** 详情页默认用谁开目录：OpenTarget.id；空串 = 访达 */
+  openWith: string
 }
 
 /** 配置文件路径。由 main 进程通过 EASY_FLOW_CONFIG 指定；独立运行 server 时回退到约定路径。 */
@@ -46,6 +48,7 @@ export function readConfig(): AppConfig {
     dataDir: devFallbackDir(),
     activeProject: '',
     panelShortcut: '',
+    openWith: '',
   }
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<AppConfig>
@@ -55,6 +58,7 @@ export function readConfig(): AppConfig {
         typeof raw?.activeProject === 'string' ? raw.activeProject : defaults.activeProject,
       panelShortcut:
         typeof raw?.panelShortcut === 'string' ? raw.panelShortcut : defaults.panelShortcut,
+      openWith: typeof raw?.openWith === 'string' ? raw.openWith : defaults.openWith,
     }
   } catch {
     /* 首次运行或文件损坏，走默认值 */

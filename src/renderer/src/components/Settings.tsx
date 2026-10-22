@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { api } from '../lib/api'
 import {
   CONTEXT_LABEL,
@@ -8,8 +8,8 @@ import {
   shortcut,
 } from '../lib/keys'
 import { acceleratorFromEvent, acceleratorKeys, formatAccelerator } from '../lib/shortcut'
-import type { HookPlan, SettingsPayload, SkillPayload, SyncResult } from '../lib/types'
-import { AgentIcon, KeyGlyph, PencilIcon, ResetIcon, TerminalIcon } from './icons'
+import type { HookPlan, OpenWithPayload, OpenWithOption, SettingsPayload, SkillPayload, SyncResult } from '../lib/types'
+import { AgentIcon, CheckIcon, ChevronIcon, KeyGlyph, PencilIcon, ResetIcon, TerminalIcon } from './icons'
 
 interface Props {
   onBack: () => void
@@ -17,10 +17,11 @@ interface Props {
   onApplied: () => void
 }
 
-type SectionId = 'data' | 'shortcut' | 'skill' | 'hook'
+type SectionId = 'data' | 'open' | 'shortcut' | 'skill' | 'hook'
 
 const SECTIONS: Array<{ id: SectionId; label: string }> = [
   { id: 'data', label: '数据目录' },
+  { id: 'open', label: '打开方式' },
   { id: 'shortcut', label: '快捷键' },
   { id: 'skill', label: 'CLI 与 Skill' },
   { id: 'hook', label: '钩子' },
@@ -59,6 +60,13 @@ export default function Settings({ onBack, onApplied }: Props) {
   const [recording, setRecording] = useState(false)
   const [hotkeyNotice, setHotkeyNotice] = useState('')
   const [hotkeyError, setHotkeyError] = useState('')
+
+  const [openWith, setOpenWith] = useState<OpenWithPayload | null>(null)
+  const [openError, setOpenError] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   const loadSettings = useCallback(async () => {
     const s = await api.settings()
@@ -115,6 +123,14 @@ export default function Settings({ onBack, onApplied }: Props) {
       .catch((e: Error) => setHotkeyError(`读取快捷键失败：${e.message}`))
   }, [section])
 
+  useEffect(() => {
+    if (section !== 'open') return
+    void api
+      .openWith()
+      .then(setOpenWith)
+      .catch((e: Error) => setOpenError(`读取打开方式失败：${e.message}`))
+  }, [section])
+
   /** Electron 里可拉起原生目录选择器；浏览器开发时退化到手输 */
   const canPick = typeof window.easyFlow?.pickDirectory === 'function'
   /** 快捷键只对桌面端有意义：web 模式没有全局快捷键，这一节整个不出现 */
@@ -142,6 +158,82 @@ export default function Settings({ onBack, onApplied }: Props) {
     },
     [platform],
   )
+
+  const applyOpenWith = useCallback(async (id: string) => {
+    setOpenError('')
+    try {
+      setOpenWith(await api.setOpenWith(id))
+    } catch (e) {
+      setOpenError(`保存失败：${(e as Error).message}`)
+    }
+  }, [])
+
+  // missing 时打开已退回访达，界面跟着显示访达
+  const selected: OpenWithOption | undefined = openWith
+    ? openWith.options.find((o) => o.id === (openWith.missing ? '' : openWith.default)) ??
+      openWith.options[0]
+    : undefined
+
+  const openMenu = useCallback(() => {
+    setMenuOpen(true)
+    requestAnimationFrame(() => {
+      const at = openWith?.options.findIndex((o) => o.id === selected?.id) ?? -1
+      optionRefs.current[Math.max(at, 0)]?.focus()
+    })
+  }, [openWith, selected])
+
+  const closeMenu = useCallback((refocus = false) => {
+    setMenuOpen(false)
+    if (refocus) buttonRef.current?.focus()
+  }, [])
+
+  const choose = useCallback(
+    async (id: string) => {
+      closeMenu(true)
+      await applyOpenWith(id)
+    },
+    [closeMenu, applyOpenWith],
+  )
+
+  const onMenuKeyDown = useCallback(
+    (e: ReactKeyboardEvent) => {
+      if (!openWith) return
+      const at = openWith.options.findIndex((o) => o.id === selected?.id)
+      const move = (delta: number) => {
+        e.preventDefault()
+        const next = Math.min(Math.max(at + delta, 0), openWith.options.length - 1)
+        optionRefs.current[next]?.focus()
+      }
+      if (e.key === 'ArrowDown') move(1)
+      else if (e.key === 'ArrowUp') move(-1)
+      else if (e.key === 'Home') {
+        e.preventDefault()
+        optionRefs.current[0]?.focus()
+      } else if (e.key === 'End') {
+        e.preventDefault()
+        optionRefs.current[openWith.options.length - 1]?.focus()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        closeMenu(true)
+      } else if (e.key === 'Tab') {
+        closeMenu()
+      }
+    },
+    [openWith, selected, closeMenu],
+  )
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (!pickerRef.current?.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [menuOpen])
+
+  useEffect(() => {
+    if (section !== 'open') setMenuOpen(false)
+  }, [section])
 
   // 录制：捕获下一个组合键。Esc 取消；认不出的组合留在录制态让人重按
   useEffect(() => {
@@ -314,6 +406,71 @@ export default function Settings({ onBack, onApplied }: Props) {
               {settings
                 ? `需求 ${settings.counts.requirements} · 项目 ${settings.counts.projects}`
                 : '读取中…'}
+            </div>
+          </>
+        )}
+
+        {section === 'open' && (
+          <>
+            <h1>打开方式</h1>
+
+            {openError && <div className="notice">{openError}</div>}
+            {openWith?.missing && (
+              <div className="notice">原来选的默认应用已不在本机，打开时会退回访达。</div>
+            )}
+
+            <div className="settings-row open-setting">
+              <div className="settings-row-text">
+                <div className="settings-row-title">默认打开方式</div>
+              </div>
+              <div className={`open-picker${menuOpen ? ' open' : ''}`} ref={pickerRef}>
+                <button
+                  ref={buttonRef}
+                  className="open-picker-btn"
+                  disabled={!openWith}
+                  aria-haspopup="listbox"
+                  aria-expanded={menuOpen}
+                  onClick={() => (menuOpen ? closeMenu() : openMenu())}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      openMenu()
+                    }
+                  }}
+                >
+                  {selected?.icon ? <img src={selected.icon} alt="" /> : <span className="open-icon-slot" />}
+                  <span className="open-picker-name">
+                    {selected ? selected.label : '扫描中…'}
+                  </span>
+                  <span className="open-picker-chevron">
+                    <ChevronIcon dir="down" size={12} />
+                  </span>
+                </button>
+
+                {menuOpen && openWith && (
+                  <div className="open-menu" role="listbox" aria-label="默认打开方式" onKeyDown={onMenuKeyDown}>
+                    {openWith.options.map((o, i) => (
+                      <Fragment key={o.id || 'finder'}>
+                        {i > 0 && openWith.options[i - 1].kind !== o.kind && <div className="open-menu-sep" />}
+                        <button
+                          ref={(el) => {
+                            optionRefs.current[i] = el
+                          }}
+                          className="open-menu-item"
+                          role="option"
+                          aria-selected={o.id === selected?.id}
+                          tabIndex={-1}
+                          onClick={() => void choose(o.id)}
+                        >
+                          {o.icon ? <img src={o.icon} alt="" /> : <span className="open-icon-slot" />}
+                          <span className="open-menu-label">{o.label}</span>
+                          {o.id === selected?.id && <CheckIcon />}
+                        </button>
+                      </Fragment>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}
