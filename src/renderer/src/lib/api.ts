@@ -1,5 +1,6 @@
 import type {
   BoardData,
+  CodeLinkStatus,
   ContextPayload,
   HookPlan,
   InstallOutcome,
@@ -72,6 +73,10 @@ export const api = {
       `/api/context?slug=${encodeURIComponent(slug)}` +
         (project ? `&project=${encodeURIComponent(project)}` : ''),
     ),
+
+  /** MR/PR 状态与流水线汇总：取不到的不在结果里 */
+  codeLinkStatuses: (urls: string[]): Promise<{ statuses: Record<string, CodeLinkStatus> }> =>
+    request('/api/code-link-statuses', { method: 'POST', body: JSON.stringify({ urls }) }),
 
   /** 全部 agent 会话（需求归属在每条的 requirementId 上）。mini 面板一次拉全 */
   sessions: (): Promise<{ sessions: Session[] }> => request('/api/sessions'),

@@ -1,9 +1,15 @@
-import { useEffect, useRef, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { api } from '../lib/api'
 import { isComposing, isEditableTarget, shortcut } from '../lib/keys'
 import { AGENT_LABELS } from '../lib/labels'
-import { codeLinkLabel, feishuTaskLabel } from '../lib/links'
-import { TODO_STATUS_LABEL, type ContextPayload, type Requirement, type Session } from '../lib/types'
+import { codeLinkLabel, feishuTaskLabel, PIPELINE_ICON, PIPELINE_LABEL, showsPipeline } from '../lib/links'
+import {
+  TODO_STATUS_LABEL,
+  type CodeLinkStatus,
+  type ContextPayload,
+  type Requirement,
+  type Session,
+} from '../lib/types'
 import { CopyButton, InfoBlock } from './InfoBits'
 import { AgentIcon } from './icons'
 import LaunchSession from './LaunchSession'
@@ -28,9 +34,37 @@ export default function InfoPanel({
   // 只列未完成的：已完成 / 已取消的不占版面
   const openTodos = (ctx?.todos ?? []).filter((t) => t.status === 'todo' || t.status === 'in_progress')
 
-  const groups = [
+  // 按 URL 列表做依赖：看板轮询换新对象时不重复请求
+  const codeUrls = req.codeLinks.map((l) => l.url).join('\n')
+  const [linkStates, setLinkStates] = useState<Record<string, CodeLinkStatus>>({})
+  useEffect(() => {
+    if (!codeUrls) return
+    let alive = true
+    const load = () => {
+      api
+        .codeLinkStatuses(codeUrls.split('\n'))
+        .then((r) => {
+          if (alive) setLinkStates(r.statuses)
+        })
+        .catch(() => {})
+    }
+    load()
+    const timer = setInterval(load, 15_000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [codeUrls])
+
+  const groups: Array<{
+    title: string
+    items: Array<{ label: string; url: string; status?: CodeLinkStatus }>
+  }> = [
     { title: '飞书任务', items: req.feishuTaskLinks.map((url) => ({ label: feishuTaskLabel(url), url })) },
-    { title: '代码链接', items: req.codeLinks.map((l) => ({ label: codeLinkLabel(l), url: l.url })) },
+    {
+      title: '代码链接',
+      items: req.codeLinks.map((l) => ({ label: codeLinkLabel(l), url: l.url, status: linkStates[l.url] })),
+    },
     { title: '扩展链接', items: req.extLinks.map((l) => ({ label: l.detail, url: l.url })) },
   ].filter((g) => g.items.length)
 
@@ -167,6 +201,7 @@ export default function InfoPanel({
                 >
                   {it.label}
                 </a>
+                {it.status && <CodeLinkStatusCell status={it.status} />}
               </div>
             )),
           )}
@@ -195,6 +230,27 @@ export default function InfoPanel({
         <CopyButton text={req.path} label="路径" />
       </div>
     </div>
+  )
+}
+
+/** 链接行末尾的状态：流水线图标（只在 open 时）+ 定宽状态列 */
+export function CodeLinkStatusCell({ status }: { status: CodeLinkStatus }) {
+  return (
+    <>
+      {showsPipeline(status) && status.pipeline && (
+        <span
+          className="link-pipe"
+          data-pipeline={status.pipeline}
+          title={`流水线：${PIPELINE_LABEL[status.pipeline]}`}
+        >
+          {PIPELINE_ICON[status.pipeline]}
+        </span>
+      )}
+      <span className="link-state" data-state={status.state} title={`状态：${status.state}`}>
+        <span className="dot" />
+        {status.state}
+      </span>
+    </>
   )
 }
 

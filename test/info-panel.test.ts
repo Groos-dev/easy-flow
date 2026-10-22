@@ -8,8 +8,15 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import InfoPanel from '../src/renderer/src/components/InfoPanel.tsx'
-import type { ContextPayload, Requirement, Session, Todo, Worktree } from '../src/renderer/src/lib/types.ts'
+import InfoPanel, { CodeLinkStatusCell } from '../src/renderer/src/components/InfoPanel.tsx'
+import type {
+  CodeLinkStatus,
+  ContextPayload,
+  Requirement,
+  Session,
+  Todo,
+  Worktree,
+} from '../src/renderer/src/lib/types.ts'
 
 function mkReq(patch: Partial<Requirement> = {}): Requirement {
   return {
@@ -203,6 +210,31 @@ describe('详情页浮窗 · 工作区与链接', () => {
     const html = render()
     assert.match(html, /foot-path/)
     assert.match(html, /\/Users\/groos\/requirements\/p\/a/)
+  })
+})
+
+describe('详情页浮窗 · 代码链接状态', () => {
+  const cell = (status: CodeLinkStatus) =>
+    renderToStaticMarkup(createElement(CodeLinkStatusCell, { status }))
+
+  test('还开着的 MR 带流水线图标，hover 说人话', () => {
+    const html = cell({ state: 'open', pipeline: 'failed' })
+    assert.match(html, /class="link-pipe" data-pipeline="failed"/)
+    assert.match(html, /✕/)
+    assert.match(html, /title="流水线：失败"/)
+  })
+
+  test('合入后不再挂历史流水线，只有状态', () => {
+    const html = cell({ state: 'merged', pipeline: 'success' })
+    assert.doesNotMatch(html, /link-pipe/)
+    assert.match(html, /data-state="merged"/)
+    assert.match(html, />merged</)
+  })
+
+  test('没跑过流水线时只留状态', () => {
+    const html = cell({ state: 'open', pipeline: null })
+    assert.doesNotMatch(html, /link-pipe/)
+    assert.match(html, /data-state="open"/)
   })
 })
 
