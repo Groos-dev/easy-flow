@@ -1,4 +1,9 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import {
+  NOTIFICATION_MODES,
+  NOTIFICATION_MODE_LABELS,
+  type NotificationMode,
+} from '../../../shared/notification-mode'
 import { api } from '../lib/api'
 import {
   CONTEXT_LABEL,
@@ -17,12 +22,13 @@ interface Props {
   onApplied: () => void
 }
 
-type SectionId = 'data' | 'open' | 'shortcut' | 'skill' | 'hook'
+type SectionId = 'data' | 'open' | 'shortcut' | 'notify' | 'skill' | 'hook'
 
 const SECTIONS: Array<{ id: SectionId; label: string }> = [
   { id: 'data', label: '数据目录' },
   { id: 'open', label: '打开方式' },
   { id: 'shortcut', label: '快捷键' },
+  { id: 'notify', label: '通知' },
   { id: 'skill', label: 'CLI 与 Skill' },
   { id: 'hook', label: '钩子' },
 ]
@@ -67,6 +73,13 @@ export default function Settings({ onBack, onApplied }: Props) {
   const pickerRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  // 系统通知：只有桌面端有。
+  // macOS 的允许/拒绝由系统设置控制，这里只报支持性与投递失败
+  const [notify, setNotify] = useState<{ supported: boolean; lastFailure: string } | null>(null)
+  const [notifyMode, setNotifyMode] = useState<NotificationMode | null>(null)
+  const [notifyNotice, setNotifyNotice] = useState('')
+  const [notifyError, setNotifyError] = useState('')
 
   const loadSettings = useCallback(async () => {
     const s = await api.settings()
@@ -131,13 +144,43 @@ export default function Settings({ onBack, onApplied }: Props) {
       .catch((e: Error) => setOpenError(`读取打开方式失败：${e.message}`))
   }, [section])
 
+  useEffect(() => {
+    if (section !== 'notify') return
+    void window.easyFlow
+      ?.notificationInfo?.()
+      .then(setNotify)
+      .catch((e: Error) => setNotifyError(`读取通知状态失败：${e.message}`))
+  }, [section])
+
+  useEffect(() => {
+    if (section !== 'notify') return
+    void window.easyFlow
+      ?.notificationMode?.()
+      .then(setNotifyMode)
+      .catch((e: Error) => setNotifyError(`读取通知时机失败：${e.message}`))
+  }, [section])
+
+  // 失败是异步事件：页面一直开着时也要能收到，
+  // 而不是只显示进来那一刻的快照
+  useEffect(() => {
+    if (section !== 'notify') return
+    const off = window.easyFlow?.onNotificationFailed?.((message) => {
+      setNotify((prev) => ({ supported: prev?.supported ?? true, lastFailure: message }))
+    })
+    return () => off?.()
+  }, [section])
+
   /** Electron 里可拉起原生目录选择器；浏览器开发时退化到手输 */
   const canPick = typeof window.easyFlow?.pickDirectory === 'function'
   /** 快捷键只对桌面端有意义：web 模式没有全局快捷键，这一节整个不出现 */
   const canSetShortcut = typeof window.easyFlow?.setShortcut === 'function'
+  /** 通知同理：web 模式没有 dock 与系统通知 */
+  const canNotify = typeof window.easyFlow?.notificationInfo === 'function'
   const platform = window.easyFlow?.platform ?? ''
-  // 应用内键位表在浏览器预览里也有意义，所以「快捷键」分区不再按平台隐藏
-  const sections = SECTIONS
+  // 应用内键位表在浏览器预览里也有意义，
+  // 所以「快捷键」分区不再按平台隐藏；
+  // 通知只有桌面端有，web 模式仍然隐藏
+  const sections = SECTIONS.filter((s) => s.id !== 'notify' || canNotify)
 
   /** 改绑：主进程注册不上（多半被占用）时把原因带回来 */
   const applyShortcut = useCallback(
@@ -348,6 +391,55 @@ export default function Settings({ onBack, onApplied }: Props) {
     }
   }
 
+  async function testNotification() {
+    setNotifyNotice('')
+    setNotifyError('')
+    try {
+      const res = await window.easyFlow?.testNotification?.()
+      if (!res) return
+      setNotify({ supported: res.supported, lastFailure: res.lastFailure })
+      if (!res.supported) setNotifyError('当前系统不支持通知')
+      else if (res.lastFailure) setNotifyNotice('')
+      else if (res.timedOut) setNotifyNotice('通知已提交，但没等到系统回执；没看到就去系统设置里确认')
+      else if (!res.delivered) setNotifyError('通知没有发出')
+    } catch (e) {
+      setNotifyError(`发送测试通知失败：${(e as Error).message}`)
+    }
+  }
+
+  async function changeNotificationMode(next: NotificationMode) {
+    const previous = notifyMode
+    setNotifyMode(next)
+    setNotifyError('')
+    setNotifyNotice('')
+    try {
+      const res = await window.easyFlow?.setNotificationMode?.(next)
+      if (!res) {
+        setNotifyMode(previous)
+        return
+      }
+      if (!res.ok) {
+        setNotifyMode(previous)
+        setNotifyError(res.error ?? '保存通知时机失败')
+        return
+      }
+      setNotifyNotice(`已改为「${NOTIFICATION_MODE_LABELS[next]}」`)
+    } catch (e) {
+      setNotifyMode(previous)
+      setNotifyError(`保存通知时机失败：${(e as Error).message}`)
+    }
+  }
+
+  async function openNotificationSettings() {
+    setNotifyError('')
+    try {
+      const res = await window.easyFlow?.openNotificationSettings?.()
+      if (res && !res.ok) setNotifyError('这个平台没有可打开的通知设置页')
+    } catch (e) {
+      setNotifyError(`打开系统设置失败：${(e as Error).message}`)
+    }
+  }
+
   return (
     <div className="settings-page">
       <aside className="settings-nav">
@@ -542,6 +634,54 @@ export default function Settings({ onBack, onApplied }: Props) {
           </>
         )}
 
+        {section === 'notify' && (
+          <>
+            <h1>通知</h1>
+
+            {notifyError && <div className="notice">{notifyError}</div>}
+            {notifyNotice && <div className="notice ok">{notifyNotice}</div>}
+
+            <div className="section-label">通知时机</div>
+            <div className="settings-row">
+              <div className="settings-row-text">
+                <div className="settings-row-title">显示系统通知</div>
+              </div>
+              <select
+                className="settings-select"
+                value={notifyMode ?? 'unfocused'}
+                disabled={!notifyMode}
+                onChange={(e) => void changeNotificationMode(e.target.value as NotificationMode)}
+              >
+                {NOTIFICATION_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {NOTIFICATION_MODE_LABELS[mode]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="section-label">状态</div>
+            <div className="settings-status">
+              {notify ? (notify.supported ? '系统支持通知' : '当前系统不支持通知') : '读取中…'}
+            </div>
+            {notify?.lastFailure && (
+              <div className="notice">最近一次投递失败：{notify.lastFailure}</div>
+            )}
+            <p className="hint">
+              通知跟随系统授权；macOS 读不到「允许 / 拒绝」状态，
+              未签名开发构建也不会投递。
+            </p>
+
+            <div className="row">
+              <button className="btn primary" onClick={() => void testNotification()}>
+                发一条测试通知
+              </button>
+              <button className="btn" onClick={() => void openNotificationSettings()}>
+                打开系统设置
+              </button>
+            </div>
+          </>
+        )}
 
         {section === 'hook' && (
           <>

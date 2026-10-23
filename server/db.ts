@@ -186,6 +186,7 @@ interface SessionStateRow {
   needs_action: string
   observed_at: number
   detail: string
+  hook_event: string
   action_text: string
   action_called_at: number
 }
@@ -208,6 +209,7 @@ function toObservation(row: SessionStateRow): SessionObservation {
       needsAction: row.needs_action,
       observedAt: row.observed_at,
       detail: row.detail,
+      ...(row.hook_event ? { hookEvent: row.hook_event } : {}),
     },
     action: row.action_text ? { text: row.action_text, calledAt: row.action_called_at } : null,
   }
@@ -892,6 +894,15 @@ export class BoardDatabase {
     return this.listIn(this.activeProject)
   }
 
+  /**
+   * 所有项目的需求：通知快照按会话的 requirementId 反查，
+   * 不分当前项目。
+   */
+  allRequirements(): Requirement[] {
+    const rows = this.db.prepare('SELECT * FROM requirement ORDER BY mtime DESC').all() as unknown as Row[]
+    return rows.map((r) => this.toRequirement(r))
+  }
+
   /** 在指定项目内按 slug 找需求 */
   get(slug: string, project = this.activeProject): Requirement | undefined {
     const row = this.db
@@ -1200,11 +1211,12 @@ export class BoardDatabase {
     const { status, action } = observation
     this.db
       .prepare(
-        `INSERT INTO session_state (agent, session, state, needs_action, observed_at, detail, action_text, action_called_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO session_state (agent, session, state, needs_action, observed_at, detail, hook_event, action_text, action_called_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(agent, session) DO UPDATE SET
            state = excluded.state, needs_action = excluded.needs_action,
            observed_at = excluded.observed_at, detail = excluded.detail,
+           hook_event = excluded.hook_event,
            action_text = excluded.action_text, action_called_at = excluded.action_called_at`,
       )
       .run(
@@ -1214,6 +1226,7 @@ export class BoardDatabase {
         status.needsAction,
         status.observedAt,
         status.detail,
+        status.hookEvent ?? '',
         action?.text ?? '',
         action?.calledAt ?? 0,
       )
@@ -1238,6 +1251,17 @@ export class BoardDatabase {
   listSessionObservations(): Array<{ agent: string; session: string; observation: SessionObservation }> {
     const rows = this.db.prepare('SELECT * FROM session_state').all() as unknown as SessionStateRow[]
     return rows.map((row) => ({ agent: row.agent, session: row.session, observation: toObservation(row) }))
+  }
+
+  /**
+   * 登记 id → 状态层 key 的全部别名。
+   * 批量读快照时一次查完，别再逐条 keyOf。
+   */
+  listSessionKeys(): Array<{ agent: string; session: string; stateKey: string }> {
+    const rows = this.db
+      .prepare('SELECT agent, session, state_key FROM session_source')
+      .all() as Array<{ agent: string; session: string; state_key: string }>
+    return rows.map((row) => ({ agent: row.agent, session: row.session, stateKey: row.state_key }))
   }
 
   source(path: string): SourceRow | undefined {

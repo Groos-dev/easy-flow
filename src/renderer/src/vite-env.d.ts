@@ -35,6 +35,25 @@ interface EasyFlowBridge {
   getShortcut?: () => Promise<{ shortcut: string; fallback: string }>
   /** 改绑呼出快捷键 */
   setShortcut?: (accel: string) => Promise<{ ok: boolean; shortcut?: string; error?: string }>
+  /** 系统通知能力与最近一次投递失败原因 */
+  notificationInfo?: () => Promise<{ supported: boolean; lastFailure: string }>
+  /** 发一条测试通知，等系统回执后给结论 */
+  testNotification?: () => Promise<{
+    supported: boolean
+    lastFailure: string
+    delivered: boolean
+    timedOut: boolean
+  }>
+  /** 投递失败时主进程推来的原因 */
+  onNotificationFailed?: (handler: (message: string) => void) => () => void
+  /** 打开系统的通知设置页 */
+  openNotificationSettings?: () => Promise<{ ok: boolean }>
+  /** 系统通知的显示时机 */
+  notificationMode?: () => Promise<'never' | 'unfocused' | 'always'>
+  /** 改通知时机 */
+  setNotificationMode?: (
+    mode: 'never' | 'unfocused' | 'always',
+  ) => Promise<{ ok: boolean; error?: string }>
 }
 
 interface Window {

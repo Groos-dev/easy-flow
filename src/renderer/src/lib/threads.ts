@@ -9,15 +9,17 @@
  * `thinking` / `working` 不是事件，是实时状态：它们自己会走完。`idle` 是点过的那档、`unknown` 读不到，
  * 都不提示。
  */
+import { isEventState } from '../../../shared/thread-events'
 import type { Session, ThreadState } from './types'
 
 /** 从急到缓：卡住了 > 出错 > 跑完了 > 干活 > 思考。角标按这个顺序排 */
 const ORDER: ThreadState[] = ['blocked', 'failed', 'done', 'working', 'thinking']
 
-/** 是不是「事件」型状态：一轮结束时抛给人的那种。其余是实时状态或读不到 */
-export function isEventState(state: ThreadState): boolean {
-  return state === 'done' || state === 'blocked' || state === 'failed'
-}
+/**
+ * 事件口径与服务端、通知层共用 src/shared/thread-events.ts，
+ * 不再各写一份。
+ */
+export { isEventState }
 
 /**
  * 这条会话现在要不要挂角标：事件（要人推），或正在跑。

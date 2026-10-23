@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, screen, session, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, Notification, screen, session, shell } from 'electron'
 import { execFile } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -8,6 +8,8 @@ import { createLogger } from '../../server/log.ts'
 import { appIconPng, scanOpenTargets } from '../../server/open-with.ts'
 import { externalOpenArgs } from './open-links.ts'
 import { placePanel, readPanelPosition, writePanelPosition } from './panel-position.ts'
+import { createAttentionService, type AttentionService } from './attention.ts'
+import { isNotificationMode } from '../shared/notification-mode.ts'
 
 // 图标放在仓库根的 resources/（electron-vite 的约定），运行时从 out/main 往上两级
 const ICON = join(__dirname, '../../resources/icon.png')
@@ -18,6 +20,12 @@ let panel: BrowserWindow | null = null
 /** 待主窗口渲染层取走的「打开需求」请求 */
 let pendingOpen: { project: string; slug: string } | null = null
 let boardServer: RunningBoardServer | null = null
+/**
+ * 会话事件 → dock 红点 / 系统通知。
+ * 检测放主进程，窗口收起也能发现。
+ */
+let attention: AttentionService | null = null
+let stopAttention: (() => void) | null = null
 const log = createLogger('open')
 
 // 开发时开远程调试端口，便于用 CDP 检查渲染进程（黑屏/白屏排查）。
@@ -213,6 +221,38 @@ function openExternal(url: string): void {
   )
 }
 
+/** 主窗口前置并打开需求。窗口被关过就重建（macOS 常态） */
+async function openRequirement(payload: { project: string; slug: string }): Promise<void> {
+  if (!win || win.isDestroyed()) {
+    // 新窗口的渲染层订阅可能还没挂上，
+    // 先存着等它来取（见 take-pending-open）
+    pendingOpen = payload
+    await createWindow()
+  }
+  if (!win || win.isDestroyed()) return
+  // 应用被 Cmd+H 隐藏时，只 show/focus 窗口不一定能把整个 app 拉回来
+  if (process.platform === 'darwin') {
+    app.show()
+    app.focus({ steal: true })
+  }
+  win.show()
+  win.focus()
+  win.webContents.send('easy-flow:open-requirement', payload)
+}
+
+/** 通知服务还没起来时（窗口极早加载）也要给设置页一个完整形状 */
+function fallbackAttentionInfo(): { supported: boolean; lastFailure: string } {
+  return { supported: Notification.isSupported(), lastFailure: '' }
+}
+
+function notificationSettingsUrl(): string | null {
+  if (process.platform === 'darwin') {
+    return 'x-apple.systempreferences:com.apple.Notifications-Settings.extension'
+  }
+  if (process.platform === 'win32') return 'ms-settings:notifications'
+  return null
+}
+
 function registerIpc(): void {
   ipcMain.handle('easy-flow:pick-directory', async () => {
     const result = await dialog.showOpenDialog(win ?? undefined!, {
@@ -244,16 +284,37 @@ function registerIpc(): void {
     return { ok: true, shortcut: next }
   })
 
-  // mini 面板点「详情」：主窗口前置并跳到该需求。主窗口被关过就重建（macOS 常态）
+  // mini 面板点「详情」、系统通知被点：主窗口前置并跳到该需求
   ipcMain.handle('easy-flow:open-requirement', async (_event, payload: { project: string; slug: string }) => {
-    if (!win || win.isDestroyed()) {
-      // 新窗口的渲染层订阅可能还没挂上，先存着等它来取（见 take-pending-open）
-      pendingOpen = payload
-      await createWindow()
+    await openRequirement(payload)
+  })
+
+  // 设置页的「通知」：系统能力与最近一次投递失败原因。
+  // macOS 的允许/拒绝读不到
+  ipcMain.handle('easy-flow:notification-info', () => attention?.info() ?? fallbackAttentionInfo())
+  ipcMain.handle(
+    'easy-flow:notification-test',
+    () => attention?.test() ?? Promise.resolve({ ...fallbackAttentionInfo(), delivered: false, timedOut: false }),
+  )
+
+  // 设置页的「通知时机」：写进配置并即时生效，不用重启
+  ipcMain.handle('easy-flow:notification-mode', () => attention?.mode() ?? 'unfocused')
+  ipcMain.handle('easy-flow:set-notification-mode', async (_event, value: unknown) => {
+    if (!isNotificationMode(value)) return { ok: false, error: '未知的通知时机' }
+    try {
+      const { writeConfig } = await import('../../server/config.ts')
+      writeConfig({ notificationMode: value })
+      attention?.setMode(value)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
     }
-    win!.show()
-    win!.focus()
-    win!.webContents.send('easy-flow:open-requirement', payload)
+  })
+  ipcMain.handle('easy-flow:open-notification-settings', async () => {
+    const url = notificationSettingsUrl()
+    if (!url) return { ok: false }
+    await shell.openExternal(url)
+    return { ok: true }
   })
 
   // 渲染层起来时取走待打开的需求：事件早于订阅就会丢，靠这一份兜底
@@ -388,11 +449,31 @@ async function boot(): Promise<void> {
   registerIpc()
   registerMenu()
   applyCsp()
-  boardServer = await startBoardServer({ port: DEFAULT_PORT })
+  boardServer = await startBoardServer({
+    port: DEFAULT_PORT,
+    // pull / hook / 点 pet 之后立刻刷通知层，不再靠主进程定时轮询
+    onAttention: () => attention?.refresh(),
+  })
+  const { readConfig } = await import('../../server/config.ts')
+  const config = readConfig()
+  attention = createAttentionService({
+    file: join(app.getPath('userData'), 'attention.json'),
+    getWindow: () => win,
+    isPanelVisible: () => Boolean(panel && !panel.isDestroyed() && panel.isVisible()),
+    mode: config.notificationMode,
+    icon: ICON,
+    openRequirement: (target) => void openRequirement(target),
+    openExternal,
+    onFailure: (message) => {
+      if (win && !win.isDestroyed()) win.webContents.send('easy-flow:notification-failed', message)
+    },
+  })
+  stopAttention = attention.start(() => boardServer?.attentionSnapshot() ?? [])
+  // 极端情况下窗口先于服务建好（并发 createWindow），这里补一次
+  attention.refreshBadge()
 
   // mini 面板的全局快捷键：取用户改过的，没改过就是默认
-  const { readConfig } = await import('../../server/config.ts')
-  panelShortcut = readConfig().panelShortcut || DEFAULT_SHORTCUT
+  panelShortcut = config.panelShortcut || DEFAULT_SHORTCUT
   if (!globalShortcut.register(panelShortcut, togglePanel)) {
     // 被别的应用占用时 register 返回 false。回落到默认，至少还能呼出——
     // 否则用户改的那个键失效后，面板就再没有入口了
@@ -445,9 +526,17 @@ async function createWindow(): Promise<void> {
     return { action: 'deny' }
   })
 
+  // Windows 的 overlay badge 挂在窗口上：
+  // 新建的窗口要把当前数量补挂回去
+  attention?.refreshBadge()
+
   win.on('closed', () => {
     win = null
   })
+
+  // Windows 的任务栏闪烁只在有人回来看时停；
+  // macOS 的 badge 不清，等事件自己消账
+  win.on('focus', () => attention?.handleWindowFocus())
 
   if (process.env.ELECTRON_RENDERER_URL) {
     await win.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -475,6 +564,7 @@ app.on('activate', () => {
 })
 
 app.on('before-quit', () => {
+  stopAttention?.()
   boardServer?.close()
 })
 
