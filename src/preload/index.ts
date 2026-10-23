@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { NotificationMode } from '../shared/notification-mode.ts'
 
 const CSP_NONCE_FLAG = '--easy-flow-csp-nonce='
 
@@ -65,4 +66,38 @@ contextBridge.exposeInMainWorld('easyFlow', {
     accel: string,
   ): Promise<{ ok: boolean; shortcut?: string; error?: string }> =>
     ipcRenderer.invoke('easy-flow:set-shortcut', accel),
+
+  /**
+   * 系统通知能力：是否支持、最近一次投递失败原因。
+   * macOS 的授权状态读不到。
+   */
+  notificationInfo: (): Promise<{ supported: boolean; lastFailure: string }> =>
+    ipcRenderer.invoke('easy-flow:notification-info'),
+
+  /** 发一条测试通知，等系统回执后返回结果 */
+  testNotification: (): Promise<{
+    supported: boolean
+    lastFailure: string
+    delivered: boolean
+    timedOut: boolean
+  }> => ipcRenderer.invoke('easy-flow:notification-test'),
+
+  /**
+   * 投递失败时主进程推来的原因，
+   * 设置页不用等下一次进页面才知道。
+   */
+  onNotificationFailed: (handler: (message: string) => void): (() => void) =>
+    subscribe('easy-flow:notification-failed', handler),
+
+  /** 打开系统的通知设置页（macOS / Windows） */
+  openNotificationSettings: (): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('easy-flow:open-notification-settings'),
+
+  /** 系统通知的显示时机 */
+  notificationMode: (): Promise<NotificationMode> =>
+    ipcRenderer.invoke('easy-flow:notification-mode'),
+
+  /** 改通知时机：立即生效并写进配置 */
+  setNotificationMode: (mode: NotificationMode): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('easy-flow:set-notification-mode', mode),
 })

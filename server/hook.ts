@@ -49,6 +49,7 @@ export function normalizeHookEvent(payload: HookPayload, observedAt = Date.now()
     needsAction: '',
     observedAt,
     detail: `hook 事件：${event}`,
+    hookEvent: event,
   })
   switch (event) {
     case 'SessionStart':

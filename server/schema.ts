@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS session (
  * session_state：会话状态。三类来源都写它——hook 事件、拉取文件、板侧点击（点一下 pet = 这条静止）。
  * 状态一变就落库，所以重启后原样还在；读口只查这张表。
  * action_text / action_called_at 是最近一次工具调用（气泡里那句「在干什么」），没有时是空串与 0。
+ * hook_event 是 hook 事件名，通知层据此判断 Interrupt；拉取来源没有，记空串。
  */
 CREATE TABLE IF NOT EXISTS session_state (
   agent        TEXT NOT NULL,
@@ -118,6 +119,7 @@ CREATE TABLE IF NOT EXISTS session_state (
   needs_action TEXT NOT NULL DEFAULT '',
   observed_at  INTEGER NOT NULL,
   detail       TEXT NOT NULL DEFAULT '',
+  hook_event   TEXT NOT NULL DEFAULT '',
   action_text  TEXT NOT NULL DEFAULT '',
   action_called_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (agent, session)
@@ -198,6 +200,9 @@ function migrate(db: DatabaseSync): void {
   addIfMissing('session', 'role', `role TEXT NOT NULL DEFAULT 'dev'`)
   addIfMissing('session_state', 'action_text', `action_text TEXT NOT NULL DEFAULT ''`)
   addIfMissing('session_state', 'action_called_at', 'action_called_at INTEGER NOT NULL DEFAULT 0')
+  // hook 事件名单独存一列：通知层判断 Interrupt 用结构化字段，
+  // 不靠 detail 文案
+  addIfMissing('session_state', 'hook_event', `hook_event TEXT NOT NULL DEFAULT ''`)
 }
 
 /** 建表 + 升级，开库时跑一次 */

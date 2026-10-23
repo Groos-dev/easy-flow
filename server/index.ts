@@ -20,7 +20,8 @@ import {
 } from './db.ts'
 import { hookKeyOf, PULL_INTERVAL_MS, pullStatuses, pullTitles, readObservations } from './threads.ts'
 import { recordHook } from './hook.ts'
-import { idleStatus, SessionStateStore } from './session-state.ts'
+import type { AttentionSession } from './attention.ts'
+import { idleStatus, SessionStateStore, unknownStatus } from './session-state.ts'
 import type { SourceTable } from './source-file.ts'
 import { rankNextUp } from './next-up.ts'
 import './launch-claude.ts'
@@ -65,6 +66,11 @@ export interface BoardAppOptions {
   dataDir?: string
   /** 服务监听端口。设置页装 hook 时要把地址与端口写进配置，所以得知道真实端口 */
   port?: number
+  /**
+   * 会话状态变化后的回调。hook 推送与点 pet 都走这儿，
+   * 通知层不用另起定时器轮询。
+   */
+  onAttention?: () => void
 }
 
 export interface BoardApp {
@@ -72,6 +78,11 @@ export interface BoardApp {
   readonly dataDir: string
   store: SessionStateStore
   sources: SourceTable
+  /**
+   * 状态变化后通知通知层。
+   * 包了 try/catch，不把通知层的错带回请求链。
+   */
+  notifyAttention: () => void
   handle: (req: IncomingMessage, res: ServerResponse) => Promise<void>
   close: () => void
 }
@@ -136,7 +147,7 @@ function openWithPayload(options = openOptions()) {
   }
 }
 
-export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions = {}): BoardApp {
+export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: BoardAppOptions = {}): BoardApp {
   const initial = readConfig()
   let currentDir = dataDir ?? initial.dataDir
   let db = new BoardDatabase(currentDir, initial.activeProject)
@@ -168,6 +179,15 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
     keyOf: (agent, session) => db.keyOf(agent, session),
     alias: (agent, session, key) => db.alias(agent, session, key),
   })
+
+  // 通知层出的错不能呛回 agent：hook 入口永远回 200
+  const notifyAttention = (): void => {
+    try {
+      onAttention?.()
+    } catch (err) {
+      log.warn(`attention callback failed: ${(err as Error).message}`)
+    }
+  }
 
   // 首次运行时把生效的数据目录固化下来，否则配置一直缺失，
   // 每个进程都要重新猜默认值（独立跑 server 与 Electron 之间会不一致）。
@@ -220,6 +240,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
         const fromQuery = url.searchParams.get('agent')
         const fromBody = typeof payload.agent === 'string' && payload.agent ? payload.agent : ''
         recordHook(payload, { agent: fromQuery || fromBody || 'claude' }, stateStore)
+        // 推送到达就刷新通知层，通知延迟不再等下一次 pull
+        notifyAttention()
         json(req, res, 200, { ok: true })
         return
       }
@@ -387,6 +409,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
         const session = String(body.session)
         const key = hookKeyOf(agent, session)
         stateStore.put(agent, key, idleStatus())
+        // 点 pet 就是消账：badge 立刻减，不等下一次 pull
+        notifyAttention()
         json(req, res, 200, { ok: true })
         return
       }
@@ -660,6 +684,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT }: BoardAppOptions
     },
     store: stateStore,
     sources,
+    notifyAttention,
     handle,
     close: () => {
       clearInterval(rescanTimer)
@@ -672,12 +697,19 @@ export interface StartOptions {
   port?: number
   dataDir?: string
   host?: string
+  /** 会话状态变化后的回调（hook / 点 pet / 每次 pull） */
+  onAttention?: () => void
 }
 
 export interface RunningBoardServer {
   server: ReturnType<typeof createServer>
   port: number
   dataDir: string
+  /**
+   * 给主进程的通知层取一份会话事件快照。渲染层在窗口隐藏时不轮询，
+   * 事件检测只能放在主进程，所以这里直接在进程内读，不走 HTTP。
+   */
+  attentionSnapshot: () => AttentionSession[]
   close: () => void
 }
 
@@ -685,9 +717,50 @@ export function startBoardServer({
   port = DEFAULT_PORT,
   dataDir,
   host = '127.0.0.1',
+  onAttention,
 }: StartOptions = {}): Promise<RunningBoardServer> {
-  const app = createBoardApp({ dataDir, port })
+  const app = createBoardApp({ dataDir, port, onAttention })
   const server = createServer((req, res) => void app.handle(req, res))
+
+  /**
+   * 一次查完需求、别名、状态与会话再在内存里拼，避免每条会话各来一次 keyOf + byId。
+   * 通知层每次 pull / hook 都会调它，不再每秒轮询。
+   */
+  const attentionSnapshot = (): AttentionSession[] => {
+    // 没有 id 的旧需求不能进表：空 key 会互相覆盖，
+    // 会话会挂到错误的需求上
+    const requirements = new Map(
+      app.db.allRequirements().filter((r) => r.id).map((r) => [r.id, r]),
+    )
+    const aliases = new Map(
+      app.db.listSessionKeys().map((k) => [`${k.agent}:${k.session}`, k.stateKey]),
+    )
+    const states = new Map(
+      app.db.listSessionObservations().map((o) => [`${o.agent}:${o.session}`, o.observation]),
+    )
+
+    return app.db.listSessions().flatMap((session) => {
+      const requirement = requirements.get(session.requirementId)
+      if (!requirement) return []
+      const key = aliases.get(`${session.agent}:${session.session}`) ?? session.session
+      const stored = states.get(`${session.agent}:${key}`)
+      return [
+        {
+          agent: session.agent,
+          session: session.session,
+          sessionTitle: session.title,
+          link: session.link,
+          requirement: {
+            id: requirement.id,
+            title: requirement.title,
+            slug: requirement.slug,
+            project: requirement.project,
+          },
+          status: stored?.status ?? unknownStatus(`${session.agent} 没有可读的状态来源`),
+        },
+      ]
+    })
+  }
 
   const pull = () => {
     try {
@@ -696,6 +769,9 @@ export function startBoardServer({
       pullTitles(sessions, app.db)
     } catch (err) {
       log.warn(`pull failed: ${(err as Error).message}`)
+    } finally {
+      // pull 之后立刻通知，不再等主进程的 1s 定时器
+      app.notifyAttention()
     }
   }
   pull()
@@ -712,6 +788,7 @@ export function startBoardServer({
         server,
         port,
         dataDir: app.dataDir,
+        attentionSnapshot,
         close: () => {
           server.close()
           app.close()

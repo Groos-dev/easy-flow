@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
+import { isNotificationMode, type NotificationMode } from '../src/shared/notification-mode.ts'
 
 export interface AppConfig {
   dataDir: string
@@ -17,6 +18,8 @@ export interface AppConfig {
   panelShortcut: string
   /** 详情页默认用谁开目录：OpenTarget.id；空串 = 访达 */
   openWith: string
+  /** 系统通知的显示时机；dock 红点不受影响 */
+  notificationMode: NotificationMode
 }
 
 /** 配置文件路径。由 main 进程通过 EASY_FLOW_CONFIG 指定；独立运行 server 时回退到约定路径。 */
@@ -49,6 +52,7 @@ export function readConfig(): AppConfig {
     activeProject: '',
     panelShortcut: '',
     openWith: '',
+    notificationMode: 'unfocused',
   }
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<AppConfig>
@@ -59,6 +63,9 @@ export function readConfig(): AppConfig {
       panelShortcut:
         typeof raw?.panelShortcut === 'string' ? raw.panelShortcut : defaults.panelShortcut,
       openWith: typeof raw?.openWith === 'string' ? raw.openWith : defaults.openWith,
+      notificationMode: isNotificationMode(raw?.notificationMode)
+        ? raw.notificationMode
+        : defaults.notificationMode,
     }
   } catch {
     /* 首次运行或文件损坏，走默认值 */

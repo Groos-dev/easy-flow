@@ -692,6 +692,13 @@ describe('配置 · 面板快捷键', () => {
       // 没配过就是空串，由主进程回落到默认
       writeConfig({ panelShortcut: '' })
       assert.equal(readConfig().panelShortcut, '')
+
+      // 通知时机同样合并写入，不影响其它字段
+      writeConfig({ notificationMode: 'never' })
+      assert.equal(readConfig().notificationMode, 'never')
+      assert.equal(readConfig().dataDir, join(d, 'data2'), '改通知时机不能把数据目录冲掉')
+      writeConfig({ panelShortcut: 'Command+Shift+K' })
+      assert.equal(readConfig().notificationMode, 'never', '改快捷键不能把通知时机冲掉')
     } finally {
       if (prev === undefined) delete process.env.EASY_FLOW_CONFIG
       else process.env.EASY_FLOW_CONFIG = prev

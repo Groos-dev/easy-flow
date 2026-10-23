@@ -18,6 +18,7 @@
  * （见 threads.ts 的 hookKeyOf），这样点击与 hook 事件才落在同一个格子里。
  */
 import { createLogger } from './log.ts'
+import { EVENT_STATES } from '../src/shared/thread-events.ts'
 import type { SessionAction } from './action.ts'
 
 const log = createLogger('state')
@@ -32,8 +33,18 @@ const log = createLogger('state')
  * 这边按看板自己的语义叫 done / blocked / failed，映射在 lib/pet-art.ts）。
  * `unknown` 是我们加的：它不是一种状态，是「读不到」。
  */
-export const THREAD_STATES = ['idle', 'thinking', 'working', 'sweeping', 'done', 'blocked', 'failed', 'unknown'] as const
+export const THREAD_STATES = [
+  'idle',
+  'thinking',
+  'working',
+  'sweeping',
+  ...EVENT_STATES,
+  'unknown',
+] as const
 export type ThreadState = (typeof THREAD_STATES)[number]
+
+export { EVENT_STATES, isEventState } from '../src/shared/thread-events.ts'
+export type { EventState } from '../src/shared/thread-events.ts'
 
 /** 会话形态的一条观察。所有来源都写这个，写的人自己把判据拼进 detail */
 export interface SessionStatus {
@@ -44,6 +55,11 @@ export interface SessionStatus {
   observedAt: number
   /** 判据出处，详情页 hover 用 */
   detail: string
+  /**
+   * hook 事件名（如 Interrupt）；拉取来源没有。
+   * 通知层按它做结构化判断。
+   */
+  hookEvent?: string
 }
 
 /**
@@ -129,6 +145,7 @@ function differs(old: SessionObservation | undefined, next: SessionObservation):
     before.state !== after.state ||
     before.observedAt !== after.observedAt ||
     before.detail !== after.detail ||
+    before.hookEvent !== after.hookEvent ||
     old.action?.text !== next.action?.text ||
     old.action?.calledAt !== next.action?.calledAt
   )

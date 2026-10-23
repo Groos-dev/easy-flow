@@ -1268,6 +1268,31 @@ body {
   background: var(--border);
 }
 
+/* 设置行右侧的下拉：通知时机这类少量选项，
+   原生 select 就够，别自绘一层 */
+.settings-select {
+  flex: none;
+  min-width: 132px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.settings-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.settings-select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* ------------------------------------------------------------ 设置面板 */
 
 .row {
