@@ -400,6 +400,38 @@ function localDay(): string {
   return stamp().slice(0, 10)
 }
 
+/**
+ * 会话 id 归一化。待办里存的是「能回到原会话」的链接式（codex://threads/<id>、
+ * claude://claude.ai/epitaxy/<id>），会话表存的是裸 id——不归一化，按会话反查永远查不到。
+ * 待办是人/agent 手写进去的，id 后面常跟着一句备注（「…（本会话「出口线合并逻辑排查」）」），
+ * 所以不按斜杠切末段，而是认出 id 本身：claude 的 local_<uuid>、裸 uuid、codex 的线程 id。
+ */
+export function todoSessionKey(session: string): string {
+  const local = /\blocal_[0-9a-f-]{8,}/i.exec(session)
+  if (local) return local[0]
+  const uuid = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i.exec(session)
+  if (uuid) return uuid[0]
+  // 认不出格式就退回末段（去掉可能跟着的括号备注）
+  const tail = session.split('/').pop() ?? session
+  return tail.split(/[（(]/)[0].trim()
+}
+
+/**
+ * 待办从首次入库到现在过了几天（本机日期，至少 0）。
+ * 超期判定与展示共用。
+ */
+export function todoAgeDays(created: string, now = localDay()): number {
+  const day = created.slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return 0
+  const ms = Date.parse(`${now}T00:00:00`) - Date.parse(`${day}T00:00:00`)
+  return Number.isFinite(ms) ? Math.max(0, Math.round(ms / 86_400_000)) : 0
+}
+
+/** 「还没完成」的唯一口径：列表过滤、超期判定、收尾计数都走这里，别各写一份 */
+export function isOpenTodo(todo: Todo): boolean {
+  return todo.status === 'todo' || todo.status === 'in_progress'
+}
+
 /** JSON 列解析。列可能存着 'null'，所以结果要允许 undefined，调用方用 ?? 兜底。 */
 function parseLinks<T>(raw: string | null, fallback: T): T | undefined {
   if (!raw) return fallback
@@ -1393,6 +1425,87 @@ export class BoardDatabase {
       | TodoRow
       | undefined
     return row ? toTodo(row) : undefined
+  }
+
+  /**
+   * 按来源会话反查待办。
+   * 会话串在库里是原样存的，归一化交给 todoSessionKey。
+   */
+  listTodosBySession(session: string): Todo[] {
+    const key = todoSessionKey(session)
+    const rows = this.db
+      .prepare('SELECT * FROM todo ORDER BY updated DESC, id DESC')
+      .all() as unknown as TodoRow[]
+    return rows.map(toTodo).filter((t) => t.session && todoSessionKey(t.session) === key)
+  }
+
+  /**
+   * 一条需求名下的待办，分两档：
+   *   explicit  —— 待办侧显式写了 req_id（唯一进库的归属）
+   *   candidate —— 没写，但来源会话登记在这条需求上。只是推断，不回写
+   * 指针悬空的那些不属于任何需求，用 stalePointerTodos 单独取。
+   */
+  todosForRequirement(requirementId: string): { explicit: Todo[]; candidate: Todo[] } {
+    // 需求没 id 时不可能有待办挂在它上面。这里必须挡住空串：库里未挂的待办
+    // 读出来是 ''，不挡就会把全部无归属的算成「显式挂在这条需求下」
+    if (!requirementId) return { explicit: [], candidate: [] }
+    const sessions = this.listSessions(requirementId)
+    const keys = new Set(sessions.map((s) => todoSessionKey(s.session)))
+    const explicit: Todo[] = []
+    const candidate: Todo[] = []
+    for (const t of this.listTodos()) {
+      if (t.requirementId === requirementId) explicit.push(t)
+      else if (!t.requirementId && t.session && keys.has(todoSessionKey(t.session))) candidate.push(t)
+    }
+    return { explicit, candidate }
+  }
+
+  /**
+   * 没有任何归属的待办：没写 req_id，来源会话也推不出需求。
+   * 这些就是没人会主动看见的那批，只能靠开工取上下文时被点出来。
+   */
+  orphanTodos(): Todo[] {
+    const owners = this.sessionOwners()
+    return this.listTodos().filter((t) => !t.requirementId && !this.candidateOwner(t, owners))
+  }
+
+  /**
+   * 悬空指针：req_id 有值但库里没有那条需求。需求被删或合并后会留下这种，
+   * 它不属于任何一条现存需求，也不算无归属——在 context 里全局点名一次。
+   */
+  stalePointerTodos(): Todo[] {
+    const known = new Set(this.allRequirements().map((r) => r.id))
+    return this.listTodos().filter((t) => t.requirementId && !known.has(t.requirementId))
+  }
+
+  /**
+   * 指向已完成需求的待办：需求收尾时没一并了结，就会留下这种假线索。
+   * 同样不属于任何未完成需求的上下文，单独全局点名。
+   */
+  finishedRequirementTodos(): Todo[] {
+    const finished = new Set(
+      this.allRequirements()
+        .filter((r) => r.status === '已完成')
+        .map((r) => r.id),
+    )
+    return this.listTodos().filter((t) => finished.has(t.requirementId))
+  }
+
+  /**
+   * 会话 id（归一化后）→ 需求 id。
+   * 一次查全，避免每条待办都开一次查询。
+   */
+  private sessionOwners(): Map<string, string> {
+    const rows = this.db.prepare('SELECT req_id, session FROM session').all() as unknown as Array<{
+      req_id: string
+      session: string
+    }>
+    return new Map(rows.map((r) => [todoSessionKey(r.session), r.req_id]))
+  }
+
+  /** 由来源会话推出的归属；推不出来就是空串 */
+  private candidateOwner(todo: Todo, owners: Map<string, string>): string {
+    return todo.session ? (owners.get(todoSessionKey(todo.session)) ?? '') : ''
   }
 
   /** 按去重键反查。feishu 来源的 ref 是 message_id，用它挡住同一消息重复入库 */

@@ -2,7 +2,8 @@
 
 # easy-flow
 
-以 markdown 为内容源、SQLite 为状态源的需求看板。全局待办不在看板上，只从 CLI 与需求详情页的「关联待办」进入。
+以 markdown 为内容源、SQLite 为状态源的需求看板。全局待办不在看板上，从 CLI 与需求详情页的「关联待办」进入；
+开工取上下文时，名下待办与无归属的存量会一起带出来。
 
 需求目录由 agent 直接在文件系统里建，应用不提供创建入口；应用负责把目录扫进库里、
 让人看见状态、读写需求文档。agent 那侧由 CLI 与 skill 承载（见 `skill/` 下的两份说明），
@@ -34,9 +35,9 @@
 | `server/` | 数据层与 HTTP 层。`db.ts` 是 SQLite 门面（状态的唯一权威），`markdown.ts` 只读文件不持状态，`http.ts` 是 CORS / JSON / 文档读写的零件，`index.ts` 是路由 |
 | `src/main/` | Electron 主进程：起内嵌服务、开窗口、菜单与原生目录选择 |
 | `src/renderer/` | 渲染层（React）。数据只经 HTTP 拿（开发与打包共用同一套代码）；原生目录选择走 preload 桥的 IPC |
-| `server/cli.ts` | 给 agent 与脚本用的命令行（context / project new / req new\|set\|link\|session / wt new\|rm / todo new\|set\|list\|show\|import），与 HTTP 层共用同一个数据层 |
+| `server/cli.ts` | 给 agent 与脚本用的命令行（context / project new / req new\|set\|link\|session / wt new\|rm / todo new\|set\|list\|show\|promote\|import），与 HTTP 层共用同一个数据层 |
 | `skill/easy-flow/SKILL.md` | 需求那侧的接入说明（触发条件、意图→命令对照），由设置页链进各 agent 的 skills 目录 |
-| `skill/todo/SKILL.md` | 待办那侧的接入说明。与需求平级，两个 skill 一起装 |
+| `skill/todo/SKILL.md` | 待办那侧的接入说明（捕获、归属三档、处置、立项、收尾）。与需求两个 skill 一起装 |
 
 `tsx server/dev.ts` 提供第三种跑法：只起 HTTP 服务，不拉 Electron。
 
@@ -64,8 +65,13 @@
   `~/requirements/easy-flow/thread-status/docs/easy-flow/research.md`
 - **待办**是全局的，不进看板：一条一份 md 放在 `_todos/`，文件名就是它的 id
   （`T-YYYYMMDD-NNN`，按首次入库日编号）。同样只从 md 读标题与摘要，状态与来源只归库
-- **待办与需求**靠 todo 侧的一个指针相连（`easy-flow todo set <id> --req <req-…>`）：立项后回填，
-  需求详情页的「关联待办」块只列未完成的那些。指针只存一侧，反向靠查询——不维护第二份列表
+- **待办与需求**靠 todo 侧的一个指针相连，归属分三档：写了的（显式）/ 由来源会话推出的
+  （候选，只提示、不回写）/ 推不出来的（无归属）。开工取 `context` 时前两档归本需求，
+  无归属、指针悬空、归属需求已完成三种在末尾全局点名；需求置 `已完成` / `Review` 时
+  `req set` 会点出名下未完成的待办与超期无归属的存量，名下那批可用
+  `todo set <id>… --status done` 一次收掉。立项是一次动作（`todo promote`），
+  不必再手工回填指针；无归属的按停留天数标超期（7 天），处置只有三条路：
+  做、不做（`cancelled`）、立成需求
 - `_templates/`、`_todos/`（下划线开头的目录）是收纳处，不会被当成项目；模板缺哪个补哪个，
   已存在的不覆盖，所以改模板只对新数据目录生效
 

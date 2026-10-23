@@ -9,6 +9,7 @@ import {
   type ContextPayload,
   type Requirement,
   type Session,
+  type Todo,
 } from '../lib/types'
 import { CopyButton, InfoBlock } from './InfoBits'
 import { AgentIcon } from './icons'
@@ -16,6 +17,8 @@ import LaunchSession from './LaunchSession'
 
 /**
  * 需求详情页的信息浮窗。数据来自详情页已加载的 /api/context。
+ *
+ * 待办分两段：登记过的归属与由来源会话推出来的候选，后者行尾标「未确认」。
  */
 export default function InfoPanel({
   req,
@@ -32,7 +35,10 @@ export default function InfoPanel({
   const worktrees = ctx?.worktrees ?? []
   const sessions = ctx?.sessions ?? []
   // 只列未完成的：已完成 / 已取消的不占版面
-  const openTodos = (ctx?.todos ?? []).filter((t) => t.status === 'todo' || t.status === 'in_progress')
+  const stillOpen = (t: Todo) => t.status === 'todo' || t.status === 'in_progress'
+  const openTodos = (ctx?.todos ?? []).filter(stillOpen)
+  // 由来源会话推出来的归属：没写进库，所以标出来，别让人误以为已经挂上了
+  const candidateTodos = (ctx?.candidateTodos ?? []).filter(stillOpen)
 
   // 按 URL 列表做依赖：看板轮询换新对象时不重复请求
   const codeUrls = req.codeLinks.map((l) => l.url).join('\n')
@@ -152,35 +158,25 @@ export default function InfoPanel({
         </InfoBlock>
       )}
 
-      {/* 关联待办：立项时在 todo 侧登记的指针反查出来的。只列未完成的，颜色区分状态 */}
+      {/* 关联待办：todo 侧登记了指针的那些。只列未完成的，颜色区分状态 */}
       {openTodos.length > 0 && (
         <InfoBlock label="关联待办" count={openTodos.length}>
-          {openTodos.map((t) => {
-            const label = TODO_STATUS_LABEL[t.status] ?? t.status
-            return (
-              <div
-                className="sess"
-                key={t.id}
-                data-info-row=""
-                role="button"
-                tabIndex={0}
-                title="在详情页打开这条待办"
-                onClick={() => onOpenTodo(t.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') onOpenTodo(t.id)
-                }}
-              >
-                <span className="sess-agent">
-                  <span className="todo-dot" data-status={t.status} />
-                  {label}
-                </span>
-                <span className="sess-title line" title={t.title}>
-                  {t.title}
-                </span>
-                <span className="sess-go">↗</span>
-              </div>
-            )
-          })}
+          {openTodos.map((t) => (
+            <TodoRow key={t.id} todo={t} onOpenTodo={onOpenTodo} />
+          ))}
+        </InfoBlock>
+      )}
+
+      {/*
+       * 候选归属：来源会话登记在本需求上、但待办自己没写指针的那些。
+       * 与上一段分开摆，因为「推出来的」和「登记过的」不是一回事——合并成一列，
+       * 人会把推断当成事实，指针也就再没人回填了。
+       */}
+      {candidateTodos.length > 0 && (
+        <InfoBlock label="待确认归属" count={candidateTodos.length}>
+          {candidateTodos.map((t) => (
+            <TodoRow key={t.id} todo={t} onOpenTodo={onOpenTodo} candidate />
+          ))}
         </InfoBlock>
       )}
 
@@ -251,6 +247,49 @@ export function CodeLinkStatusCell({ status }: { status: CodeLinkStatus }) {
         {status.state}
       </span>
     </>
+  )
+}
+
+/**
+ * 一条待办：状态点 + 标题，整行点开。
+ * candidate 是推出来的归属，行尾挂一句说明。
+ */
+function TodoRow({
+  todo,
+  onOpenTodo,
+  candidate = false,
+}: {
+  todo: Todo
+  onOpenTodo: (id: string) => void
+  candidate?: boolean
+}) {
+  const label = TODO_STATUS_LABEL[todo.status] ?? todo.status
+  return (
+    <div
+      className="sess"
+      data-info-row=""
+      role="button"
+      tabIndex={0}
+      title={
+        candidate
+          ? `来源会话在这条需求上，但待办没写归属。确认后补上：easy-flow todo set ${todo.id} --req <req-…>`
+          : '在详情页打开这条待办'
+      }
+      onClick={() => onOpenTodo(todo.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onOpenTodo(todo.id)
+      }}
+    >
+      <span className="sess-agent">
+        <span className="todo-dot" data-status={todo.status} />
+        {label}
+      </span>
+      <span className="sess-title line" title={todo.title}>
+        {todo.title}
+      </span>
+      {candidate && <span className="todo-candidate">未确认</span>}
+      <span className="sess-go">↗</span>
+    </div>
   )
 }
 

@@ -7,7 +7,7 @@
  * worktree dirs. Never guessed from cwd or env: a wrong guess writes state onto another
  * requirement, while an unknown id just errors out.
  */
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
@@ -38,6 +38,8 @@ import {
   TODO_CHANNELS,
   TODO_SOURCES,
   TODO_STATUSES,
+  isOpenTodo,
+  todoAgeDays,
   type CodeLink,
   type Priority,
   type Requirement,
@@ -262,6 +264,166 @@ function requirementLine(r: Requirement): string {
   return `- ${r.id || '（无 id）'}  ${r.slug}  ${r.title}`
 }
 
+interface TodoGroups {
+  explicit: Todo[]
+  candidate: Todo[]
+}
+
+/**
+ * 待办放过这么多天还没归属就该处置了：做、不做、还是归到某条需求。
+ * 只用来标「超期」，不改任何状态——到点只负责把人叫到跟前，决定仍由人做。
+ */
+const TODO_STALE_DAYS = 7
+
+/**
+ * 每段最多列几条。
+ * context 的主体仍是需求本身，待办只占末尾一小截。
+ */
+const TODO_BLOCK_LIMIT = 5
+
+/** 一段待办的 id 清单：超出上限只报总数，不把它铺成第二个列表 */
+function todoIds(todos: Todo[]): string {
+  const ids = todos
+    .slice(0, TODO_BLOCK_LIMIT)
+    .map((t) => t.id)
+    .join(' ')
+  return todos.length > TODO_BLOCK_LIMIT ? `${ids} 等 ${todos.length} 条` : ids
+}
+
+/**
+ * 开工时看得见的待办。两段分开，因为它们要人做的事不一样：
+ *   显式归属 —— 这条需求名下未完成的，直接去做
+ *   候选归属 —— 来源会话在这条需求上，但指针没回填。只是推断，得人确认
+ * 全局的三种（无归属 / 悬空 / 归属需求已完成）见 todoSection。
+ */
+function todoBlock({ explicit, candidate }: TodoGroups, reqId: string): string[] {
+  const explicitOpen = explicit.filter(isOpenTodo)
+  const candidateOpen = candidate.filter(isOpenTodo)
+  const blocks: string[] = []
+
+  if (explicitOpen.length) {
+    blocks.push(
+      `## 待办（${explicitOpen.length}）\n${explicitOpen
+        .slice(0, TODO_BLOCK_LIMIT)
+        .map((t) => todoLine(t))
+        .join('\n')}\n` +
+        `做完一条就置 done：easy-flow todo set ${todoIds(explicitOpen)} --status done`,
+    )
+  }
+  if (candidateOpen.length) {
+    blocks.push(
+      `## 待办 · 归属未确认（${candidateOpen.length}）\n` +
+        `${candidateOpen
+          .slice(0, TODO_BLOCK_LIMIT)
+          .map((t) => todoLine(t))
+          .join('\n')}\n` +
+        `来源会话登记在本需求上，但待办自己没写归属——确认是这条需求的活就补上：\n` +
+        `  easy-flow todo set ${todoIds(candidateOpen)} --req ${reqId}\n` +
+        '不是这条需求的活，就归到它该去的那条需求，或者不做（--status cancelled）。',
+    )
+  }
+  return blocks
+}
+
+/** 无归属那批的口径：只算未完成的，超期与最老天数都从这批里数 */
+function orphanStats(orphans: Todo[]): { open: Todo[]; overdue: Todo[]; oldestDays: number } {
+  const open = orphans
+    .filter(isOpenTodo)
+    .sort((a, b) => todoAgeDays(b.created) - todoAgeDays(a.created))
+  return {
+    open,
+    overdue: open.filter((t) => todoAgeDays(t.created) >= TODO_STALE_DAYS),
+    oldestDays: open.length ? todoAgeDays(open[0].created) : 0,
+  }
+}
+
+/**
+ * 无归属的存量：不属于任何需求，也推不出归属。
+ * 一行说清有几条、最老多久、是哪几条。
+ */
+function orphanLine(orphans: Todo[]): string {
+  const { open, overdue, oldestDays } = orphanStats(orphans)
+  if (!open.length) return ''
+  return (
+    `## 无归属待办（${open.length}，超期 ${overdue.length}）\n` +
+    `最老 ${oldestDays} 天：${todoIds(open)}\n` +
+    `不挂在任何需求上，也没法从会话推出归属。逐条处置：做 → todo set <id> --status in_progress；` +
+    `不做 → --status cancelled；要交付就立成需求 → easy-flow todo promote <id> --project <项目>`
+  )
+}
+
+/** 指针悬空是全局状态：不属于任何一条现存需求，不跟需求走 */
+function staleLine(stale: Todo[]): string {
+  const open = stale.filter(isOpenTodo)
+  if (!open.length) return ''
+  const lines = open
+    .slice(0, TODO_BLOCK_LIMIT)
+    .map((t) => `${todoLine(t)}  → 指向 ${t.requirementId}（库里已没有这条需求）`)
+  return (
+    `## 待办 · 指针悬空（${open.length}）\n${lines.join('\n')}\n` +
+    `重新挂到一条存在的需求上：easy-flow todo set ${todoIds(open)} --req <req-…>；不做就 --status cancelled。`
+  )
+}
+
+/** 需求已完成、待办还开着：收尾时没一并了结留下的假线索 */
+function finishedLine(todos: Todo[]): string {
+  const open = todos.filter(isOpenTodo)
+  if (!open.length) return ''
+  const lines = open
+    .slice(0, TODO_BLOCK_LIMIT)
+    .map((t) => `${todoLine(t)}  → 归属 ${t.requirementId} 已完成`)
+  const command =
+    open.length <= TODO_BLOCK_LIMIT
+      ? `一并了结：easy-flow todo set ${todoIds(open)} --status done`
+      : `先 easy-flow todo list --status todo 逐条收，或分批 todo set ${todoIds(open)} --status done`
+  return `## 待办 · 归属需求已完成（${open.length}）\n${lines.join('\n')}\n${command}`
+}
+
+/**
+ * context 末尾的待办段：本需求的两档 + 三种全局点名。
+ * 只算一次，块与 --json 共用同一份结果。
+ */
+function todoSection(board: BoardDatabase, reqId: string | null): {
+  groups: TodoGroups | null
+  orphans: Todo[]
+  blocks: string[]
+} {
+  const groups = reqId ? board.todosForRequirement(reqId) : null
+  const orphans = board.orphanTodos()
+  const blocks = [
+    ...(reqId && groups ? todoBlock(groups, reqId) : []),
+    orphanLine(orphans),
+    staleLine(board.stalePointerTodos()),
+    finishedLine(board.finishedRequirementTodos()),
+  ].filter(Boolean)
+  return { groups, orphans, blocks }
+}
+
+/**
+ * 需求收尾时回头看待办：名下还有未完成的就点一句，超期的无归属也点一句。
+ * 与父需求提示同一套道理——只提示、不改状态，收不收由人判。
+ */
+function todoHint({ explicit, candidate }: TodoGroups, reqId: string): string {
+  const open = [...explicit, ...candidate].filter(isOpenTodo)
+  if (!open.length) return ''
+  const command =
+    open.length <= TODO_BLOCK_LIMIT
+      ? `收尾时一并了结：easy-flow todo set ${todoIds(open)} --status done`
+      : `收尾时一并了结：easy-flow todo list --req ${reqId}，再分批 todo set --status done`
+  return `这条需求名下还有 ${open.length} 条未完成待办（${todoIds(open)}）——${command}`
+}
+
+/** 收尾是必做的处置点：顺手把超期还没人管的无归属待办也顶到眼前 */
+function overdueOrphanHint(orphans: Todo[]): string {
+  const { overdue } = orphanStats(orphans)
+  if (!overdue.length) return ''
+  return (
+    `另有 ${overdue.length} 条无归属待办已超期（${todoIds(overdue)}）——三选一：` +
+    '归到某条需求（todo set <id> --req <req-…>）/ 立成新需求（todo promote <id> --project <项目>）/ ' +
+    '不做（todo set <id> --status cancelled）'
+  )
+}
+
 /** 会话块：这条需求上登记了哪些 agent 会话。cwd 传当前工作区时，命中它的会话会被标出来 */
 function sessionBlock(sessions: Session[], cwd = ''): string[] {
   if (!sessions.length) return []
@@ -403,23 +565,32 @@ chengxiaobang → chengxiaobang://session/<id>；cursor 与终端里的 claude �
 待办是全局的，不挂在项目下。id 按首次入库日自动编号（T-YYYYMMDD-NNN）。
 --summary 要写成"下一个 agent 只看这一条就能接手"：进度、下一步、完成标准、关键 ID、证据入口；
 只写现象的口号不算数。--ref 重复时会报出已有条目，不再新建。
---req 指向立项后的需求，需求详情页据此列出这条待办。`,
+--req 是这条待办归属的需求：还没立项就写一条现有的需求也算——不要求先新建需求。
+归属、候选（由来源会话推出）与无归属的处置见 todo skill。`,
 
-  'todo set': `用法：easy-flow todo set <id> [--status <todo|in_progress|done|cancelled>] [--title <标题>]
+  'todo set': `用法：easy-flow todo set <id>… [--status <todo|in_progress|done|cancelled>] [--title <标题>]
        [--summary <上下文>] [--source …] [--session …] [--channel …] [--from …] [--chat …]
        [--ref …] [--req <req-…>] [--link …] [--at …] [--json]
 
 传了哪个改哪个，都没传会报错。--title / --summary 改的是 md 的内容（改完自动同步回库），
-其余字段只归库。传空串表示清空该字段。`,
+其余字段只归库。传空串表示清空该字段。--req 是归属的需求；不做（放弃）用 --status cancelled。
+一次可以给多个 id（收尾时成批置 done / cancelled），但 --title / --summary 只能配一条。`,
 
-  'todo list': `用法：easy-flow todo list [--status <todo|in_progress|done|cancelled>] [--source <…>] [--req <req-…>] [--all] [--limit <n>] [--json]
+  'todo list': `用法：easy-flow todo list [--status <todo|in_progress|done|cancelled>] [--source <…>] [--req <req-…>]
+       [--session <会话 id|链接>] [--orphan] [--all] [--limit <n>] [--json]
 
-默认只列未完成的（todo / in_progress）；--all 连已完成的一起列。按最近更新排。
---req 只看挂在这条需求上的。`,
+默认只列未完成的（todo / in_progress）；--all 连已完成的一起列。按最近更新排，行尾带停留天数。
+--req 只看挂在这条需求上的；--session 按来源会话反查（需求收尾时一次收干净）；
+--orphan 只看无归属的（没写 --req，也推不出归属）。`,
 
   'todo show': `用法：easy-flow todo show <id> [--json]
 
 列出这条待办的元数据、md 文件路径与全文。`,
+
+  'todo promote': `用法：easy-flow todo promote <id> --project <项目> [--slug <目录名>] [--title <标题>] [--json]
+
+把一条待办立项成需求，并把归属指针回填——两步合成一次。
+标题与摘要沿用待办的（摘要即交接文），--title / --slug 可覆盖。已挂需求的待办会报错并指出那条需求。`,
 
   'todo import': `用法：easy-flow todo import <目录> [--dry-run] [--json]
 
@@ -432,7 +603,14 @@ const GROUP_USAGE = {
   project: USAGE.project,
   req: [USAGE['req new'], USAGE['req set'], USAGE['req link'], USAGE['req session'], USAGE['req session review']].join('\n\n'),
   wt: [USAGE['wt new'], USAGE['wt rm']].join('\n\n'),
-  todo: [USAGE['todo new'], USAGE['todo set'], USAGE['todo list'], USAGE['todo show'], USAGE['todo import']].join('\n\n'),
+  todo: [
+    USAGE['todo new'],
+    USAGE['todo set'],
+    USAGE['todo list'],
+    USAGE['todo show'],
+    USAGE['todo promote'],
+    USAGE['todo import'],
+  ].join('\n\n'),
 }
 
 type OptSpec = Record<string, { type: 'boolean' | 'string'; multiple?: boolean }>
@@ -503,8 +681,19 @@ async function cmdContext(argv: string[]): Promise<void> {
     // 会话挂在需求上，工作区视图里照样列出来，并标出哪个会话就在这个目录里干活
     const sessions = board.listSessions(req.id)
     view.blocks.push(...sessionBlock(sessions, wt.path))
+    // 待办跟着需求走：在工作区里开工，与在需求目录里开工看到的是同一批
+    const todos = todoSection(board, req.id)
+    view.blocks.push(...todos.blocks)
     return emit(
-      { kind: 'worktree', worktree: wt, sessions, ...view.data, siblings },
+      {
+        kind: 'worktree',
+        worktree: wt,
+        sessions,
+        ...view.data,
+        siblings,
+        todoGroups: todos.groups,
+        orphanTodos: todos.orphans,
+      },
       view.blocks.join('\n\n'),
     )
   }
@@ -525,11 +714,27 @@ async function cmdContext(argv: string[]): Promise<void> {
     )
     const sessions = board.listSessions(req.id)
     view.blocks.push(...sessionBlock(sessions))
-    return emit({ kind: 'requirement', sessions, ...view.data, worktrees: wts }, view.blocks.join('\n\n'))
+    const todos = todoSection(board, req.id)
+    view.blocks.push(...todos.blocks)
+    return emit(
+      {
+        kind: 'requirement',
+        sessions,
+        ...view.data,
+        worktrees: wts,
+        todoGroups: todos.groups,
+        orphanTodos: todos.orphans,
+      },
+      view.blocks.join('\n\n'),
+    )
   }
 
   const view = projectView(key)
-  emit({ kind: 'project', ...view.data }, view.blocks.join('\n\n'))
+  const todos = todoSection(board, null)
+  emit(
+    { kind: 'project', ...view.data, orphanTodos: todos.orphans },
+    [...view.blocks, ...todos.blocks].join('\n\n'),
+  )
 }
 
 async function cmdProject(action: string | undefined, argv: string[]): Promise<void> {
@@ -618,6 +823,13 @@ async function cmdReqSet(argv: string[]): Promise<void> {
 
   // 刚收掉最后一个子需求时提一句父需求，但不替它改状态——父需求自己可能还有整体验收
   const hint = status === '已完成' && req.status !== '已完成' ? parentHint(board, next) : ''
+  // 收尾时待办也回头看一眼：只提示，不改状态。与父需求提示同一套道理
+  const todoReminder =
+    status === '已完成' || status === 'Review'
+      ? [todoHint(board.todosForRequirement(next.id), next.id), overdueOrphanHint(board.orphanTodos())]
+          .filter(Boolean)
+          .join('\n')
+      : ''
 
   emit(
     {
@@ -627,10 +839,11 @@ async function cmdReqSet(argv: string[]): Promise<void> {
       status: next.status,
       priority: next.priority,
       parentHint: hint || undefined,
+      todoHint: todoReminder || undefined,
     },
     `需求：${next.title}（${next.id}）\n状态：${next.status}${
       next.priority ? ` · 优先级：${next.priority}` : ''
-    }${hint ? `\n${hint}` : ''}`,
+    }${hint ? `\n${hint}` : ''}${todoReminder ? `\n${todoReminder}` : ''}`,
   )
 }
 
@@ -1150,12 +1363,17 @@ function oneOf(value: string, valid: readonly string[], what: string): void {
 
 /** --req 只收真实存在的需求 id：写错了需求详情页只会一直空着，不如当场报错 */
 function checkTodoReq(board: BoardDatabase, req: string | undefined): void {
-  if (req && !board.byId(req)) throw new Error(`Requirement not found: ${req}`)
+  if (req && !board.byId(req)) {
+    throw new Error(`Requirement not found: ${req}. --req 是归属的需求；要新建一条需求用 easy-flow todo promote`)
+  }
 }
 
 function todoLine(t: Todo): string {
   const who = t.origin || t.chat
-  return `- ${t.id}  ${t.status.padEnd(11)} ${t.source || '—'}  ${t.title}${who ? `（${who}）` : ''}`
+  const days = todoAgeDays(t.created)
+  const age = days > 0 ? `  ${days}天` : ''
+  const overdue = days >= TODO_STALE_DAYS && isOpenTodo(t) ? '  超期' : ''
+  return `- ${t.id}  ${t.status.padEnd(11)} ${t.source || '—'}  ${t.title}${who ? `（${who}）` : ''}${age}${overdue}`
 }
 
 // 元数据一行一个，new 与 show 共用
@@ -1230,13 +1448,18 @@ async function cmdTodoSet(argv: string[]): Promise<void> {
   })
   if (bool(values.help)) return out(USAGE['todo set'])
 
-  const id = required(positionals[0], 'Missing todo id (T-…)', USAGE['todo set'])
+  const ids = positionals.map((p) => p.trim()).filter(Boolean)
+  if (!ids.length) throw new UsageError('Missing todo id (T-…)', USAGE['todo set'])
   const patch = todoPatch(values)
   const status = str(values.status)?.trim()
   const title = str(values.title)?.trim()
   const summary = str(values.summary)
   if (status === undefined && title === undefined && summary === undefined && !Object.keys(patch).length) {
     throw new UsageError('Pass at least one field to change', USAGE['todo set'])
+  }
+  // 标题与摘要是 md 的正文，一条一份文件；批量只做字段与状态，避免改串
+  if (ids.length > 1 && (title !== undefined || summary !== undefined)) {
+    throw new UsageError('--title / --summary 一次只能改一条待办', USAGE['todo set'])
   }
   if (status !== undefined) oneOf(status, TODO_STATUSES, 'status')
   if (patch.source) oneOf(patch.source, TODO_SOURCES, 'source')
@@ -1245,23 +1468,35 @@ async function cmdTodoSet(argv: string[]): Promise<void> {
   const board = db()
   board.syncTodos()
   checkTodoReq(board, patch.requirementId)
-  if (!board.todoById(id)) {
-    throw new Error(`Todo not found: ${id}. id 就是文件名（${join(config.dataDir, '_todos', `${id}.md`)}）`)
+  const unknown = ids.filter((id) => !board.todoById(id))
+  if (unknown.length) {
+    throw new Error(
+      `Todo not found: ${unknown.join(', ')}. id 就是文件名（${join(config.dataDir, '_todos', '<id>.md')}）`,
+    )
   }
 
-  if (status !== undefined) board.setTodoStatus(id, status as TodoStatus)
-  if (Object.keys(patch).length) board.setTodoFields(id, patch)
-  // 标题与摘要是 md 的内容：改文件，再由同步带回归库
-  if (title !== undefined || summary !== undefined) {
-    const { content } = board.readTodoDoc(id)
-    let next = content
-    if (title !== undefined) next = setTodoTitle(next, title)
-    if (summary !== undefined) next = setTodoSummary(next, summary)
-    board.writeTodoDoc(id, next)
+  for (const id of ids) {
+    if (status !== undefined) board.setTodoStatus(id, status as TodoStatus)
+    if (Object.keys(patch).length) board.setTodoFields(id, patch)
+    // 标题与摘要是 md 的内容：改文件，再由同步带回归库
+    if (title !== undefined || summary !== undefined) {
+      const { content } = board.readTodoDoc(id)
+      let next = content
+      if (title !== undefined) next = setTodoTitle(next, title)
+      if (summary !== undefined) next = setTodoSummary(next, summary)
+      board.writeTodoDoc(id, next)
+    }
   }
 
-  const todo = board.todoById(id)!
-  emit({ ok: true, ...todo }, [`待办：${todo.title}（${todo.id}）`, `状态：${todo.status}`].join('\n'))
+  const todos = ids.map((id) => board.todoById(id)!)
+  if (todos.length === 1) {
+    const [todo] = todos
+    return emit({ ok: true, ...todo }, [`待办：${todo.title}（${todo.id}）`, `状态：${todo.status}`].join('\n'))
+  }
+  emit(
+    { ok: true, todos },
+    [`已更新 ${todos.length} 条待办：`, ...todos.map((t) => `- ${t.id}  ${t.title}  ${t.status}`)].join('\n'),
+  )
 }
 
 async function cmdTodoList(argv: string[]): Promise<void> {
@@ -1269,6 +1504,8 @@ async function cmdTodoList(argv: string[]): Promise<void> {
     status: { type: 'string' },
     source: { type: 'string' },
     req: { type: 'string' },
+    session: { type: 'string' },
+    orphan: { type: 'boolean' },
     all: { type: 'boolean' },
     limit: { type: 'string' },
   })
@@ -1277,33 +1514,67 @@ async function cmdTodoList(argv: string[]): Promise<void> {
   const status = str(values.status)?.trim()
   const source = str(values.source)?.trim()
   const req = str(values.req)?.trim()
+  const session = str(values.session)?.trim()
   if (status !== undefined) oneOf(status, TODO_STATUSES, 'status')
   if (source !== undefined) oneOf(source, TODO_SOURCES, 'source')
+  if (req && bool(values.orphan)) throw new UsageError('Pass either --req or --orphan', USAGE['todo list'])
+  if (session && (req || bool(values.orphan))) {
+    throw new UsageError('Pass --session on its own', USAGE['todo list'])
+  }
 
   const board = db()
   board.syncTodos()
   checkTodoReq(board, req)
-  const all = board.listTodos(req || undefined)
-  const open = all.filter((t) => t.status === 'todo' || t.status === 'in_progress')
+  // --session 按会话反查：需求收尾时「这条会话冒出来的活」要能一次收干净
+  const all = session ? board.listTodosBySession(session) : board.listTodos(req || undefined)
+  const open = all.filter(isOpenTodo)
   let todos = status ? all.filter((t) => t.status === status) : bool(values.all) ? all : open
   if (source) todos = todos.filter((t) => t.source === source)
+  // 无归属只算这一个口径；过滤与摘要共用同一次结果，别扫两遍
+  const orphans = board.orphanTodos()
+  if (bool(values.orphan)) {
+    const orphanIds = new Set(orphans.map((t) => t.id))
+    todos = todos.filter((t) => orphanIds.has(t.id))
+  }
 
   const limit = Number(str(values.limit) ?? '') || 0
   const shown = limit > 0 ? todos.slice(0, limit) : todos
   const hidden = todos.length - shown.length
 
-  const scope = req ? `需求 ${req} 的` : ''
+  const scope = req
+    ? `需求 ${req} 的`
+    : session
+      ? `会话 ${session} 的`
+      : bool(values.orphan)
+        ? '无归属的'
+        : ''
   const blocks = [
     `${status ? `状态 ${status}` : bool(values.all) ? `${scope}全部待办` : `${scope}未完成的待办`}（${todos.length}）：`,
     shown.map(todoLine).join('\n') || '（无）',
   ]
   if (hidden > 0) blocks.push(`（还有 ${hidden} 条，--limit 调大或加 --status）`)
-  if (!status && !bool(values.all) && !req) {
+  if (!status && !bool(values.all) && !req && !session && !bool(values.orphan)) {
     const rest = all.length - open.length
     if (rest > 0) blocks.push(`（已完成/已取消 ${rest} 条，--all 看全部）`)
   }
+  // 验收要的那一条：未归属 N、超期 M、最老 K 天
+  if (bool(values.orphan)) {
+    const stats = orphanStats(orphans)
+    blocks.push(`（未归属 ${stats.open.length} 条、其中超期 ${stats.overdue.length} 条、最老 ${stats.oldestDays} 天）`)
+  }
 
-  emit({ todos: shown, total: todos.length, open: open.length, all: all.length }, blocks.join('\n'))
+  emit(
+    {
+      todos: shown,
+      total: todos.length,
+      open: open.length,
+      all: all.length,
+      orphan: orphans.filter(isOpenTodo).length,
+      stale: board.stalePointerTodos().filter(isOpenTodo).length,
+      finished: board.finishedRequirementTodos().filter(isOpenTodo).length,
+    },
+    blocks.join('\n'),
+  )
 }
 
 async function cmdTodoShow(argv: string[]): Promise<void> {
@@ -1320,6 +1591,69 @@ async function cmdTodoShow(argv: string[]): Promise<void> {
   emit(
     { todo, path, content },
     [todoHead(todo, path).join('\n'), `## 内容（${path}）\n\n${content.trim()}`].join('\n\n'),
+  )
+}
+
+/**
+ * 待办立项成需求，并把指针回填——两步合成一次，因为分两步就一定有人忘第二步。
+ * 已挂需求的待办直接报错并指出那条需求：重复调用不该长出第二条需求。
+ */
+async function cmdTodoPromote(argv: string[]): Promise<void> {
+  const { values, positionals } = parse(argv, {
+    project: { type: 'string' },
+    slug: { type: 'string' },
+    title: { type: 'string' },
+  })
+  if (bool(values.help)) return out(USAGE['todo promote'])
+
+  const id = required(positionals[0], 'Missing todo id (T-…)', USAGE['todo promote'])
+  const project = required(str(values.project)?.trim(), 'Missing --project', USAGE['todo promote'])
+
+  const board = db()
+  board.syncTodos()
+  const todo = board.todoById(id)
+  if (!todo) throw new Error(`Todo not found: ${id}`)
+  if (todo.requirementId) {
+    throw new Error(
+      `Todo ${id} already belongs to ${todo.requirementId}. 要换归属用 easy-flow todo set ${id} --req <req-…>`,
+    )
+  }
+
+  const title = str(values.title)?.trim() || todo.title
+  const slug = str(values.slug)?.trim() || deriveSlug(title)
+  if (titleIsSlug(title, slug)) {
+    throw new UsageError(
+      `Title repeats the directory name, which tells nobody what the requirement does: ${title}. 用 --title 或 --slug 改一个`,
+      USAGE['todo promote'],
+    )
+  }
+  // 摘要照搬待办的交接文：下一个 agent 读需求时，来源与现场也在
+  const created = createRequirementDir(projectRoot(project), slug, title, todo.summary)
+  // 建目录与回填指针要一起成立：入库或写指针失败就把刚建的空需求收掉，不留半截
+  try {
+    board.syncProjects()
+    board.setTodoFields(id, { requirementId: created.id })
+  } catch (err) {
+    rmSync(created.dir, { recursive: true, force: true })
+    throw err
+  }
+  const requirementId = created.id
+  const stored = board.byId(requirementId)
+
+  emit(
+    {
+      ok: true,
+      todo: board.todoById(id),
+      requirement: { id: requirementId, slug: stored?.slug ?? slug, project, title, dir: created.dir },
+    },
+    [
+      `已立项：${todo.title}（${id}）`,
+      `需求 id：${requirementId}`,
+      `目录：${created.dir}`,
+      `看板状态默认「澄清」。待办已挂到这条需求上。`,
+      '',
+      `下一步：easy-flow wt new ${requirementId} --repo <仓库> --branch feature-${stored?.slug ?? slug}`,
+    ].join('\n'),
   )
 }
 
@@ -1441,11 +1775,12 @@ async function cmdTodoImport(argv: string[]): Promise<void> {
 
 async function cmdTodo(action: string | undefined, argv: string[]): Promise<void> {
   if (action === '--help' || action === '-h') return out(GROUP_USAGE.todo)
-  if (!action) throw new UsageError('todo needs a subcommand: new / set / list / show / import', GROUP_USAGE.todo)
+  if (!action) throw new UsageError('todo needs a subcommand: new / set / list / show / promote / import', GROUP_USAGE.todo)
   if (action === 'new') return cmdTodoNew(argv)
   if (action === 'set') return cmdTodoSet(argv)
   if (action === 'list') return cmdTodoList(argv)
   if (action === 'show') return cmdTodoShow(argv)
+  if (action === 'promote') return cmdTodoPromote(argv)
   if (action === 'import') return cmdTodoImport(argv)
   throw new UsageError(`Unknown subcommand: todo ${action}`, GROUP_USAGE.todo)
 }

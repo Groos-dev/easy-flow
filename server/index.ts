@@ -381,6 +381,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
         db.syncRequirement(slug, project)
         const ctx = db.context(slug, project)
         if (!ctx) throw new Error(`Requirement not found: ${slug}`)
+        // 三档一次算好：详情页要显式与候选分开摆，不必再查两次
+        const todos = db.todosForRequirement(ctx.requirement.id)
         json(req, res, 200, {
           ...ctx,
           requirementMd: db.readRequirementMd(slug, project),
@@ -388,8 +390,10 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
           worktrees: db.listWorktrees(ctx.requirement.id),
           // 同理：会话只归库，详情页的「会话」块靠这一份；状态是读 agent 应用的落盘文件得来的
           sessions: readObservations(db.listSessions(ctx.requirement.id), stateStore),
-          // 挂在这条需求上的待办（立项时由 todo 侧登记）。同样是只归库的关系
-          todos: db.listTodos(ctx.requirement.id),
+          // 挂在这条需求上的待办。explicit 是指针写了的；candidate 是由来源会话推出的，
+          // 只是提示、不回写——详情页把两档分开摆，人一眼能看出哪条归属还没确认
+          todos: todos.explicit,
+          candidateTodos: todos.candidate,
         })
         return
       }
