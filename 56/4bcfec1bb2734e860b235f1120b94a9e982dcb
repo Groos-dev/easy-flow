@@ -1,0 +1,22 @@
+src/renderer/src/styles.css
+  s_ae3290da02bdcb::t_7367eef5bd1886 1305-1308
+src/renderer/src/components/Settings.tsx
+  s_ae3290da02bdcb::t_18a08dab58144e 663
+  s_ae3290da02bdcb::t_8afdf9df1132a7 667
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "564bcfec1bb2734e860b235f1120b94a9e982dcb",
+  "prompts": {},
+  "sessions": {
+    "s_ae3290da02bdcb": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_v5p1w31rg33w",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
