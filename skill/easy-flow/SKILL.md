@@ -147,9 +147,15 @@ description: >-
 | 看待办 / 删会话 | `easy-flow req session ls [<req-…>]` / `easy-flow req session rm <req-…> --agent <…> --id <会话 id>` |
 | 开工作区 | `easy-flow wt new <req-…> --repo <仓库> --branch <分支> [--short <短名>]` |
 | 删工作区 | `easy-flow wt rm <wt-…> [--force]` |
+| 待办立项成需求 | `easy-flow todo promote <todo-id> --project <项目>`（建需求 + 回填指针一次做完） |
+| 收尾时清待办 | `easy-flow todo set <id> <id> … --status done`（名下那批一次收掉） |
 
-待办（全局 todo）不在这里：它是与需求平级的另一块板，命令是 `easy-flow todo new|set|list|show`，
-规则见 `todo` skill。
+待办（全局 todo）不挂在项目下，命令是 `easy-flow todo new|set|list|show|promote`，规则见 `todo` skill。
+
+`context` 的末尾带「待办」段：显式挂在本需求下的、由来源会话推出归属的（标「未确认」），
+以及三种全局点名——无归属的存量（N / 超期 M / 最老 K 天）、指针悬空、归属需求已完成。
+**开工时先看这一段**——它和需求描述一样是上下文的一部分。
+`req set --status 已完成|Review` 会点出名下未完成的待办与超期无归属的存量，收尾时一并了结。
 
 ## 常用流程
 
@@ -161,7 +167,8 @@ description: >-
   3. 开工作区 → `easy-flow wt new <req-…> --repo <仓库> --branch feature-<需求 slug>`
   4. 进工作区后 `easy-flow context <wt-…>` 取上下文，然后动手
 - **进需求目录 / 工作区接活**：先 `easy-flow context <id>`——返回项目规范、需求描述、context.md，
-  加上上层需求 / 子需求、同名工作区清单与会话；再动手。
+  加上上层需求 / 子需求、同名工作区清单、会话与待办；再动手。待办段里标「未确认」的是推出来的
+  归属，确认了就 `todo set <id> --req <req-…>` 补上指针。
 
 ## 会话：开工先登记
 

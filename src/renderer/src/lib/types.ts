@@ -205,6 +205,8 @@ export interface ContextPayload {
   sessions: Session[]
   /** 挂在这条需求上的待办（todo 侧存指针）。只归库，详情页的「关联待办」块靠它 */
   todos: Todo[]
+  /** 由来源会话推出、但指针没回填的待办。只是提示，没有进库 */
+  candidateTodos: Todo[]
 }
 
 /** 会话的实时状态。字面量与 server/session-state.ts 的 THREAD_STATES 一致 */

@@ -4,7 +4,8 @@ description: >-
   本机全局待办（todo / task manager）：记一条、看待办、改状态、恢复现场。所有经 agent
   记录的待办（feishu / chat / agent / manual）都走这里，入口是 easy-flow CLI 的 todo 命令，
   待办不挂在任何项目下。当用户提到 全局待办、todo、记一条任务、加个 todo、看待办、还有哪些没做、
-  关掉这条、开始做某条、改任务状态，或别的 skill（如 feishu-task）交来候选要落库时使用。
+  关掉这条、开始做某条、改任务状态、这条该归到哪条需求、立项、收尾时清待办，
+  或别的 skill（如 feishu-task）交来候选要落库时使用。
   条目必须带上"下一个 agent 只看这一条就能接手"的上下文。
 ---
 
@@ -26,12 +27,16 @@ easy-flow 应用里没有待办看板入口，单条待办从需求详情页的�
 | 看待办 | `easy-flow todo list [--status …] [--source …] [--all] [--limit <n>]` |
 | 记一条 | `easy-flow todo new <标题> --source <…> [--summary <上下文>] …` |
 | 读一条（含 md 全文与文件路径） | `easy-flow todo show <id>` |
-| 改状态 | `easy-flow todo set <id> --status <todo\|in_progress\|done\|cancelled>` |
+| 改状态 | `easy-flow todo set <id>… --status <todo\|in_progress\|done\|cancelled>`（多个 id 一次改） |
 | 改标题 / 补上下文 | `easy-flow todo set <id> [--title <标题>] [--summary <上下文>]` |
 | 补来源类字段 | `easy-flow todo set <id> [--link <url>] [--session …] [--ref …] [--req <req-…>] …` |
+| 立项成需求（一次做完） | `easy-flow todo promote <id> --project <项目> [--slug <目录名>] [--title <标题>]` |
 | 反查某需求下的待办 | `easy-flow todo list --req <req-…>` |
+| 反查某个会话下的待办 | `easy-flow todo list --session <会话 id\|链接>` |
+| 只看无归属的 | `easy-flow todo list --orphan` |
 
 `todo list` 默认只列未完成的；`--all` 连已完成一起列。加 `--json` 给脚本解析。
+行尾带停留天数；未完成且超过 7 天的标「超期」——超期不是错误，是「该处置了」。
 
 ## 字段
 
@@ -44,10 +49,47 @@ easy-flow 应用里没有待办看板入口，单条待办从需求详情页的�
 | `channel` | 仅 feishu：`at_me` / `p2p` |
 | `from` / `chat` | 来源人、会话或群名 |
 | `ref` | 去重键：feishu 用 message_id，其余用来源稳定 id。重复时 `todo new` 会报出已有条目 |
-| `req` | 立项后挂的需求 id（`req-…`）。需求详情页的「关联待办」块据此列出未完成的那些 |
+| `req` | 归属的需求 id（`req-…`）。没立项也能挂到一条已存在的需求上；空表示还没归属 |
 | `link` | 可跳转链接（飞书 thread、MR、页面） |
 | `at` | 源事件时间 `yyyy-mm-dd HH:mm` |
 | `summary` | 可恢复现场的上下文，见下节 |
+
+## 归属：三档（硬规则）
+
+待办回答「要不要做、归谁」；需求回答「这条交付走到哪了」。两者靠 `req` 这根指针相连，
+但**没写指针不等于没人管**。开工时先分清自己在哪一档：
+
+| 档 | 怎么认 | 你要做什么 |
+| --- | --- | --- |
+| 显式归属 | 待办写了 `--req` | 直接做；做完置 `done` |
+| 候选归属 | 没写 `--req`，但 `session` 指向的会话登记在某条需求上 | **确认**：是这条需求的活就 `todo set <id> --req <req-…>`；不是就归到该去的那条 |
+| 无归属 | 没写 `--req`，会话也推不出需求 | **处置**：做（`--status in_progress`）、不做（`--status cancelled`）、或立成需求 |
+
+另有两种指针坏了的情况，`context` 会全局点名一次，不挂在任何需求下：
+
+- **指针悬空**：`req` 指向的需求已被删/合并。重新挂到一条存在的需求，或 `cancelled`
+- **归属需求已完成**：收尾时没一并了结。`todo set <id>… --status done` 收掉，确认还要继续就重新归属
+
+- 候选归属是**推出来的，不是登记过的**：`context` 与需求详情页都把它单列一段并标「未确认」。
+  不要把它当事实，也不要因为看到了就不回填指针
+- `context` 的「待办」段就是这两档 + 三种全局点名的入口：开工第一步看到的就该是它们，
+  而不是先 `todo list` 再筛
+- 无归属的待办会按停留天数标超期（7 天）。超期不等于逾期，它只说明「该做一次决定了」——
+  决定可以是「不做」，`cancelled` 是正常动作，不是失败
+
+## 收尾：需求那头也要了结
+
+- 需求置 `已完成` / `Review` 时，`req set` 会点出名下未完成的待办与超期还没归属的存量；
+  名下那批可以一条命令收掉：`easy-flow todo set <id> <id> … --status done`
+- 一条需求由多条待办汇入时，收尾前都过一遍——留着指向已完成需求的待办，等于留个假线索；
+  `context` 会把它们列在「归属需求已完成」段
+- 指针指向的需求被删了（悬空）：`context` 会点名，重新挂到一条存在的需求上，或置 `cancelled`
+
+## 立项：一次动作
+
+`easy-flow todo promote <id> --project <项目>` 一次做完「建需求 + 回填指针」。
+分两步（`req new` 再 `todo set --req`）就一定有人忘第二步——这是实测出来的：26 条待办只有 6 条挂上。
+标题与摘要沿用待办的（摘要即交接文），需要时用 `--title` / `--slug` 覆盖。
 
 ## 内容写在哪
 
@@ -165,9 +207,11 @@ easy-flow todo set <id> --summary "<补上的现场>"
 
 同一件工作在立项前后会换板：待办记入口与跟进，需求记交付。两边靠 todo 侧的一个指针相连。
 
-- 待办立项成需求后（`easy-flow req new` 建完），回来把指针补上：
-  `easy-flow todo set <id> --req <req-…>`。此后那条需求的详情页会列出它。
-- 需求收尾时反过来：`easy-flow todo list --req <req-…>` 找回未完成的源待办，一并置 `done`。
+- 立项是一次动作：`easy-flow todo promote <id> --project <项目>`——建需求 + 回填指针一起做完。
+  分两步（`req new` 再 `todo set --req`）就一定有人忘第二步
+- 轻归属：不必先立项，挂到一条已存在的需求上也叫归属：`easy-flow todo set <id> --req <req-…>`
+- 需求收尾时反过来：`req set --status 已完成|Review` 会点名未完成待办，
+  `todo list --req <req-…>` 逐条置 `done` 或 `cancelled`
 - 指针只存 todo 一侧，需求侧不存列表——登记动作永远发生在待办这边，别去需求文档里
   维护待办清单（写进 md 也查不出来，下次重写就没了）。
 - 一条需求常由多条待办汇入（多条 todo 挂同一个 `req-…`）；反过来一条待办只挂一条需求。

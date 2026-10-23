@@ -106,6 +106,7 @@ function render(patch: Partial<ContextPayload> = {}): string {
     worktrees: [],
     sessions: [],
     todos: [],
+    candidateTodos: [],
     ...patch,
   }
   return renderToStaticMarkup(
@@ -246,5 +247,27 @@ describe('详情页浮窗 · 关联待办', () => {
     assert.match(html, /进行中/)
     assert.match(html, /扫一遍日志/)
     assert.doesNotMatch(html, /已经做完的/)
+  })
+
+  test('候选归属单独一段，行尾标「未确认」——推出来的不能冒充登记过的', () => {
+    const html = render({
+      todos: [mkTodo({ id: 'T-1', title: '登记过的' })],
+      candidateTodos: [mkTodo({ id: 'T-9', title: '推出来的', requirementId: '' })],
+    })
+    assert.match(html, /关联待办/)
+    assert.match(html, /待确认归属/)
+    assert.match(html, /推出来的/)
+    assert.match(html, /未确认/)
+    // 标记只挂在候选那一行上：按标题定位到那条待办，别拿全文第一行凑数
+    const rows = html.split('<div class="sess"').slice(1)
+    const registered = rows.find((r) => r.includes('登记过的')) ?? ''
+    assert.ok(registered, '登记过的那一行应当渲染出来')
+    assert.doesNotMatch(registered, /未确认/)
+    assert.match(rows.find((r) => r.includes('推出来的')) ?? '', /未确认/)
+  })
+
+  test('候选段在没候选时整段不出现', () => {
+    const html = render({ todos: [mkTodo()] })
+    assert.doesNotMatch(html, /待确认归属/)
   })
 })
