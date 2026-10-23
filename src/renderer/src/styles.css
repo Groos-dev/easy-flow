@@ -1302,6 +1302,10 @@ body {
   margin: 6px 0;
 }
 
+.row.notify-actions {
+  margin-top: 16px;
+}
+
 .search.wide {
   width: 100%;
   flex: 1;
