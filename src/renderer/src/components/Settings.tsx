@@ -660,19 +660,11 @@ export default function Settings({ onBack, onApplied }: Props) {
               </select>
             </div>
 
-            <div className="section-label">状态</div>
-            <div className="settings-status">
-              {notify ? (notify.supported ? '系统支持通知' : '当前系统不支持通知') : '读取中…'}
-            </div>
+            {notify && !notify.supported && <div className="notice">当前系统不支持通知</div>}
             {notify?.lastFailure && (
               <div className="notice">最近一次投递失败：{notify.lastFailure}</div>
             )}
-            <p className="hint">
-              通知跟随系统授权；macOS 读不到「允许 / 拒绝」状态，
-              未签名开发构建也不会投递。
-            </p>
-
-            <div className="row">
+            <div className="row notify-actions">
               <button className="btn primary" onClick={() => void testNotification()}>
                 发一条测试通知
               </button>
