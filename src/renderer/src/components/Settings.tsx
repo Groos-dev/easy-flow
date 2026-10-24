@@ -18,7 +18,7 @@ import { AgentIcon, CheckIcon, ChevronIcon, KeyGlyph, PencilIcon, ResetIcon, Ter
 
 interface Props {
   onBack: () => void
-  /** 应用后通知外层重新拉取数据 */
+  // 应用后通知外层重新拉取数据
   onApplied: () => void
 }
 
@@ -170,11 +170,11 @@ export default function Settings({ onBack, onApplied }: Props) {
     return () => off?.()
   }, [section])
 
-  /** Electron 里可拉起原生目录选择器；浏览器开发时退化到手输 */
+  // Electron 里可拉起原生目录选择器；浏览器开发时退化到手输
   const canPick = typeof window.easyFlow?.pickDirectory === 'function'
-  /** 快捷键只对桌面端有意义：web 模式没有全局快捷键，这一节整个不出现 */
+  // 快捷键只对桌面端有意义：web 模式没有全局快捷键，这一节整个不出现
   const canSetShortcut = typeof window.easyFlow?.setShortcut === 'function'
-  /** 通知同理：web 模式没有 dock 与系统通知 */
+  // 通知同理：web 模式没有 dock 与系统通知
   const canNotify = typeof window.easyFlow?.notificationInfo === 'function'
   const platform = window.easyFlow?.platform ?? ''
   // 应用内键位表在浏览器预览里也有意义，
@@ -182,7 +182,7 @@ export default function Settings({ onBack, onApplied }: Props) {
   // 通知只有桌面端有，web 模式仍然隐藏
   const sections = SECTIONS.filter((s) => s.id !== 'notify' || canNotify)
 
-  /** 改绑：主进程注册不上（多半被占用）时把原因带回来 */
+  // 改绑：主进程注册不上（多半被占用）时把原因带回来
   const applyShortcut = useCallback(
     async (accel: string) => {
       setHotkeyError('')
@@ -300,7 +300,7 @@ export default function Settings({ onBack, onApplied }: Props) {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [recording, platform, applyShortcut])
 
-  /** 键位与铅笔都走这里：录制中再点一次就是取消 */
+  // 键位与铅笔都走这里：录制中再点一次就是取消
   function toggleRecording() {
     setRecording((v) => !v)
     setHotkeyError('')

@@ -20,6 +20,9 @@
 | `pnpm app start\|stop\|restart\|status` | 同上，但脱离终端跑：日志与 PID 在 `.tmp/`，关掉终端窗口不会带走应用 |
 | `pnpm dev:server` + `pnpm dev:web` | 浏览器开发；Vite 把 `/api` 代理到 `127.0.0.1:29170` |
 | `pnpm test` | 回归测试（`node --test`），重构时的行为基线 |
+| `pnpm lint` | ESLint：类型脚本、React Hooks、未使用变量与常见错误 |
+| `pnpm lint:fix` | 同上，自动修复能修的部分 |
+| `pnpm check` | 依次跑 lint / typecheck / dead-code / test；提交前用这个 |
 | `pnpm typecheck` | 两套 tsconfig：node 侧（server / main / preload / test）、web 侧（renderer） |
 | `pnpm dead-code` | 找仓库内无引用的导出符号；预留接口需人工判断 |
 | `pnpm build` | 三端产物打到 `out/` |

@@ -14,20 +14,20 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import type { InstallOutcome } from './skill-install.ts'
 
-export type HookAgentId = 'claude' | 'codex' | 'chengxiaobang'
+export type HookAgentId = 'claude' | 'codex' | 'chengxiaobang' | 'cursor'
 
-/** 设置页每个 agent 一行的状态 */
+// 设置页每个 agent 一行的状态
 export interface HookAgentStatus {
   id: HookAgentId
   label: string
-  /** 用户级配置文件 */
+  // 用户级配置文件
   file: string
   installed: boolean
-  /** 装了几个事件 */
+  // 装了几个事件
   events: number
-  /** 指向的地址与端口 */
+  // 指向的地址与端口
   url: string
-  /** 读文件出的问题（不是合法 JSON 等）；正常为空串 */
+  // 读文件出的问题（不是合法 JSON 等）；正常为空串
   problem: string
 }
 
@@ -36,7 +36,7 @@ export interface HookPlan {
   agents: HookAgentStatus[]
 }
 
-/** 端点里带 /api/hook 就算自己那条——这是 easy-flow 独有的路径，别人的 hook 不会命中 */
+// 端点里带 /api/hook 就算自己那条——这是 easy-flow 独有的路径，别人的 hook 不会命中
 const MARKER = '/api/hook'
 
 function endpoint(port: number, agent: HookAgentId): string {
@@ -77,8 +77,19 @@ const CODEX_EVENTS = [
   'PostCompact',
   'Interrupt',
 ] as const
+// Cursor 的事件名是 camelCase；subagent 事件不装
+const CURSOR_EVENTS = [
+  'sessionStart',
+  'sessionEnd',
+  'beforeSubmitPrompt',
+  'preToolUse',
+  'postToolUse',
+  'postToolUseFailure',
+  'stop',
+  'preCompact',
+] as const
 
-/** Claude 的工具类事件才要 matcher，照 hook-pipeline.md 实测的写法 */
+// Claude 的工具类事件才要 matcher，照 hook-pipeline.md 实测的写法
 const CLAUDE_MATCHER_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure'])
 
 function claudeBlock(event: string, port: number): Record<string, unknown> {
@@ -94,7 +105,7 @@ function claudeBlock(event: string, port: number): Record<string, unknown> {
   }
 }
 
-/** 程小帮的 hook 是扁平条目；事件名与 stdin 字段和 Claude 一致 */
+// 程小帮的 hook 是扁平条目；事件名与 stdin 字段和 Claude 一致
 function chengxiaobangBlock(event: string, port: number): Record<string, unknown> {
   return {
     id: `easy-flow-${event}`,
@@ -105,7 +116,7 @@ function chengxiaobangBlock(event: string, port: number): Record<string, unknown
   }
 }
 
-/** Codex 的 hook 只有 command：用 curl 一行转发，零依赖、不限 checkout 路径 */
+// Codex 的 hook 只有 command：用 curl 一行转发，零依赖、不限 checkout 路径
 function codexBlock(_event: string, port: number): Record<string, unknown> {
   return {
     hooks: [
@@ -118,6 +129,18 @@ function codexBlock(_event: string, port: number): Record<string, unknown> {
   }
 }
 
+/**
+ * Cursor 的条目是扁平的 command；permission 类 hook 对空输出按非法 JSON 处理，
+ * 所以每次都要回一份合法 JSON。beforeSubmitPrompt 还要显式 continue。
+ */
+function cursorBlock(event: string, port: number): Record<string, unknown> {
+  const response = event === 'beforeSubmitPrompt' ? `printf '{"continue":true}'` : `printf '{}'`
+  return {
+    command: `curl -s -m 1 -X POST -H 'content-type: application/json' --data-binary @- '${endpoint(port, 'cursor')}' >/dev/null 2>&1; ${response}`,
+    timeout: 3,
+  }
+}
+
 interface HookSpec {
   id: HookAgentId
   label: string
@@ -125,8 +148,10 @@ interface HookSpec {
   events: readonly string[]
   block: (event: string, port: number) => Record<string, unknown>
   endpoint: (port: number) => string
-  /** 程小帮是扁平 hooks[]，与 Claude/Codex 的按事件分组不同 */
+  // 程小帮是扁平 hooks[]，与 Claude/Codex 的按事件分组不同
   flat?: boolean
+  // Cursor 的 hooks.json 需要 version: 1；文件已有就保留
+  version?: number
 }
 
 function specs(home: string): HookSpec[] {
@@ -138,6 +163,15 @@ function specs(home: string): HookSpec[] {
       events: CLAUDE_EVENTS,
       block: claudeBlock,
       endpoint: (port) => endpoint(port, 'claude'),
+    },
+    {
+      id: 'cursor',
+      label: 'Cursor',
+      file: join(home, '.cursor', 'hooks.json'),
+      events: CURSOR_EVENTS,
+      block: cursorBlock,
+      endpoint: (port) => endpoint(port, 'cursor'),
+      version: 1,
     },
     {
       id: 'codex',
@@ -159,17 +193,19 @@ function specs(home: string): HookSpec[] {
   ]
 }
 
-/** 一个 block 是不是我们那条：它的 hooks[] 里任一条带 /api/hook 端点 */
+// 一个 block 是不是我们那条：hooks[] 里任一条，或 Cursor 那种顶层 command，带 /api/hook 端点
 function isOurBlock(block: unknown): boolean {
   if (!block || typeof block !== 'object') return false
-  const hooks = (block as { hooks?: unknown }).hooks
+  const rec = block as Record<string, unknown>
+  if (typeof rec.command === 'string' && rec.command.includes(MARKER)) return true
+  const hooks = rec.hooks
   if (!Array.isArray(hooks)) return false
   return hooks.some((h) => {
     if (!h || typeof h !== 'object') return false
-    const rec = h as Record<string, unknown>
+    const entry = h as Record<string, unknown>
     return (
-      (typeof rec.url === 'string' && rec.url.includes(MARKER)) ||
-      (typeof rec.command === 'string' && rec.command.includes(MARKER))
+      (typeof entry.url === 'string' && entry.url.includes(MARKER)) ||
+      (typeof entry.command === 'string' && entry.command.includes(MARKER))
     )
   })
 }
@@ -198,7 +234,7 @@ function load(file: string): Loaded {
   return { kind: 'ok', obj: parsed as Record<string, unknown>, trailingNewline: raw.endsWith('\n') }
 }
 
-/** 按原文件的缩进与行尾习惯回写，让「装完再卸完」能逐字还原 */
+// 按原文件的缩进与行尾习惯回写，让「装完再卸完」能逐字还原
 function render(obj: Record<string, unknown>, trailingNewline: boolean): string {
   return JSON.stringify(obj, null, 2) + (trailingNewline ? '\n' : '')
 }
@@ -212,7 +248,7 @@ function tableOf(obj: Record<string, unknown>): Record<string, unknown> {
   return h && typeof h === 'object' && !Array.isArray(h) ? (h as Record<string, unknown>) : {}
 }
 
-/** 程小帮条目是不是自己那条：按 command 里的 easy-flow hook 端点认 */
+// 程小帮条目是不是自己那条：按 command 里的 easy-flow hook 端点认
 function isOurFlat(entry: unknown): boolean {
   if (!entry || typeof entry !== 'object') return false
   const rec = entry as Record<string, unknown>
@@ -270,6 +306,10 @@ function apply(
   if (spec.flat) return applyFlat(obj, spec, port, mode)
   const table = tableOf(obj)
   let changed = false
+  if (mode === 'install' && spec.version !== undefined && obj.version === undefined) {
+    obj.version = spec.version
+    changed = true
+  }
   for (const [event, value] of Object.entries(table)) {
     if (!Array.isArray(value)) continue
     const kept = value.filter((b) => !isOurBlock(b))
@@ -310,7 +350,7 @@ function backup(file: string): void {
   if (existsSync(file)) copyFileSync(file, `${file}.bak`)
 }
 
-/** 读现状：每个 agent 装没装、装了几个事件、指向哪个地址与端口。 */
+// 读现状：每个 agent 装没装、装了几个事件、指向哪个地址与端口。
 export function hookPlan({ port, home = homedir() }: { port: number; home?: string }): HookPlan {
   return {
     port,
@@ -325,9 +365,10 @@ export function hookPlan({ port, home = homedir() }: { port: number; home?: stri
   }
 }
 
-/** 一键装：各 agent 各写一份，只追加自己那条；写完读一遍核对。 */
+// 一键装：各 agent 各写一份，只追加自己那条；写完读一遍核对。
 export function installHooks({ port, home = homedir() }: { port: number; home?: string }): InstallOutcome {
   let changed = false
+  let cursorWritten = false
   for (const spec of specs(home)) {
     const loaded = load(spec.file)
     if (loaded.kind === 'error') throw new Error(`没敢改 ${spec.file}：${loaded.message}`)
@@ -351,9 +392,15 @@ export function installHooks({ port, home = homedir() }: { port: number; home?: 
     if (events !== spec.events.length) {
       throw new Error(`${spec.label} 写入后核对不一致：只认出 ${events}/${spec.events.length} 个事件`)
     }
+    if (spec.id === 'cursor') cursorWritten = true
     changed = true
   }
-  return { summary: changed ? '已安装' : '已是最新，没有改动', failed: [] }
+  const summary = !changed
+    ? '已是最新，没有改动'
+    : cursorWritten
+      ? '已安装；Cursor 若没反应，重启 Cursor'
+      : '已安装'
+  return { summary, failed: [] }
 }
 
 /**

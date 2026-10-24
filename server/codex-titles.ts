@@ -23,7 +23,7 @@ function stateDb(codexHome: string): string | null {
     return best ? join(codexHome, best) : null
 }
 
-/** thread id → 应用里的标题。读不到返回空表 */
+// thread id → 应用里的标题。读不到返回空表
 export function codexTitles(codexHome: string): Map<string, string> {
     const out = new Map<string, string>()
     const path = stateDb(codexHome)

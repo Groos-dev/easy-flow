@@ -4,10 +4,10 @@ import { shortcutLabel } from '../lib/keys'
 import { projectColor, projectInitial } from '../lib/projectIcon'
 import { BellIcon, BoardIcon, CheckIcon, InfoIcon, MapIcon, PinIcon } from './icons'
 
-/** 左栏能进的三个视图：board 与 map 由一个按钮循环，agent 焦点单独一个入口 */
+// 左栏能进的三个视图：board 与 map 由一个按钮循环，agent 焦点单独一个入口
 export type RailView = 'board' | 'next' | 'map'
 
-/** 进入要防手滑扫过就弹，离开要留出鼠标从图标滑进面板的时间 */
+// 进入要防手滑扫过就弹，离开要留出鼠标从图标滑进面板的时间
 const OPEN_DELAY_MS = 120
 const CLOSE_DELAY_MS = 250
 
@@ -16,7 +16,7 @@ interface LeftRailProps {
   active: string
   pinned: string[]
   view: RailView
-  /** agent 卡住等你、要人介入的需求数；0 时不显示角标 */
+  // agent 卡住等你、要人介入的需求数；0 时不显示角标
   agentCount: number
   onSwitchProject: (slug: string) => void
   onTogglePin: (slug: string, pinned: boolean) => void
@@ -57,7 +57,7 @@ export default function LeftRail({
     clearTimeout(openTimer.current)
     closeTimer.current = setTimeout(() => setOpen(false), CLOSE_DELAY_MS)
   }
-  /** 鼠标落在面板上：撤销倒计时中的关闭——从图标滑进面板的路上会经过这段 */
+  // 鼠标落在面板上：撤销倒计时中的关闭——从图标滑进面板的路上会经过这段
   const holdOpen = () => clearTimeout(closeTimer.current)
 
   const bySlug = new Map(projects.map((p) => [p.slug, p]))

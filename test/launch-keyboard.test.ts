@@ -1,4 +1,4 @@
-/** 新建会话表单的键盘闭环：可导航行、agent 在启动按钮前、禁用按钮不可达 */
+// 新建会话表单的键盘闭环：可导航行、agent 在启动按钮前、禁用按钮不可达
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { createElement } from 'react'
@@ -83,6 +83,7 @@ describe('新建会话 · 键盘可达', () => {
     assert.ok(firstRow >= 0, '表单里至少要有一个可导航行')
     assert.ok(launchAt > firstRow, 'agent 选择要先于启动按钮被 j/k 摸到')
     assert.match(html, /class="agent-chip on" data-info-row="" aria-pressed="true"/)
+    assert.match(html, /class="agent-chip on"[^>]*aria-label="Codex"[^>]*title="Codex"/, '名称只留在 tooltip / 读屏标签里')
     assert.match(html, /class="launch-go" type="submit" data-info-row=""/)
   })
 

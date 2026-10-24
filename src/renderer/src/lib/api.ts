@@ -52,7 +52,7 @@ async function request<T>(
 export const api = {
   list: (): Promise<BoardData> => request('/api/requirements'),
 
-  /** 服务端全文检索：md 与索引都在服务端，前端不做遍历 */
+  // 服务端全文检索：md 与索引都在服务端，前端不做遍历
   search: (q: string): Promise<{ requirements: Requirement[] }> =>
     request(`/api/search?q=${encodeURIComponent(q)}`),
 
@@ -75,11 +75,11 @@ export const api = {
         (project ? `&project=${encodeURIComponent(project)}` : ''),
     ),
 
-  /** MR/PR 状态与流水线汇总：取不到的不在结果里 */
+  // MR/PR 状态与流水线汇总：取不到的不在结果里
   codeLinkStatuses: (urls: string[]): Promise<{ statuses: Record<string, CodeLinkStatus> }> =>
     request('/api/code-link-statuses', { method: 'POST', body: JSON.stringify({ urls }) }),
 
-  /** 全部 agent 会话（需求归属在每条的 requirementId 上）。mini 面板一次拉全 */
+  // 全部 agent 会话（需求归属在每条的 requirementId 上）。mini 面板一次拉全
   sessions: (): Promise<{ sessions: Session[] }> => request('/api/sessions'),
 
   /**
@@ -90,17 +90,21 @@ export const api = {
   markSessionClicked: (agent: string, session: string): Promise<{ ok: boolean }> =>
     request('/api/sessions/clicked', { method: 'POST', body: JSON.stringify({ agent, session }) }),
 
+  // Cursor 没有会话级 deeplink：只把会话所在工作区窗口带到前台
+  openSessionWorkspace: (agent: string, session: string): Promise<{ ok: boolean; path: string }> =>
+    request('/api/sessions/open-workspace', { method: 'POST', body: JSON.stringify({ agent, session }) }),
+
   /**
    * 「下一步该动哪个」的排名。名次与理由由服务端算——它要会话实时状态，
    * 渲染层拿不到同一份，所以不在这儿重算。
    */
   nextUp: (): Promise<{ items: NextUpItem[] }> => request('/api/next-up'),
 
-  /** 按需求 id 取单条。待办详情页的「需求」那行只有 id，靠它换成可跳转的需求 */
+  // 按需求 id 取单条。待办详情页的「需求」那行只有 id，靠它换成可跳转的需求
   requirementById: (id: string): Promise<Requirement> =>
     request(`/api/requirement?id=${encodeURIComponent(id)}`),
 
-  /** 读需求目录下的文档（默认 requirement.md） */
+  // 读需求目录下的文档（默认 requirement.md）
   doc: (
     slug: string,
     name: string,
@@ -111,7 +115,7 @@ export const api = {
         (project ? `&project=${encodeURIComponent(project)}` : ''),
     ),
 
-  /** 保存文档 */
+  // 保存文档
   saveDoc: (
     slug: string,
     name: string,
@@ -125,13 +129,13 @@ export const api = {
 
   // ------------------------------------------------------------- 待办
 
-  /** 待办是全局的，不分项目 */
+  // 待办是全局的，不分项目
   todos: (): Promise<TodosPayload> => request('/api/todos'),
 
   updateTodo: (id: string, patch: { status?: string }): Promise<Todo> =>
     request('/api/todos/update', { method: 'POST', body: JSON.stringify({ id, ...patch }) }),
 
-  /** 读一条待办的 md 原文（内容源在文件里） */
+  // 读一条待办的 md 原文（内容源在文件里）
   todoDoc: (id: string): Promise<{ id: string; path: string; content: string }> =>
     request(`/api/todos/doc?id=${encodeURIComponent(id)}`),
 
@@ -140,10 +144,10 @@ export const api = {
 
   // ------------------------------------------------------------- 项目
 
-  /** 项目列表：顶栏的项目 chip 行用它。只要项目本身，不拉各自的需求 */
+  // 项目列表：顶栏的项目 chip 行用它。只要项目本身，不拉各自的需求
   projects: (): Promise<{ projects: Project[]; active: string }> => request('/api/projects'),
 
-  /** 所有项目 + 各自需求，一次拉全（mini 面板用） */
+  // 所有项目 + 各自需求，一次拉全（mini 面板用）
   tree: (): Promise<{ tree: Array<Project & { requirements: Requirement[] }>; active: string }> =>
     request('/api/tree'),
 
@@ -170,14 +174,14 @@ export const api = {
   open: (slug: string, project?: string): Promise<{ ok: boolean }> =>
     request('/api/open', { method: 'POST', body: JSON.stringify({ slug, project }) }),
 
-  /** 在 Finder 里打开某个工作区的目录 */
+  // 在 Finder 里打开某个工作区的目录
   openWorktree: (id: string): Promise<{ ok: boolean; path: string }> =>
     request('/api/worktree/open', { method: 'POST', body: JSON.stringify({ id }) }),
 
   launchProviders: (): Promise<{ providers: LaunchProviderInfo[] }> =>
     request('/api/launch/providers'),
 
-  /** 启动失败仍是带 prompt 的结果；仅 HTTP 非 2xx 进入 request 错误通道。 */
+  // 启动失败仍是带 prompt 的结果；仅 HTTP 非 2xx 进入 request 错误通道。
   launch: (input: {
     slug: string
     project: string
@@ -206,7 +210,7 @@ export const api = {
 
   // ------------------------------------------------------------- Agent hook
 
-  /** 两个 agent 的 hook 安装状态。读的是真文件 */
+  // 两个 agent 的 hook 安装状态。读的是真文件
   hooks: (): Promise<HookPlan> => request('/api/hooks'),
 
   installHooks: (): Promise<HookPlan & InstallOutcome> =>

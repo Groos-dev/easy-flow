@@ -1,4 +1,4 @@
-/** /api/settings/open-with 契约；断言不依赖本机装了哪些 app */
+// /api/settings/open-with 契约；断言不依赖本机装了哪些 app
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'

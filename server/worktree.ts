@@ -30,11 +30,11 @@ import { parseFrontmatter } from './markdown.ts'
  */
 const DESIGN_DIR = 'design'
 
-/** info/exclude 里那几行的抬头注释，同时当"我们写过"的标记用，避免重复追加 */
+// info/exclude 里那几行的抬头注释，同时当"我们写过"的标记用，避免重复追加
 const EXCLUDE_MARK = '# easy-flow：需求软链与身份文件，勿删'
-/** 不让 easy-flow 的产物进 git status */
+// 不让 easy-flow 的产物进 git status
 const EXCLUDE_LINES = ['/requirement.md', '/AGENTS.md', '/CLAUDE.md', `/${DESIGN_DIR}`]
-/** 同上，去掉开头的斜杠，便于和 git status 的输出比对 */
+// 同上，去掉开头的斜杠，便于和 git status 的输出比对
 const OURS = EXCLUDE_LINES.map((f) => f.slice(1))
 
 let gitPath: string | null = null
@@ -63,7 +63,7 @@ function failureDetail(stderr: string, fallback: string): string {
   return [...lines].reverse().find((l) => /^(fatal|error):/i.test(l)) ?? lines[0] ?? fallback
 }
 
-/** 登录 shell 里解析 git 的绝对路径，进程内只做一次 */
+// 登录 shell 里解析 git 的绝对路径，进程内只做一次
 async function gitBinary(): Promise<string> {
   if (gitPath) return gitPath
   const shell = process.env.SHELL ?? '/bin/zsh'
@@ -81,20 +81,20 @@ async function git(args: string[], cwd?: string): Promise<string> {
   try {
     return (await exec(await gitBinary(), args, cwd)).trim()
   } catch (err) {
-    throw new Error(`git ${args[0]} failed: ${(err as Error).message}`)
+    throw new Error(`git ${args[0]} failed: ${(err as Error).message}`, { cause: err })
   }
 }
 
 // ------------------------------------------------------------------ 仓库
 
 export interface RepoCheckout {
-  /** 仓库名 = 主 checkout 的目录名 */
+  // 仓库名 = 主 checkout 的目录名
   repo: string
-  /** 主 checkout 绝对路径 */
+  // 主 checkout 绝对路径
   main: string
 }
 
-/** 仓库根目录。默认 ~/repo，测试与多盘用 EASY_FLOW_REPO_ROOTS 覆盖（冒号分隔） */
+// 仓库根目录。默认 ~/repo，测试与多盘用 EASY_FLOW_REPO_ROOTS 覆盖（冒号分隔）
 function repoRoots(): string[] {
   const raw = process.env.EASY_FLOW_REPO_ROOTS
   return (raw ? raw.split(':') : [join(homedir(), 'repo')])
@@ -102,7 +102,7 @@ function repoRoots(): string[] {
     .map((r) => (r.startsWith('~') ? join(homedir(), r.slice(1)) : r))
 }
 
-/** 认出一个 checkout 属于哪个仓库。主 worktree 由 git 排在 list 首位，比推 --git-common-dir 稳 */
+// 认出一个 checkout 属于哪个仓库。主 worktree 由 git 排在 list 首位，比推 --git-common-dir 稳
 async function describeCheckout(path: string): Promise<RepoCheckout> {
   const here = await git(['rev-parse', '--show-toplevel'], path)
   const head = (await git(['worktree', 'list', '--porcelain'], here)).split('\n\n')[0] ?? ''
@@ -133,7 +133,7 @@ export async function resolveCheckout(repo: string): Promise<RepoCheckout> {
   throw new Error(`Multiple candidates for repo "${repo}"; pass an absolute path:\n${hits.slice(0, 5).join('\n')}`)
 }
 
-/** 在 root 下按目录名找 git 仓库。深度受限，跳过点开头与 node_modules */
+// 在 root 下按目录名找 git 仓库。深度受限，跳过点开头与 node_modules
 function findRepo(root: string, name: string, depth: number): string[] {
   if (depth < 0 || !existsSync(root)) return []
   const hits: string[] = []
@@ -151,7 +151,7 @@ function findRepo(root: string, name: string, depth: number): string[] {
   return hits
 }
 
-/** worktree 路径：主 checkout 旁边，`<仓库名>.<分支扁平化>`。分支里的 / 会坏掉目录名 */
+// worktree 路径：主 checkout 旁边，`<仓库名>.<分支扁平化>`。分支里的 / 会坏掉目录名
 export function worktreePathFor(main: string, branch: string): string {
   return join(dirname(main), `${basename(main)}.${branch.replace(/\//g, '-')}`)
 }
@@ -160,26 +160,26 @@ export function worktreePathFor(main: string, branch: string): string {
 
 export interface Provision {
   path: string
-  /** 目录是本次 add 出来的。false = 复用了已存在的 worktree */
+  // 目录是本次 add 出来的。false = 复用了已存在的 worktree
   created: boolean
-  /** 分支是本次新建的 */
+  // 分支是本次新建的
   branchCreated: boolean
-  /** worktree 里能读到 wt- id。false = 已有一份别人的 AGENTS.md，身份只在库里 */
+  // worktree 里能读到 wt- id。false = 已有一份别人的 AGENTS.md，身份只在库里
   identityInFile: boolean
-  /** info/exclude 的结果，直接说给 agent 听（补上了 / 没补上） */
+  // info/exclude 的结果，直接说给 agent 听（补上了 / 没补上）
   excludeNote: string
 }
 
 export interface ProvisionInput {
-  /** 写进 worktree 的 AGENTS.md，落库也用同一个 */
+  // 写进 worktree 的 AGENTS.md，落库也用同一个
   worktreeId: string
   requirementId: string
   requirementDir: string
-  /** 需求里的短名，用来给设计目录起名字（如 agg） */
+  // 需求里的短名，用来给设计目录起名字（如 agg）
   short?: string
   target: RepoCheckout
   branch: string
-  /** 新分支的起点，缺省主 checkout 当前的 HEAD */
+  // 新分支的起点，缺省主 checkout 当前的 HEAD
   base?: string
 }
 
@@ -231,7 +231,7 @@ export async function provisionWorktree(input: ProvisionInput): Promise<Provisio
   return { path, created, branchCreated, ...decorated }
 }
 
-/** 补齐产物需要知道的全部信息；writeAgentsFile 取其中的一部分 */
+// 补齐产物需要知道的全部信息；writeAgentsFile 取其中的一部分
 interface DecorateInput {
   worktreeId: string
   requirementId: string
@@ -243,7 +243,7 @@ interface DecorateInput {
   main: string
 }
 
-/** 设计目录：需求目录下按短名分仓（没有短名就用仓库名） */
+// 设计目录：需求目录下按短名分仓（没有短名就用仓库名）
 function designDirFor(input: { requirementDir: string; short?: string; repo: string }): string {
   return join(input.requirementDir, 'docs', (input.short || input.repo).trim())
 }
@@ -271,13 +271,13 @@ async function decorate(input: DecorateInput): Promise<{ identityInFile: boolean
 // ------------------------------------------------------------------ 移除
 
 export interface Deprovision {
-  /** 目录本来就不在（只清了记录与 git 登记） */
+  // 目录本来就不在（只清了记录与 git 登记）
   missing: boolean
-  /** 被丢弃的未提交改动条数 */
+  // 被丢弃的未提交改动条数
   discarded: string[]
 }
 
-/** 删掉 worktree。脏工作区要 force 才动，分支永不删（里面可能有提交） */
+// 删掉 worktree。脏工作区要 force 才动，分支永不删（里面可能有提交）
 export async function deprovisionWorktree(input: {
   path: string
   main: string
@@ -326,7 +326,7 @@ export async function deprovisionWorktree(input: {
 
 // ------------------------------------------------------------------ 零件
 
-/** 已登记的 worktree：路径与它检出的分支 */
+// 已登记的 worktree：路径与它检出的分支
 async function registeredWorktrees(main: string): Promise<Array<{ path: string; branch: string }>> {
   const out = await git(['worktree', 'list', '--porcelain'], main)
   return out
@@ -343,7 +343,7 @@ async function hasLocalBranch(main: string, branch: string): Promise<boolean> {
   return out.split('\n').some((l) => l.trim() === branch)
 }
 
-/** 目录当前停在哪个分支。不是 git 仓库、或元数据已坏，都返回空串 */
+// 目录当前停在哪个分支。不是 git 仓库、或元数据已坏，都返回空串
 async function branchOf(path: string): Promise<string> {
   try {
     const branch = await git(['rev-parse', '--abbrev-ref', 'HEAD'], path)
@@ -353,7 +353,7 @@ async function branchOf(path: string): Promise<string> {
   }
 }
 
-/** worktree 的 AGENTS.md 里写的身份 id（没有则空串） */
+// worktree 的 AGENTS.md 里写的身份 id（没有则空串）
 export function worktreeIdIn(path: string): string {
   try {
     const { data } = parseFrontmatter(readFileSync(join(path, 'AGENTS.md'), 'utf8'))
@@ -385,7 +385,7 @@ function writeAgentsFile(input: DecorateInput): boolean {
   return true
 }
 
-/** 已存在且指向同一目标算成功；指向别处、或占位的是普通文件，都报错不覆盖 */
+// 已存在且指向同一目标算成功；指向别处、或占位的是普通文件，都报错不覆盖
 function ensureSymlink(link: string, target: string): void {
   const st = lstatOrNull(link)
   if (!st) {

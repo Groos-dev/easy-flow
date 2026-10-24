@@ -7,15 +7,15 @@ import { PetRow } from './Pet'
 
 interface Props {
   req: Requirement
-  /** 这条需求名下的全部会话。谁挂 pet、谁在等人都由 PetRow 判——卡片自己不再单独高亮 */
+  // 这条需求名下的全部会话。谁挂 pet、谁在等人都由 PetRow 判——卡片自己不再单独高亮
   sessions?: Session[]
-  /** 有子需求才传：右上角多出完成度与展开键 */
+  // 有子需求才传：右上角多出完成度与展开键
   childStat?: ChildStat
-  /** 直接子需求，展开后列出来。子需求散在别的列，这是父卡片上唯一通往它们的路 */
+  // 直接子需求，展开后列出来。子需求散在别的列，这是父卡片上唯一通往它们的路
   kids?: Requirement[]
-  /** 点某条子需求：由看板负责滚过去并高亮，卡片自己不认路 */
+  // 点某条子需求：由看板负责滚过去并高亮，卡片自己不认路
   onJumpChild?: (slug: string) => void
-  /** 刚被跳过来的那条：闪一下，好让人在满屏卡片里认出落点 */
+  // 刚被跳过来的那条：闪一下，好让人在满屏卡片里认出落点
   flash?: boolean
   focused?: boolean
   kidsOpen?: boolean

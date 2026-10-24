@@ -1,4 +1,4 @@
-/** 看板键盘焦点的位置计算 */
+// 看板键盘焦点的位置计算
 
 export interface BoardColumn {
   status: string
@@ -26,7 +26,7 @@ function firstPos(columns: BoardColumn[]): BoardPos | null {
   return col ? { status: col.status, index: 0 } : null
 }
 
-/** 左右跳过空列，越界时夹到目标列最后一张 */
+// 左右跳过空列，越界时夹到目标列最后一张
 export function movePos(
   columns: BoardColumn[],
   current: BoardPos | null,

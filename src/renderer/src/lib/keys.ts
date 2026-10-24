@@ -1,4 +1,4 @@
-/** 键位定义与匹配；设置页、按钮提示与键盘处理共用 */
+// 键位定义与匹配；设置页、按钮提示与键盘处理共用
 
 import { formatAccelerator } from './shortcut'
 
@@ -17,12 +17,12 @@ export type KeyContext =
 export interface ShortcutDef {
   id: string
   context: KeyContext
-  /** Electron accelerator 写法；一个动作有多个等价键就都列出来 */
+  // Electron accelerator 写法；一个动作有多个等价键就都列出来
   keys: string[]
   label: string
-  /** 设置页不列（由录制框单独展示的全局呼出键） */
+  // 设置页不列（由录制框单独展示的全局呼出键）
   hidden?: boolean
-  /** 显示文案覆盖，给 `+` 这种会被 accelerator 语法吃掉的键用 */
+  // 显示文案覆盖，给 `+` 这种会被 accelerator 语法吃掉的键用
   display?: string
 }
 
@@ -144,7 +144,7 @@ export const SHORTCUTS: ShortcutDef[] = [
 
 const BY_ID = new Map(SHORTCUTS.map((s) => [s.id, s]))
 
-/** 按 id 判断是否命中 */
+// 按 id 判断是否命中
 export function shortcut(e: KeyEventLike, id: string, platform = currentPlatform()): boolean {
   const def = BY_ID.get(id)
   return !!def && def.keys.some((k) => matches(e, k, platform))
@@ -234,7 +234,7 @@ function sameKey(e: KeyEventLike, token: string): boolean {
   return e.key === token
 }
 
-/** 一个键盘事件是否命中某条 accelerator。修饰键按「完全相等」比，⌘K 不会误中 ⌘⇧K */
+// 一个键盘事件是否命中某条 accelerator。修饰键按「完全相等」比，⌘K 不会误中 ⌘⇧K
 export function matches(e: KeyEventLike, accel: string, platform = currentPlatform()): boolean {
   const { key, mods } = parseAccelerator(accel)
   if (!key) return false
@@ -251,7 +251,7 @@ export function matches(e: KeyEventLike, accel: string, platform = currentPlatfo
   return e.shiftKey === mods.shift
 }
 
-/** 是否落在输入控件里：单键快捷键一律让位 */
+// 是否落在输入控件里：单键快捷键一律让位
 export function isEditableTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
   if (!el || typeof el.tagName !== 'string') return false
@@ -261,31 +261,31 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   return typeof el.closest === 'function' && !!el.closest('.cm-editor, [contenteditable="true"]')
 }
 
-/** 输入法组合中按的键不算快捷键 */
+// 输入法组合中按的键不算快捷键
 export function isComposing(e: Pick<KeyEventLike, 'isComposing' | 'keyCode'>): boolean {
   return !!e.isComposing || e.keyCode === 229
 }
 
-/** 焦点在按钮 / 链接上时，单键与 Enter 应该留给它自己 */
+// 焦点在按钮 / 链接上时，单键与 Enter 应该留给它自己
 export function isInteractiveTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
   if (!el || typeof el.closest !== 'function') return false
   return !!el.closest('button, a, input, textarea, select, [contenteditable="true"]')
 }
 
-/** 焦点停在卡片里的 agent 头像上：这时看板的单键让位，Enter / Esc 归头像自己 */
+// 焦点停在卡片里的 agent 头像上：这时看板的单键让位，Enter / Esc 归头像自己
 export function isPetTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
   if (!el || typeof el.closest !== 'function') return false
   return !!el.closest('.slot')
 }
 
-/** 非组合键场景的统一入口：输入法里、输入控件里都不接 */
+// 非组合键场景的统一入口：输入法里、输入控件里都不接
 export function shouldIgnore(e: KeyEventLike): boolean {
   return isComposing(e) || isEditableTarget(e.target ?? null)
 }
 
-/** 某条键位给人看的写法；按钮 title 用，免得与设置页各写一套 */
+// 某条键位给人看的写法；按钮 title 用，免得与设置页各写一套
 export function shortcutLabel(id: string, platform = currentPlatform()): string {
   const def = BY_ID.get(id)
   if (!def) return ''

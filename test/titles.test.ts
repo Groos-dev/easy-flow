@@ -22,6 +22,7 @@ const roots: ThreadRoots = {
   claudeHome: join(TMP, 'claude'),
   codexHome: join(TMP, 'codex'),
   chengxiaobangHome: join(TMP, 'chengxiaobang'),
+  cursorHome: join(TMP, 'cursor'),
 }
 
 /**
@@ -80,8 +81,35 @@ function writeCxbDb(rows: Array<[string, string]>): void {
   db.close()
 }
 
+// Cursor 的 chat 库：chats/<workspace>/<conversation>/store.db 的 meta key 0 里有 name
+function writeCursorDb(session: string, name: string, encode: 'json' | 'hex' = 'json'): void {
+  const dir = join(roots.cursorHome, 'chats', 'workspace-hash', session)
+  mkdirSync(dir, { recursive: true })
+  const db = new DatabaseSync(join(dir, 'store.db'))
+  db.exec('create table meta (key text primary key, value text)')
+  const json = JSON.stringify({ agentId: session, name })
+  db.prepare('insert into meta (key, value) values (?, ?)').run(
+    '0',
+    encode === 'hex' ? Buffer.from(json, 'utf8').toString('hex') : json,
+  )
+  db.close()
+}
+
+// Cursor 3.27 的会话标题在全局 state.vscdb 的 composerHeaders.value.name
+function writeComposerHeader(session: string, name: string): void {
+  const dir = join(roots.appSupport, 'Cursor', 'User', 'globalStorage')
+  mkdirSync(dir, { recursive: true })
+  const db = new DatabaseSync(join(dir, 'state.vscdb'))
+  db.exec('create table if not exists composerHeaders (composerId text primary key, value text)')
+  db.prepare('insert or replace into composerHeaders (composerId, value) values (?, ?)').run(
+    session,
+    JSON.stringify({ composerId: session, name }),
+  )
+  db.close()
+}
+
 function registered(db: BoardDatabase, agent: string, session: string, title = '登记时那句'): void {
-  db.addSession({ requirementId: 'req-x', agent: agent as 'claude' | 'codex' | 'chengxiaobang', session, title })
+  db.addSession({ requirementId: 'req-x', agent: agent as 'claude' | 'codex' | 'chengxiaobang' | 'cursor', session, title })
 }
 
 const titleOf = (db: BoardDatabase, agent: string, session: string) =>
@@ -173,6 +201,62 @@ describe('标题同步：应用里那句覆盖登记那句', () => {
     writeCxbDb([['s_cxb3', 'AI 总结后的标题']])
     pullTitles(db.listSessions(), db, roots)
     assert.equal(titleOf(db, 'chengxiaobang', 's_cxb3'), 'AI 总结后的标题')
+  })
+
+  test('cursor：chat 库 meta 里的 name', () => {
+    writeCursorDb('conv-title', 'Seat Feature Map')
+    const db = newBoard()
+    registered(db, 'cursor', 'conv-title')
+
+    pullTitles(db.listSessions(), db, roots)
+    assert.equal(titleOf(db, 'cursor', 'conv-title'), 'Seat Feature Map')
+  })
+
+  test('cursor：占位名 New Agent 不覆盖登记标题', () => {
+    writeCursorDb('conv-placeholder', 'New Agent')
+    const db = newBoard()
+    registered(db, 'cursor', 'conv-placeholder', '先写一句占着')
+
+    pullTitles(db.listSessions(), db, roots)
+    assert.equal(titleOf(db, 'cursor', 'conv-placeholder'), '先写一句占着')
+  })
+
+  test('cursor：全局 composerHeaders 里的 name 覆盖登记标题', () => {
+    writeComposerHeader('conv-composer', 'test2')
+    const db = newBoard()
+    registered(db, 'cursor', 'conv-composer', '登记时那句')
+
+    pullTitles(db.listSessions(), db, roots)
+    assert.equal(titleOf(db, 'cursor', 'conv-composer'), 'test2')
+  })
+
+  test('cursor：chat 库 meta 是十六进制时也能读到 name', () => {
+    writeCursorDb('conv-hex', '十六进制标题', 'hex')
+    const db = newBoard()
+    registered(db, 'cursor', 'conv-hex')
+
+    pullTitles(db.listSessions(), db, roots)
+    assert.equal(titleOf(db, 'cursor', 'conv-hex'), '十六进制标题')
+  })
+
+  test('cursor：composerHeaders 的占位名不覆盖，chat 库的真标题仍然生效', () => {
+    writeComposerHeader('conv-composer-placeholder', 'New Agent')
+    writeCursorDb('conv-composer-placeholder', '改名之后', 'hex')
+    const db = newBoard()
+    registered(db, 'cursor', 'conv-composer-placeholder', '登记时那句')
+
+    pullTitles(db.listSessions(), db, roots)
+    assert.equal(titleOf(db, 'cursor', 'conv-composer-placeholder'), '改名之后')
+  })
+
+  test('cursor：composerHeaders 有真标题时盖过 chat 库', () => {
+    writeComposerHeader('conv-composer-wins', 'test2')
+    writeCursorDb('conv-composer-wins', '旧库里的标题')
+    const db = newBoard()
+    registered(db, 'cursor', 'conv-composer-wins')
+
+    pullTitles(db.listSessions(), db, roots)
+    assert.equal(titleOf(db, 'cursor', 'conv-composer-wins'), 'test2')
   })
 
   test('原样写：换行与长句都不裁', () => {

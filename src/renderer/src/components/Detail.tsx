@@ -16,26 +16,26 @@ import { InfoIcon } from './icons'
 export interface DocTarget {
   kind: 'requirement' | 'project' | 'todo'
   project: string
-  /** 仅 kind === 'requirement' 时有值 */
+  // 仅 kind === 'requirement' 时有值
   slug?: string
   title: string
-  /** 仅 requirement 有：用于头部展示与编辑 */
+  // 仅 requirement 有：用于头部展示与编辑
   req?: Requirement
-  /** 仅 todo 有 */
+  // 仅 todo 有
   todo?: Todo
 }
 
 interface Props {
   target: DocTarget
   onBack: () => void
-  /** 需求页的「关联待办」块：点一条即在详情页打开它 */
+  // 需求页的「关联待办」块：点一条即在详情页打开它
   onOpenTodo: (id: string) => void
-  /** 待办页浮窗的「需求」段：点一下跳到它挂的需求 */
+  // 待办页浮窗的「需求」段：点一下跳到它挂的需求
   onOpenRequirement: (project: string, slug: string) => void
   projectRoot?: string
 }
 
-/** 停止输入后多久落盘 */
+// 停止输入后多久落盘
 const AUTOSAVE_DELAY = 600
 
 export default function Detail({
@@ -50,18 +50,18 @@ export default function Detail({
   const isProject = target.kind === 'project'
   const isTodo = target.kind === 'todo'
   const [docs, setDocs] = useState<string[]>([])
-  /** 当前打开的文档；空串表示还没定（列表在异步加载）或这个挂载点没有文档 */
+  // 当前打开的文档；空串表示还没定（列表在异步加载）或这个挂载点没有文档
   const [activeDoc, setActiveDoc] = useState('')
-  /** draft 是唯一事实源：编辑器渲染它、自动保存提交它 */
+  // draft 是唯一事实源：编辑器渲染它、自动保存提交它
   const [draft, setDraft] = useState('')
-  /** 上次成功保存的内容，用来判断是否真有改动 */
+  // 上次成功保存的内容，用来判断是否真有改动
   const savedRef = useRef('')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'error'>('idle')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  /** 需求上下文（含工作区列表）。项目页用不到，保持 null */
+  // 需求上下文（含工作区列表）。项目页用不到，保持 null
   const [ctx, setCtx] = useState<ContextPayload | null>(null)
-  /** 待办挂的需求：待办上只有 id，标题与跳转目标要按它换回来 */
+  // 待办挂的需求：待办上只有 id，标题与跳转目标要按它换回来
   const [todoReq, setTodoReq] = useState<Requirement | null>(null)
   const [infoOpen, setInfoOpen] = useState(false)
   const [hint, setHint] = useState('')
@@ -70,11 +70,11 @@ export default function Detail({
   const infoRef = useRef<HTMLDivElement>(null)
   const infoBtnRef = useRef<HTMLButtonElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  /** 文档加载序号：快速切标签时丢弃过期响应 */
+  // 文档加载序号：快速切标签时丢弃过期响应
   const docSeq = useRef(0)
-  /** 保存用的最新值，避免防抖回调闭包过期 */
+  // 保存用的最新值，避免防抖回调闭包过期
   const draftRef = useRef('')
-  /** 项目页的规范原文。文档列表已经拿到，正文复用它——同一个接口不该拉两次 */
+  // 项目页的规范原文。文档列表已经拿到，正文复用它——同一个接口不该拉两次
   const projectDoc = useRef<Promise<string> | null>(null)
 
   useEffect(() => {
@@ -117,7 +117,7 @@ export default function Detail({
     }
   }, [target.project, target.slug, isProject, isTodo, todo?.id])
 
-  /** 项目页的规范原文：正常走上面那次请求，挂载顺序有变时兜一次新请求 */
+  // 项目页的规范原文：正常走上面那次请求，挂载顺序有变时兜一次新请求
   function projectContent(): Promise<string> {
     return projectDoc.current ?? api.projectConvention(target.project).then((r) => r.content ?? '')
   }
@@ -177,7 +177,7 @@ export default function Detail({
     void loadDoc()
   }, [loadDoc])
 
-  /** 落盘。用 ref 取最新内容，避免防抖回调里的闭包过期。 */
+  // 落盘。用 ref 取最新内容，避免防抖回调里的闭包过期。
   const flushSave = useCallback(async () => {
     const content = draftRef.current
     if (content === savedRef.current) return
@@ -359,7 +359,7 @@ export default function Detail({
     return () => window.removeEventListener('keydown', onKey, true)
   }, [flushSave, onBack, infoOpen, goTab, stepTab, req, todo, isProject, projectRoot, target.project])
 
-  /** 编辑器改一次就收一次：draft 仍是唯一事实源 */
+  // 编辑器改一次就收一次：draft 仍是唯一事实源
   const onDraftChange = useCallback((next: string) => {
     draftRef.current = next
     setDraft(next)

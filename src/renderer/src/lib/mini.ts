@@ -40,7 +40,7 @@ export interface MiniInput {
   expanded: string
 }
 
-/** hook 推送、拉取、点 pet 都写 observed_at；没观察过的会话退回登记时间 */
+// hook 推送、拉取、点 pet 都写 observed_at；没观察过的会话退回登记时间
 export function sessionActive(s: Session): number {
   return Math.max(s.status.observedAt, parseStamp(s.updated))
 }

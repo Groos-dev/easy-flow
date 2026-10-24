@@ -27,7 +27,7 @@ import type { SessionStatus, ThreadState } from '../server/session-state.ts'
 // 夹具目录按 cwd 派生：多个 worktree 并行跑测试时互不干扰
 const TMP = join(tmpdir(), `easy-flow-nextup-test-${basename(process.cwd())}`)
 
-/** 固定「现在」：2026-10-14 12:00 本机时间，好把天数算准 */
+// 固定「现在」：2026-10-14 12:00 本机时间，好把天数算准
 const NOW = new Date(2026, 9, 14, 12, 0).getTime()
 
 function req(p: Partial<Requirement> & { slug: string }): Requirement {

@@ -15,9 +15,9 @@ import { isNotificationMode } from '../shared/notification-mode.ts'
 const ICON = join(__dirname, '../../resources/icon.png')
 
 let win: BrowserWindow | null = null
-/** mini 面板窗（见下方 mini 面板段） */
+// mini 面板窗（见下方 mini 面板段）
 let panel: BrowserWindow | null = null
-/** 待主窗口渲染层取走的「打开需求」请求 */
+// 待主窗口渲染层取走的「打开需求」请求
 let pendingOpen: { project: string; slug: string } | null = null
 let boardServer: RunningBoardServer | null = null
 /**
@@ -71,7 +71,7 @@ function applyCsp(): void {
  */
 const PANEL_SIZE = { width: 420, height: 480 }
 
-/** 上次呼出位置存 userData，跨重启生效 */
+// 上次呼出位置存 userData，跨重启生效
 function panelPositionFile(): string {
   return join(process.env.EASY_FLOW_USER_DATA!, 'panel-position.json')
 }
@@ -82,7 +82,7 @@ function savePanelPosition(): void {
   writePanelPosition(panelPositionFile(), { x, y })
 }
 
-/** 拖动不一定有 'moved'，收起来之前再落一次 */
+// 拖动不一定有 'moved'，收起来之前再落一次
 function hidePanel(): void {
   if (!panel || panel.isDestroyed()) return
   savePanelPosition()
@@ -161,9 +161,9 @@ function togglePanel(): void {
   }
 }
 
-/** 默认快捷键。用户改了存在配置里（见设置页的「快捷键」） */
+// 默认快捷键。用户改了存在配置里（见设置页的「快捷键」）
 const DEFAULT_SHORTCUT = 'CommandOrControl+Shift+E'
-/** 当前生效的快捷键，改的时候要先摘掉旧的 */
+// 当前生效的快捷键，改的时候要先摘掉旧的
 let panelShortcut = DEFAULT_SHORTCUT
 
 /**
@@ -178,7 +178,7 @@ function rebindShortcut(accel: string): boolean {
   return true
 }
 
-/** 2x 图在 16pt 菜单里才清晰；转换结果按 app 路径缓存 */
+// 2x 图在 16pt 菜单里才清晰；转换结果按 app 路径缓存
 const menuIcons = new Map<string, Electron.NativeImage>()
 
 function openTargetIcon(appPath: string): Electron.NativeImage | undefined {
@@ -196,7 +196,7 @@ function openTargetIcon(appPath: string): Electron.NativeImage | undefined {
   }
 }
 
-/** Electron 没有「用指定 app 打开」，macOS 上这条就是它 */
+// Electron 没有「用指定 app 打开」，macOS 上这条就是它
 function openInApp(appPath: string, dir: string): void {
   execFile('open', ['-a', appPath, dir], () => {})
 }
@@ -221,7 +221,7 @@ function openExternal(url: string): void {
   )
 }
 
-/** 主窗口前置并打开需求。窗口被关过就重建（macOS 常态） */
+// 主窗口前置并打开需求。窗口被关过就重建（macOS 常态）
 async function openRequirement(payload: { project: string; slug: string }): Promise<void> {
   if (!win || win.isDestroyed()) {
     // 新窗口的渲染层订阅可能还没挂上，
@@ -240,7 +240,7 @@ async function openRequirement(payload: { project: string; slug: string }): Prom
   win.webContents.send('easy-flow:open-requirement', payload)
 }
 
-/** 通知服务还没起来时（窗口极早加载）也要给设置页一个完整形状 */
+// 通知服务还没起来时（窗口极早加载）也要给设置页一个完整形状
 function fallbackAttentionInfo(): { supported: boolean; lastFailure: string } {
   return { supported: Notification.isSupported(), lastFailure: '' }
 }

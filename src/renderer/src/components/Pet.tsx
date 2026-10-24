@@ -86,7 +86,7 @@ function Cloudling({ svg, still }: { svg: string; still: boolean }) {
   return <span ref={host} className="pet-art" aria-hidden="true" />
 }
 
-/** 醒来这一档停多久：素材本身是 1.6s 的循环，播一轮就切回目标姿势 */
+// 醒来这一档停多久：素材本身是 1.6s 的循环，播一轮就切回目标姿势
 const WAKE_MS = 1600
 
 /**
@@ -144,14 +144,14 @@ export default function Pet({
   const name = `${AGENT_LABELS[agent] ?? agent} · ${PET_LABEL[state]}`
   const wake = useWake(agent, state, mood, !compact)
   const art = petArt(agent, state, { compact, still, mood, wake })
-  // cloudling 内联成 <svg>（脚本驱动，且 object 的文档画布不透明）；clawd / cxb 走 <img>（每张自带同名 @keyframes，内联会互相覆盖）
+  // cloudling 内联成 <svg>（脚本驱动，且 object 的文档画布不透明）；clawd / cxb / cursor 走 <img>（每张自带同名 @keyframes，内联会互相覆盖）
   const body =
     art.channel === 'inline' ? (
       <Cloudling svg={art.svg} still={still} />
     ) : (
       <img src={art.src} alt="" draggable={false} />
     )
-  const cls = `pet${agent === 'chengxiaobang' ? ' cxb' : ''}${compact ? ' compact' : ''} s-${state}${event ? ' event' : ''}${focus ? ' focus' : ''}`
+  const cls = `pet${agent === 'chengxiaobang' ? ' cxb' : ''}${agent === 'cursor' ? ' cursor' : ''}${compact ? ' compact' : ''} s-${state}${event ? ' event' : ''}${focus ? ' focus' : ''}`
 
   return (
     <span className={cls} role="img" aria-label={name}>
@@ -171,7 +171,7 @@ function Bubble({ text, state }: { text: string; state: Pose }) {
   )
 }
 
-/** 鼠标移开 / 焦点移走之后气泡还留多久 */
+// 鼠标移开 / 焦点移走之后气泡还留多久
 const LINGER_MS = 30_000
 
 /**
@@ -194,28 +194,6 @@ function useBubbleShown(pinned: boolean, active: boolean): boolean {
   return shown
 }
 
-function elementLabel(target: EventTarget | null): string {
-  if (!(target instanceof Element)) return String(target)
-  const cls = target.getAttribute('class') ?? ''
-  return `${target.tagName.toLowerCase()}${cls ? `.${cls.replace(/\s+/g, '.')}` : ''}`
-}
-
-function logPetHit(kind: string, e: { clientX: number; clientY: number; target: EventTarget | null }): void {
-  const hit = document.elementFromPoint(e.clientX, e.clientY)
-  console.debug(
-    '[pet-hit] ' +
-      JSON.stringify({
-        kind,
-        target: elementLabel(e.target),
-        hit: elementLabel(hit),
-        inButton: !!(e.target instanceof Element && e.target.closest('button.pet')),
-        inSlot: !!(e.target instanceof Element && e.target.closest('.slot')),
-        x: Math.round(e.clientX),
-        y: Math.round(e.clientY),
-      }),
-  )
-}
-
 /**
  * 一只 pet 一格：气泡在上、pet 在下，尾巴指着自己那只。格子的宽度跟着气泡在不在变——
  * 没气泡时收成 pet 的宽度挤在一起，有气泡时撑开（过渡在 styles.css 里）。
@@ -223,32 +201,26 @@ function logPetHit(kind: string, e: { clientX: number; clientY: number; target: 
 function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; still: boolean }) {
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
+  const [openError, setOpenError] = useState('')
   const { session, state } = item
   const hasBubble = item.bubble !== ''
   // 焦点与悬停共用一条气泡规则：移开焦点和移开鼠标一样，气泡再留 30 秒
-  const shown = hasBubble && useBubbleShown(state !== 'idle', hovered || focused)
-  // 没有链接的 pet 回车无处可去，就不进 Tab 顺序
-  const focusable = !!session.link
+  const shown = useBubbleShown(hasBubble && state !== 'idle', hovered || focused)
+  const canFocusWorkspace = session.agent === 'cursor' && !!session.cwd
+  const focusable = !!session.link || canFocusWorkspace
   const openFromSlot = () => {
-    if (!session.link) return
-    console.debug(
-      '[pet-click-ui] ' +
-        JSON.stringify({
-          at: new Date().toISOString(),
-          surface: 'slot',
-          agent: session.agent,
-          session: session.session,
-          title: session.title,
-          link: session.link,
-          cwd: session.cwd,
-          state,
-          page: window.location.pathname,
-          bridge: typeof window.easyFlow?.openExternal === 'function',
-        }),
-    )
-    api.markSessionClicked(session.agent, session.session).catch(() => {})
-    if (window.easyFlow?.openExternal) void window.easyFlow.openExternal(session.link)
-    else window.open(session.link, '_blank')
+    if (!session.link && !canFocusWorkspace) return
+    setOpenError('')
+    if (session.link) {
+      api.markSessionClicked(session.agent, session.session).catch(() => {})
+      if (window.easyFlow?.openExternal) void window.easyFlow.openExternal(session.link)
+      else window.open(session.link, '_blank')
+      return
+    }
+    void api
+      .openSessionWorkspace(session.agent, session.session)
+      .then(() => api.markSessionClicked(session.agent, session.session))
+      .catch((error: Error) => setOpenError(error.message || '打开失败'))
   }
 
   // 焦点停在这一格：回车走和鼠标点击同一条路，Esc 交回卡片，hjkl / 方向键在同一排头像里走；
@@ -280,15 +252,28 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
     <div
       className={`slot${shown ? ' shown' : ''}`}
       tabIndex={focusable ? 0 : undefined}
-      role={focusable ? 'link' : undefined}
-      aria-label={focusable ? `回到 ${AGENT_LABELS[session.agent] ?? session.agent} 的会话` : undefined}
+      role={focusable ? (session.link ? 'link' : 'button') : undefined}
+      aria-label={
+        focusable
+          ? session.link
+            ? `回到 ${AGENT_LABELS[session.agent] ?? session.agent} 的会话`
+            : `打开 ${AGENT_LABELS[session.agent] ?? session.agent} 的工作区`
+          : undefined
+      }
+      title={
+        openError
+          ? `打开失败：${openError}`
+          : focusable
+            ? session.link
+              ? session.title || session.session
+              : `打开工作区；会话 ${session.session}`
+            : undefined
+      }
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onFocus={focusable ? () => setFocused(true) : undefined}
       onBlur={focusable ? () => setFocused(false) : undefined}
       onKeyDown={onKeyDown}
-      onPointerDownCapture={(e) => logPetHit('pointerdown', e)}
-      onClickCapture={(e) => logPetHit('click', e)}
     >
       {!compact && hasBubble && (
         <div className="bubble-box">
@@ -297,7 +282,7 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
           </div>
         </div>
       )}
-      {session.link && (
+      {focusable && (
         <span
           className="pet-hit-layer"
           aria-hidden="true"
@@ -311,6 +296,11 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
             openFromSlot()
           }}
         />
+      )}
+      {openError && (
+        <span className="pet-error" title={openError}>
+          !
+        </span>
       )}
       <Pet
         agent={session.agent}

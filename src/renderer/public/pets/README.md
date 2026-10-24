@@ -1,12 +1,13 @@
-# pet 素材（clawd / cloudling / cxb）
+# pet 素材（clawd / cloudling / cxb / cursor）
 
 看板卡片上那只 pet 的素材。一个 agent 一套形象：
 
 - **Claude** → clawd 像素螃蟹（`.pet-src/` 的默认主题），走 `<img>`
 - **Codex** → cloudling 云宝（`.pet-src/cloudling`，作者 stlabslogo），**内联成 `<svg>`**
 - **程小帮** → cxb 蓝卫衣短发女孩（`cxb-*.webp`），走 `<img>`
+- **Cursor** → cursor 立方体小机器人（`cursor-*.webp`，方块 logo + 指针箭头），走 `<img>`
 
-## 三套的通道与动效
+## 四套的通道与动效
 
 clawd 每张 SVG 自带 `<style>` 与 `@keyframes`，内联到一张卡里会撞名，`<img>` 让每个 SVG
 文档独立、CSS 天然隔离。
@@ -21,12 +22,17 @@ cxb 是位图（以程小帮应用图标为参考、用 gpt-image-2.5 生成并�
 它走 `<img>`，呼吸 / 摇摆 / 敲键盘这类轻动由宿主在 `styles.css` 里按 `.pet.cxb` 补；位图不涉及
 CSS 撞名，也不需要云宝那套内联壳。
 
+cursor 是 gpt-image-2.5 以 Cursor 的方块 logo 与指针箭头为参考生成的透明底位图（11 档姿势 +
+6 张 mini），没有自带动画。走 `<img>`，宿主只做轻动；生成见 `scripts/build-cursor-pet.py`。
+
 ## 许可
 
 clawd / cloudling 两套素材的版权与授权条款原文见 `.pet-src/LICENSE.clawd`。
 
 cxb 是为程小帮生成的原创素材，形象取自已安装的程小帮应用图标（深棕短发、蓝卫衣、`</>` 徽章），
 没有引入第三方素材。
+
+cursor 是为 Cursor 生成的原创位图素材，形象取自 Cursor 的方块 logo 与指针箭头，没有引入第三方素材。
 
 ## 文件
 
@@ -36,6 +42,8 @@ cxb 是为程小帮生成的原创素材，形象取自已安装的程小帮应�
 | `clawd-*.still.svg` | 同上，`prefers-reduced-motion` 时换这一份 |
 | `cxb-*.webp` | 程小帮 12 档：七档状态 + 打哈欠 / 打盹 / 瘫倒 / 睡着 / 醒来，256×256 |
 | `cxb-mini-*.webp` | 折叠卡 24px 用，从各档头部裁的 128×128（6 张） |
+| `cursor-*.webp` | Cursor 11 档：七档状态 + 打哈欠 / 打盹 / 瘫倒 / 睡着，256×256 |
+| `cursor-mini-*.webp` | 折叠卡 24px 用（6 张，128×128） |
 | `README.md` | 本文件 |
 
 云宝不在这里——它只以内联的形态出现，素材落在生成物 `src/renderer/src/lib/pet-cloudling-art.ts`
@@ -46,6 +54,7 @@ cxb 是为程小帮生成的原创素材，形象取自已安装的程小帮应�
 ```bash
 node scripts/build-pets.mjs                                    # clawd / cloudling
 uv run --with pillow python scripts/build-cxb-pet.py           # 程小帮那套
+uv run --with pillow python scripts/build-cursor-pet.py        # Cursor 那套
 ```
 
 `.pet-src/` 里的原始素材与生成物都在仓库里，clone 下来就能重跑。`build-pets.mjs` 会重设

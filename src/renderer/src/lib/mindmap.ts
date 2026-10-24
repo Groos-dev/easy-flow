@@ -1,6 +1,6 @@
 import type { Requirement } from './types'
 
-/** 节点高、同侧竖直间距、列间距、根节点尺寸、画布留白 */
+// 节点高、同侧竖直间距、列间距、根节点尺寸、画布留白
 const NODE_H = 34
 const GAP_Y = 14
 const COL_GAP = 56
@@ -15,9 +15,9 @@ export interface MapNode {
 }
 
 export interface LayoutOptions {
-  /** 收起的分支：slug 在这里的节点不再铺开子需求 */
+  // 收起的分支：slug 在这里的节点不再铺开子需求
   collapsed?: Set<string>
-  /** 搜索命中集合；给了就只留命中的节点与它们的祖先链 */
+  // 搜索命中集合；给了就只留命中的节点与它们的祖先链
   hits?: Set<string> | null
 }
 
@@ -29,9 +29,9 @@ export interface LaidNode {
   y: number
   width: number
   height: number
-  /** 收起时被藏起来的子需求数，0 表示没藏 */
+  // 收起时被藏起来的子需求数，0 表示没藏
   hidden: number
-  /** 还有子需求，可以收起 */
+  // 还有子需求，可以收起
   collapsible: boolean
 }
 
@@ -41,7 +41,7 @@ export interface LaidEdge {
   y1: number
   x2: number
   y2: number
-  /** 顶层分支的序号，用来取连线颜色 */
+  // 顶层分支的序号，用来取连线颜色
   branch: number
 }
 
@@ -53,7 +53,7 @@ export interface MapLayout {
   height: number
 }
 
-/** 按字数估宽：中文按 1em、ASCII 按 0.55em，再夹到 [132, 240] */
+// 按字数估宽：中文按 1em、ASCII 按 0.55em，再夹到 [132, 240]
 export function nodeWidth(title: string): number {
   let units = 0
   for (const ch of title) units += (ch.codePointAt(0) ?? 0) > 0x2e80 ? 1 : 0.55
@@ -88,7 +88,7 @@ export function buildTree(reqs: Requirement[]): MapNode[] {
   return roots
 }
 
-/** 沿 slug 逐段往上去找最近的、确实存在的祖先 */
+// 沿 slug 逐段往上去找最近的、确实存在的祖先
 function nearestAncestor(slug: string, bySlug: Map<string, MapNode>): MapNode | null {
   let cut = slug.lastIndexOf('/')
   while (cut > 0) {
@@ -99,7 +99,7 @@ function nearestAncestor(slug: string, bySlug: Map<string, MapNode>): MapNode | 
   return null
 }
 
-/** 搜索时只留命中的节点与它们的祖先链——否则树会断成一片 */
+// 搜索时只留命中的节点与它们的祖先链——否则树会断成一片
 function filterByHits(nodes: MapNode[], hits: Set<string> | null): MapNode[] {
   if (!hits) return nodes
   const out: MapNode[] = []
@@ -133,7 +133,7 @@ export function layoutTree(branches: MapNode[], opts: LayoutOptions = {}): MapLa
   const nodes: LaidNode[] = []
   const links: Array<{ parent: string | null; child: LaidNode; branch: number }> = []
 
-  /** 摆一侧，返回这一侧的总高；x 留到后面按列统一定 */
+  // 摆一侧，返回这一侧的总高；x 留到后面按列统一定
   const placeSide = (idxs: number[], side: 'left' | 'right'): number => {
     let cursor = 0
     const colWidth = new Map<number, number>()

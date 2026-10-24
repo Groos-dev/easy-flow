@@ -25,7 +25,7 @@ import ProjectSwitcher from './components/ProjectSwitcher'
 import Settings from './components/Settings'
 import LeftRail from './components/LeftRail'
 
-/** 空列的一句话：一个「—」说不出这一列是干什么的。认不出的状态回落到通用文案 */
+// 空列的一句话：一个「—」说不出这一列是干什么的。认不出的状态回落到通用文案
 const COLUMN_HINT: Record<string, string> = {
   澄清: '没有待澄清的需求',
   执行中: '没有正在执行的需求',
@@ -36,15 +36,15 @@ const COLUMN_HINT: Record<string, string> = {
 interface BoardColumnProps {
   status: Status
   items: Requirement[]
-  /** 需求 id → 它名下的会话。卡片角标按需求取用（每个会话各挂一个） */
+  // 需求 id → 它名下的会话。卡片角标按需求取用（每个会话各挂一个）
   sessionsByReq: Map<string, Session[]>
-  /** 父需求 id → 子需求完成度。没有子需求的需求不在表里 */
+  // 父需求 id → 子需求完成度。没有子需求的需求不在表里
   childStats: Map<string, ChildStat>
-  /** 父需求 id → 直接子需求。铺开的父卡片靠它把子需求列出来 */
+  // 父需求 id → 直接子需求。铺开的父卡片靠它把子需求列出来
   childrenByParent: Map<string, Requirement[]>
-  /** 点父卡片上的子需求：滚到它在版面上的卡片 */
+  // 点父卡片上的子需求：滚到它在版面上的卡片
   onJumpChild: (slug: string) => void
-  /** 刚跳过去的那条，闪一下 */
+  // 刚跳过去的那条，闪一下
   flashSlug: string | null
   focusSlug: string | null
   kidsOpen: Set<string>
@@ -52,7 +52,7 @@ interface BoardColumnProps {
   onFocusCard: (slug: string) => void
   onOpen: (slug: string) => void
   isOver: boolean
-  /** 收成窄条（只有「已完成」列会） */
+  // 收成窄条（只有「已完成」列会）
   collapsed: boolean
   onToggleCollapsed: () => void
 }
@@ -135,13 +135,13 @@ function ColumnView({
   )
 }
 
-/** dnd-kit 的 data 是 unknown，这里收窄一次 */
+// dnd-kit 的 data 是 unknown，这里收窄一次
 function statusOf(over: DragOverEvent['over']): Status | undefined {
   const data = over?.data.current as { status?: Status } | undefined
   return data?.status
 }
 
-/** 同列内按优先级排：p0 在前，没设优先级的排最后 */
+// 同列内按优先级排：p0 在前，没设优先级的排最后
 const PRIORITY_RANK: Record<string, number> = { p0: 0, p1: 1, p2: 2, p3: 3 }
 
 /**
@@ -150,7 +150,7 @@ const PRIORITY_RANK: Record<string, number> = { p0: 0, p1: 1, p2: 2, p3: 3 }
  */
 const BOARD_POLL_MS = 1_000
 
-/** pin 的项目存浏览器本地：它是「这台机器上常看哪几个」，不是看板数据 */
+// pin 的项目存浏览器本地：它是「这台机器上常看哪几个」，不是看板数据
 const PINNED_KEY = 'easy-flow.pinned-projects'
 
 function readPinned(): string[] {
@@ -164,40 +164,40 @@ function readPinned(): string[] {
 
 export default function App() {
   const [statuses, setStatuses] = useState<Status[]>([])
-  /** 当前项目：看板数据按项目隔离 */
+  // 当前项目：看板数据按项目隔离
   const [project, setProject] = useState('')
-  /** 当前项目显示名，取自项目根 AGENTS.md 的 frontmatter；缺省是目录名 */
+  // 当前项目显示名，取自项目根 AGENTS.md 的 frontmatter；缺省是目录名
   const [projectName, setProjectName] = useState('')
-  /** 项目列表：左侧栏用它。agent 在文件系统里建完目录后靠刷新带出来 */
+  // 项目列表：左侧栏用它。agent 在文件系统里建完目录后靠刷新带出来
   const [projects, setProjects] = useState<Project[]>([])
-  /** 常驻左侧栏的项目（pin 的），顺序即栏里的顺序 */
+  // 常驻左侧栏的项目（pin 的），顺序即栏里的顺序
   const [pinned, setPinned] = useState<string[]>(readPinned)
-  /** 「已完成」列是否展开。默认收成窄条：历史只增不减，全铺开会把活跃三列挤窄 */
+  // 「已完成」列是否展开。默认收成窄条：历史只增不减，全铺开会把活跃三列挤窄
   const [doneOpen, setDoneOpen] = useState(false)
-  /** 从父卡片点过来的那条子需求：等它在版面上出现再滚过去 */
+  // 从父卡片点过来的那条子需求：等它在版面上出现再滚过去
   const [pendingJump, setPendingJump] = useState<string | null>(null)
-  /** 刚跳到的卡片：闪一下，好在一屏卡片里认出落点 */
+  // 刚跳到的卡片：闪一下，好在一屏卡片里认出落点
   const [flashSlug, setFlashSlug] = useState<string | null>(null)
-  /** 需求板块里的视图：看板（默认）/ 下一步 / 导图 */
+  // 需求板块里的视图：看板（默认）/ 下一步 / 导图
   const [reqView, setReqView] = useState<'board' | 'next' | 'map'>('board')
-  /** 详情页挂载点：需求或项目。slugs 用 'project:<slug>' 区分 */
+  // 详情页挂载点：需求或项目。slugs 用 'project:<slug>' 区分
   const [detail, setDetail] = useState<{ project: string; slug: string | null } | null>(null)
   const [items, setItems] = useState<Requirement[]>([])
-  /** 全部会话（含实时状态）。卡片角标与详情页的「会话」块共用 */
+  // 全部会话（含实时状态）。卡片角标与详情页的「会话」块共用
   const [sessions, setSessions] = useState<Session[]>([])
-  /** 「下一步」的排名（服务端算好，每条带理由），只在「下一步」视图里读 */
+  // 「下一步」的排名（服务端算好，每条带理由），只在「下一步」视图里读
   const [nextItems, setNextItems] = useState<NextUpItem[]>([])
-  /** 上次算排名失败的原话；空串表示最近一次是成功的 */
+  // 上次算排名失败的原话；空串表示最近一次是成功的
   const [nextError, setNextError] = useState('')
-  /** 待办：全局的，不分项目 */
+  // 待办：全局的，不分项目
   const [todos, setTodos] = useState<Todo[]>([])
-  /** 打开的待办详情。只存 id，对象从 todos 里取——改完状态详情页跟着变 */
+  // 打开的待办详情。只存 id，对象从 todos 里取——改完状态详情页跟着变
   const [todoId, setTodoId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
   const [dragSlug, setDragSlug] = useState<string | null>(null)
-  /** mini 面板可能点开非当前项目的需求，这里单独持有 */
+  // mini 面板可能点开非当前项目的需求，这里单独持有
   const [crossReq, setCrossReq] = useState<Requirement | null>(null)
   const [overStatus, setOverStatus] = useState<Status | null>(null)
   /**
@@ -206,9 +206,9 @@ export default function App() {
    */
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
-  /** 命中集合；null 表示没在筛。看板的过滤与导图的 hits 共用它 */
+  // 命中集合；null 表示没在筛。看板的过滤与导图的 hits 共用它
   const [hits, setHits] = useState<Set<string> | null>(null)
-  /** 正在等服务端返回：用来区分「还没查」与「查了没有」 */
+  // 正在等服务端返回：用来区分「还没查」与「查了没有」
   const [searching, setSearching] = useState(false)
   // 默认常开，第一次按键落到第一列第一张
   const [focusSlug, setFocusSlug] = useState<string | null>(null)
@@ -221,7 +221,7 @@ export default function App() {
   }, [pinned])
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
-  /** 待打开的需求只取一次（主窗口刚重建时的那份交接） */
+  // 待打开的需求只取一次（主窗口刚重建时的那份交接）
   const tookPending = useRef(false)
 
   /**
@@ -438,7 +438,7 @@ export default function App() {
     }
   }, [load, loadTodos, loadProjects, loadSessions, loadNextUp, dragSlug])
 
-  /** 动作之后立刻重拉一份（改完状态、退出设置页、从详情页返回）：不等下一次轮询 */
+  // 动作之后立刻重拉一份（改完状态、退出设置页、从详情页返回）：不等下一次轮询
   const refresh = useCallback(() => {
     void load()
     void loadTodos()
@@ -455,10 +455,10 @@ export default function App() {
     void loadNextUp()
   }, [load, loadTodos, loadProjects, loadSessions, loadNextUp])
 
-  /** 铃铛角标：agent 卡住等你、要人介入的需求数（档位 1 就是 level now） */
+  // 铃铛角标：agent 卡住等你、要人介入的需求数（档位 1 就是 level now）
   const agentCount = useMemo(() => nextItems.filter((i) => i.level === 'now').length, [nextItems])
 
-  /** 需求 id → 名下的会话。需求没有 id 时不可能有会话，取不到正好 */
+  // 需求 id → 名下的会话。需求没有 id 时不可能有会话，取不到正好
   const sessionsByReq = useMemo(() => {
     const map = new Map<string, Session[]>()
     for (const s of sessions) {
@@ -469,14 +469,14 @@ export default function App() {
     return map
   }, [sessions])
 
-  /** pin 只动左栏常驻哪几个，不切当前项目 */
+  // pin 只动左栏常驻哪几个，不切当前项目
   function togglePin(slug: string, next: boolean) {
     setPinned((list) =>
       next ? (list.includes(slug) ? list : [...list, slug]) : list.filter((s) => s !== slug),
     )
   }
 
-  /** 切项目：写回 activeProject，再把看板换成新项目的数据 */
+  // 切项目：写回 activeProject，再把看板换成新项目的数据
   async function switchProject(slug: string) {
     if (slug === project) {
       setDetail(null)
@@ -493,7 +493,7 @@ export default function App() {
     }
   }
 
-  /** 搜索时看板只留命中的卡片。导图不在这里筛——它要留着祖先链，见 filterByHits */
+  // 搜索时看板只留命中的卡片。导图不在这里筛——它要留着祖先链，见 filterByHits
   const shown = useMemo(
     () => (hits ? items.filter((r) => hits.has(r.slug)) : items),
     [items, hits],
@@ -656,7 +656,7 @@ export default function App() {
     setPendingJump(null)
   }, [pendingJump, hits])
 
-  /** 落点闪一下就好：它是「到了」的提示，不是常驻标记 */
+  // 落点闪一下就好：它是「到了」的提示，不是常驻标记
   useEffect(() => {
     if (!flashSlug) return
     const timer = setTimeout(() => setFlashSlug(null), 1400)
@@ -667,7 +667,7 @@ export default function App() {
     if (focusSlug && flashSlug && focusSlug !== flashSlug) setFlashSlug(null)
   }, [focusSlug, flashSlug])
 
-  /** 点父卡片上的子需求：先把它所在的那一列铺开，滚动交给上面的 effect */
+  // 点父卡片上的子需求：先把它所在的那一列铺开，滚动交给上面的 effect
   function jumpToChild(slug: string) {
     const child = items.find((r) => r.slug === slug)
     if (child?.status === DONE_STATUS && !doneOpen) setDoneOpen(true)

@@ -9,7 +9,7 @@
  */
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync, readdirSync, cpSync, realpathSync, lstatSync, readlinkSync, statSync } from 'node:fs'
+import { mkdirSync, writeFileSync, rmSync, existsSync, symlinkSync, readFileSync, readdirSync, cpSync, realpathSync, lstatSync, readlinkSync, statSync, utimesSync } from 'node:fs'
 import { join, basename, resolve, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:http'
@@ -49,7 +49,7 @@ process.env.GIT_CONFIG_GLOBAL = '/dev/null'
 // 按 cwd 派生：每个工作区一份，同工作区内仍是同一目录。
 const TMP = process.env.EASY_FLOW_TEST_TMP ?? join(tmpdir(), `easy-flow-test-${basename(process.cwd())}`)
 
-/** 状态层与读位置都落在 sqlite 上：每个用例一个自己的库。放 OS 临时目录——TMP 会被 fresh() 整个清掉 */
+// 状态层与读位置都落在 sqlite 上：每个用例一个自己的库。放 OS 临时目录——TMP 会被 fresh() 整个清掉
 let storeSeq = 0
 function newState(): { store: SessionStateStore; sources: SourceTable } {
   const db = new BoardDatabase(join(tmpdir(), `easy-flow-test-state-${process.pid}`, String(storeSeq++)), 'p')
@@ -69,7 +69,7 @@ function newState(): { store: SessionStateStore; sources: SourceTable } {
   }
 }
 
-/** 造一个需求目录 */
+// 造一个需求目录
 function makeReq(
   dataDir: string,
   project: string,
@@ -299,7 +299,7 @@ describe('数据层 · 项目与需求同步', () => {
 
 // ------------------------------------------------------------ 数据层：待办
 
-/** 造一条待办 md（<dataDir>/_todos/<id>.md） */
+// 造一条待办 md（<dataDir>/_todos/<id>.md）
 function makeTodo(dataDir: string, id: string, title: string, summary = '', progress = ''): string {
   const dir = join(dataDir, '_todos')
   mkdirSync(dir, { recursive: true })
@@ -1281,7 +1281,7 @@ function cli(
   return { code: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
 }
 
-/** One successful call; returns stdout */
+// One successful call; returns stdout
 function cliOk(configFile: string, args: string[], extraEnv: Record<string, string> = {}): string {
   const r = cli(configFile, args, extraEnv)
   assert.equal(r.code, 0, `expected success: easy-flow ${args.join(' ')}\n${r.stderr}`)
@@ -1299,7 +1299,7 @@ function todayId(seq = '001'): string {
   return `T-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${seq}`
 }
 
-/** One failing call; returns the error text (stderr in text mode, usage included for usage errors) */
+// One failing call; returns the error text (stderr in text mode, usage included for usage errors)
 function cliFail(configFile: string, args: string[], extraEnv: Record<string, string> = {}): string {
   const r = cli(configFile, args, extraEnv)
   assert.notEqual(r.code, 0, `expected failure: easy-flow ${args.join(' ')}\n${r.stdout}`)
@@ -1420,7 +1420,7 @@ describe('数据层 · worktree', () => {
 // ------------------------------------------------------------ 数据层：会话
 
 describe('数据层 · 会话', () => {
-  /** 造一条需求，返回它的 id */
+  // 造一条需求，返回它的 id
   function seedReq(d: string, slug = 'alpha', project = 'demo'): string {
     makeReq(d, project, slug, `# ${slug}`, { id: `req-${slug}` })
     return `req-${slug}`
@@ -2761,6 +2761,18 @@ describe('HTTP 层', () => {
     }
   })
 
+  test('POST /api/sessions/open-workspace 只认 Cursor 且目录必须还在', async () => {
+    const missing = await post('/api/sessions/open-workspace', { agent: 'cursor', session: 'nope' })
+    assert.match(missing.error, /Session not found/)
+
+    app.db.addSession({ requirementId: 'req-alpha', agent: 'cursor', session: 'cur-focus', cwd: '/definitely/not/here' })
+    const gone = await post('/api/sessions/open-workspace', { agent: 'cursor', session: 'cur-focus' })
+    assert.match(gone.error, /Directory no longer exists/)
+
+    const wrong = await post('/api/sessions/open-workspace', { agent: 'codex', session: 'th-ctx' })
+    assert.match(wrong.error, /Only Cursor/)
+  })
+
   test('POST /api/sessions/clicked 把这条会话写成静止，下一个 hook 事件直接覆盖', async () => {
     assert.deepEqual(await post('/api/sessions/clicked', { agent: 'codex', session: 'th-ctx' }), { ok: true })
     const clicked = (await get('/api/sessions')).sessions.find((s: any) => s.session === 'th-ctx')
@@ -3134,27 +3146,28 @@ describe('导图：布局', () => {
 // ---------------------------------------------- 会话状态：读 agent 应用的落盘文件
 
 describe('会话状态', () => {
-  /** 假装的用户主目录。各处外部数据都从这儿派生，测试不碰真机上的东西 */
+  // 假装的用户主目录。各处外部数据都从这儿派生，测试不碰真机上的东西
   const HOME = join(TMP, 'agent-home')
   const roots = {
     appSupport: join(HOME, 'Library', 'Application Support'),
     claudeHome: join(HOME, '.claude'),
     codexHome: join(HOME, '.codex'),
     chengxiaobangHome: join(HOME, '.chengxiaobang'),
+    cursorHome: join(HOME, '.cursor'),
   }
 
   const { store: suiteStore, sources: suiteSources } = newState()
 
   before(() => rmSync(HOME, { recursive: true, force: true }))
 
-  /** 桌面应用的会话记录。写在第三方 provider 那套目录下——本机在用的就是它 */
+  // 桌面应用的会话记录。写在第三方 provider 那套目录下——本机在用的就是它
   function claudeRecord(sessionId: string, rec: Record<string, unknown>): void {
     const dir = join(roots.appSupport, 'Claude-3p', 'claude-code-sessions', 'acct', 'org')
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, `${sessionId}.json`), JSON.stringify({ sessionId, ...rec }), 'utf8')
   }
 
-  /** 活着的 CLI 进程才会写这个文件，进程一退就没了。pid 用测试进程自己——它一定活着 */
+  // 活着的 CLI 进程才会写这个文件，进程一退就没了。pid 用测试进程自己——它一定活着
   function claudeLive(hostSessionId: string, status: string, pid: number | null = process.pid): void {
     const dir = join(roots.claudeHome, 'sessions')
     mkdirSync(dir, { recursive: true })
@@ -3173,12 +3186,21 @@ describe('会话状态', () => {
     return file
   }
 
-  /** 一条 rollout 事件行，形状照本机实测的顶层 { timestamp, type, payload } */
+  // 一条 rollout 事件行，形状照本机实测的顶层 { timestamp, type, payload }
   function evLine(type: string, payload: Record<string, unknown> | null = null, at = Date.now()): string {
     return JSON.stringify({ timestamp: new Date(at).toISOString(), type, payload })
   }
 
-  /** codex 的官方未读集合：不在这里面的 thread 就是看过了 */
+  // Cursor 的会话日志：projects/<workspace>/agent-transcripts/<id>/<id>.jsonl
+  function cursorTranscript(id: string, lines: string[]): string {
+    const dir = join(roots.cursorHome, 'projects', 'test-project', 'agent-transcripts', id)
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, `${id}.jsonl`)
+    writeFileSync(file, lines.join('\n') + '\n', 'utf8')
+    return file
+  }
+
+  // codex 的官方未读集合：不在这里面的 thread 就是看过了
   function codexUnreadState(unreadIds: string[]): void {
     mkdirSync(roots.codexHome, { recursive: true })
     writeFileSync(
@@ -3188,7 +3210,7 @@ describe('会话状态', () => {
     )
   }
 
-  /** 桌面应用的未读集合 */
+  // 桌面应用的未读集合
   function statusOf(agent: string, session: string): SessionStatus {
     const one = [{ agent, session }]
     pullStatuses(one, suiteStore, suiteSources, roots)
@@ -3425,8 +3447,74 @@ describe('会话状态', () => {
     assert.equal(statusOf('codex', 'cx-no-state').state, 'done')
   })
 
-  test('cursor 没有可读的状态来源，一律 unknown', () => {
-    assert.equal(statusOf('cursor', 'conv-1').state, 'unknown')
+  test('cursor：会话日志的 turn_ended 补回最终状态', () => {
+    cursorTranscript('conv-done', [
+      JSON.stringify({ role: 'assistant', message: { content: [{ type: 'text', text: 'done' }] } }),
+      JSON.stringify({ type: 'turn_ended', status: 'success' }),
+    ])
+    assert.equal(statusOf('cursor', 'conv-done').state, 'done')
+
+    cursorTranscript('conv-aborted', [JSON.stringify({ type: 'turn_ended', status: 'aborted' })])
+    assert.equal(statusOf('cursor', 'conv-aborted').state, 'blocked')
+
+    cursorTranscript('conv-failed', [JSON.stringify({ type: 'turn_ended', status: 'error' })])
+    assert.equal(statusOf('cursor', 'conv-failed').state, 'failed')
+  })
+
+  test('cursor：最后一行还没写完时，不拿上一轮的 turn_ended 当结论', () => {
+    cursorTranscript('conv-partial', [
+      JSON.stringify({ type: 'turn_ended', status: 'success' }),
+      '{"role":"assistant","message":{"content":',
+    ])
+    assert.equal(statusOf('cursor', 'conv-partial').state, 'unknown')
+  })
+
+  test('cursor：只改 mtime 不重算旧 turn_ended', () => {
+    const session = 'conv-touch'
+    const file = cursorTranscript(session, [JSON.stringify({ type: 'turn_ended', status: 'success' })])
+    const one = [{ agent: 'cursor', session }]
+    pullStatuses(one, suiteStore, suiteSources, roots)
+    assert.equal(readObservations(one, suiteStore)[0].status.state, 'done')
+
+    recordHook(
+      { hook_event_name: 'preToolUse', conversation_id: session, tool_name: 'Shell', tool_input: { command: 'ls' } },
+      { agent: 'cursor', at: Date.now() + 1_000 },
+      suiteStore,
+    )
+    const future = new Date(Date.now() + 2_000)
+    utimesSync(file, future, future)
+    pullStatuses(one, suiteStore, suiteSources, roots)
+    assert.equal(readObservations(one, suiteStore)[0].status.state, 'working')
+  })
+
+  test('cursor：尾部半行不覆盖钩子写下的 working', () => {
+    const session = 'conv-partial-hook'
+    cursorTranscript(session, [
+      JSON.stringify({ type: 'turn_ended', status: 'success' }),
+      '{"role":"assistant","message":{"content":',
+    ])
+    recordHook(
+      { hook_event_name: 'preToolUse', conversation_id: session, tool_name: 'Shell', tool_input: { command: 'ls' } },
+      { agent: 'cursor' },
+      suiteStore,
+    )
+    const one = [{ agent: 'cursor', session }]
+    pullStatuses(one, suiteStore, suiteSources, roots)
+    assert.equal(readObservations(one, suiteStore)[0].status.state, 'working')
+  })
+
+  test('cursor：日志停在工具调用就是 working，带气泡动作', () => {
+    cursorTranscript('conv-working', [
+      JSON.stringify({
+        role: 'assistant',
+        message: { content: [{ type: 'tool_use', name: 'Shell', input: { command: 'ls' } }] },
+      }),
+    ])
+    const one = [{ agent: 'cursor', session: 'conv-working' }]
+    pullStatuses(one, suiteStore, suiteSources, roots)
+    const observation = readObservations(one, suiteStore)[0]
+    assert.equal(observation.status.state, 'working')
+    assert.equal(observation.action?.text, '跑 ls')
   })
 
   test('程小帮：库里的落盘结论参与状态，推拉结合', () => {
@@ -3561,12 +3649,12 @@ describe('rollout 兜底：事件译状态、增量读、只扫近几天', () =>
 
   const DAY = 86_400_000
 
-  /** 一条完整的事件行，形状照本机实测的顶层 { timestamp, type, payload } */
+  // 一条完整的事件行，形状照本机实测的顶层 { timestamp, type, payload }
   function line(type: string, payload: Record<string, unknown> | null = null, at = Date.now()): string {
     return JSON.stringify({ timestamp: new Date(at).toISOString(), type, payload })
   }
 
-  /** 写一份 rollout，返回文件路径。dir 由调用方给，好测「近几天」的窗口 */
+  // 写一份 rollout，返回文件路径。dir 由调用方给，好测「近几天」的窗口
   function writeRollout(dir: string, id: string, body: string): string {
     mkdirSync(dir, { recursive: true })
     const file = join(dir, `rollout-2026-10-14T10-00-00-${id}.jsonl`)
@@ -3799,11 +3887,12 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
     claudeHome: join(HOME, '.claude'),
     codexHome: join(HOME, '.codex'),
     chengxiaobangHome: join(HOME, '.chengxiaobang'),
+    cursorHome: join(HOME, '.cursor'),
   }
 
   before(() => rmSync(HOME, { recursive: true, force: true }))
 
-  /** 桌面记录的 fixture：登记 id 是 local_<uuid>，内层 cliSessionId 才是 hook 报的那个 */
+  // 桌面记录的 fixture：登记 id 是 local_<uuid>，内层 cliSessionId 才是 hook 报的那个
   function claudeRecord(sessionId: string, rec: Record<string, unknown> = {}): void {
     const dir = join(roots.appSupport, 'Claude-3p', 'claude-code-sessions', 'acct', 'org')
     mkdirSync(dir, { recursive: true })
@@ -4020,14 +4109,14 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
   type ArtOpt = { compact: boolean; still: boolean; mood?: IdleMood; wake?: boolean }
   const PETS_DIR = join(REPO_ROOT, 'src/renderer/public/pets')
 
-  /** 走 <img> 的素材：拿它的 src，顺带钉住通道 */
+  // 走 <img> 的素材：拿它的 src，顺带钉住通道
   const imgSrc = (agent: string, state: Pose, opt: ArtOpt = art) => {
     const got = petArt(agent, state, opt)
     assert.equal(got.channel, 'img')
     return got.channel === 'img' ? got.src : ''
   }
 
-  /** 云宝内联：拿它那份 SVG 原文，顺带钉住通道 */
+  // 云宝内联：拿它那份 SVG 原文，顺带钉住通道
   const cloudlingSvg = (state: Pose, opt: ArtOpt = art) => {
     const got = petArt('codex', state, opt)
     assert.equal(got.channel, 'inline')
@@ -4062,8 +4151,31 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
   })
 
   test('认不出的 agent 落到 clawd（默认那只），不染不动', () => {
-    assert.equal(imgSrc('cursor', 'done'), imgSrc('claude', 'done'))
     assert.equal(petArt('some-new-agent', 'done', art).channel, 'img')
+    assert.equal(imgSrc('some-new-agent', 'done'), imgSrc('claude', 'done'))
+  })
+
+  test('Cursor 用专属立方体机器人，走 <img>：各档一张、互不重样', () => {
+    const files: Record<Pose, string> = {
+      idle: 'cursor-idle.webp',
+      thinking: 'cursor-thinking.webp',
+      working: 'cursor-working.webp',
+      sweeping: 'cursor-sweeping.webp',
+      blocked: 'cursor-blocked.webp',
+      done: 'cursor-done.webp',
+      failed: 'cursor-failed.webp',
+    }
+    const poses = THREAD_STATES.filter((s) => s !== 'unknown')
+    for (const state of poses) assert.equal(imgSrc('cursor', state), `pets/${files[state]}`, state)
+    assert.equal(new Set(poses.map((s) => imgSrc('cursor', s))).size, poses.length)
+    assert.doesNotMatch(imgSrc('cursor', 'idle'), /clawd|cloudling|cxb/)
+
+    assert.equal(imgSrc('cursor', 'idle', { compact: true, still: false }), 'pets/cursor-mini-idle.webp')
+    assert.equal(imgSrc('cursor', 'done', { compact: true, still: false }), 'pets/cursor-mini-happy.webp')
+    assert.equal(
+      imgSrc('cursor', 'idle', { compact: false, still: true, mood: 'sleeping' }),
+      'pets/cursor-sleeping.webp',
+    )
   })
 
   test('程小帮用专属 cxb，走 <img>：各档一张、互不重样', () => {
@@ -4161,6 +4273,8 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
     const still = { compact: false, still: true }
     assert.equal(imgSrc('claude', 'done', still), 'pets/clawd-happy.still.svg')
     assert.equal(imgSrc('claude', 'done', { compact: true, still: true }), 'pets/clawd-mini-happy.still.svg')
+    assert.equal(imgSrc('cursor', 'done', still), 'pets/cursor-done.webp', '位图没有 still 版')
+    assert.equal(imgSrc('cursor', 'done', { compact: true, still: true }), 'pets/cursor-mini-happy.webp')
     assert.equal(imgSrc('chengxiaobang', 'done', still), 'pets/cxb-done.webp', '位图没有 still 版，减动效由宿主 CSS 停')
     assert.equal(imgSrc('chengxiaobang', 'idle', { compact: true, still: true }), 'pets/cxb-mini-idle.webp')
     assert.equal(cloudlingSvg('failed', still), cloudlingSvg('failed'))
@@ -4221,10 +4335,10 @@ describe('pet 素材：agent → 形象、状态 → 文件、静态版', () => 
 describe('云宝内联：按实例改写 id', () => {
   const files = Object.keys(CLOUDLING_SVG)
 
-  /** 素材里定义的全部 id */
+  // 素材里定义的全部 id
   const idsIn = (text: string) => [...text.matchAll(/\bid="([\w-]+)"/g)].map((m) => m[1])
 
-  /** 素材里所有「指向某个元素」的引用：标记与脚本里都有 */
+  // 素材里所有「指向某个元素」的引用：标记与脚本里都有
   const refsIn = (text: string) => [
     ...[...text.matchAll(/(?:url\(#|href="#)([\w-]+)/g)].map((m) => m[1]),
     ...[...text.matchAll(/getElementById\(\s*(['"])([\w-]+)\1/g)].map((m) => m[2]),

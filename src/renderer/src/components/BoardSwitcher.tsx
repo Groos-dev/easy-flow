@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-/** 窗口里的两个看板：需求与待办是平级的，只是看的东西不同 */
+// 窗口里的两个看板：需求与待办是平级的，只是看的东西不同
 export type BoardView = 'req' | 'todo'
 
 const BOARDS: Array<{ value: BoardView; label: string; hint: string }> = [

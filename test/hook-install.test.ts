@@ -22,7 +22,7 @@ process.env.GIT_CONFIG_GLOBAL = '/dev/null'
 
 const TMP = join(tmpdir(), `easy-flow-hooks-${basename(process.cwd())}`)
 
-/** 一份含他人 Codex hook 的配置（cmux 设了 120s、orca 走 .orca 脚本、git-ai 走 checkpoint） */
+// 一份含他人 Codex hook 的配置（cmux 设了 120s、orca 走 .orca 脚本、git-ai 走 checkpoint）
 function codexOthers() {
   return {
     hooks: {
@@ -52,7 +52,7 @@ function codexOthers() {
   }
 }
 
-/** 一份含用户自配 Claude hook 的配置 */
+// 一份含用户自配 Claude hook 的配置
 function claudeOthers() {
   return {
     $schema: 'https://json.schemastore.org/claude-code-settings.json',
@@ -80,7 +80,7 @@ function claudeOthers() {
   }
 }
 
-/** 程小帮的 hook 是扁平数组，保留一条用户自己的 hook 验证只增不改 */
+// 程小帮的 hook 是扁平数组，保留一条用户自己的 hook 验证只增不改
 function cxbOthers() {
   return {
     enabled: true,
@@ -97,7 +97,21 @@ function cxbOthers() {
   }
 }
 
-/** JSON.stringify 的缩进要跟真实文件一致，否则「逐字相等」的基线不是真基线 */
+// Cursor 的 hook 也是扁平 command；保留 git-ai / 用户自己的脚本
+function cursorOthers() {
+  return {
+    version: 1,
+    hooks: {
+      preToolUse: [
+        { command: '/Users/x/.git-ai/bin/git-ai checkpoint cursor --hook-input stdin', timeout: 10 },
+        { command: 'echo other', timeout: 10 },
+      ],
+      stop: [{ command: '/Users/x/.cursor/hooks/skill-distill-queue.sh' }],
+    },
+  }
+}
+
+// JSON.stringify 的缩进要跟真实文件一致，否则「逐字相等」的基线不是真基线
 function writeJson(file: string, obj: unknown, trailingNewline = true): void {
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, JSON.stringify(obj, null, 2) + (trailingNewline ? '\n' : ''), 'utf8')
@@ -112,35 +126,47 @@ describe('hook 一键配置：只增不改', () => {
   let claudeFile: string
   let codexFile: string
   let cxbFile: string
+  let cursorFile: string
 
   beforeEach(() => {
     home = join(TMP, `home-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     claudeFile = join(home, '.claude', 'settings.json')
     codexFile = join(home, '.codex', 'hooks.json')
     cxbFile = join(home, '.chengxiaobang', 'hooks.json')
+    cursorFile = join(home, '.cursor', 'hooks.json')
   })
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true })
   })
 
-  test('未配置时三个 agent 都报未安装，地址带端口', () => {
+  test('未配置时四个 agent 都报未安装，地址带端口', () => {
     const plan = hookPlan({ port: 3210, home })
     assert.equal(plan.port, 3210)
-    assert.equal(plan.agents.length, 3)
+    assert.equal(plan.agents.length, 4)
     for (const a of plan.agents) {
       assert.equal(a.installed, false)
       assert.equal(a.events, 0)
       assert.match(a.url, /^http:\/\/127\.0\.0\.1:3210\/api\/hook/)
     }
     assert.equal(plan.agents.find((a) => a.id === 'codex')!.url, 'http://127.0.0.1:3210/api/hook?agent=codex')
+    assert.equal(plan.agents.find((a) => a.id === 'cursor')!.url, 'http://127.0.0.1:3210/api/hook?agent=cursor')
     assert.equal(plan.agents.find((a) => a.id === 'chengxiaobang')!.url, 'http://127.0.0.1:3210/api/hook?agent=chengxiaobang')
+  })
+
+  test('Cursor 原来没有配置文件时，装出来带 version: 1', () => {
+    installHooks({ port: 3210, home })
+    const cursor = JSON.parse(read(cursorFile))
+    assert.equal(cursor.version, 1)
+    assert.equal(cursor.hooks.preToolUse.length, 1)
+    assert.match(cursor.hooks.preToolUse[0].command, /\/api\/hook\?agent=cursor/)
   })
 
   test('装完能读到：各装了自己那批事件，别人的 hook 深度不变', () => {
     writeJson(codexFile, codexOthers())
     writeJson(claudeFile, claudeOthers())
     writeJson(cxbFile, cxbOthers())
+    writeJson(cursorFile, cursorOthers())
 
     installHooks({ port: 3210, home })
 
@@ -168,11 +194,22 @@ describe('hook 一键配置：只增不改', () => {
     assert.match(ours.command, /'http:\/\/127\.0\.0\.1:3210\/api\/hook'/)
     assert.match(ours.command, /\|\| true$/)
 
+    // Cursor：扁平 command；别人的条目在前，我们追加；beforeSubmitPrompt 要显式 continue
+    const cursor = JSON.parse(read(cursorFile))
+    assert.deepEqual(cursor.hooks.preToolUse.slice(0, 2), cursorOthers().hooks.preToolUse)
+    assert.equal(cursor.hooks.preToolUse.length, 3)
+    assert.match(cursor.hooks.preToolUse[2].command, /\/api\/hook\?agent=cursor/)
+    assert.match(cursor.hooks.beforeSubmitPrompt[0].command, /\{"continue":true\}/)
+    assert.match(cursor.hooks.stop[0].command, /skill-distill-queue/)
+    assert.equal(cursor.version, 1)
+
     const plan = hookPlan({ port: 3210, home })
     assert.equal(plan.agents.find((a) => a.id === 'codex')!.installed, true)
     assert.equal(plan.agents.find((a) => a.id === 'codex')!.events, 9)
     assert.equal(plan.agents.find((a) => a.id === 'claude')!.installed, true)
     assert.equal(plan.agents.find((a) => a.id === 'claude')!.events, 9)
+    assert.equal(plan.agents.find((a) => a.id === 'cursor')!.installed, true)
+    assert.equal(plan.agents.find((a) => a.id === 'cursor')!.events, 8)
     assert.equal(plan.agents.find((a) => a.id === 'chengxiaobang')!.installed, true)
     assert.equal(plan.agents.find((a) => a.id === 'chengxiaobang')!.events, 6)
     assert.equal(cxb.enabled, true)
@@ -182,23 +219,27 @@ describe('hook 一键配置：只增不改', () => {
     assert.equal(cxb.hooks[1].event, 'SessionStart')
   })
 
-  test('最要紧的一条：装完再卸完，两份配置逐字还原', () => {
+  test('最要紧的一条：装完再卸完，四份配置逐字还原', () => {
     writeJson(codexFile, codexOthers())
     writeJson(claudeFile, claudeOthers())
     writeJson(cxbFile, cxbOthers())
+    writeJson(cursorFile, cursorOthers())
     const codexBefore = read(codexFile)
     const claudeBefore = read(claudeFile)
     const cxbBefore = read(cxbFile)
+    const cursorBefore = read(cursorFile)
 
     installHooks({ port: 3210, home })
     assert.notEqual(read(codexFile), codexBefore, '装完应当确实写进去了')
     assert.notEqual(read(claudeFile), claudeBefore)
     assert.notEqual(read(cxbFile), cxbBefore)
+    assert.notEqual(read(cursorFile), cursorBefore)
 
     uninstallHooks({ home })
     assert.equal(read(codexFile), codexBefore, 'Codex：cmux 与 orca 必须逐字不变')
     assert.equal(read(claudeFile), claudeBefore, 'Claude：用户自己的 hook 必须逐字不变')
     assert.equal(read(cxbFile), cxbBefore, '程小帮：原有 hook 必须逐字不变')
+    assert.equal(read(cursorFile), cursorBefore, 'Cursor：git-ai 与用户脚本必须逐字不变')
   })
 
   test('原文件没有行尾换行时，装完再卸完也不多出换行', () => {
@@ -245,6 +286,17 @@ describe('hook 一键配置：只增不改', () => {
     const again = uninstallHooks({ home })
     assert.equal(read(codexFile), cleaned, '第二次卸不应改动文件')
     assert.match(again.summary, /没有需要卸载的条目/)
+  })
+
+  test('这次写入了 Cursor 的 hooks.json 才在结论里提示重启', () => {
+    const first = installHooks({ port: 3210, home })
+    assert.match(first.summary, /重启 Cursor/)
+
+    const cursorBefore = read(cursorFile)
+    rmSync(claudeFile, { force: true })
+    const second = installHooks({ port: 3210, home })
+    assert.equal(second.summary, '已安装')
+    assert.equal(read(cursorFile), cursorBefore)
   })
 
   test('端口变了，装出来的地址跟着更新', () => {
@@ -335,15 +387,16 @@ describe('/api/hooks 路由', () => {
   test('GET 反映真文件，POST 装 / 卸走同一条路径', async () => {
     const empty = (await (await fetch(`${base}/api/hooks`)).json()) as any
     assert.equal(empty.port, 4321)
-    assert.equal(empty.agents.length, 3)
+    assert.equal(empty.agents.length, 4)
     assert.ok(empty.agents.every((a: any) => a.installed === false))
 
     const installed = (await (await post('/api/hooks/install')).json()) as any
-    assert.equal(installed.summary, '已安装')
+    assert.match(installed.summary, /^已安装/)
+    assert.match(installed.summary, /重启 Cursor/)
     assert.deepEqual(installed.failed, [])
     assert.deepEqual(
       installed.agents.map((a: any) => a.installed),
-      [true, true, true],
+      [true, true, true, true],
     )
     assert.match(installed.agents[0].url, /:4321\/api\/hook/)
 

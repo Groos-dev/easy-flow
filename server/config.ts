@@ -12,17 +12,17 @@ import { isNotificationMode, type NotificationMode } from '../src/shared/notific
 
 export interface AppConfig {
   dataDir: string
-  /** 当前看板的项目（用户切换后记住） */
+  // 当前看板的项目（用户切换后记住）
   activeProject: string
-  /** 呼出 mini 面板的全局快捷键（Electron accelerator）；空串表示用默认值 */
+  // 呼出 mini 面板的全局快捷键（Electron accelerator）；空串表示用默认值
   panelShortcut: string
-  /** 详情页默认用谁开目录：OpenTarget.id；空串 = 访达 */
+  // 详情页默认用谁开目录：OpenTarget.id；空串 = 访达
   openWith: string
-  /** 系统通知的显示时机；dock 红点不受影响 */
+  // 系统通知的显示时机；dock 红点不受影响
   notificationMode: NotificationMode
 }
 
-/** 配置文件路径。由 main 进程通过 EASY_FLOW_CONFIG 指定；独立运行 server 时回退到约定路径。 */
+// 配置文件路径。由 main 进程通过 EASY_FLOW_CONFIG 指定；独立运行 server 时回退到约定路径。
 export function configPath(): string {
   if (process.env.EASY_FLOW_CONFIG) return process.env.EASY_FLOW_CONFIG
   const base =
@@ -31,7 +31,7 @@ export function configPath(): string {
   return join(base, 'config.json')
 }
 
-/** macOS 上的默认数据目录。*/
+// macOS 上的默认数据目录。
 export function defaultDataDir(): string {
   const base =
     process.env.EASY_FLOW_USER_DATA ??
@@ -39,7 +39,7 @@ export function defaultDataDir(): string {
   return join(base, 'data')
 }
 
-/** 开发便利：沿用旧的 ~/requirements，避免每次都要手动指路。 */
+// 开发便利：沿用旧的 ~/requirements，避免每次都要手动指路。
 export function devFallbackDir(): string {
   const legacy = join(homedir(), 'requirements')
   return existsSync(legacy) ? legacy : defaultDataDir()

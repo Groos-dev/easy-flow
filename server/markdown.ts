@@ -6,9 +6,9 @@ import { existsSync, statSync, lstatSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readdirOrEmpty, readTextOrNull } from './fsutil.ts'
 
-/** 单文件索引上限：超出只索引前 N 个字符。按 content.length 算（UTF-16 码元），给超大文档兜底够用 */
+// 单文件索引上限：超出只索引前 N 个字符。按 content.length 算（UTF-16 码元），给超大文档兜底够用
 const MAX_DOC_CHARS = 64 * 1024
-/** 单需求索引总量上限，口径同上 */
+// 单需求索引总量上限，口径同上
 const MAX_REQ_CHARS = 512 * 1024
 
 export interface Frontmatter {
@@ -68,7 +68,7 @@ const HEADINGS = {
   summary: ['需求', '需求摘要', '需求概述', '任务范围', 'Requirement summary', 'Summary'],
   repos: ['涉及仓库', '仓库与软链', '仓库映射', '仓库关系', '仓库', 'Repos and symlinks', 'Repos'],
   links: ['链接', '相关链接', '参考链接', '文档索引', 'Doc index', 'Links'],
-  /** 待办 md 的摘要段。与需求分开列：待办没有「需求」段，别名越少越不容易误命中 */
+  // 待办 md 的摘要段。与需求分开列：待办没有「需求」段，别名越少越不容易误命中
   todoSummary: ['摘要', '待办', 'Summary'],
 } as const
 
@@ -80,7 +80,7 @@ function firstParagraph(text: string): string {
   return line ? line.replace(/\*\*/g, '').slice(0, 160) : ''
 }
 
-/** 摘要兜底：早期需求没有标准「需求」段，取 H1 之后的第一个非空段落 */
+// 摘要兜底：早期需求没有标准「需求」段，取 H1 之后的第一个非空段落
 function fallbackSummary(body: string): string {
   const withoutH1 = body.replace(/^#\s.*$/m, '')
   for (const block of withoutH1.split(/\n\s*\n/)) {
@@ -114,7 +114,7 @@ function parseRepos(body: string): RepoRef[] {
   return repos
 }
 
-/** 目录下的可见条目（点开头的不算，它们在数据目录里是"应用自己的东西"） */
+// 目录下的可见条目（点开头的不算，它们在数据目录里是"应用自己的东西"）
 function entries(dir: string): string[] {
   return readdirOrEmpty(dir).filter((e) => !e.startsWith('.'))
 }
@@ -122,7 +122,7 @@ function entries(dir: string): string[] {
 export interface DocFile {
   name: string
   content: string
-  /** 文件真实修改时间（毫秒）。用于排序"最近动过的需求优先" */
+  // 文件真实修改时间（毫秒）。用于排序"最近动过的需求优先"
   mtime: number
 }
 
@@ -168,11 +168,11 @@ export function readDocs(dir: string): DocFile[] {
 }
 
 export interface ParsedRequirement {
-  /** 不透明 id，写在 AGENTS.md 的 frontmatter 里。老需求可能还没有 */
+  // 不透明 id，写在 AGENTS.md 的 frontmatter 里。老需求可能还没有
   id: string
   slug: string
   title: string
-  /** 从正文推导的摘要，用于卡片展示 */
+  // 从正文推导的摘要，用于卡片展示
   summary: string
   repos: RepoRef[]
   links: string
@@ -204,12 +204,12 @@ export function parseRequirement(dir: string, fallbackSlug: string): ParsedRequi
   }
 }
 
-/** 需求目录的判据：AGENTS.md（agent 指令）与 requirement.md（需求描述）都在 */
+// 需求目录的判据：AGENTS.md（agent 指令）与 requirement.md（需求描述）都在
 function isRequirementDir(dir: string): boolean {
   return existsSync(join(dir, 'AGENTS.md')) && existsSync(join(dir, 'requirement.md'))
 }
 
-/** 一个需求目录：绝对路径，以及相对项目根目录的路径（后者就是它的 slug，子需求形如 parent/child） */
+// 一个需求目录：绝对路径，以及相对项目根目录的路径（后者就是它的 slug，子需求形如 parent/child）
 export interface RequirementDir {
   dir: string
   slug: string
@@ -292,7 +292,7 @@ export function listStrayDirs(root: string): string[] {
     })
 }
 
-/** 读取项目级规范文件（约定为项目根目录的 AGENTS.md），不存在则返回 null */
+// 读取项目级规范文件（约定为项目根目录的 AGENTS.md），不存在则返回 null
 export function readProjectConvention(projectRoot: string): string | null {
   return readTextOrNull(join(projectRoot, 'AGENTS.md'))
 }
@@ -306,13 +306,13 @@ export function readProjectConvention(projectRoot: string): string | null {
 export const TODOS_DIR = '_todos'
 
 export interface ParsedTodo {
-  /** 卡片与列表用的标题：md 的 H1 */
+  // 卡片与列表用的标题：md 的 H1
   title: string
-  /** 卡片摘要：md「摘要」段的首段 */
+  // 卡片摘要：md「摘要」段的首段
   summary: string
 }
 
-/** 解析一份待办 md。状态不在这里——状态归 sqlite 管，和需求一个规矩 */
+// 解析一份待办 md。状态不在这里——状态归 sqlite 管，和需求一个规矩
 export function parseTodo(text: string): ParsedTodo {
   const h1 = /^#\s+(.+)$/m.exec(text)?.[1]?.trim()
   return {
@@ -322,13 +322,13 @@ export function parseTodo(text: string): ParsedTodo {
 }
 
 export interface TodoFile extends ParsedTodo {
-  /** 文件名去掉 .md 就是待办 id（T-YYYYMMDD-NNN） */
+  // 文件名去掉 .md 就是待办 id（T-YYYYMMDD-NNN）
   id: string
   file: string
   mtime: number
 }
 
-/** 列出待办目录下的所有 md。文件名即 id，读不到内容的条目跳过 */
+// 列出待办目录下的所有 md。文件名即 id，读不到内容的条目跳过
 export function listTodoFiles(dataDir: string): TodoFile[] {
   const dir = join(dataDir, TODOS_DIR)
   const out: TodoFile[] = []

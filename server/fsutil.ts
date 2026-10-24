@@ -7,7 +7,7 @@
  */
 import { lstatSync, readdirSync, readFileSync } from 'node:fs'
 
-/** 读不到的目录当空目录 */
+// 读不到的目录当空目录
 export function readdirOrEmpty(dir: string): string[] {
   try {
     return readdirSync(dir)
@@ -16,7 +16,7 @@ export function readdirOrEmpty(dir: string): string[] {
   }
 }
 
-/** 路径不存在（或 lstat 失败）当没有这个路径 */
+// 路径不存在（或 lstat 失败）当没有这个路径
 export function lstatOrNull(p: string): ReturnType<typeof lstatSync> | null {
   try {
     return lstatSync(p)
@@ -25,7 +25,7 @@ export function lstatOrNull(p: string): ReturnType<typeof lstatSync> | null {
   }
 }
 
-/** 读不到的文件当没有内容 */
+// 读不到的文件当没有内容
 export function readTextOrNull(file: string): string | null {
   try {
     return readFileSync(file, 'utf8')

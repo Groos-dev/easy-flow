@@ -3,7 +3,7 @@
  * 分开写两份迟早漂移（agent 名认不出来、状态色对不齐）。
  */
 
-/** agent 显示名。取值与 CLI 的 --agent 一致，认不出来的原样显示 */
+// agent 显示名。取值与 CLI 的 --agent 一致，认不出来的原样显示
 export const AGENT_LABELS: Record<string, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
@@ -11,7 +11,7 @@ export const AGENT_LABELS: Record<string, string> = {
   chengxiaobang: '程小帮',
 }
 
-/** 状态圆点的配色，与看板列的语义对齐 */
+// 状态圆点的配色，与看板列的语义对齐
 export const STATUS_CLASS: Record<string, string> = {
   澄清: 's-clarify',
   执行中: 's-doing',
@@ -19,13 +19,13 @@ export const STATUS_CLASS: Record<string, string> = {
   已完成: 's-done',
 }
 
-/** 「下一步」两级的分组标题 */
+// 「下一步」两级的分组标题
 export const NEXT_UP_LEVEL_LABEL: Record<string, string> = {
   now: '现在就得动',
   soon: '有空再看',
 }
 
-/** 会话实时状态的配色：沿用看板那四个色，失败用 p0 的红。unknown 不给配色，它不该出现在角标上 */
+// 会话实时状态的配色：沿用看板那四个色，失败用 p0 的红。unknown 不给配色，它不该出现在角标上
 export const THREAD_STATE_CLASS: Record<string, string> = {
   thinking: 't-thinking',
   working: 't-working',

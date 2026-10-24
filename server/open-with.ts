@@ -58,7 +58,7 @@ export function appIconFile(appPath: string): string {
 
 const iconPngCache = new Map<string, string>()
 
-/** .icns 转 PNG 落临时目录，按 app + 尺寸缓存；读不出图标返回空串 */
+// .icns 转 PNG 落临时目录，按 app + 尺寸缓存；读不出图标返回空串
 export function appIconPng(appPath: string, size = 32): string {
   const key = `${appPath}:${size}`
   const hit = iconPngCache.get(key)
@@ -95,7 +95,7 @@ export function scanOpenTargets(dirs: string[] = appDirs()): OpenTarget[] {
   })
 }
 
-/** 空 id = 访达；配的 app 被卸了也返回 undefined，调用方退回访达 */
+// 空 id = 访达；配的 app 被卸了也返回 undefined，调用方退回访达
 export function findOpenTarget(id: string, dirs: string[] = appDirs()): OpenTarget | undefined {
   if (!id) return undefined
   return scanOpenTargets(dirs).find((t) => t.id === id)

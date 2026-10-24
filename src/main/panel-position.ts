@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 
-/** mini 面板的落点与位置落盘：不碰 Electron，多屏、换屏这些情况在测试里覆盖 */
+// mini 面板的落点与位置落盘：不碰 Electron，多屏、换屏这些情况在测试里覆盖
 export interface Box {
   x: number
   y: number
@@ -13,7 +13,7 @@ export interface Point {
   y: number
 }
 
-/** 落盘是 { x, y }——getPosition() 给的是数组，写之前转一次 */
+// 落盘是 { x, y }——getPosition() 给的是数组，写之前转一次
 export function readPanelPosition(file: string): Point | null {
   try {
     const saved = JSON.parse(readFileSync(file, 'utf8')) as Partial<Point> | null
@@ -38,7 +38,7 @@ function inside(p: Point, box: Box): boolean {
   return p.x >= box.x && p.x < box.x + box.width && p.y >= box.y && p.y < box.y + box.height
 }
 
-/** 上次的位置还在某块屏上就夹回工作区，否则落鼠标所在屏的默认点 */
+// 上次的位置还在某块屏上就夹回工作区，否则落鼠标所在屏的默认点
 export function placePanel(
   saved: Point | null,
   size: { width: number; height: number },

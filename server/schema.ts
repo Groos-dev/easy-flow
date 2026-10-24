@@ -159,7 +159,7 @@ CREATE INDEX IF NOT EXISTS idx_wt_req ON worktree(req_id);
 CREATE INDEX IF NOT EXISTS idx_session_req ON session(req_id);
 `
 
-/** 老库升级：补齐后加的列 */
+// 老库升级：补齐后加的列
 function migrate(db: DatabaseSync): void {
   const addIfMissing = (table: string, column: string, ddl: string) => {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
@@ -205,7 +205,7 @@ function migrate(db: DatabaseSync): void {
   addIfMissing('session_state', 'hook_event', `hook_event TEXT NOT NULL DEFAULT ''`)
 }
 
-/** 建表 + 升级，开库时跑一次 */
+// 建表 + 升级，开库时跑一次
 export function applySchema(db: DatabaseSync): void {
   db.exec(SCHEMA)
   migrate(db)

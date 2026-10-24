@@ -17,7 +17,7 @@ export function isNotificationMode(value: unknown): value is NotificationMode {
   return typeof value === 'string' && (NOTIFICATION_MODES as readonly string[]).includes(value)
 }
 
-/** 这个模式下、当前前台状态要不要发系统通知 */
+// 这个模式下、当前前台状态要不要发系统通知
 export function shouldNotify(mode: NotificationMode, foreground: boolean): boolean {
   if (mode === 'never') return false
   if (mode === 'always') return true

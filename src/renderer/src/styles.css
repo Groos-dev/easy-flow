@@ -1474,6 +1474,21 @@ body {
   border: 1px solid var(--border);
 }
 
+.pet-error {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #7f1d1d;
+  color: #fecaca;
+  font-size: 10px;
+  line-height: 12px;
+  text-align: center;
+}
+
 /* 素材两条通道：clawd 走 <img>（自带的 <style>、@keyframes 封在独立文档里，不跟宿主或彼此打架）；
    云宝内联成 <svg>（脚本驱动，而 object 的文档画布在 Chromium 里恒为不透明），外面套一层
    .pet-art 承载尺寸与一次性动效。 */
@@ -1539,6 +1554,48 @@ body {
 
 .pet.cxb img[src*="cxb-wake"] {
   animation: cxb-wake 1.6s ease-in-out infinite;
+}
+
+/* Cursor 也是位图：复用同一套轻动，节奏略慢一点 */
+.pet.cursor img {
+  animation: cxb-breathe 4.4s ease-in-out infinite;
+}
+
+.pet.cursor.s-thinking img {
+  animation: cxb-sway 5s ease-in-out infinite;
+}
+
+.pet.cursor.s-working img {
+  animation: cxb-bob 0.9s ease-in-out infinite;
+}
+
+.pet.cursor.s-sweeping img {
+  animation: cxb-lean 2.6s ease-in-out infinite;
+}
+
+.pet.cursor.s-blocked img {
+  animation: cxb-alert 1.8s ease-in-out infinite;
+}
+
+.pet.cursor.s-done:not(.event) img {
+  animation: cxb-hop 2s ease-in-out infinite;
+}
+
+.pet.cursor.s-failed:not(.event) img {
+  animation: cxb-shake 2.2s ease-in-out infinite;
+}
+
+.pet.cursor img[src*="cursor-idle-yawn"] {
+  animation: cxb-breathe 5.6s ease-in-out infinite;
+}
+
+.pet.cursor img[src*="cursor-idle-doze"] {
+  animation: cxb-sway 6.8s ease-in-out infinite;
+}
+
+.pet.cursor img[src*="cursor-collapse-sleep"],
+.pet.cursor img[src*="cursor-sleeping"] {
+  animation: cxb-slow 7.2s ease-in-out infinite;
 }
 
 @keyframes cxb-breathe {
@@ -2550,6 +2607,12 @@ a.sess,
   font-size: 12px;
 }
 
+.sess-error {
+  flex: none;
+  color: #ffb4b4;
+  font-size: 11px;
+}
+
 .sess-go,
 .path-row .go {
   flex: none;
@@ -3342,8 +3405,10 @@ a.sess,
 .agent-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 9px;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: transparent;

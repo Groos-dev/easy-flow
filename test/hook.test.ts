@@ -95,7 +95,7 @@ describe('/api/hook?agent=codex', () => {
 describe('codex-hook 转发脚本', () => {
   const payload = JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'cx-fwd', cwd: '/tmp' })
 
-  /** 跑一次转发脚本，把 input 喂进它的 stdin。捕获用的 server 在测试进程里，必须异步跑 */
+  // 跑一次转发脚本，把 input 喂进它的 stdin。捕获用的 server 在测试进程里，必须异步跑
   function runForwarder(
     input: string,
     env: Record<string, string> = {},

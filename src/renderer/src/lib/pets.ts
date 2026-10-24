@@ -10,10 +10,10 @@
 import { badgesOf } from './threads'
 import type { Session, ThreadState } from './types'
 
-/** 会画出来的那些状态：`unknown` 是「读不到」，不给 pet——与角标口径一致 */
+// 会画出来的那些状态：`unknown` 是「读不到」，不给 pet——与角标口径一致
 export type Pose = Exclude<ThreadState, 'unknown'>
 
-/** 状态显示名，悬停提示用 */
+// 状态显示名，悬停提示用
 export const PET_LABEL: Record<ThreadState, string> = {
   idle: '静止',
   thinking: '思考',
@@ -40,7 +40,7 @@ export const PET_RANK: Record<ThreadState, number> = {
   unknown: 6,
 }
 
-/** 抢注意力的分界线：rank 小于等于它的才配那圈脉冲 */
+// 抢注意力的分界线：rank 小于等于它的才配那圈脉冲
 export const PET_ATTENTION = 2
 
 /**
@@ -59,10 +59,10 @@ export function focusIndex(states: ThreadState[]): number {
   return PET_RANK[states[best]] <= PET_ATTENTION ? best : -1
 }
 
-/** 真在动的三档（与 server/session-state.ts 的 isActive 同口径）：只有它们可能显示实时动作 */
+// 真在动的三档（与 server/session-state.ts 的 isActive 同口径）：只有它们可能显示实时动作
 const ACTIVE: Pose[] = ['thinking', 'working', 'sweeping']
 
-/** 气泡的调子：事件三档用自己的状态色，静止一档暗，真在动的那几档亮 */
+// 气泡的调子：事件三档用自己的状态色，静止一档暗，真在动的那几档亮
 export type BubbleTone = 'act' | 'title' | 'blocked' | 'done' | 'failed'
 
 export function bubbleToneOf(state: Pose): BubbleTone {
@@ -72,9 +72,9 @@ export function bubbleToneOf(state: Pose): BubbleTone {
 export interface PetItem {
   session: Session
   state: Pose
-  /** 唯一抢动效的那只（只对 blocked 的脉冲有效）；其余为 false */
+  // 唯一抢动效的那只（只对 blocked 的脉冲有效）；其余为 false
   focus: boolean
-  /** 气泡里那句话：卡住且有原文时报那句原文，干活且有动作时报动作，其余报会话 title */
+  // 气泡里那句话：卡住且有原文时报那句原文，干活且有动作时报动作，其余报会话 title
   bubble: string
 }
 

@@ -4,14 +4,14 @@ import { STATUS_CLASS } from '../lib/labels'
 import type { Requirement } from '../lib/types'
 
 interface Props {
-  /** 当前筛选词。关掉面板后它还在——看板仍旧只留命中的卡片 */
+  // 当前筛选词。关掉面板后它还在——看板仍旧只留命中的卡片
   query: string
   onQuery: (q: string) => void
-  /** 命中的需求，顺序由服务端给（按文件修改时间倒序） */
+  // 命中的需求，顺序由服务端给（按文件修改时间倒序）
   results: Requirement[]
-  /** 正在等服务端返回，用来区分「还没查」与「查了没有」 */
+  // 正在等服务端返回，用来区分「还没查」与「查了没有」
   pending: boolean
-  /** clear 为 true 时打开后把筛选一起清掉（⌘↵） */
+  // clear 为 true 时打开后把筛选一起清掉（⌘↵）
   onPick: (slug: string, clear?: boolean) => void
   onClose: () => void
 }

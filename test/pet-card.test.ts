@@ -38,6 +38,22 @@ function sess(
 
 const act = (text: string): SessionAction => ({ text, calledAt: 1 })
 
+test('Cursor 没有会话链接也能 Tab 到，点击打开它所在的工作区', () => {
+  const cursor = { ...sess('cursor', 'done'), cwd: '/tmp/wt' }
+  const html = renderToStaticMarkup(createElement(PetRow, { sessions: [cursor] }))
+  assert.match(html, /tabindex="0"/)
+  assert.match(html, /role="button"/)
+  assert.match(html, /pet-hit-layer/)
+  assert.match(html, /打开 Cursor 的工作区/)
+  assert.match(html, /会话 cursor-done-/)
+})
+
+test('没有链接的其他 agent 仍然不进 Tab 顺序', () => {
+  const html = renderToStaticMarkup(createElement(PetRow, { sessions: [sess('claude', 'done')] }))
+  assert.doesNotMatch(html, /tabindex="0"/)
+  assert.doesNotMatch(html, /pet-hit-layer/)
+})
+
 function req(patch: Partial<Requirement> = {}): Requirement {
   return {
     slug: 'a',
@@ -61,7 +77,7 @@ function req(patch: Partial<Requirement> = {}): Requirement {
   }
 }
 
-/** 五个都挂得上角标的会话：卡住 + 跑完没看 + 失败 + 两条正在跑 */
+// 五个都挂得上角标的会话：卡住 + 跑完没看 + 失败 + 两条正在跑
 const pool: Session[] = [
   sess('claude', 'blocked'),
   sess('codex', 'working'),
@@ -294,7 +310,7 @@ describe('Card 挂 pet', () => {
 })
 
 describe('agent 头像的键盘入口', () => {
-  /** 每只 pet 那一格的开始标签；Tab 顺序与语义都看它 */
+  // 每只 pet 那一格的开始标签；Tab 顺序与语义都看它
   const slotTag = (html: string) => {
     const at = html.indexOf('<div class="slot')
     return at < 0 ? '' : html.slice(at, html.indexOf('>', at) + 1)

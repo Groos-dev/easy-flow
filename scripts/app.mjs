@@ -31,14 +31,14 @@ const TMP = join(ROOT, '.tmp')
 const PID_FILE = join(TMP, 'app.pid')
 const LOG_FILE = join(TMP, 'app.log')
 const LOG_ROTATED = join(TMP, 'app.log.1')
-/** 日志只留一代：超过这个大小就在启动时挪走，别让它无限涨 */
+// 日志只留一代：超过这个大小就在启动时挪走，别让它无限涨
 const LOG_MAX_BYTES = 5 * 1024 * 1024
 
-/** 内嵌服务端口，用来判断应用有没有起来（见 server/index.ts 的 DEFAULT_PORT） */
+// 内嵌服务端口，用来判断应用有没有起来（见 server/index.ts 的 DEFAULT_PORT）
 const PORT = 29170
-/** 启动最多等这么久：electron-vite 要先编主进程与 preload，再拉 electron */
+// 启动最多等这么久：electron-vite 要先编主进程与 preload，再拉 electron
 const BOOT_TIMEOUT_MS = 40_000
-/** 停止时留给进程的退出时间，超时就 SIGKILL */
+// 停止时留给进程的退出时间，超时就 SIGKILL
 const STOP_TIMEOUT_MS = 6_000
 const POLL_MS = 400
 
@@ -80,7 +80,7 @@ function pidsOnPort(port) {
   return out ? out.split('\n').filter(Boolean).map(Number) : []
 }
 
-/** 内嵌服务在听 = 应用起来了（它跟着 electron 主进程起落） */
+// 内嵌服务在听 = 应用起来了（它跟着 electron 主进程起落）
 function running() {
   return pidsOnPort(PORT).some(isOurs)
 }
@@ -91,13 +91,13 @@ function readPidFile() {
   return Number.isInteger(pid) && pid > 0 ? pid : null
 }
 
-/** 脚本自己起的那个实例的组长 pid；不在跑就是 null */
+// 脚本自己起的那个实例的组长 pid；不在跑就是 null
 function scriptPid() {
   const pid = readPidFile()
   return pid && isAlive(pid) ? pid : null
 }
 
-/** 该被停掉的进程：脚本起的组长 + electron-vite + 占着内嵌服务端口的 electron 主进程 */
+// 该被停掉的进程：脚本起的组长 + electron-vite + 占着内嵌服务端口的 electron 主进程
 function targets() {
   const set = new Set()
   const pid = scriptPid()
@@ -129,7 +129,7 @@ function signal(pid, sig) {
   }
 }
 
-/** 启动时转一次：服务是追加写的，只有这里能动手 */
+// 启动时转一次：服务是追加写的，只有这里能动手
 function rotateLog() {
   if (!existsSync(LOG_FILE) || statSync(LOG_FILE).size < LOG_MAX_BYTES) return
   rmSync(LOG_ROTATED, { force: true })

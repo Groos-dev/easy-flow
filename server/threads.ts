@@ -34,21 +34,24 @@ import { RolloutStore } from './rollout.ts'
 import { codexUnread } from './codex-unread.ts'
 import { codexTitles } from './codex-titles.ts'
 import { chengxiaobangObservations, chengxiaobangTitles } from './chengxiaobang.ts'
+import { cursorObservations, cursorTitles } from './cursor.ts'
 import { changed, type SourceTable } from './source-file.ts'
 
-/** 停在「在干活」多久没新事件就当它没了：会话崩了不会有收尾事件 */
+// 停在「在干活」多久没新事件就当它没了：会话崩了不会有收尾事件
 const RUNNING_TTL_MS = 30 * 60_000
 
-/** 外部数据的位置。默认本机；测试传临时目录 */
+// 外部数据的位置。默认本机；测试传临时目录
 export interface ThreadRoots {
-  /** macOS 的 Application Support，Claude 桌面应用数据目录在它下面 */
+  // macOS 的 Application Support，Claude 桌面应用数据目录在它下面
   appSupport: string
-  /** ~/.claude */
+  // ~/.claude
   claudeHome: string
-  /** ~/.codex */
+  // ~/.codex
   codexHome: string
-  /** ~/.chengxiaobang */
+  // ~/.chengxiaobang
   chengxiaobangHome: string
+  // ~/.cursor
+  cursorHome: string
 }
 
 export function defaultRoots(): ThreadRoots {
@@ -58,6 +61,7 @@ export function defaultRoots(): ThreadRoots {
     claudeHome: join(home, '.claude'),
     codexHome: join(home, '.codex'),
     chengxiaobangHome: join(home, '.chengxiaobang'),
+    cursorHome: join(home, '.cursor'),
   }
 }
 
@@ -84,6 +88,22 @@ export function pullStatuses(
     putSettled(states, 'chengxiaobang', s.session, observation, false)
   }
 
+  // Cursor：hook 推送 + 会话日志里的最终结论；读不到就退回 unknown，交给活跃超时兜底
+  const cursor = sessions.filter((s) => s.agent === 'cursor')
+  if (cursor.length) {
+    const found = cursorObservations(
+      roots.cursorHome,
+      cursor.map((s) => s.session),
+    )
+    for (const s of cursor) {
+      const observation = found.get(s.session) ?? {
+        status: unknownStatus('Cursor 没有这条会话的日志'),
+        action: null,
+      }
+      putSettled(states, 'cursor', s.session, observation, false)
+    }
+  }
+
   // 合并按时刻走，所以先后顺序无所谓
   if (live) for (const s of claude) pullClaude(s.session, roots, live, states, sources)
   if (codex.length) {
@@ -105,7 +125,7 @@ function codexSeen(id: string, observation: SessionObservation, unread: Set<stri
   return { ...observation, status: { ...status, state: 'idle' } }
 }
 
-/** 标题往哪写。index.ts 传 db，测试传一个收集器 */
+// 标题往哪写。index.ts 传 db，测试传一个收集器
 export interface TitleTable {
   setSessionTitle(agent: string, session: string, title: string): void
 }
@@ -150,6 +170,19 @@ export function pullTitles(
     for (const s of chengxiaobang) {
       const title = found.get(s.session)
       if (title) titles.setSessionTitle('chengxiaobang', s.session, title)
+    }
+  }
+
+  const cursor = sessions.filter((s) => s.agent === 'cursor')
+  if (cursor.length) {
+    const found = cursorTitles(
+      roots.cursorHome,
+      join(roots.appSupport, 'Cursor', 'User', 'globalStorage', 'state.vscdb'),
+      cursor.map((s) => s.session),
+    )
+    for (const s of cursor) {
+      const title = found.get(s.session)
+      if (title) titles.setSessionTitle('cursor', s.session, title)
     }
   }
 }
@@ -303,11 +336,11 @@ function settleActive(status: SessionStatus, alive: boolean): SessionStatus {
 
 interface ClaudeRecord {
   sessionId?: string
-  /** CLI 那一层的会话 id（transcript / hook 的 session_id）；桌面记录里与 sessionId 不同名 */
+  // CLI 那一层的会话 id（transcript / hook 的 session_id）；桌面记录里与 sessionId 不同名
   cliSessionId?: string
-  /** 应用里显示的会话标题 */
+  // 应用里显示的会话标题
   title?: string
-  /** 最后一轮活动的时刻。桌面记录这条观察的时刻就是它（进 observedAt） */
+  // 最后一轮活动的时刻。桌面记录这条观察的时刻就是它（进 observedAt）
   lastActivityAt?: number
   lastFocusedAt?: number
   postTurnSummaryFor?: string
@@ -356,7 +389,7 @@ function claudeRecords(roots: ThreadRoots, sessions?: readonly string[]): Map<st
   return out
 }
 
-/** 会话记录所在的那两层目录，先摊平再读 */
+// 会话记录所在的那两层目录，先摊平再读
 function claudeRecordDirs(roots: ThreadRoots): string[] {
   const dirs: string[] = []
   for (const app of readdirOrEmpty(roots.appSupport)) {
@@ -369,7 +402,7 @@ function claudeRecordDirs(roots: ThreadRoots): string[] {
   return dirs
 }
 
-/** 活着的 CLI 进程才有这个文件，进程一退就没了。两个 id 都建索引，调用方传哪个都能命中 */
+// 活着的 CLI 进程才有这个文件，进程一退就没了。两个 id 都建索引，调用方传哪个都能命中
 function claudeLive(roots: ThreadRoots): Map<string, ClaudeLive> {
   const out = new Map<string, ClaudeLive>()
   const dir = join(roots.claudeHome, 'sessions')

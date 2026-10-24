@@ -1,7 +1,7 @@
 import type { AppServer } from './codex.ts'
 import { registerLaunchProvider, type LaunchInput, type LaunchProvider } from './launch.ts'
 
-/** project 的 roots：该需求名下全部可用工作区。review 会话按它拿多仓库；开发会话 app 侧认不出这个 project，靠 deeplink 的 path 定位 */
+// project 的 roots：该需求名下全部可用工作区。review 会话按它拿多仓库；开发会话 app 侧认不出这个 project，靠 deeplink 的 path 定位
 export function codexProjectRoots(input: LaunchInput): string[] {
   return input.requirementWorktreePaths
 }

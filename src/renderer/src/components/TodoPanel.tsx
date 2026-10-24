@@ -13,7 +13,7 @@ export default function TodoPanel({
   onOpenRequirement,
 }: {
   todo: Todo
-  /** 这条待办挂的需求；查不到（没挂 / 需求没了）时为 null */
+  // 这条待办挂的需求；查不到（没挂 / 需求没了）时为 null
   req: Requirement | null
   onOpenRequirement: (project: string, slug: string) => void
 }) {

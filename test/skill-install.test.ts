@@ -19,7 +19,7 @@ import { skillPlan } from '../server/skill-install.ts'
 
 const TMP = join(tmpdir(), `easy-flow-skill-${basename(process.cwd())}`)
 const HOME = join(TMP, 'home')
-/** 假装是另一份 checkout 的 skill 根目录（链接指向它，而不是当前这份） */
+// 假装是另一份 checkout 的 skill 根目录（链接指向它，而不是当前这份）
 const OTHER = join(TMP, 'other-checkout', 'skill')
 
 const SKILLS = ['easy-flow', 'todo']
@@ -35,7 +35,7 @@ function link(from: string, to: string) {
   symlinkSync(to, from)
 }
 
-/** 照安装时那样链起来：home 指向 skill 源，三个 agent 的目录再指向 home（程小帮直接读 home） */
+// 照安装时那样链起来：home 指向 skill 源，三个 agent 的目录再指向 home（程小帮直接读 home）
 function linkAll(sourceRoot: string) {
   for (const name of SKILLS) {
     const home = join(HOME, '.agents', 'skills', name)

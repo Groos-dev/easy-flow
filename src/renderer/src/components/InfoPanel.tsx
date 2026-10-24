@@ -28,7 +28,7 @@ export default function InfoPanel({
 }: {
   req: Requirement
   ctx: ContextPayload | null
-  /** 点一条关联待办即在详情页打开它 */
+  // 点一条关联待办即在详情页打开它
   onOpenTodo: (id: string) => void
   launchSignal?: number
 }) {
@@ -229,7 +229,7 @@ export default function InfoPanel({
   )
 }
 
-/** 链接行末尾的状态：流水线图标（只在 open 时）+ 定宽状态列 */
+// 链接行末尾的状态：流水线图标（只在 open 时）+ 定宽状态列
 export function CodeLinkStatusCell({ status }: { status: CodeLinkStatus }) {
   return (
     <>
@@ -301,7 +301,7 @@ function openWithMenu(path: string): void {
   void window.easyFlow?.openWithMenu?.({ path }).catch(() => {})
 }
 
-/** ⌥ 点 = 自己选打开方式；普通点 = 默认那个（访达） */
+// ⌥ 点 = 自己选打开方式；普通点 = 默认那个（访达）
 function openDirWith(e: MouseEvent, path: string, openDefault: () => void): void {
   if (e.altKey) {
     openWithMenu(path)
@@ -310,17 +310,26 @@ function openDirWith(e: MouseEvent, path: string, openDefault: () => void): void
   openDefault()
 }
 
-/** 会话没登记标题时的兜底：拿登记目录的末段（通常就是工作区名），比留一行空的强 */
+// 会话没登记标题时的兜底：拿登记目录的末段（通常就是工作区名），比留一行空的强
 function sessionTitle(s: Session): string {
   return s.title || s.cwd.split('/').filter(Boolean).pop() || s.session
 }
 
-/**
- * 没有 deeplink 的会话（终端里的 claude、cursor）不给假链接，整行只是"有这么条会话"。
- */
 function SessionRow({ session }: { session: Session }) {
   const agent = AGENT_LABELS[session.agent] ?? session.agent
   const title = sessionTitle(session)
+  const canFocusWorkspace = session.agent === 'cursor' && !!session.cwd
+  const [opening, setOpening] = useState(false)
+  const [focusError, setFocusError] = useState('')
+  const openWorkspace = () => {
+    if (!canFocusWorkspace || opening) return
+    setOpening(true)
+    setFocusError('')
+    void api
+      .openSessionWorkspace(session.agent, session.session)
+      .catch((error: Error) => setFocusError(error.message || '打开失败'))
+      .finally(() => setOpening(false))
+  }
   const body = (
     <>
       <span className="sess-agent">
@@ -330,17 +339,27 @@ function SessionRow({ session }: { session: Session }) {
       <span className="sess-title line" title={title}>
         {title}
       </span>
-      {session.link && <span className="sess-go">↗</span>}
+      {focusError && <span className="sess-error">{focusError}</span>}
+      {(session.link || canFocusWorkspace) && <span className="sess-go">↗</span>}
     </>
   )
 
   if (!session.link) {
     return (
       <div
-        className="sess sess-off"
+        className={`sess ${canFocusWorkspace ? '' : 'sess-off'}`}
         data-info-row=""
+        role={canFocusWorkspace ? 'button' : undefined}
         tabIndex={0}
-        title={`这条会话没有会话级链接，去 ${agent} 里找：${session.session}`}
+        onClick={openWorkspace}
+        onKeyDown={(e) => {
+          if (canFocusWorkspace && e.key === 'Enter') openWorkspace()
+        }}
+        title={
+          canFocusWorkspace
+            ? `在 Cursor 里打开这条会话所在的工作区（不直达会话）：${session.session}`
+            : `这条会话没有会话级链接，去 ${agent} 里找：${session.session}`
+        }
       >
         {body}
       </div>

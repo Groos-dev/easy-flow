@@ -42,7 +42,7 @@ export async function readBody(req: IncomingMessage): Promise<Record<string, unk
   return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}
 }
 
-/** 只允许读写需求目录内的文本/markdown，且禁止越界（..、绝对路径） */
+// 只允许读写需求目录内的文本/markdown，且禁止越界（..、绝对路径）
 const READABLE = /\.(md|markdown|txt|json|ya?ml)$/i
 
 function resolveDocPath(reqDir: string, name: string): string {
@@ -64,7 +64,7 @@ export function readRequirementDoc(reqDir: string, name: string): string {
   }
 }
 
-/** 直接写入，不留备份（版本历史交给 git） */
+// 直接写入，不留备份（版本历史交给 git）
 export function writeRequirementDoc(
   reqDir: string,
   name: string,
