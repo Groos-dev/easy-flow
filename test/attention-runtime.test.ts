@@ -1,4 +1,4 @@
-/** 通知编排的回归：前台抑制、badge 去重、重启对齐、按需求合并 */
+// 通知编排的回归：前台抑制、badge 去重、重启对齐、按需求合并
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {

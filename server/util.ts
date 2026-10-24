@@ -5,7 +5,7 @@
  * 让调用点少写一层错误分支。
  */
 
-/** 不是字符串就当空串 */
+// 不是字符串就当空串
 export function str(v: unknown): string {
   return typeof v === 'string' ? v : ''
 }

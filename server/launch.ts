@@ -8,32 +8,36 @@
  * 各 provider 的 deeplink 构造在各自的 launch-<agent>.ts 里，由 server/index.ts 引入时注册进来。
  */
 
-/** 支持新会话启动的 agent。cursor 没有验证过的新会话启动方式，不在其中 */
-export type LaunchAgent = 'claude' | 'codex' | 'chengxiaobang'
+// 支持新会话启动的 agent
+export type LaunchAgent = 'claude' | 'codex' | 'chengxiaobang' | 'cursor'
 
-/** 一次启动请求：详情页上选中的 agent 与工作区 */
+// 一次启动请求：详情页上选中的 agent 与工作区
 export interface LaunchInput {
   agent: LaunchAgent
-  /** 需求 id（req-…） */
+  // 需求 id（req-…）
   requirementId: string
-  /** 用户选中的工作区：两个 agent 的 deeplink 都只能带一个目录——Claude 用它当工作目录，Codex 用它当 path 定位项目 */
+  // 用户选中的工作区：两个 agent 的 deeplink 都只能带一个目录——Claude 用它当工作目录，Codex 用它当 path 定位项目
   worktreeId: string
-  /** 工作区目录；deeplink 里的那个目录就是它 */
+  // 工作区目录；deeplink 里的那个目录就是它
   worktreePath: string
-  /** Codex 用：需求名下全部可用工作区路径——一条需求一个 project，roots 收这些 */
+  // Codex 用：需求名下全部可用工作区路径——一条需求一个 project，roots 收这些
   requirementWorktreePaths: string[]
 }
 
 export interface LaunchProvider {
   id: LaunchAgent
   label: string
-  /** 生成 deeplink。codex 要先备好 project，所以允许异步 */
+  // 没有工作区就不能启动（Cursor 的 deeplink 只能按工作区名路由）
+  requiresWorktree?: boolean
+  // 打开 deeplink 前要先让应用准备好目标工作区；失败会直接走启动失败
+  prepare?: (input: LaunchInput) => Promise<void> | void
+  // 生成 deeplink。codex 要先备好 project，所以允许异步
   build: (input: LaunchInput, prompt: string) => Promise<string> | string
 }
 
 const providers = new Map<LaunchAgent, LaunchProvider>()
 
-/** provider 在自己的文件里注册；调用方只读，不关心谁注册的 */
+// provider 在自己的文件里注册；调用方只读，不关心谁注册的
 export function registerLaunchProvider(provider: LaunchProvider): void {
   providers.set(provider.id, provider)
 }
@@ -46,12 +50,12 @@ export function findLaunchProvider(id: string): LaunchProvider | undefined {
   return providers.get(id as LaunchAgent)
 }
 
-/** 新会话把自己登记回需求的那条命令；提示词里那句与失败降级给用户手动执行的是同一条 */
+// 新会话把自己登记回需求的那条命令；提示词里那句与失败降级给用户手动执行的是同一条
 export function sessionAddCommand(requirementId: string, agent: LaunchAgent): string {
   return `easy-flow req session add ${requirementId} --agent ${agent} --title "<一句话说明在做什么>"`
 }
 
-/** 预填提示词：只带身份与下一步动作，实时内容由新会话自己用 easy-flow context 拉 */
+// 预填提示词：只带身份与下一步动作，实时内容由新会话自己用 easy-flow context 拉
 export function launchPrompt(input: LaunchInput): string {
   const register = sessionAddCommand(input.requirementId, input.agent)
   // 有工作区就按工作区取上下文：新会话实际只拿到这一个目录

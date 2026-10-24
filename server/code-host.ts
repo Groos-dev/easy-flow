@@ -1,4 +1,4 @@
-/** MR/PR 状态走本机已登录的 glab / gh：内网 CA 不被 Node 信任，也免去在本进程经手 token */
+// MR/PR 状态走本机已登录的 glab / gh：内网 CA 不被 Node 信任，也免去在本进程经手 token
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -12,7 +12,7 @@ export type PipelineState = 'success' | 'failed' | 'running' | 'skipped'
 
 export interface CodeLinkStatus {
   state: CodeLinkState
-  /** 只有 GitLab 的 MR 带；PR 与没跑过流水线的为 null */
+  // 只有 GitLab 的 MR 带；PR 与没跑过流水线的为 null
   pipeline: PipelineState | null
 }
 
@@ -63,7 +63,7 @@ export function stateOfGithub(data: unknown): CodeLinkState | null {
   return d.merged === true || d.merged_at ? 'merged' : 'closed'
 }
 
-/** 只取汇总：stage 明细留在 GitLab，面板里一个图标就够 */
+// 只取汇总：stage 明细留在 GitLab，面板里一个图标就够
 export function pipelineOfGitlab(data: unknown): PipelineState | null {
   const pipeline = (data as { head_pipeline?: { status?: unknown } | null } | null)?.head_pipeline
   const status = pipeline?.status
@@ -86,7 +86,7 @@ export function pipelineOfGitlab(data: unknown): PipelineState | null {
   return null
 }
 
-/** GUI 拉起的进程读不到登录 shell 的 PATH，补上 Homebrew 的安装位置 */
+// GUI 拉起的进程读不到登录 shell 的 PATH，补上 Homebrew 的安装位置
 function which(name: string): string | null {
   const dirs = (process.env.PATH ?? '').split(':').concat('/opt/homebrew/bin', '/usr/local/bin')
   for (const dir of dirs) {
@@ -179,7 +179,7 @@ async function lookup(url: string): Promise<CodeLinkStatus | null> {
   return status
 }
 
-/** 取不到的不出现，不拿 unknown 冒充事实 */
+// 取不到的不出现，不拿 unknown 冒充事实
 export async function codeLinkStatuses(
   urls: string[],
   resolve: (url: string) => Promise<CodeLinkStatus | null> = lookup,

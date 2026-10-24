@@ -13,7 +13,7 @@ interface Props {
   onClose: () => void
 }
 
-/** ⌘P 项目切换面板 */
+// ⌘P 项目切换面板
 export default function ProjectSwitcher({
   projects,
   active,

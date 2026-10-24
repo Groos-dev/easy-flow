@@ -35,7 +35,7 @@ function specOf(value: unknown): Spec {
   return ((value as { spec?: Spec }).spec ?? {}) as Spec
 }
 
-/** 被收起来的记号（不带 widget 的 replace） */
+// 被收起来的记号（不带 widget 的 replace）
 function hiddenText(state: EditorState): string[] {
   const out: string[] = []
   liveDecorations(state).between(0, state.doc.length, (from, to, v) => {
@@ -45,7 +45,7 @@ function hiddenText(state: EditorState): string[] {
   return out
 }
 
-/** 被替换成 widget 的原文（方框、圆点、分割线） */
+// 被替换成 widget 的原文（方框、圆点、分割线）
 function widgetText(state: EditorState): string[] {
   const out: string[] = []
   liveDecorations(state).between(0, state.doc.length, (from, to, v) => {
@@ -54,7 +54,7 @@ function widgetText(state: EditorState): string[] {
   return out
 }
 
-/** 挂了某个 mark 样式的字 */
+// 挂了某个 mark 样式的字
 function markedText(state: EditorState, cls: string): string[] {
   const out: string[] = []
   liveDecorations(state).between(0, state.doc.length, (from, to, v) => {
@@ -63,7 +63,7 @@ function markedText(state: EditorState, cls: string): string[] {
   return out
 }
 
-/** 挂了某个行样式的行号 */
+// 挂了某个行样式的行号
 function markedLines(state: EditorState, cls: string): number[] {
   const out: number[] = []
   liveDecorations(state).between(0, state.doc.length, (from, _to, v) => {

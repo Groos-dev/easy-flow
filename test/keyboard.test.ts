@@ -1,4 +1,4 @@
-/** 快捷键匹配、输入守卫与键位表自身的回归 */
+// 快捷键匹配、输入守卫与键位表自身的回归
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {

@@ -1,11 +1,15 @@
 import type { LaunchResult, Worktree } from './types'
 
-/** deeplink 只带一个工作目录（Claude 的 folder、Codex 的 path），有可用工作区时必须选一个；一个都没有时不带目录也能起 */
-export function launchNeedsWorktree(available: Worktree[]): boolean {
-  return available.length > 0
+/**
+ * deeplink 只带一个工作目录（Claude 的 folder、Codex 的 path、Cursor 的 workspace），
+ * 有可用工作区时必须选一个。
+ * provider 强制要求时，没有工作区也不能起。
+ */
+export function launchNeedsWorktree(available: Worktree[], requiresWorktree = false): boolean {
+  return requiresWorktree || available.length > 0
 }
 
-/** 只有可用 worktree 才能启动；唯一项直选，多项留空要求用户明确选择。 */
+// 只有可用 worktree 才能启动；唯一项直选，多项留空要求用户明确选择。
 export function launchWorktreeSelection(worktrees: Worktree[], selectedId = ''): {
   available: Worktree[]
   selectedId: string
@@ -28,13 +32,15 @@ export function worktreeCreationCommand(requirementId: string): string {
  * 这里只回答「到底打开没有、失败原因是什么、兜底要给什么」。
  */
 export interface LaunchFeedback {
-  /** 真把 deeplink 交给系统打开了才算成功；没打开时不留「已打开」的假象 */
+  // 真把 deeplink 交给系统打开了才算成功；没打开时不留「已打开」的假象
   opened: boolean
-  /** 失败原因；成功时是空串 */
+  // 失败原因；成功时是空串
   error: string
-  /** 没打开成时手动重试用的 deeplink；连它都没建出来时是空串 */
+  // 没打开成时手动重试用的 deeplink；连它都没建出来时是空串
   url: string
   prompt: string
+  // 提示词已由服务端放进剪贴板（启动失败时的降级）
+  promptCopied: boolean
   manualCommand: string
 }
 
@@ -44,6 +50,7 @@ export function launchResultFeedback(requirementId: string, result: LaunchResult
     error: result.error ?? '',
     url: result.url,
     prompt: result.prompt,
+    promptCopied: !!result.promptCopied,
     manualCommand: `easy-flow req session add ${requirementId} --agent ${result.agent} --title "<一句话说明在做什么>"`,
   }
 }

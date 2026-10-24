@@ -5,7 +5,8 @@
  * 检测放主进程而不是渲染层：看板的轮询在 `document.hidden` 时直接跳过，
  * 窗口一收起来就再也发现不了事件，而「跑完了叫我」恰恰发生在那时。
  */
-import { app, BrowserWindow, Notification, nativeImage } from 'electron'
+import type { BrowserWindow} from 'electron';
+import { app, Notification, nativeImage } from 'electron'
 import { type AttentionNotification, type AttentionSession } from '../../server/attention.ts'
 import { AttentionRuntime } from '../../server/attention-runtime.ts'
 import { createAttentionStore } from '../../server/attention-store.ts'
@@ -14,11 +15,11 @@ import { shouldNotify as shouldNotifyFor, type NotificationMode } from '../../sr
 
 const log = createLogger('attention')
 
-/** 保留最近几条通知对象。丢了引用，macOS 上的通知可能跟着被回收 */
+// 保留最近几条通知对象。丢了引用，macOS 上的通知可能跟着被回收
 const RETAIN_LIMIT = 50
-/** 等系统回执的上限：超时没收到 show / failed，就如实说「没等到回执」 */
+// 等系统回执的上限：超时没收到 show / failed，就如实说「没等到回执」
 const TEST_TIMEOUT_MS = 1_500
-/** hook 在 agent 的关键路径上：refresh 合到一帧后再读快照，别让 HTTP 响应等通知 */
+// hook 在 agent 的关键路径上：refresh 合到一帧后再读快照，别让 HTTP 响应等通知
 const REFRESH_DEBOUNCE_MS = 50
 
 export interface AttentionTarget {
@@ -28,51 +29,51 @@ export interface AttentionTarget {
 
 export interface AttentionInfo {
   supported: boolean
-  /** 最近一次投递失败的原因；没有则为空串 */
+  // 最近一次投递失败的原因；没有则为空串
   lastFailure: string
 }
 
 export interface AttentionTestResult extends AttentionInfo {
-  /** 系统回了 show：通知确实投递出去了 */
+  // 系统回了 show：通知确实投递出去了
   delivered: boolean
-  /** 超时前既没 show 也没 failed：多半是权限 / 勿扰，读不到确切原因 */
+  // 超时前既没 show 也没 failed：多半是权限 / 勿扰，读不到确切原因
   timedOut: boolean
 }
 
 export interface AttentionServiceOptions {
-  /** 持久化事件的文件 */
+  // 持久化事件的文件
   file: string
   platform?: NodeJS.Platform
   getWindow: () => BrowserWindow | null
-  /** mini 面板可见时也算「人正在看」 */
+  // mini 面板可见时也算「人正在看」
   isPanelVisible: () => boolean
-  /** 系统通知的显示时机；设置页改完即时生效 */
+  // 系统通知的显示时机；设置页改完即时生效
   mode: NotificationMode
-  /** 非 macOS 的通知图标；macOS 由应用包图标决定 */
+  // 非 macOS 的通知图标；macOS 由应用包图标决定
   icon?: string
   openRequirement: (target: AttentionTarget) => void
   openExternal: (url: string) => void
-  /** 投递失败时推给渲染层，设置页不用等下一次进页面才知道 */
+  // 投递失败时推给渲染层，设置页不用等下一次进页面才知道
   onFailure?: (message: string) => void
 }
 
 export interface AttentionService {
-  /** 接上快照读取并先对齐一次；之后由服务端的 pull / hook 回调 refresh */
+  // 接上快照读取并先对齐一次；之后由服务端的 pull / hook 回调 refresh
   start: (read: () => AttentionSession[]) => () => void
-  /** 会话状态变了：重新读一次快照。服务端在 pull、hook、点 pet 后调用 */
+  // 会话状态变了：重新读一次快照。服务端在 pull、hook、点 pet 后调用
   refresh: () => void
-  /** 当前 outstanding 数（测试与设置页用） */
+  // 当前 outstanding 数（测试与设置页用）
   count: () => number
-  /** 当前通知时机 */
+  // 当前通知时机
   mode: () => NotificationMode
-  /** 改通知时机：只影响之后的事件，不补发历史 */
+  // 改通知时机：只影响之后的事件，不补发历史
   setMode: (mode: NotificationMode) => void
-  /** 窗口重建后补挂 badge：Windows 的 overlay 挂在窗口上，不能只靠数量变化触发 */
+  // 窗口重建后补挂 badge：Windows 的 overlay 挂在窗口上，不能只靠数量变化触发
   refreshBadge: () => void
   info: () => AttentionInfo
-  /** 发一条测试通知，等系统回执后给结论（show / failed / 超时） */
+  // 发一条测试通知，等系统回执后给结论（show / failed / 超时）
   test: () => Promise<AttentionTestResult>
-  /** 窗口获得焦点：停掉 Windows 的任务栏闪烁 */
+  // 窗口获得焦点：停掉 Windows 的任务栏闪烁
   handleWindowFocus: () => void
 }
 
@@ -144,7 +145,7 @@ export function createAttentionService({
     onFailure?.(message)
   }
 
-  /** 同一需求的通知替换旧的：Electron 35 的 Notification 没有 id，自己记一份 LRU */
+  // 同一需求的通知替换旧的：Electron 35 的 Notification 没有 id，自己记一份 LRU
   function retain(key: string, notification: Notification): void {
     const previous = retained.get(key)
     if (previous && previous !== notification) previous.close()
@@ -289,12 +290,12 @@ export function createAttentionService({
 
 let redDot: Electron.NativeImage | null = null
 
-/** Windows 没有 dock badge，用任务栏 overlay 红点。一次画好复用 */
+// Windows 没有 dock badge，用任务栏 overlay 红点。一次画好复用
 function redDotIcon(): Electron.NativeImage {
   redDot ??= nativeImage.createFromDataURL(`data:image/png;base64,${RED_DOT_PNG}`)
   return redDot
 }
 
-/** 32×32 的红色圆点，带一像素抗锯齿 */
+// 32×32 的红色圆点，带一像素抗锯齿
 const RED_DOT_PNG =
   'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA0klEQVR4nM2Xyw3EIBBDUwEVuQlaoBZaoIXUQi9TA9q9gDSJiDYsH3PwJQrygzEwHAIcTLUOsAIEAaIAIkDKkvwt5H+GAhgBfDb5vJTkMaYXwDUa10DcvwChw/iu0ApwDjQvOt8CjJz5z5Wo1XyWeZF7AjCdgWsJpqkB+AXmRb4GsGL2ehUuAHaheZHVADOT/6SgASIBIGqAlfW/5KAAJAJA2gqAXgJ6COnbkH4Q0Y/iLS4j+nVMb0i2aMm2aEq3aMt1JmgPE707aE+zuyiP06n6AtmVTDFPfidaAAAAAElFTkSuQmCC'

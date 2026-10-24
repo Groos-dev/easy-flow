@@ -18,7 +18,7 @@ function label(status: string): string {
   return TODO_STATUS_LABEL[status] ?? status
 }
 
-/** 空列的一句话：一个「—」说不出这一列是干什么的。认不出的状态回落到通用文案 */
+// 空列的一句话：一个「—」说不出这一列是干什么的。认不出的状态回落到通用文案
 const EMPTY_HINT: Record<string, string> = {
   todo: '没有待办的事',
   in_progress: '没有正在做的',
@@ -93,17 +93,17 @@ function ColumnView({ status, items, onOpen, isOver }: ColumnProps) {
   )
 }
 
-/** dnd-kit 的 data 是 unknown，这里收窄一次 */
+// dnd-kit 的 data 是 unknown，这里收窄一次
 function statusOf(over: DragOverEvent['over']): string | undefined {
   return (over?.data.current as { status?: string } | undefined)?.status
 }
 
 interface Props {
   todos: Todo[]
-  /** 看板列顺序，由服务端下发 */
+  // 看板列顺序，由服务端下发
   statuses: string[]
   onOpen: (id: string) => void
-  /** 拖到别的列：由 App 落库（乐观更新与回滚都在那边） */
+  // 拖到别的列：由 App 落库（乐观更新与回滚都在那边）
   onMove: (id: string, status: string) => void
 }
 

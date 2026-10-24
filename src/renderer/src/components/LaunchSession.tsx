@@ -12,7 +12,7 @@ export default function LaunchSession({
 }: {
   req: Requirement
   worktrees: Worktree[]
-  /** 每加一次展开表单；0 不展开 */
+  // 每加一次展开表单；0 不展开
   openSignal?: number
 }) {
   const [open, setOpen] = useState(false)
@@ -94,8 +94,9 @@ export default function LaunchSession({
 
   async function launch() {
     if (!agent || busy) return
-    // 有工作区就必须带一个：Claude 用它当 folder，Codex 用它当 path（app 按目录认项目）
-    const needsWorktree = launchNeedsWorktree(launchWorktreeSelection(worktrees).available)
+    // 有工作区就必须带一个：Claude 用它当 folder，Codex 用它当 path，Cursor 用它当 workspace
+    const picked = providers.find((p) => p.id === agent)
+    const needsWorktree = launchNeedsWorktree(launchWorktreeSelection(worktrees).available, picked?.requiresWorktree)
     if (needsWorktree && !worktreeId) return
     const sequence = ++requestSequence.current
     const selectedWorktreeId = needsWorktree ? worktreeId : ''
@@ -134,7 +135,7 @@ export default function LaunchSession({
     setRequestError('')
   }
 
-  /** 收表单而不是收浮窗：焦点回到「＋ 新建会话」，再按 Esc 才轮到浮窗 */
+  // 收表单而不是收浮窗：焦点回到「＋ 新建会话」，再按 Esc 才轮到浮窗
   function collapse() {
     setOpen(false)
   }

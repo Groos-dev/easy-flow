@@ -12,9 +12,9 @@ import { AgentIcon } from './icons'
 
 interface Props {
   items: NextUpItem[]
-  /** 计算失败时给出原话——空列表分不清「没事」和「没算出来」，两者要分开说 */
+  // 计算失败时给出原话——空列表分不清「没事」和「没算出来」，两者要分开说
   error?: string
-  /** 没有会话可跳时，点开需求 */
+  // 没有会话可跳时，点开需求
   onOpenRequirement: (project: string, slug: string) => void
 }
 

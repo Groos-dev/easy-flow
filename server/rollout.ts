@@ -24,15 +24,15 @@ import type { SessionObservation, SessionStatus, ThreadState } from './session-s
 import { actionOf, type SessionAction } from './action.ts'
 import type { SourceTable } from './source-file.ts'
 
-/** rollout 落在 <codexHome>/sessions/<年>/<月>/<日>/ 这层日期目录下 */
+// rollout 落在 <codexHome>/sessions/<年>/<月>/<日>/ 这层日期目录下
 const SESSION_DIR = 'sessions'
-/** 文件名模式，照 clawd 的 rollout-*.jsonl。末尾就是 thread id */
+// 文件名模式，照 clawd 的 rollout-*.jsonl。末尾就是 thread id
 const FILE_PREFIX = 'rollout-'
 const FILE_SUFFIX = '.jsonl'
-/** 近几天：当天及前两天。跑了好几天、rollout 落在更早日期目录里的会话靠缓存兜住 */
+// 近几天：当天及前两天。跑了好几天、rollout 落在更早日期目录里的会话靠缓存兜住
 const RECENT_DAYS = 3
 
-/** 文件名里的 thread id：rollout-<ISO 日期>-<id>.jsonl。认不出返回 null，不猜 */
+// 文件名里的 thread id：rollout-<ISO 日期>-<id>.jsonl。认不出返回 null，不猜
 const THREAD_ID_RE = /^rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/
 
 function threadIdOf(file: string): string | null {
@@ -40,13 +40,13 @@ function threadIdOf(file: string): string | null {
   return THREAD_ID_RE.exec(file)?.[1] ?? null
 }
 
-/** 某天的 rollout 目录。测试与「近几天」的计算共用，别两处各写一遍日期格式 */
+// 某天的 rollout 目录。测试与「近几天」的计算共用，别两处各写一遍日期格式
 export function sessionDirFor(codexHome: string, at: Date): string {
   const p = (n: number) => String(n).padStart(2, '0')
   return join(codexHome, SESSION_DIR, String(at.getFullYear()), p(at.getMonth() + 1), p(at.getDate()))
 }
 
-/** rollout 的一行。只挑认得的字段，其余原样不关心 */
+// rollout 的一行。只挑认得的字段，其余原样不关心
 interface RolloutLine {
   type?: unknown
   payload?: { type?: unknown; error?: unknown; name?: unknown; arguments?: unknown } | null
@@ -111,14 +111,14 @@ export function rolloutActionOf(line: RolloutLine, observedAt: number): SessionA
 }
 
 interface Track {
-  /** 认领的文件绝对路径。同一条会话换文件（fork / 重建）时不接新的 */
+  // 认领的文件绝对路径。同一条会话换文件（fork / 重建）时不接新的
   path: string
-  /** 已读到的字节数，只到最后一个换行——写了一半的尾行留到下次 */
+  // 已读到的字节数，只到最后一个换行——写了一半的尾行留到下次
   offset: number
   mtimeMs: number
-  /** fold 出来的最新观察；只有认不出的事件时保持上一次的 */
+  // fold 出来的最新观察；只有认不出的事件时保持上一次的
   observation: SessionObservation | null
-  /** 缓存里那份认不出、这轮必须写回：不然 offset 重算成一样，旧形状会一直留在库里 */
+  // 缓存里那份认不出、这轮必须写回：不然 offset 重算成一样，旧形状会一直留在库里
   rewrite: boolean
 }
 
@@ -128,7 +128,7 @@ export class RolloutStore {
     private readonly sources: SourceTable,
   ) {}
 
-  /** 增量读一遍，返回认到的会话观察。只处理 ids 里的会话（外加已经跟过的） */
+  // 增量读一遍，返回认到的会话观察。只处理 ids 里的会话（外加已经跟过的）
   refresh(ids: Iterable<string>, now = Date.now()): Map<string, SessionObservation> {
     const want = new Set(ids)
     const tracked = new Map<string, Track>()
@@ -160,7 +160,7 @@ export class RolloutStore {
     return out
   }
 
-  /** 近几天 + 跟过的会话所在目录，去重后按顺序返回 */
+  // 近几天 + 跟过的会话所在目录，去重后按顺序返回
   private candidateDirs(now: number, tracked: Map<string, Track>): string[] {
     const out: string[] = []
     const seen = new Set<string>()
@@ -237,7 +237,7 @@ function cachedObservation(raw: unknown): SessionObservation | null {
   return { status: status as SessionStatus, action: (action as SessionAction | null) ?? null }
 }
 
-/** 从 from 起读 length 字节。读不到返回 null——调用方当没读到，不抛 */
+// 从 from 起读 length 字节。读不到返回 null——调用方当没读到，不抛
 function readBytes(path: string, from: number, length: number): Buffer | null {
   let fd: number
   try {

@@ -176,7 +176,7 @@ function sessionLink(agent: SessionAgent, session: string): string {
   return ''
 }
 
-/** 会话一行；cwd 命中当前工作区时标出来，一眼看出哪个会话就在这儿干活 */
+// 会话一行；cwd 命中当前工作区时标出来，一眼看出哪个会话就在这儿干活
 function sessionLine(s: Session, cwd = ''): string {
   const title = s.title ? `  ${s.title}` : ''
   const here = cwd && s.cwd === cwd ? '（本工作区）' : ''
@@ -259,7 +259,7 @@ function requirementView(req: Requirement, extraHead: string[] = []) {
   return { blocks, data }
 }
 
-/** One requirement per line, for the ancestor / child lists */
+// One requirement per line, for the ancestor / child lists
 function requirementLine(r: Requirement): string {
   return `- ${r.id || '（无 id）'}  ${r.slug}  ${r.title}`
 }
@@ -281,7 +281,7 @@ const TODO_STALE_DAYS = 7
  */
 const TODO_BLOCK_LIMIT = 5
 
-/** 一段待办的 id 清单：超出上限只报总数，不把它铺成第二个列表 */
+// 一段待办的 id 清单：超出上限只报总数，不把它铺成第二个列表
 function todoIds(todos: Todo[]): string {
   const ids = todos
     .slice(0, TODO_BLOCK_LIMIT)
@@ -325,7 +325,7 @@ function todoBlock({ explicit, candidate }: TodoGroups, reqId: string): string[]
   return blocks
 }
 
-/** 无归属那批的口径：只算未完成的，超期与最老天数都从这批里数 */
+// 无归属那批的口径：只算未完成的，超期与最老天数都从这批里数
 function orphanStats(orphans: Todo[]): { open: Todo[]; overdue: Todo[]; oldestDays: number } {
   const open = orphans
     .filter(isOpenTodo)
@@ -352,7 +352,7 @@ function orphanLine(orphans: Todo[]): string {
   )
 }
 
-/** 指针悬空是全局状态：不属于任何一条现存需求，不跟需求走 */
+// 指针悬空是全局状态：不属于任何一条现存需求，不跟需求走
 function staleLine(stale: Todo[]): string {
   const open = stale.filter(isOpenTodo)
   if (!open.length) return ''
@@ -365,7 +365,7 @@ function staleLine(stale: Todo[]): string {
   )
 }
 
-/** 需求已完成、待办还开着：收尾时没一并了结留下的假线索 */
+// 需求已完成、待办还开着：收尾时没一并了结留下的假线索
 function finishedLine(todos: Todo[]): string {
   const open = todos.filter(isOpenTodo)
   if (!open.length) return ''
@@ -413,7 +413,7 @@ function todoHint({ explicit, candidate }: TodoGroups, reqId: string): string {
   return `这条需求名下还有 ${open.length} 条未完成待办（${todoIds(open)}）——${command}`
 }
 
-/** 收尾是必做的处置点：顺手把超期还没人管的无归属待办也顶到眼前 */
+// 收尾是必做的处置点：顺手把超期还没人管的无归属待办也顶到眼前
 function overdueOrphanHint(orphans: Todo[]): string {
   const { overdue } = orphanStats(orphans)
   if (!overdue.length) return ''
@@ -424,7 +424,7 @@ function overdueOrphanHint(orphans: Todo[]): string {
   )
 }
 
-/** 会话块：这条需求上登记了哪些 agent 会话。cwd 传当前工作区时，命中它的会话会被标出来 */
+// 会话块：这条需求上登记了哪些 agent 会话。cwd 传当前工作区时，命中它的会话会被标出来
 function sessionBlock(sessions: Session[], cwd = ''): string[] {
   if (!sessions.length) return []
   return [`## 会话（${sessions.length}）\n${sessions.map((s) => sessionLine(s, cwd)).join('\n')}`]
@@ -862,7 +862,7 @@ function parentHint(board: BoardDatabase, child: Requirement): string {
   return `父需求「${parent.title}」的 ${siblings.length} 个子需求已全部完成——它自己没有别的活就一并收尾：easy-flow req set ${parent.id} --status 已完成`
 }
 
-/** 这批需求是不是都到了终态。「全完成」只有这一处定义，`req set` 与 `context` 共用 */
+// 这批需求是不是都到了终态。「全完成」只有这一处定义，`req set` 与 `context` 共用
 function allDone(reqs: Requirement[]): boolean {
   return reqs.every((r) => r.status === '已完成')
 }
@@ -946,7 +946,7 @@ async function cmdReqLink(argv: string[]): Promise<void> {
   )
 }
 
-/** 登记会话时把 agent 的原生会话 id 认出来：--id 优先，否则按 agent 读它的环境变量 */
+// 登记会话时把 agent 的原生会话 id 认出来：--id 优先，否则按 agent 读它的环境变量
 function sessionIdFrom(values: Record<string, unknown>, agent: SessionAgent): string {
   const explicit = str(values.id)?.trim()
   if (explicit) return explicit
@@ -996,7 +996,7 @@ async function cmdReqSessionAdd(argv: string[]): Promise<void> {
   )
 }
 
-/** 用系统默认应用打开链接；起不来就只把链接打出来，别把命令弄失败 */
+// 用系统默认应用打开链接；起不来就只把链接打出来，别把命令弄失败
 function openUrl(url: string): void {
   const bin = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open'
   const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url]
@@ -1007,7 +1007,7 @@ function openUrl(url: string): void {
   }
 }
 
-/** 默认评审提示词。工作区路径全列出来，Codex 自己会去读 diff */
+// 默认评审提示词。工作区路径全列出来，Codex 自己会去读 diff
 function defaultReviewPrompt(req: Requirement, worktrees: Worktree[]): string {
   const repos = worktrees.map((w) => `- ${w.repo}  分支 ${w.branch}  工作区 ${w.path}`).join('\n')
   return [
@@ -1023,7 +1023,7 @@ function defaultReviewPrompt(req: Requirement, worktrees: Worktree[]): string {
   ].join('\n')
 }
 
-/** --prompt 优先，其次 --prompt-file；都没给返回 undefined，由调用方用默认值 */
+// --prompt 优先，其次 --prompt-file；都没给返回 undefined，由调用方用默认值
 function readPromptArg(values: Record<string, unknown>): string | undefined {
   const inline = str(values.prompt)?.trim()
   if (inline) return inline
@@ -1233,6 +1233,7 @@ async function cmdWtNew(argv: string[]): Promise<void> {
     throw new Error(
       `Failed to register: ${(err as Error).message}\n` +
         `The worktree dir is already created (${provision.path}, its id lives in its AGENTS.md); run easy-flow wt new again to finish the registration.`,
+      { cause: err },
     )
   }
 
@@ -1311,7 +1312,7 @@ async function cmdWtRm(argv: string[]): Promise<void> {
 
 // ------------------------------------------------------------------ 待办
 
-/** new 与 set 共用的元数据选项 */
+// new 与 set 共用的元数据选项
 const TODO_FIELDS = {
   source: { type: 'string' },
   session: { type: 'string' },
@@ -1336,7 +1337,7 @@ interface TodoPatch {
   happened?: string
 }
 
-/** 把命令行取值收成补丁：没传的字段留 undefined（表示不动），空串表示清空 */
+// 把命令行取值收成补丁：没传的字段留 undefined（表示不动），空串表示清空
 function todoPatch(values: Record<string, unknown>): TodoPatch {
   const patch: TodoPatch = {}
   const put = (key: keyof TodoPatch, value: string | undefined) => {
@@ -1356,12 +1357,12 @@ function todoPatch(values: Record<string, unknown>): TodoPatch {
   return patch
 }
 
-/** 校验枚举值，报错时列出合法取值——agent 据此就能自己纠正 */
+// 校验枚举值，报错时列出合法取值——agent 据此就能自己纠正
 function oneOf(value: string, valid: readonly string[], what: string): void {
   if (!valid.includes(value)) throw new Error(`Unknown ${what}: ${value}. Valid: ${valid.join(', ')}`)
 }
 
-/** --req 只收真实存在的需求 id：写错了需求详情页只会一直空着，不如当场报错 */
+// --req 只收真实存在的需求 id：写错了需求详情页只会一直空着，不如当场报错
 function checkTodoReq(board: BoardDatabase, req: string | undefined): void {
   if (req && !board.byId(req)) {
     throw new Error(`Requirement not found: ${req}. --req 是归属的需求；要新建一条需求用 easy-flow todo promote`)
@@ -1657,7 +1658,7 @@ async function cmdTodoPromote(argv: string[]): Promise<void> {
   )
 }
 
-/** 旧 todo 板的一块：`### T-YYYYMMDD-NNN | status` + 若干 `- key: value` */
+// 旧 todo 板的一块：`### T-YYYYMMDD-NNN | status` + 若干 `- key: value`
 interface LegacyTodo {
   id: string
   status: string

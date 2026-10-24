@@ -14,17 +14,17 @@ import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { TODOS_DIR, listStrayDirs, parseFrontmatter, readProjectConvention } from './markdown.ts'
 
-/** 收纳目录。下划线开头，listProjectDirs 不会把它当成项目 */
+// 收纳目录。下划线开头，listProjectDirs 不会把它当成项目
 export const TEMPLATES_DIR = '_templates'
 
 function templatesDir(dataDir: string): string {
   return join(dataDir, TEMPLATES_DIR)
 }
 
-/** 原来的创建入口在这里做过校验，入口移除后只用于提示 */
+// 原来的创建入口在这里做过校验，入口移除后只用于提示
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/
 
-/** 写进单行结构的值先把换行压平，否则会把 frontmatter 和 H1 写坏 */
+// 写进单行结构的值先把换行压平，否则会把 frontmatter 和 H1 写坏
 function oneLine(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
 }
@@ -89,7 +89,7 @@ function requirementAgents(id: string): string {
 `
 }
 
-/** requirement.md：需求描述，卡片标题与摘要的来源。身份不在这里 */
+// requirement.md：需求描述，卡片标题与摘要的来源。身份不在这里
 function requirementDesc(title: string, summary: string): string {
   return `# ${oneLine(title)}
 
@@ -110,7 +110,7 @@ ${summary}
 `
 }
 
-/** context.md：需求的上下文。一开始只是骨架，边做边补 */
+// context.md：需求的上下文。一开始只是骨架，边做边补
 const REQUIREMENT_CONTEXT_TEMPLATE = `## 背景
 
 ## 约束
@@ -122,7 +122,7 @@ const PLACEHOLDER_SUMMARY = '一句话说清要做什么、为什么。'
 
 const REQUIREMENT_DESC_TEMPLATE = requirementDesc('这条需求在做什么（短句，别写目录名）', PLACEHOLDER_SUMMARY)
 
-/** 补上 context.md 脚手架：缺才写，已有不动 */
+// 补上 context.md 脚手架：缺才写，已有不动
 export function ensureRequirementContext(dir: string): boolean {
   const file = join(dir, 'context.md')
   if (existsSync(file)) return false
@@ -130,7 +130,7 @@ export function ensureRequirementContext(dir: string): boolean {
   return true
 }
 
-/** 不透明 id：人和 agent 都看不出它对应什么，换来的是改名搬家都不变 */
+// 不透明 id：人和 agent 都看不出它对应什么，换来的是改名搬家都不变
 function newId(prefix: string): string {
   return `${prefix}-${randomUUID().replace(/-/g, '').slice(0, 10)}`
 }
@@ -143,7 +143,7 @@ export function newWorktreeId(): string {
   return newId('wt')
 }
 
-/** 给已有需求补 id：只动 frontmatter，正文原样写回 */
+// 给已有需求补 id：只动 frontmatter，正文原样写回
 export function setRequirementId(dir: string, id: string): void {
   // 身份归说明书：写入 AGENTS.md 的 frontmatter，正文原样写回
   const file = join(dir, 'AGENTS.md')
@@ -164,7 +164,7 @@ export function renderWorktreeAgents(input: {
   requirementDir: string
   repo: string
   branch: string
-  /** design/ 软链指向的真实目录 */
+  // design/ 软链指向的真实目录
   designDir: string
 }): string {
   return `---
@@ -299,12 +299,12 @@ ${summary.trim()}
 `
 }
 
-/** 待办目录（<dataDir>/_todos）。不存在时按需建出来 */
+// 待办目录（<dataDir>/_todos）。不存在时按需建出来
 export function todosDir(dataDir: string): string {
   return join(dataDir, TODOS_DIR)
 }
 
-/** 建一份待办 md。id 由调用方按首次入库日编号，文件已存在则报错 */
+// 建一份待办 md。id 由调用方按首次入库日编号，文件已存在则报错
 export function createTodoDoc(
   dataDir: string,
   id: string,
@@ -319,13 +319,13 @@ export function createTodoDoc(
   return { file }
 }
 
-/** 改写 md 的 H1（待办标题）。没有 H1 就补在最前面 */
+// 改写 md 的 H1（待办标题）。没有 H1 就补在最前面
 export function setTodoTitle(text: string, title: string): string {
   const line = `# ${oneLine(title)}`
   return /^#\s+.+$/m.test(text) ? text.replace(/^#\s+.+$/m, line) : `${line}\n\n${text}`
 }
 
-/** 改写「摘要」段，其余（H1、进度段等）原样保留；段不存在就追加到末尾 */
+// 改写「摘要」段，其余（H1、进度段等）原样保留；段不存在就追加到末尾
 export function setTodoSummary(text: string, summary: string): string {
   const lines = text.split('\n')
   const start = lines.findIndex((l) => /^##\s*摘要\s*$/.test(l))

@@ -21,20 +21,20 @@ const log = createLogger('attention')
 
 export interface AttentionRuntimeOptions {
   store: AttentionStore
-  /** badge 只在数量变化时调用 */
+  // badge 只在数量变化时调用
   setBadge: (count: number) => void
   notify: (notification: AttentionNotification) => void
-  /** 这次事件要不要发系统通知（通知时机 + 主窗口/mini 面板焦点由调用方算好） */
+  // 这次事件要不要发系统通知（通知时机 + 主窗口/mini 面板焦点由调用方算好）
   shouldNotify: () => boolean
-  /** 需求下已经没有待处理事件了：把该需求的通知从通知中心关掉 */
+  // 需求下已经没有待处理事件了：把该需求的通知从通知中心关掉
   dismiss?: (requirementId: string) => void
-  /** failed 要在事件态里活过这个窗口才通知，挡掉一次工具报错 */
+  // failed 要在事件态里活过这个窗口才通知，挡掉一次工具报错
   notifyGraceMs?: number
-  /** 后台来了新事件时的轻提示（Windows 任务栏闪烁）；没有就不做 */
+  // 后台来了新事件时的轻提示（Windows 任务栏闪烁）；没有就不做
   signal?: () => void
 }
 
-/** 与 pull 周期一致：一次工具报错通常在下一个事件到达前就翻过去了 */
+// 与 pull 周期一致：一次工具报错通常在下一个事件到达前就翻过去了
 const DEFAULT_NOTIFY_GRACE_MS = 2_000
 
 interface PendingNotification {

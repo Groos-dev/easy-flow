@@ -5,13 +5,13 @@
  * 所以归一只有这一处：认得就拼一句，认不出返回空串。
  */
 export interface SessionAction {
-  /** 展示文案，形如「改 hook.ts」 */
+  // 展示文案，形如「改 hook.ts」
   text: string
-  /** 这次工具调用发生的时刻（epoch ms） */
+  // 这次工具调用发生的时刻（epoch ms）
   calledAt: number
 }
 
-/** 描述类文案的字数上限 */
+// 描述类文案的字数上限
 const DESC_MAX = 12
 
 /**
@@ -23,11 +23,11 @@ const DESC_MAX = 12
 export const ACTION_MAX_WIDTH = 36
 
 interface Rule {
-  /** 拼在文案最前面的动词 */
+  // 拼在文案最前面的动词
   verb: string
-  /** 从工具参数里取哪个字段 */
+  // 从工具参数里取哪个字段
   field: string
-  /** 取到之后怎么裁 */
+  // 取到之后怎么裁
   cut: (raw: string) => string
 }
 
@@ -45,6 +45,10 @@ const RULES: Record<string, Rule> = {
   Glob: { verb: '搜', field: 'pattern', cut: raw },
   Agent: { verb: '派', field: 'description', cut: clipText },
   Task: { verb: '派', field: 'description', cut: clipText },
+  Delete: { verb: '删', field: 'file_path', cut: tailPath },
+  WebSearch: { verb: '查', field: 'query', cut: clipText },
+  WebFetch: { verb: '查', field: 'url', cut: clipText },
+  CallMcpTool: { verb: '调', field: 'toolName', cut: clipText },
   exec_command: { verb: '跑', field: 'cmd', cut: headWords },
   view_image: { verb: '看', field: 'path', cut: tailPath },
 }
@@ -62,7 +66,7 @@ export function actionTextOf(tool: string, input: unknown): string {
   return text ? clip(`${rule.verb} ${text}`) : ''
 }
 
-/** 带时刻的动作。认不出就是 null——读不到一律不猜 */
+// 带时刻的动作。认不出就是 null——读不到一律不猜
 export function actionOf(tool: string, input: unknown, calledAt: number): SessionAction | null {
   const text = actionTextOf(tool, input)
   return text ? { text, calledAt } : null
@@ -92,7 +96,7 @@ function headWords(raw: string): string {
   return words.slice(0, 2).join(' ')
 }
 
-/** 描述截到 12 个字，截短了带省略号 */
+// 描述截到 12 个字，截短了带省略号
 function clipText(raw: string): string {
   const body = collapse(raw)
   return body.length > DESC_MAX ? `${body.slice(0, DESC_MAX).trimEnd()}…` : body
@@ -118,7 +122,7 @@ function clip(text: string): string {
   return `${cut}…`
 }
 
-/** 展示宽度：全角算 2、半角算 1 */
+// 展示宽度：全角算 2、半角算 1
 function width(text: string): number {
   let n = 0
   for (const ch of text) n += ch.codePointAt(0)! > 0x2e80 ? 2 : 1

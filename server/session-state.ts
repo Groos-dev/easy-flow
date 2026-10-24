@@ -46,14 +46,14 @@ export type ThreadState = (typeof THREAD_STATES)[number]
 export { EVENT_STATES, isEventState } from '../src/shared/thread-events.ts'
 export type { EventState } from '../src/shared/thread-events.ts'
 
-/** 会话形态的一条观察。所有来源都写这个，写的人自己把判据拼进 detail */
+// 会话形态的一条观察。所有来源都写这个，写的人自己把判据拼进 detail
 export interface SessionStatus {
   state: ThreadState
-  /** 需要人介入时，要人回答的那句话原文；其余为空串 */
+  // 需要人介入时，要人回答的那句话原文；其余为空串
   needsAction: string
-  /** 这条状态的时刻（epoch ms）。展示时才格式化成库里的口径（yyyy-mm-dd HH:mm） */
+  // 这条状态的时刻（epoch ms）。展示时才格式化成库里的口径（yyyy-mm-dd HH:mm）
   observedAt: number
-  /** 判据出处，详情页 hover 用 */
+  // 判据出处，详情页 hover 用
   detail: string
   /**
    * hook 事件名（如 Interrupt）；拉取来源没有。
@@ -72,17 +72,17 @@ export interface SessionObservation {
   action: SessionAction | null
 }
 
-/** 读不到时的状态。调用方拿不到条目时也该拿到它，而不是自己拼一个 */
+// 读不到时的状态。调用方拿不到条目时也该拿到它，而不是自己拼一个
 export function unknownStatus(detail: string): SessionStatus {
   return { state: 'unknown', needsAction: '', observedAt: 0, detail }
 }
 
-/** 板侧写的那条：点一下 pet = 这条会话此刻「静止」，不用管了 */
+// 板侧写的那条：点一下 pet = 这条会话此刻「静止」，不用管了
 export function idleStatus(at = Date.now()): SessionStatus {
   return { state: 'idle', needsAction: '', observedAt: at, detail: '板侧：点过 pet' }
 }
 
-/** 在干活的那些档：会话真在动，跟「静止 / 等你」分开 */
+// 在干活的那些档：会话真在动，跟「静止 / 等你」分开
 export function isActive(state: ThreadState): boolean {
   return state === 'thinking' || state === 'working' || state === 'sweeping'
 }

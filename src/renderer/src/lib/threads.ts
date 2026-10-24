@@ -12,7 +12,7 @@
 import { isEventState } from '../../../shared/thread-events'
 import type { Session, ThreadState } from './types'
 
-/** 从急到缓：卡住了 > 出错 > 跑完了 > 干活 > 思考。角标按这个顺序排 */
+// 从急到缓：卡住了 > 出错 > 跑完了 > 干活 > 思考。角标按这个顺序排
 const ORDER: ThreadState[] = ['blocked', 'failed', 'done', 'working', 'thinking']
 
 /**
@@ -32,7 +32,7 @@ export function needsBadge(session: Session): boolean {
   return state !== 'unknown' && state !== 'idle'
 }
 
-/** 一条需求名下该挂角标的会话，按急缓排序；没有就返回空数组（卡片不挂角标） */
+// 一条需求名下该挂角标的会话，按急缓排序；没有就返回空数组（卡片不挂角标）
 export function badgesOf(sessions: Session[]): Session[] {
   return sessions
     .filter(needsBadge)

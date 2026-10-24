@@ -133,9 +133,16 @@ describe('需求详情页启动会话', () => {
       body: JSON.stringify(body),
     })).json() as Promise<any>
 
-  test('provider API 只暴露注册表中的 id 与 label', async () => {
+  test('provider API 只暴露注册表中的 id、label 与能力位', async () => {
     const result = await get('/api/launch/providers')
-    assert.deepEqual(result.providers, launchProviders().map(({ id, label }) => ({ id, label })))
+    assert.deepEqual(
+      result.providers,
+      launchProviders().map(({ id, label, requiresWorktree }) => ({
+        id,
+        label,
+        requiresWorktree: !!requiresWorktree,
+      })),
+    )
     assert.ok(result.providers.some((p: any) => p.id === 'codex' && p.label === '测试 Codex'))
     assert.equal('build' in result.providers.find((p: any) => p.id === 'codex'), false)
   })
@@ -155,7 +162,7 @@ describe('需求详情页启动会话', () => {
       import { renderToStaticMarkup } from 'react-dom/server'
       import Form from './src/renderer/src/components/LaunchSessionForm.tsx'
       const base = {
-        requirementId: 'req-alpha', providers: [{ id: 'claude', label: 'Claude Code' }, { id: 'codex', label: 'Codex' }],
+        requirementId: 'req-alpha', providers: [{ id: 'claude', label: 'Claude Code' }, { id: 'codex', label: 'Codex' }, { id: 'cursor', label: 'Cursor', requiresWorktree: true }],
         worktreeId: '', agent: 'codex', loading: false, providerError: '', requestError: '',
         busy: false, result: null, onWorktreeChange() {}, onAgentChange() {}, onLaunch() {},
       }
@@ -172,6 +179,9 @@ describe('需求详情页启动会话', () => {
         missing: render({ worktrees: [gone] }),
         failure: render({ worktrees: [one], worktreeId: 'wt-one', result: { agent: 'codex', url: 'codex-test://new-session', prompt: 'easy-flow context wt-one', opened: false, error: 'handler unavailable' } }),
         success: render({ worktrees: [one], worktreeId: 'wt-one', result: { agent: 'codex', url: 'codex-test://new-session', prompt: 'easy-flow context wt-one', opened: true } }),
+        cursorSuccess: render({ worktrees: [one], worktreeId: 'wt-one', agent: 'cursor', result: { agent: 'cursor', url: 'cursor://x', prompt: 'easy-flow context wt-one', opened: true } }),
+        cursorNoWorktree: render({ worktrees: [], agent: 'cursor' }),
+        cursorCopied: render({ worktrees: [one], worktreeId: 'wt-one', agent: 'cursor', result: { agent: 'cursor', url: '', prompt: 'easy-flow context wt-one', opened: false, promptCopied: true, error: 'no window' } }),
       }))
     `
     const rendered = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '--eval', renderScript], {
@@ -200,6 +210,11 @@ describe('需求详情页启动会话', () => {
     assert.match(markup.emptyClaude, /easy-flow wt new req-alpha/)
     assert.doesNotMatch(markup.emptyClaude, /在哪个工作区开始/)
     assert.doesNotMatch(markup.emptyClaude, /class="launch-go"[^>]*type="submit"[^>]*disabled=""/)
+    // Cursor 必须有工作区；成功后提示去弹窗点 Create Chat；失败且已复制提示词要说明
+    assert.match(markup.cursorNoWorktree, /Cursor 需要先有一个工作区/)
+    assert.match(markup.cursorNoWorktree, /class="launch-go"[^>]*disabled=""/)
+    assert.match(markup.cursorSuccess, /点 Create Chat/)
+    assert.match(markup.cursorCopied, /提示词已复制到剪贴板/)
     // 只有失联工作区时同样放行（那几条本来就不可选，不再单独列出来）
     assert.doesNotMatch(markup.missing, /feature-gone/)
     assert.doesNotMatch(markup.missing, /class="launch-go"[^>]*type="submit"[^>]*disabled=""/)
@@ -216,7 +231,7 @@ describe('需求详情页启动会话', () => {
     assert.match(markup.success, /用 Codex 打开新会话/)
     assert.doesNotMatch(markup.success, /已在|草稿|提示词|登记/)
     // agent 标签在 form 里，没有 type="button" 会变成提交——这条是防回归
-    assert.equal((markup.one.match(/type="button" class="agent-chip[^"]*"/g) ?? []).length, 2)
+    assert.equal((markup.one.match(/type="button" class="agent-chip[^"]*"/g) ?? []).length, 3)
   })
 
   test('api.launch 将 HTTP 200 的启动失败保留为结果，并且 ctx 未加载时不显示启动入口', async () => {
@@ -397,7 +412,7 @@ describe('需求详情页启动会话', () => {
 
     // 注册表里没有的 agent 直接拒掉，而不是返回一个"打开了"的假象
     const unsupported = await post('/api/launch', {
-      slug: 'alpha', project: 'demo', worktreeId: 'wt-alpha', agent: 'cursor',
+      slug: 'alpha', project: 'demo', worktreeId: 'wt-alpha', agent: 'gemini',
     })
     assert.match(unsupported.error, /Unknown launch agent/i)
 

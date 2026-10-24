@@ -47,9 +47,9 @@ async function runAgent(bin: string, args: string[]): Promise<void> {
   } catch (err) {
     const { code, stderr } = err as { code?: number; stderr?: string }
     // a login shell exits 127 when the command is missing — more reliable than matching stderr wording
-    if (code === 127) throw new Error(`Cannot find the ${bin} command; make sure it is installed and on PATH`)
+    if (code === 127) throw new Error(`Cannot find the ${bin} command; make sure it is installed and on PATH`, { cause: err })
     const detail = (stderr ?? '').trim() || (err as Error).message
-    throw new Error(detail.split('\n').find((line) => line.trim())?.trim() ?? detail)
+    throw new Error(detail.split('\n').find((line) => line.trim())?.trim() ?? detail, { cause: err })
   }
 }
 
@@ -76,12 +76,12 @@ function upfind(...rel: string[]): string {
  */
 const SKILLS = ['easy-flow', 'todo'] as const
 
-/** 仓库里的 skill 根目录（<repo>/skill）：找到任一 skill 的 SKILL.md 再往上退两级 */
+// 仓库里的 skill 根目录（<repo>/skill）：找到任一 skill 的 SKILL.md 再往上退两级
 function skillRoot(): string {
   return dirname(dirname(upfind('skill', SKILLS[0], 'SKILL.md')))
 }
 
-/** 某个 skill 在仓库里的实体 */
+// 某个 skill 在仓库里的实体
 function skillSource(name: string): string {
   return join(skillRoot(), name)
 }
@@ -93,26 +93,26 @@ function cliEntry(): string {
 export interface AgentSkill {
   id: 'claude' | 'cursor' | 'codex' | 'chengxiaobang'
   label: string
-  /** That agent's skills dir; it may not exist when the agent is not installed */
+  // That agent's skills dir; it may not exist when the agent is not installed
   dir: string
-  /** Whether the dir exists (skip missing ones — do not create an empty dir for them) */
+  // Whether the dir exists (skip missing ones — do not create an empty dir for them)
   available: boolean
-  /** 这个 agent 下的每个 skill 都已链对 */
+  // 这个 agent 下的每个 skill 都已链对
   linked: boolean
 }
 
 export interface SkillPlan {
-  /** 仓库里的 skill 根目录与 CLI 入口；环境不允许时为 null */
+  // 仓库里的 skill 根目录与 CLI 入口；环境不允许时为 null
   source: string | null
-  /** 根目录下的 skill 清单 */
+  // 根目录下的 skill 清单
   skills: string[]
   cli: string | null
   problem: string | null
   shim: { path: string; installed: boolean }
-  /** node resolved from a login shell; running .ts directly needs >= 22.18 */
+  // node resolved from a login shell; running .ts directly needs >= 22.18
   node: { path: string; version: string } | null
   agents: AgentSkill[]
-  /** Legacy MCP registrations still present (installing removes them) */
+  // Legacy MCP registrations still present (installing removes them)
   legacyMcp: Array<{ id: 'claude' | 'codex'; label: string; registered: boolean }>
 }
 
@@ -120,7 +120,7 @@ function shimPath(): string {
   return join(homedir(), '.local', 'bin', NAME)
 }
 
-/** 某个 skill 挂到 ~/.agents/skills 下的位置 */
+// 某个 skill 挂到 ~/.agents/skills 下的位置
 function homeLink(name: string): string {
   return join(homedir(), '.agents', 'skills', name)
 }
@@ -163,7 +163,7 @@ function linkedTo(link: string, target: string): boolean {
   return !!real && real === resolveOrNull(target)
 }
 
-/** ~/.agents/skills/<name> 要落在真的 skill 源上：解出来名字对得上，里面还有 SKILL.md */
+// ~/.agents/skills/<name> 要落在真的 skill 源上：解出来名字对得上，里面还有 SKILL.md
 function homeLinked(name: string): boolean {
   const real = resolveOrNull(homeLink(name))
   return !!real && basename(real) === name && existsSync(join(real, 'SKILL.md'))

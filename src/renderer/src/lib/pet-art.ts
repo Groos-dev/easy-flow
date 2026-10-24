@@ -11,6 +11,9 @@
  * - 程小帮 → cxb 蓝卫衣短发女孩，走 `<img>`。素材是以应用图标为参考、用 gpt-image-2.5 生成的
  *   位图（12 档姿势 + 6 张 mini），构建见 scripts/build-cxb-pet.py。位图没有自带 CSS 动画，
  *   呼吸 / 抖动这类轻动由宿主在 styles.css 里按 `.pet.cxb` 补。
+ * - Cursor → cursor 立方体小机器人（方块 logo + 指针箭头），走 `<img>`。素材是 gpt-image-2.5
+ *   生成的透明底位图（11 档姿势 + 6 张 mini），构建见 scripts/build-cursor-pet.py。位图没有自带
+ *   CSS 动画，宿主只做轻动。
  *
  * 素材来源与许可见 src/renderer/public/pets/README.md；clawd / cloudling 的构建见
  * scripts/build-pets.mjs。
@@ -78,7 +81,27 @@ const CXB_MINI_FILE: Record<Pose, string> = {
   failed: 'cxb-mini-alert.webp',
 }
 
-/** 静止越久越困：打哈欠 → 打盹 → 瘫倒 → 睡着 */
+const CURSOR_FILE: Record<Pose, string> = {
+  idle: 'cursor-idle.webp',
+  thinking: 'cursor-thinking.webp',
+  working: 'cursor-working.webp',
+  sweeping: 'cursor-sweeping.webp',
+  blocked: 'cursor-blocked.webp',
+  done: 'cursor-done.webp',
+  failed: 'cursor-failed.webp',
+}
+
+const CURSOR_MINI_FILE: Record<Pose, string> = {
+  idle: 'cursor-mini-idle.webp',
+  thinking: 'cursor-mini-peek.webp',
+  working: 'cursor-mini-typing.webp',
+  sweeping: 'cursor-mini-typing.webp',
+  blocked: 'cursor-mini-alert.webp',
+  done: 'cursor-mini-happy.webp',
+  failed: 'cursor-mini-alert.webp',
+}
+
+// 静止越久越困：打哈欠 → 打盹 → 瘫倒 → 睡着
 export type IdleMood = 'awake' | 'yawning' | 'dozing' | 'collapsing' | 'sleeping'
 
 const CLAWD_IDLE: Record<IdleMood, string> = {
@@ -105,6 +128,14 @@ const CXB_IDLE: Record<IdleMood, string> = {
   sleeping: 'cxb-sleeping.webp',
 }
 
+const CURSOR_IDLE: Record<IdleMood, string> = {
+  awake: 'cursor-idle.webp',
+  yawning: 'cursor-idle-yawn.webp',
+  dozing: 'cursor-idle-doze.webp',
+  collapsing: 'cursor-collapse-sleep.webp',
+  sleeping: 'cursor-sleeping.webp',
+}
+
 const COLLAPSE_MS = 5_000
 
 const IDLE_STAGES: ReadonlyArray<{ after: number; mood: IdleMood }> = [
@@ -120,7 +151,7 @@ export function idleMoodOf(observedAt: number, now = Date.now()): IdleMood {
   return IDLE_STAGES.find((stage) => idleMs >= stage.after)?.mood ?? 'awake'
 }
 
-/** 一块素材怎么落到页面上 */
+// 一块素材怎么落到页面上
 export type PetArt = { channel: 'img'; src: string } | { channel: 'inline'; svg: string }
 
 interface Theme {
@@ -129,7 +160,7 @@ interface Theme {
   idle: Record<IdleMood, string>
   miniSleep: string
   inline: boolean
-  /** 从睡着里被叫醒时先播的一档；没有就不播（素材没有这一档的 agent 直接切目标姿势） */
+  // 从睡着里被叫醒时先播的一档；没有就不播（素材没有这一档的 agent 直接切目标姿势）
   wake?: string
 }
 
@@ -158,10 +189,19 @@ const CXB: Theme = {
   wake: 'cxb-wake.webp',
 }
 
-/** 认不出的 agent 落到 clawd（默认那只）；三个认识的 agent 各自一套形象 */
+const CURSOR: Theme = {
+  files: CURSOR_FILE,
+  minis: CURSOR_MINI_FILE,
+  idle: CURSOR_IDLE,
+  miniSleep: 'cursor-mini-sleep.webp',
+  inline: false,
+}
+
+// 认不出的 agent 落到 clawd（默认那只）；四个认识的 agent 各自一套形象
 function themeFor(agent: string): Theme {
   if (agent === 'codex') return CLOUDLING
   if (agent === 'chengxiaobang') return CXB
+  if (agent === 'cursor') return CURSOR
   return CLAWD
 }
 
@@ -210,9 +250,9 @@ export function petArt(
 
 const SCRIPT_RE = /<script[^>]*>([\s\S]*?)<\/script>/
 const STYLE_RE = /(<style\b[^>]*>)([\s\S]*?)(<\/style>)/
-/** 脚本里按文档找元素的三处调用；`getElementById` 的参数是 id，另两个是选择器 */
+// 脚本里按文档找元素的三处调用；`getElementById` 的参数是 id，另两个是选择器
 const LOOKUP_RE = /\.(getElementById|querySelector|querySelectorAll)\(\s*(['"])([^'"]*)\2/g
-/** 属性值里指向本文件元素的引用 */
+// 属性值里指向本文件元素的引用
 const REF_RE = /(url\(#|href="#)([\w-]+)/g
 
 /**

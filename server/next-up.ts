@@ -20,31 +20,31 @@ import type { SessionStatus } from './session-state.ts'
 
 export type RankableSession = Session & { status: SessionStatus }
 
-/** 两级：现在就得动 / 有空再看 */
+// 两级：现在就得动 / 有空再看
 export type NextUpLevel = 'now' | 'soon'
 
 export interface NextUpItem {
-  /** 需求 slug（没有会话信号时，点开需求用） */
+  // 需求 slug（没有会话信号时，点开需求用）
   slug: string
   project: string
   title: string
-  /** 需求状态，界面上并排摆一枚小药丸 */
+  // 需求状态，界面上并排摆一枚小药丸
   status: string
   level: NextUpLevel
-  /** 命中的档位，1 最硬、4 最软。前端不读，单测拿它断言顺序 */
+  // 命中的档位，1 最硬、4 最软。前端不读，单测拿它断言顺序
   tier: number
-  /** 一句话理由，中文 */
+  // 一句话理由，中文
   reason: string
-  /** 第二行的补充；没有则空串 */
+  // 第二行的补充；没有则空串
   detail: string
-  /** 命中的会话；没有会话信号时是 null，界面据此决定回会话还是开需求 */
+  // 命中的会话；没有会话信号时是 null，界面据此决定回会话还是开需求
   session: { agent: string; link: string } | null
 }
 
 export interface NextUpConfig {
-  /** 同一档内的先后：p0 最靠前；没设优先级的排最后 */
+  // 同一档内的先后：p0 最靠前；没设优先级的排最后
   priorityRank: Record<string, number>
-  /** 「停太久」的阈值（天）：没到这个天数就不推，免得刚进这栏就被催 */
+  // 「停太久」的阈值（天）：没到这个天数就不推，免得刚进这栏就被催
   staleDays: { review: number; clarify: number }
 }
 
@@ -53,7 +53,7 @@ export const DEFAULT_NEXT_UP_CONFIG: NextUpConfig = {
   staleDays: { review: 2, clarify: 2 },
 }
 
-/** 档位。数字越小越硬，排序从它开始 */
+// 档位。数字越小越硬，排序从它开始
 const TIER = { blocked: 1, agentFinished: 2, reviewStale: 3, clarifyStale: 4 } as const
 
 const AGENT_LABELS: Record<string, string> = {
@@ -68,11 +68,11 @@ const DAY_MS = 86_400_000
 interface Candidate {
   item: NextUpItem
   priority: number
-  /** 排序用的「等了多久」起点（epoch ms），小的（等得久的）在前 */
+  // 排序用的「等了多久」起点（epoch ms），小的（等得久的）在前
   since: number
 }
 
-/** 排名。按档位、档内优先级、等待时长、slug 依次定序，稳定可测 */
+// 排名。按档位、档内优先级、等待时长、slug 依次定序，稳定可测
 export function rankNextUp(
   requirements: readonly Requirement[],
   sessions: readonly RankableSession[],
@@ -200,20 +200,20 @@ function identity(req: Requirement): Pick<NextUpItem, 'slug' | 'project' | 'titl
   return { slug: req.slug, project: req.project, title: req.title, status: req.status }
 }
 
-/** 档内排序的起点：优先取会话状态时间，其次需求更新时间，最后文件修改时间 */
+// 档内排序的起点：优先取会话状态时间，其次需求更新时间，最后文件修改时间
 function sinceOf(req: Requirement, session?: RankableSession): number {
   // 状态的时刻直接就是 ms，不用再走一遍字符串
   const at = session ? session.status.observedAt : 0
   return at || parseLocalTime(req.updated) || req.mtime || 0
 }
 
-/** 从某个时间戳到今天过了几天（向下取整）。解析不出返回 -1，调用方据此不推 */
+// 从某个时间戳到今天过了几天（向下取整）。解析不出返回 -1，调用方据此不推
 function daysSince(stamp: string, now: number): number {
   const t = parseLocalTime(stamp)
   return t ? Math.floor((now - t) / DAY_MS) : -1
 }
 
-/** 库里的本机时间戳：'yyyy-mm-dd' 或 'yyyy-mm-dd HH:mm'。解析不出返回 0 */
+// 库里的本机时间戳：'yyyy-mm-dd' 或 'yyyy-mm-dd HH:mm'。解析不出返回 0
 function parseLocalTime(stamp: string): number {
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/.exec((stamp ?? '').trim())
   if (!m) return 0

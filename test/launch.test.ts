@@ -32,7 +32,7 @@ describe('启动交接', () => {
   })
 
   test('各 agent 都按所选工作区取上下文——会话实际只拿到那一个目录', () => {
-    for (const agent of ['codex', 'chengxiaobang'] as const) {
+    for (const agent of ['codex', 'chengxiaobang', 'cursor'] as const) {
       const prompt = launchPrompt({ ...input, agent })
       assert.match(prompt, /req-abc123/)
       assert.match(prompt, /wt-xyz789/)
@@ -62,7 +62,7 @@ describe('启动交接', () => {
   test('注册过的 provider 能被查到，没注册的返回 undefined', () => {
     registerLaunchProvider({ id: 'claude', label: 'Claude Code', build: () => 'claude://code/new' })
     assert.equal(findLaunchProvider('claude')?.label, 'Claude Code')
-    assert.equal(findLaunchProvider('cursor'), undefined)
+    assert.equal(findLaunchProvider('codex'), undefined)
     assert.deepEqual(
       launchProviders().map((p) => p.id),
       ['claude'],

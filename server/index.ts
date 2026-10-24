@@ -6,7 +6,7 @@
  *   3. 测试直接调 createBoardApp
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { existsSync, rmSync } from 'node:fs'
 import {
   BoardDatabase,
@@ -17,6 +17,7 @@ import {
   type Status,
   type Priority,
   type TodoStatus,
+  type SessionAgent,
 } from './db.ts'
 import { hookKeyOf, PULL_INTERVAL_MS, pullStatuses, pullTitles, readObservations } from './threads.ts'
 import { recordHook } from './hook.ts'
@@ -36,6 +37,7 @@ import { findLaunchProvider, launchPrompt, launchProviders } from './launch.ts'
 import { codeLinkStatuses } from './code-host.ts'
 import './launch-codex.ts'
 import './launch-chengxiaobang.ts'
+import './launch-cursor.ts'
 import {
   allowOrigin,
   json,
@@ -52,7 +54,7 @@ export const DEFAULT_PORT = 29170
  */
 const RESCAN_INTERVAL_MS = 10_000
 
-/** 不涉及目录扫描的响应回一个空 sync：列表与单条接口的对象形状保持一致 */
+// 不涉及目录扫描的响应回一个空 sync：列表与单条接口的对象形状保持一致
 const NO_CHANGES = {
   added: [],
   updated: [],
@@ -62,9 +64,9 @@ const NO_CHANGES = {
 }
 
 export interface BoardAppOptions {
-  /** 数据目录；不传则读配置 */
+  // 数据目录；不传则读配置
   dataDir?: string
-  /** 服务监听端口。设置页装 hook 时要把地址与端口写进配置，所以得知道真实端口 */
+  // 服务监听端口。设置页装 hook 时要把地址与端口写进配置，所以得知道真实端口
   port?: number
   /**
    * 会话状态变化后的回调。hook 推送与点 pet 都走这儿，
@@ -87,7 +89,7 @@ export interface BoardApp {
   close: () => void
 }
 
-/** 解析请求要操作的项目：显式参数优先，否则用当前项目 */
+// 解析请求要操作的项目：显式参数优先，否则用当前项目
 function resolveProject(db: BoardDatabase, raw: string | null): string {
   if (!raw) return db.project
   let slug: string
@@ -102,7 +104,7 @@ function resolveProject(db: BoardDatabase, raw: string | null): string {
   return slug
 }
 
-/** 项目数据在 <dataDir>/<project>/，删除时要连目录一起删 */
+// 项目数据在 <dataDir>/<project>/，删除时要连目录一起删
 function removeProjectData(db: BoardDatabase, slug: string): void {
   const project = db.listProjects().find((p) => p.slug === slug)
   if (project && existsSync(project.root)) {
@@ -114,6 +116,17 @@ function openDir(path: string): void {
   const target = findOpenTarget(readConfig().openWith)
   execFile('open', target ? ['-a', target.app, path] : [path], (error) => {
     if (error) log.warn(`open failed path=${path} error=${error.message}`)
+  })
+}
+
+// 启动失败时的兜底：把提示词放进剪贴板，用户到新会话里粘贴
+function copyPrompt(text: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (process.platform !== 'darwin') return resolve(false)
+    const child = spawn('pbcopy')
+    child.on('error', () => resolve(false))
+    child.on('close', (code) => resolve(code === 0))
+    child.stdin.end(text)
   })
 }
 
@@ -248,7 +261,11 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
 
       if (url.pathname === '/api/launch/providers' && req.method === 'GET') {
         json(req, res, 200, {
-          providers: launchProviders().map(({ id, label }) => ({ id, label })),
+          providers: launchProviders().map(({ id, label, requiresWorktree }) => ({
+            id,
+            label,
+            requiresWorktree: !!requiresWorktree,
+          })),
         })
         return
       }
@@ -419,6 +436,25 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
         return
       }
 
+      if (url.pathname === '/api/sessions/open-workspace' && req.method === 'POST') {
+        const body = await readBody(req)
+        const agent = String(body.agent) as SessionAgent
+        const session = String(body.session)
+        const found = db.sessionBy(agent, session)
+        if (!found) throw new Error(`Session not found: ${agent}:${session}`)
+        if (agent !== 'cursor') throw new Error('Only Cursor sessions can focus a workspace')
+        if (!found.cwd) throw new Error('Session has no cwd')
+        if (!existsSync(found.cwd)) throw new Error(`Directory no longer exists: ${found.cwd}`)
+        await new Promise<void>((resolve, reject) => {
+          execFile('open', ['-a', 'Cursor', found.cwd], (error, _stdout, stderr) => {
+            if (error) reject(new Error(stderr.trim() || error.message))
+            else resolve()
+          })
+        })
+        json(req, res, 200, { ok: true, path: found.cwd })
+        return
+      }
+
       // 「下一步该动哪个」：服务端揉好信号、给每条配一句理由，前端只负责展示与跳转。
       // 只看当前项目——看板是按项目隔离的。会话按归属过滤，别把别的项目的信号串进来
       if (url.pathname === '/api/next-up' && req.method === 'GET') {
@@ -496,6 +532,9 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
           }
           if (!existsSync(wt.path)) throw new Error(`Directory no longer exists: ${wt.path}`)
         }
+        if (provider.requiresWorktree && !wt) {
+          throw new Error(`Launch agent ${agent} needs a worktree`)
+        }
 
         const input = {
           agent,
@@ -507,7 +546,9 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
         const prompt = launchPrompt(input)
 
         let targetUrl = ''
+        let promptCopied = false
         try {
+          await provider.prepare?.(input)
           targetUrl = await provider.build(input, prompt)
           await new Promise<void>((resolve, reject) => {
             execFile('open', [targetUrl], (error, _stdout, stderr) => {
@@ -517,11 +558,14 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
           })
           json(req, res, 200, { agent, url: targetUrl, prompt, opened: true })
         } catch (error) {
+          // Cursor 启动失败时把提示词放进剪贴板，用户不至于手抄
+          if (agent === 'cursor') promptCopied = await copyPrompt(prompt)
           json(req, res, 200, {
             agent,
             url: targetUrl,
             prompt,
             opened: false,
+            promptCopied,
             error: (error as Error).message,
           })
         }
@@ -630,7 +674,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
           db = new BoardDatabase(previous, readConfig().activeProject)
           currentDir = previous
           db.pickProject()
-          throw new Error(`Switch failed, rolled back: ${(err as Error).message}`)
+          throw new Error(`Switch failed, rolled back: ${(err as Error).message}`, { cause: err })
         }
         return
       }
@@ -701,7 +745,7 @@ export interface StartOptions {
   port?: number
   dataDir?: string
   host?: string
-  /** 会话状态变化后的回调（hook / 点 pet / 每次 pull） */
+  // 会话状态变化后的回调（hook / 点 pet / 每次 pull）
   onAttention?: () => void
 }
 

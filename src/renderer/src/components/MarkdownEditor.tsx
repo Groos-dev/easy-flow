@@ -21,7 +21,7 @@ export default function MarkdownEditor({
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
-  /** 建实例那一刻的正文。之后 value 变了走下面的同步，不再重建实例 */
+  // 建实例那一刻的正文。之后 value 变了走下面的同步，不再重建实例
   const initial = useRef(value)
   const changeRef = useRef(onChange)
   changeRef.current = onChange

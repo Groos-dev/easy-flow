@@ -3,7 +3,7 @@
  * 纯函数，设置页的录制框与测试共用这一份。
  */
 
-/** 事件里能当快捷键用的具名键 → accelerator 里的写法。认不出的键一律拒绝 */
+// 事件里能当快捷键用的具名键 → accelerator 里的写法。认不出的键一律拒绝
 const NAMED_KEYS: Record<string, string> = {
   ' ': 'Space',
   Enter: 'Return',
@@ -21,7 +21,7 @@ const NAMED_KEYS: Record<string, string> = {
   PageDown: 'PageDown',
 }
 
-/** 单个键的 accelerator 写法；认不出返回空串 */
+// 单个键的 accelerator 写法；认不出返回空串
 function keyName(key: string): string {
   if (/^[a-zA-Z]$/.test(key)) return key.toUpperCase()
   if (/^[0-9]$/.test(key)) return key
@@ -54,7 +54,7 @@ export function acceleratorFromEvent(e: KeyEventLike, platform: string): string 
   return [...mods, key].join('+')
 }
 
-/** 修饰键的显示符号：mac 用符号，其它平台用名字 */
+// 修饰键的显示符号：mac 用符号，其它平台用名字
 const MAC_SYMBOLS: Record<string, string> = {
   CommandOrControl: '⌘',
   Command: '⌘',
@@ -77,7 +77,7 @@ const PC_NAMES: Record<string, string> = {
   Option: 'Alt',
 }
 
-/** 方向键这类键的符号，只有 mac 用。两种写法都收：录制给的是 Up，手改配置的人可能写 ArrowUp */
+// 方向键这类键的符号，只有 mac 用。两种写法都收：录制给的是 Up，手改配置的人可能写 ArrowUp
 const MAC_KEY_SYMBOLS: Record<string, string> = {
   Up: '↑',
   ArrowUp: '↑',
@@ -92,7 +92,7 @@ const MAC_KEY_SYMBOLS: Record<string, string> = {
   Escape: 'Esc',
 }
 
-/** 键盘上印不出符号的键，两端用同一套短写法 */
+// 键盘上印不出符号的键，两端用同一套短写法
 const PC_KEY_NAMES: Record<string, string> = {
   Return: 'Enter',
   Escape: 'Esc',

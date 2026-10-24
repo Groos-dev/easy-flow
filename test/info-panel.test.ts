@@ -41,7 +41,7 @@ function mkReq(patch: Partial<Requirement> = {}): Requirement {
   }
 }
 
-/** 会话的 id 与 deeplink 故意取成不同的串：测试要能分辨"亮的是 id"还是"亮的是链接" */
+// 会话的 id 与 deeplink 故意取成不同的串：测试要能分辨"亮的是 id"还是"亮的是链接"
 function sess(patch: Partial<Session> = {}): Session {
   return {
     requirementId: 'req-1',
@@ -153,9 +153,16 @@ describe('详情页浮窗 · 会话块', () => {
   })
 
   test('没有 deeplink 的会话整行置灰，不给假链接', () => {
-    const html = render({ sessions: [sess({ link: '' })] })
+    const html = render({ sessions: [sess({ agent: 'claude', link: '' })] })
     assert.match(html, /sess-off/)
     assert.doesNotMatch(html, /href=/)
+  })
+
+  test('Cursor 会话没有 deeplink，但可以点开它所在的工作区', () => {
+    const html = render({ sessions: [sess({ agent: 'cursor', link: '' })] })
+    assert.doesNotMatch(html, /sess-off/)
+    assert.match(html, /role="button"/)
+    assert.match(html, /在 Cursor 里打开这条会话所在的工作区/)
   })
 
   test('新会话入口跟在会话列表后面', () => {

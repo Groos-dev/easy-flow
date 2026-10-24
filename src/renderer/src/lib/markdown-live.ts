@@ -11,7 +11,7 @@ import { syntaxTree } from '@codemirror/language'
  * `#` 不是「所见即所得」。
  */
 
-/** 编辑器有没有焦点。焦点不在里面时，谁也不知道光标在哪一行，索性全按渲染结果画 */
+// 编辑器有没有焦点。焦点不在里面时，谁也不知道光标在哪一行，索性全按渲染结果画
 export const focusEffect = StateEffect.define<boolean>()
 
 const focused = StateField.define<boolean>({
@@ -40,7 +40,7 @@ function line(cls: string): Decoration {
   return d
 }
 
-/** 无序列表的圆点：markdown 写的是 `-`，渲染出来是个点 */
+// 无序列表的圆点：markdown 写的是 `-`，渲染出来是个点
 class BulletWidget extends WidgetType {
   eq() {
     return true
@@ -53,7 +53,7 @@ class BulletWidget extends WidgetType {
   }
 }
 
-/** 任务项前面的方框。点一下直接改 md 里那个 `[ ]`，md 仍是唯一事实源 */
+// 任务项前面的方框。点一下直接改 md 里那个 `[ ]`，md 仍是唯一事实源
 class TaskWidget extends WidgetType {
   constructor(
     readonly done: boolean,
@@ -77,13 +77,13 @@ class TaskWidget extends WidgetType {
     }
     return el
   }
-  /** 不拦的话点方框就只是移动光标，点不动 */
+  // 不拦的话点方框就只是移动光标，点不动
   ignoreEvent() {
     return false
   }
 }
 
-/** 分割线：`---` 这一行整行换成一条横线 */
+// 分割线：`---` 这一行整行换成一条横线
 class RuleWidget extends WidgetType {
   eq() {
     return true
@@ -95,7 +95,7 @@ class RuleWidget extends WidgetType {
   }
 }
 
-/** 光标落在哪几行——那几行保持原文，是「就地改」的入口 */
+// 光标落在哪几行——那几行保持原文，是「就地改」的入口
 function activeLines(state: EditorState): Set<number> {
   const set = new Set<number>()
   for (const r of state.selection.ranges) {
@@ -106,7 +106,7 @@ function activeLines(state: EditorState): Set<number> {
   return set
 }
 
-/** 把 md 渲染成装饰集：只描述长什么样，不改内容 */
+// 把 md 渲染成装饰集：只描述长什么样，不改内容
 export function liveDecorations(state: EditorState): DecorationSet {
   const doc = state.doc
   const active = activeLines(state)
@@ -114,7 +114,7 @@ export function liveDecorations(state: EditorState): DecorationSet {
   const out: Range<Decoration>[] = []
 
   const lineOf = (pos: number) => doc.lineAt(pos).number
-  /** 显原文的行就是「活跃」的；记号只在不活跃的行上收起来 */
+  // 显原文的行就是「活跃」的；记号只在不活跃的行上收起来
   const quiet = (from: number) => !isFocused || !active.has(lineOf(from))
   const paintLines = (cls: string, from: number, to: number) => {
     const last = lineOf(Math.max(from, to - 1))
@@ -262,5 +262,5 @@ const decorations = StateField.define<DecorationSet>({
       : value.map(tr.changes),
 })
 
-/** 编辑器扩展：把正文按 md 渲染出来，同时保持它是可编辑的原文 */
+// 编辑器扩展：把正文按 md 渲染出来，同时保持它是可编辑的原文
 export const livePreview: Extension = [focused, decorations, EditorView.decorations.from(decorations)]

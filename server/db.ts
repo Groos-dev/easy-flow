@@ -50,11 +50,11 @@ export type Priority = (typeof PRIORITIES)[number]
 export const TODO_STATUSES = ['todo', 'in_progress', 'done', 'cancelled'] as const
 export type TodoStatus = (typeof TODO_STATUSES)[number]
 
-/** 待办来源。feishu 由 feishu-task 识别后委托入库，manual 是用户口头要求记一条 */
+// 待办来源。feishu 由 feishu-task 识别后委托入库，manual 是用户口头要求记一条
 export const TODO_SOURCES = ['feishu', 'chat', 'agent', 'manual'] as const
 export type TodoSource = (typeof TODO_SOURCES)[number]
 
-/** 飞书来源的来路：@我 还是小窗私聊 */
+// 飞书来源的来路：@我 还是小窗私聊
 export const TODO_CHANNELS = ['at_me', 'p2p'] as const
 
 /**
@@ -64,7 +64,7 @@ export const TODO_CHANNELS = ['at_me', 'p2p'] as const
 export const SESSION_AGENTS = ['claude', 'codex', 'cursor', 'chengxiaobang'] as const
 export type SessionAgent = (typeof SESSION_AGENTS)[number]
 
-/** 会话角色：开工登记的 dev；review 会话由 req session review 建，用来复用与展示 */
+// 会话角色：开工登记的 dev；review 会话由 req session review 建，用来复用与展示
 export const SESSION_ROLES = ['dev', 'review'] as const
 export type SessionRole = (typeof SESSION_ROLES)[number]
 
@@ -74,11 +74,11 @@ export interface Project {
   slug: string
   name: string
   root: string
-  /** 项目根目录下是否有 AGENTS.md（项目总规范） */
+  // 项目根目录下是否有 AGENTS.md（项目总规范）
   hasConvention: boolean
-  /** 规范文件原文，没有则为 null */
+  // 规范文件原文，没有则为 null
   convention: string | null
-  /** 目录不合规范之处（只读提示，空数组即合规）。不落库——它是文件系统的纯函数 */
+  // 目录不合规范之处（只读提示，空数组即合规）。不落库——它是文件系统的纯函数
   issues: string[]
   requirementCount: number
   mtime: number
@@ -87,11 +87,11 @@ export interface Project {
 
 export interface Requirement {
   slug: string
-  /** 所属项目 */
+  // 所属项目
   project: string
-  /** 不透明需求 id（AGENTS.md 的 frontmatter）。老需求可能还没有，为空串 */
+  // 不透明需求 id（AGENTS.md 的 frontmatter）。老需求可能还没有，为空串
   id: string
-  /** 父需求的 id；顶层需求为空串。slug 里也带着层级（parent/child），两者互为印证 */
+  // 父需求的 id；顶层需求为空串。slug 里也带着层级（parent/child），两者互为印证
   parentId: string
   title: string
   status: Status
@@ -99,11 +99,11 @@ export interface Requirement {
   summary: string
   repos: RepoRef[]
   links: string
-  /** Feishu task (Meego story) links. Written by the CLI; the UI is read-only */
+  // Feishu task (Meego story) links. Written by the CLI; the UI is read-only
   feishuTaskLinks: string[]
-  /** Code links: GitLab MR / GitHub PR etc. Written by the CLI; the UI is read-only */
+  // Code links: GitLab MR / GitHub PR etc. Written by the CLI; the UI is read-only
   codeLinks: CodeLink[]
-  /** 扩展链接：{ detail 描述, url 链接 } */
+  // 扩展链接：{ detail 描述, url 链接 }
   extLinks: ExtLink[]
   docs: Array<{ name: string; size: number }>
   path: string
@@ -111,13 +111,13 @@ export interface Requirement {
   updated: string
 }
 
-/** 扩展链接：detail 是描述，url 是链接 */
+// 扩展链接：detail 是描述，url 是链接
 export interface ExtLink {
   detail: string
   url: string
 }
 
-/** 代码链接：label 是显示别名，空串表示没给——展示层从 url 推导一个 */
+// 代码链接：label 是显示别名，空串表示没给——展示层从 url 推导一个
 export interface CodeLink {
   label: string
   url: string
@@ -129,15 +129,15 @@ export interface CodeLink {
  */
 export interface Worktree {
   id: string
-  /** 所属需求的 id */
+  // 所属需求的 id
   requirementId: string
-  /** 需求里的短名（涉及仓库表的短名列）。可空：调用方直接给路径时没有短名 */
+  // 需求里的短名（涉及仓库表的短名列）。可空：调用方直接给路径时没有短名
   short: string
-  /** 仓库名，即主 checkout 的目录名 */
+  // 仓库名，即主 checkout 的目录名
   repo: string
   branch: string
   path: string
-  /** 主 checkout 路径。worktree 没了也留着，否则无法定位到仓库去收拾残局 */
+  // 主 checkout 路径。worktree 没了也留着，否则无法定位到仓库去收拾残局
   main: string
   created: string
   updated: string
@@ -162,18 +162,18 @@ interface WtRow {
  * cursor 的 conversation id），这里只做「哪条需求上有哪些会话」的映射。
  */
 export interface Session {
-  /** 所属需求的 id */
+  // 所属需求的 id
   requirementId: string
   agent: SessionAgent
-  /** agent 原生的会话 id */
+  // agent 原生的会话 id
   session: string
-  /** dev（开工登记）还是 review（评审会话） */
+  // dev（开工登记）还是 review（评审会话）
   role: SessionRole
-  /** 会话在做什么，agent 自己给的一句话；应用里的标题读不到，只能靠它记 */
+  // 会话在做什么，agent 自己给的一句话；应用里的标题读不到，只能靠它记
   title: string
-  /** 登记时所在目录，通常就是工作区 */
+  // 登记时所在目录，通常就是工作区
   cwd: string
-  /** 在 desktop 应用里打开这个会话的 deeplink；没有则为空串 */
+  // 在 desktop 应用里打开这个会话的 deeplink；没有则为空串
   link: string
   created: string
   updated: string
@@ -231,35 +231,35 @@ interface SessionRow {
  * 一条待办。内容（标题、摘要）与需求一样从 md 同步进来，状态与来源类元数据只归库。
  */
 export interface Todo {
-  /** 首次入库日编号：T-YYYYMMDD-NNN */
+  // 首次入库日编号：T-YYYYMMDD-NNN
   id: string
   title: string
   status: TodoStatus
   source: TodoSource | ''
-  /** 来源 agent 会话（如 codex://threads/<id>）。source 为 agent / chat 时必有 */
+  // 来源 agent 会话（如 codex://threads/<id>）。source 为 agent / chat 时必有
   session: string
-  /** 仅 feishu 来源：at_me（@我） / p2p（私聊） */
+  // 仅 feishu 来源：at_me（@我） / p2p（私聊）
   channel: string
-  /** 来源人 / 触发者 */
+  // 来源人 / 触发者
   origin: string
-  /** 会话、群或上下文名 */
+  // 会话、群或上下文名
   chat: string
-  /** 去重键：feishu 用 message_id，其余用来源稳定 id */
+  // 去重键：feishu 用 message_id，其余用来源稳定 id
   ref: string
-  /** 立项后的所属需求 id（req-…）。空串表示还没挂 */
+  // 立项后的所属需求 id（req-…）。空串表示还没挂
   requirementId: string
-  /** 可跳转链接（飞书 thread、MR、页面） */
+  // 可跳转链接（飞书 thread、MR、页面）
   link: string
-  /** 源事件时间（yyyy-mm-dd HH:mm），可空 */
+  // 源事件时间（yyyy-mm-dd HH:mm），可空
   happened: string
-  /** 卡片摘要，从 md「摘要」段同步 */
+  // 卡片摘要，从 md「摘要」段同步
   summary: string
-  /** md 文件绝对路径 */
+  // md 文件绝对路径
   path: string
   mtime: number
   created: string
   updated: string
-  /** md 没了（被手工删过、或盘不在） */
+  // md 没了（被手工删过、或盘不在）
   missing: boolean
 }
 
@@ -322,7 +322,7 @@ function asTodoSource(value: string | null | undefined): TodoSource | null {
 
 // ------------------------------------------------------------------ 链接
 
-/** Normalize link fields: writers are the CLI / AI; sanitize once here */
+// Normalize link fields: writers are the CLI / AI; sanitize once here
 export function normalizeLinkList(input: unknown): string[] {
   if (!Array.isArray(input)) throw new Error('Link list must be an array')
   const out: string[] = []
@@ -351,13 +351,13 @@ export function normalizeCodeLinks(input: unknown): CodeLink[] {
   return out
 }
 
-/** 一条代码链接的形状归一：字符串当纯 URL。读侧不校验——写进来时已经校验过 */
+// 一条代码链接的形状归一：字符串当纯 URL。读侧不校验——写进来时已经校验过
 function toCodeLink(item: unknown): CodeLink {
   const raw = (typeof item === 'string' ? { url: item } : item) as Partial<CodeLink> | null
   return { label: String(raw?.label ?? '').trim(), url: String(raw?.url ?? '').trim() }
 }
 
-/** 读库里的 code_links 列：老格式（字符串数组）与新格式（对象数组）都认 */
+// 读库里的 code_links 列：老格式（字符串数组）与新格式（对象数组）都认
 function readCodeLinks(raw: string | null): CodeLink[] {
   const list = parseLinks<unknown[]>(raw, [])
   if (!Array.isArray(list)) return []
@@ -380,7 +380,7 @@ export function normalizeExtLinks(input: unknown): ExtLink[] {
   return out
 }
 
-/** 今天（YYYY-MM-DD）。多处写状态时间戳，集中一处避免格式漂移。 */
+// 今天（YYYY-MM-DD）。多处写状态时间戳，集中一处避免格式漂移。
 function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -395,7 +395,7 @@ function stamp(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
-/** 本机日期（yyyy-mm-dd）。待办 id 里的日期按本机时区算——人在哪儿，"今天"就是哪天 */
+// 本机日期（yyyy-mm-dd）。待办 id 里的日期按本机时区算——人在哪儿，"今天"就是哪天
 function localDay(): string {
   return stamp().slice(0, 10)
 }
@@ -427,12 +427,12 @@ export function todoAgeDays(created: string, now = localDay()): number {
   return Number.isFinite(ms) ? Math.max(0, Math.round(ms / 86_400_000)) : 0
 }
 
-/** 「还没完成」的唯一口径：列表过滤、超期判定、收尾计数都走这里，别各写一份 */
+// 「还没完成」的唯一口径：列表过滤、超期判定、收尾计数都走这里，别各写一份
 export function isOpenTodo(todo: Todo): boolean {
   return todo.status === 'todo' || todo.status === 'in_progress'
 }
 
-/** JSON 列解析。列可能存着 'null'，所以结果要允许 undefined，调用方用 ?? 兜底。 */
+// JSON 列解析。列可能存着 'null'，所以结果要允许 undefined，调用方用 ?? 兜底。
 function parseLinks<T>(raw: string | null, fallback: T): T | undefined {
   if (!raw) return fallback
   try {
@@ -500,10 +500,10 @@ export class BoardDatabase {
   readonly dataDir: string
   readonly file: string
   private db: DatabaseSync
-  /** 当前看板展示的项目 */
+  // 当前看板展示的项目
   private activeProject = DEFAULT_PROJECT_SLUG
 
-  /** 配置里记住的项目，pickProject() 用它做首选 */
+  // 配置里记住的项目，pickProject() 用它做首选
   private preferredProject: string | undefined
 
   constructor(dataDir: string, preferredProject?: string) {
@@ -551,7 +551,7 @@ export class BoardDatabase {
     return this.activeProject
   }
 
-  /** 切到另一个项目；不存在则报错，避免静默落到空看板 */
+  // 切到另一个项目；不存在则报错，避免静默落到空看板
   setProject(slug: string): void {
     if (!this.hasProject(slug)) throw new Error(`Project not found: ${slug}`)
     this.activeProject = slug
@@ -596,7 +596,7 @@ export class BoardDatabase {
     }))
   }
 
-  /** 侧边栏树：每个项目带上自己的需求列表（不切换当前项目） */
+  // 侧边栏树：每个项目带上自己的需求列表（不切换当前项目）
   tree(): Array<Project & { requirements: Requirement[] }> {
     const projects = this.listProjects()
     const stmt = this.db.prepare('SELECT * FROM requirement WHERE project = ? ORDER BY mtime DESC')
@@ -606,7 +606,7 @@ export class BoardDatabase {
     })
   }
 
-  /** 写项目总规范（项目根目录的 AGENTS.md）。内容格式不限，由用户决定。 */
+  // 写项目总规范（项目根目录的 AGENTS.md）。内容格式不限，由用户决定。
   writeProjectConvention(slug: string, content: string): { path: string; bytes: number } {
     const row = this.db.prepare('SELECT root FROM project WHERE slug = ?').get(slug) as
       | { root: string }
@@ -621,7 +621,7 @@ export class BoardDatabase {
     return { path: file, bytes }
   }
 
-  /** 删除项目记录。落盘文件由调用方决定是否一并删除。 */
+  // 删除项目记录。落盘文件由调用方决定是否一并删除。
   deleteProject(slug: string): void {
     const exists = this.db.prepare('SELECT slug FROM project WHERE slug = ?').get(slug)
     if (!exists) throw new Error(`Project not found: ${slug}`)
@@ -646,7 +646,7 @@ export class BoardDatabase {
 
   // ------------------------------------------------------------- 同步
 
-  /** 只同步一个需求目录（路径取自库里），不扫整个数据目录。 */
+  // 只同步一个需求目录（路径取自库里），不扫整个数据目录。
   syncRequirement(slug: string, project = this.activeProject): boolean {
     const existing = this.get(slug, project)
     if (!existing) return false
@@ -764,7 +764,7 @@ export class BoardDatabase {
         seenProjects.add(proj.slug)
         const convention = readProjectConvention(proj.root)
         const name = projectDisplayName(convention, proj.slug)
-        let projectMtime = Date.now()
+        const projectMtime = Date.now()
 
         if (!selectProject.get(proj.slug)) {
           insertProject.run(proj.slug, name, proj.root, convention ? 1 : 0, projectMtime, today())
@@ -861,7 +861,7 @@ export class BoardDatabase {
     }
   }
 
-  /** worktree 的存活校对：只 stat，不跑 git——这条路每次刷看板都会走 */
+  // worktree 的存活校对：只 stat，不跑 git——这条路每次刷看板都会走
   private syncWorktrees(): { missing: string[]; restored: string[] } {
     const missing: string[] = []
     const restored: string[] = []
@@ -913,7 +913,7 @@ export class BoardDatabase {
     }
   }
 
-  /** 指定项目下的需求 */
+  // 指定项目下的需求
   listIn(project: string): Requirement[] {
     const rows = this.db
       .prepare('SELECT * FROM requirement WHERE project = ? ORDER BY mtime DESC')
@@ -921,7 +921,7 @@ export class BoardDatabase {
     return rows.map((r) => this.toRequirement(r))
   }
 
-  /** 当前项目下的需求 */
+  // 当前项目下的需求
   list(): Requirement[] {
     return this.listIn(this.activeProject)
   }
@@ -935,7 +935,7 @@ export class BoardDatabase {
     return rows.map((r) => this.toRequirement(r))
   }
 
-  /** 在指定项目内按 slug 找需求 */
+  // 在指定项目内按 slug 找需求
   get(slug: string, project = this.activeProject): Requirement | undefined {
     const row = this.db
       .prepare('SELECT * FROM requirement WHERE slug = ? AND project = ?')
@@ -943,7 +943,7 @@ export class BoardDatabase {
     return row ? this.toRequirement(row) : undefined
   }
 
-  /** 全文检索：限定在当前项目内 */
+  // 全文检索：限定在当前项目内
   search(query: string): Set<string> {
     const q = query.trim().toLowerCase()
     if (!q) return new Set()
@@ -972,7 +972,7 @@ export class BoardDatabase {
     return hits
   }
 
-  /** 某个需求的完整上下文（含文档全文） */
+  // 某个需求的完整上下文（含文档全文）
   context(slug: string, project = this.activeProject): { requirement: Requirement; docs: DocFile[] } | null {
     const requirement = this.get(slug, project)
     if (!requirement) return null
@@ -982,7 +982,7 @@ export class BoardDatabase {
     return { requirement, docs }
   }
 
-  /** 读需求目录下的原始 requirement.md（需求描述的原文） */
+  // 读需求目录下的原始 requirement.md（需求描述的原文）
   readRequirementMd(slug: string, project = this.activeProject): string | null {
     const req = this.get(slug, project)
     if (!req) return null
@@ -1016,7 +1016,7 @@ export class BoardDatabase {
     return out
   }
 
-  /** 直接子需求。父需求没有 id 时返回空——关系靠 id 承载 */
+  // 直接子需求。父需求没有 id 时返回空——关系靠 id 承载
   children(parentId: string): Requirement[] {
     if (!parentId) return []
     const rows = this.db
@@ -1025,7 +1025,7 @@ export class BoardDatabase {
     return rows.map((r) => this.toRequirement(r))
   }
 
-  /** 还没拿到 id 的需求（frontmatter 里缺 id 的老需求） */
+  // 还没拿到 id 的需求（frontmatter 里缺 id 的老需求）
   missingIds(): Array<{ slug: string; project: string; path: string }> {
     return this.db
       .prepare('SELECT slug, project, path FROM requirement WHERE id IS NULL OR id = ?')
@@ -1103,7 +1103,7 @@ export class BoardDatabase {
 
   // ------------------------------------------------------------- worktree
 
-  /** 某个需求名下的 worktree；不传则全部。按仓库排，列表稳定好读 */
+  // 某个需求名下的 worktree；不传则全部。按仓库排，列表稳定好读
   listWorktrees(requirementId?: string): Worktree[] {
     // 判 undefined 而不是真假：需求没 id 时传进来的是空串，
     // 那表示"它名下不可能有工作区"，不是"列出全部"
@@ -1166,7 +1166,7 @@ export class BoardDatabase {
     return this.worktreeByPath(input.path)!
   }
 
-  /** 只删记录。目录与 git 登记归 worktree 层处理 */
+  // 只删记录。目录与 git 登记归 worktree 层处理
   removeWorktree(id: string): boolean {
     return this.db.prepare('DELETE FROM worktree WHERE id = ?').run(id).changes > 0
   }
@@ -1347,7 +1347,7 @@ export class BoardDatabase {
     return row ? toSession(row) : undefined
   }
 
-  /** 只删记录：会话本身在 agent 应用里，这里动不了它 */
+  // 只删记录：会话本身在 agent 应用里，这里动不了它
   removeSession(agent: SessionAgent, session: string): boolean {
     return this.db
       .prepare('DELETE FROM session WHERE agent = ? AND session = ?')
@@ -1407,7 +1407,7 @@ export class BoardDatabase {
     return { added, updated, missing, restored }
   }
 
-  /** 全部待办，最近动过的在前。给了 requirementId 就只列挂在这条需求上的 */
+  // 全部待办，最近动过的在前。给了 requirementId 就只列挂在这条需求上的
   listTodos(requirementId?: string): Todo[] {
     const rows =
       requirementId === undefined
@@ -1503,12 +1503,12 @@ export class BoardDatabase {
     return new Map(rows.map((r) => [todoSessionKey(r.session), r.req_id]))
   }
 
-  /** 由来源会话推出的归属；推不出来就是空串 */
+  // 由来源会话推出的归属；推不出来就是空串
   private candidateOwner(todo: Todo, owners: Map<string, string>): string {
     return todo.session ? (owners.get(todoSessionKey(todo.session)) ?? '') : ''
   }
 
-  /** 按去重键反查。feishu 来源的 ref 是 message_id，用它挡住同一消息重复入库 */
+  // 按去重键反查。feishu 来源的 ref 是 message_id，用它挡住同一消息重复入库
   todoByRef(ref: string): Todo | undefined {
     const row = this.db.prepare('SELECT * FROM todo WHERE ref = ?').get(ref) as unknown as
       | TodoRow
@@ -1529,7 +1529,7 @@ export class BoardDatabase {
     return `${prefix}${String(last + 1).padStart(3, '0')}`
   }
 
-  /** 登记一条待办。md 由调用方先落盘（createTodoDoc），这里只管库 */
+  // 登记一条待办。md 由调用方先落盘（createTodoDoc），这里只管库
   addTodo(input: {
     id: string
     title: string
@@ -1546,7 +1546,7 @@ export class BoardDatabase {
     summary?: string
     path: string
     mtime?: number
-    /** 迁移历史条目时用它保住原来的时间线；不传就用当前时间 */
+    // 迁移历史条目时用它保住原来的时间线；不传就用当前时间
     created?: string
     updated?: string
   }): Todo {
@@ -1646,7 +1646,7 @@ export class BoardDatabase {
     return this.todoById(id)!
   }
 
-  /** 读待办 md 原文。路径从库里取，不接受调用方给的路径 */
+  // 读待办 md 原文。路径从库里取，不接受调用方给的路径
   readTodoDoc(id: string): { path: string; content: string } {
     const todo = this.todoById(id)
     if (!todo) throw new Error(`Todo not found: ${id}`)
@@ -1655,7 +1655,7 @@ export class BoardDatabase {
     return { path: todo.path, content }
   }
 
-  /** 写回 md，不留备份（版本历史交给 git）。写完顺手同步一次，标题与摘要跟着更新 */
+  // 写回 md，不留备份（版本历史交给 git）。写完顺手同步一次，标题与摘要跟着更新
   writeTodoDoc(id: string, content: string): { path: string; bytes: number } {
     const todo = this.todoById(id)
     if (!todo) throw new Error(`Todo not found: ${id}`)

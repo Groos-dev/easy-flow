@@ -1,4 +1,4 @@
-/** 待处理事件落盘：原子写、坏文件兜底、内容不变不重写 */
+// 待处理事件落盘：原子写、坏文件兜底、内容不变不重写
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'

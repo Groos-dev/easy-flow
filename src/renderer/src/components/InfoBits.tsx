@@ -89,8 +89,11 @@ export function OneLine(props: {
   )
 }
 
-/** 复制按钮：图标按钮，复制成功后短暂变勾。失败就什么也不说，别谎报"已复制"。
- *  showLabel 是给兜底路径用的——那里只有「复制提示词」这一个动作，光一个图标认不出来 */
+/**
+ * 复制按钮：图标按钮，复制成功后短暂变勾。
+ * 失败就什么也不说，别谎报“已复制”。
+ * showLabel 是给兜底路径用的——那里只有「复制提示词」这一个动作，光一个图标认不出来。
+ */
 export function CopyButton({ text, label, showLabel = false }: { text: string; label: string; showLabel?: boolean }) {
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)

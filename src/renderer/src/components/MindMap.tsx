@@ -4,7 +4,7 @@ import type { Requirement } from '../lib/types'
 import { STATUS_CLASS } from '../lib/labels'
 import { buildTree, layoutTree, type LaidNode } from '../lib/mindmap'
 
-/** 顶层分支的连线颜色，循环取用；刻意避开状态色，免得两种颜色打架 */
+// 顶层分支的连线颜色，循环取用；刻意避开状态色，免得两种颜色打架
 const BRANCH_COLORS = ['#a78bfa', '#f472b6', '#22d3ee', '#eab308', '#fb7185', '#2dd4bf']
 
 const MIN_ZOOM = 0.4
@@ -13,9 +13,9 @@ const FIT_MARGIN = 24
 
 interface Props {
   requirements: Requirement[]
-  /** 项目显示名，画在根节点上 */
+  // 项目显示名，画在根节点上
   projectName: string
-  /** 搜索命中集合；不传表示没在搜索。当前没有搜索入口，留给以后的搜索面板 */
+  // 搜索命中集合；不传表示没在搜索。当前没有搜索入口，留给以后的搜索面板
   hits?: Set<string> | null
   onOpen: (slug: string) => void
   onBack: () => void
@@ -77,7 +77,7 @@ export default function MindMap({ requirements, projectName, hits, onOpen, onBac
   const panRef = useRef<{ px: number; py: number; vx: number; vy: number } | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [size, setSize] = useState({ w: 0, h: 0 })
-  /** 画布位移与缩放；容器坐标，transform-origin 是左上角 */
+  // 画布位移与缩放；容器坐标，transform-origin 是左上角
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1 })
 
   const layout = useMemo(
@@ -118,7 +118,7 @@ export default function MindMap({ requirements, projectName, hits, onOpen, onBac
     fit()
   }, [fit, projectName])
 
-  /** 键盘缩放以画布中心为锚点，和滚轮同一个手感 */
+  // 键盘缩放以画布中心为锚点，和滚轮同一个手感
   const zoomBy = useCallback(
     (factor: number) => {
       setView((v) => {

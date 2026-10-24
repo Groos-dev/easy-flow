@@ -3,7 +3,7 @@
  * 详情页、mini 面板各用一部分，合在一起是因为同属一类，不是因为共享。
  */
 
-/** 信息浮窗图标：右侧栏面板，路径取自 Lucide 的 panel-right（ISC） */
+// 信息浮窗图标：右侧栏面板，路径取自 Lucide 的 panel-right（ISC）
 export function InfoIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -13,7 +13,7 @@ export function InfoIcon() {
   )
 }
 
-/** 复制图标：两个叠起来的方框 */
+// 复制图标：两个叠起来的方框
 export function CopyIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -23,7 +23,7 @@ export function CopyIcon() {
   )
 }
 
-/** 改绑图标：一支笔 */
+// 改绑图标：一支笔
 export function PencilIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
@@ -33,7 +33,7 @@ export function PencilIcon() {
   )
 }
 
-/** 恢复默认图标：回头的箭头 */
+// 恢复默认图标：回头的箭头
 export function ResetIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
@@ -43,7 +43,7 @@ export function ResetIcon() {
   )
 }
 
-/** 命令行图标：终端里的提示符 */
+// 命令行图标：终端里的提示符
 export function TerminalIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
@@ -64,7 +64,7 @@ const MODIFIER_MARKS: Record<string, string> = {
   '⇧': 'M12 19V5m-6 6 6-6 6 6',
 }
 
-/** 键帽里的那个符号：修饰键画成图标，其余键（字母、数字、Space）原样显示 */
+// 键帽里的那个符号：修饰键画成图标，其余键（字母、数字、Space）原样显示
 export function KeyGlyph({ mark }: { mark: string }) {
   const d = MODIFIER_MARKS[mark]
   if (!d) return <>{mark}</>
@@ -75,7 +75,7 @@ export function KeyGlyph({ mark }: { mark: string }) {
   )
 }
 
-/** 复制成功的短暂反馈：换成勾 */
+// 复制成功的短暂反馈：换成勾
 export function CheckIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -105,7 +105,7 @@ const AGENT_MARKS: Record<string, { d: string; outline?: boolean }> = {
   },
 }
 
-/** agent 图标。认不出的 agent 原样显示名字——空徽标比文字更难查 */
+// agent 图标。认不出的 agent 原样显示名字——空徽标比文字更难查
 export function AgentIcon({ agent, size = 12 }: { agent: string; size?: number }) {
   const mark = AGENT_MARKS[agent]
   if (!mark) return <>{agent}</>
@@ -187,7 +187,7 @@ export function SearchIcon({ size = 13 }: { size?: number }) {
 
 /* 下面四个是左侧栏的导航图标，路径取自 Lucide（ISC） */
 
-/** 图钉：把项目钉到左侧栏 */
+// 图钉：把项目钉到左侧栏
 export function PinIcon({ size = 13 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -197,7 +197,7 @@ export function PinIcon({ size = 13 }: { size?: number }) {
   )
 }
 
-/** 看板：三列 */
+// 看板：三列
 export function BoardIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -208,7 +208,7 @@ export function BoardIcon({ size = 16 }: { size?: number }) {
   )
 }
 
-/** 导图：节点与分支 */
+// 导图：节点与分支
 export function MapIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -221,7 +221,7 @@ export function MapIcon({ size = 16 }: { size?: number }) {
   )
 }
 
-/** 铃铛：agent 焦点——谁在等我 */
+// 铃铛：agent 焦点——谁在等我
 export function BellIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

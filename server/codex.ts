@@ -19,9 +19,9 @@ import { spawn, type ChildProcess } from 'node:child_process'
  */
 const VERSION = process.env.EASY_FLOW_VERSION ?? '0.0.0'
 
-/** 建 project / thread 这类单次调用的等待上限 */
+// 建 project / thread 这类单次调用的等待上限
 const CALL_TIMEOUT_MS = 60_000
-/** 一轮 review 的等待上限。这一轮是同步跑完的，给短了会误杀 */
+// 一轮 review 的等待上限。这一轮是同步跑完的，给短了会误杀
 const TURN_TIMEOUT_MS = 15 * 60_000
 
 interface Pending {
@@ -40,7 +40,7 @@ interface Waiter {
 
 type Params = Record<string, unknown>
 
-/** 从 JSON-RPC 结果里取字段；形状不对时给出能看懂的错误，而不是 undefined 满天飞 */
+// 从 JSON-RPC 结果里取字段；形状不对时给出能看懂的错误，而不是 undefined 满天飞
 function pick<T>(value: unknown, path: string[]): T {
   let cur: unknown = value
   for (const key of path) {
@@ -94,7 +94,7 @@ export class AppServer {
     return server
   }
 
-  /** 子进程没了：所有在等的调用一起失败，别让调用方挂到超时 */
+  // 子进程没了：所有在等的调用一起失败，别让调用方挂到超时
   private die(err: Error): void {
     if (this.dead) return
     this.dead = err
@@ -166,7 +166,7 @@ export class AppServer {
     this.child.stdin!.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`)
   }
 
-  /** 等一条通知；用于等某一轮结束 */
+  // 等一条通知；用于等某一轮结束
   waitFor(
     method: string,
     match: (params: Params) => boolean,
@@ -232,7 +232,7 @@ export async function latestThread(
   return null
 }
 
-/** 建一个 thread：cwd 定主工作区，runtimeWorkspaceRoots 把全部工作区带上 */
+// 建一个 thread：cwd 定主工作区，runtimeWorkspaceRoots 把全部工作区带上
 export async function startReviewThread(
   server: AppServer,
   projectId: string,
@@ -260,7 +260,7 @@ export async function resumeThread(
   await server.call('thread/resume', { threadId, cwd, runtimeWorkspaceRoots: roots })
 }
 
-/** 发一轮并等它跑完。跑完才返回，是为了让调用方在进程活着的时候把它跑完 */
+// 发一轮并等它跑完。跑完才返回，是为了让调用方在进程活着的时候把它跑完
 export async function sendPrompt(server: AppServer, threadId: string, prompt: string): Promise<void> {
   const done = server.waitFor('turn/completed', (params) => params.threadId === threadId)
   // turn/start 自己失败时这条等待要收掉：留着它，close() 时会变成未处理的拒绝把进程打崩

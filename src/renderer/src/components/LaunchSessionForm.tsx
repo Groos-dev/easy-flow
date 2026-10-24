@@ -37,13 +37,13 @@ export default function LaunchSessionForm({
   onAgentChange: (id: LaunchAgent) => void
   onLaunch: () => void
 }) {
-  /** 提示词平时折着：它只在「deeplink 没把提示词带过去」时才需要人看 */
+  // 提示词平时折着：它只在「deeplink 没把提示词带过去」时才需要人看
   const [promptOpen, setPromptOpen] = useState(false)
 
   const { available } = launchWorktreeSelection(worktrees, worktreeId)
-  const needsWorktree = launchNeedsWorktree(available)
-  const canLaunch = !!agent && (!needsWorktree || !!worktreeId) && !busy
   const picked = providers.find((p) => p.id === agent)
+  const needsWorktree = launchNeedsWorktree(available, picked?.requiresWorktree)
+  const canLaunch = !!agent && (!needsWorktree || !!worktreeId) && !busy
   const feedback = result ? launchResultFeedback(requirementId, result) : null
   const agentName = picked?.label ?? result?.agent ?? 'Agent'
 
@@ -75,10 +75,11 @@ export default function LaunchSessionForm({
               className={`agent-chip${p.id === agent ? ' on' : ''}`}
               data-info-row=""
               aria-pressed={p.id === agent}
+              aria-label={p.label}
+              title={p.label}
               onClick={() => onAgentChange(p.id)}
             >
-              <AgentIcon agent={p.id} />
-              {p.label}
+              <AgentIcon agent={p.id} size={14} />
             </button>
           ))}
         </div>
@@ -126,6 +127,12 @@ export default function LaunchSessionForm({
 
         {/* 正常不说「会发生什么」，按钮上写着；只有还没工作区时得给一条能往下走的路 */}
         {!needsWorktree && <code className="launch-hint">{worktreeCreationCommand(requirementId)}</code>}
+        {picked?.requiresWorktree && !available.length && (
+          <>
+            <p className="launch-hint">{picked?.label ?? '该 Agent'} 需要先有一个工作区：</p>
+            <code className="launch-hint">{worktreeCreationCommand(requirementId)}</code>
+          </>
+        )}
       </form>
 
       {requestError && (
@@ -133,6 +140,10 @@ export default function LaunchSessionForm({
           <span className="mark">!</span>
           启动请求失败：{requestError}
         </p>
+      )}
+
+      {feedback?.opened && result?.agent === 'cursor' && (
+        <p className="launch-hint">已在 Cursor 打开工作区；在弹窗里点 Create Chat，提示词已填好。</p>
       )}
 
       {/* 打开成功不说话：agent 应用已经弹出来了，那就是回执。
@@ -143,6 +154,7 @@ export default function LaunchSessionForm({
             <span className="mark">!</span>
             没能自动打开 {agentName}：{feedback.error || '未知错误'}
           </p>
+          {feedback.promptCopied && <p className="launch-hint">提示词已复制到剪贴板，到新会话里粘贴即可。</p>}
           <div className="launch-actions">
             <button
               className="launch-retry"

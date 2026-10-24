@@ -25,14 +25,14 @@ export default function MiniApp() {
   const [selectedKey, setSelectedKey] = useState('')
   const [expanded, setExpanded] = useState('')
   const [error, setError] = useState('')
-  /** 首份数据到手前画骨架 */
+  // 首份数据到手前画骨架
   const [ready, setReady] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const pointer = useRef({ x: -1, y: -1 })
   const syncedAt = useRef(0)
-  /** 卡片与动作行的节点：展开、键盘移动时滚进视野 */
+  // 卡片与动作行的节点：展开、键盘移动时滚进视野
   const rowRefs = useRef(new Map<string, HTMLElement>())
-  /** 只有键盘挪的选中才跟着滚，鼠标划过不让列表跳 */
+  // 只有键盘挪的选中才跟着滚，鼠标划过不让列表跳
   const keyMoved = useRef(false)
 
   const load = useCallback(async () => {
@@ -52,7 +52,7 @@ export default function MiniApp() {
     }
   }, [])
 
-  /** 先读库画骨架，再让服务端扫目录；两秒内重复呼出不重扫 */
+  // 先读库画骨架，再让服务端扫目录；两秒内重复呼出不重扫
   const refresh = useCallback(async () => {
     await load()
     if (Date.now() - syncedAt.current < 2000) return

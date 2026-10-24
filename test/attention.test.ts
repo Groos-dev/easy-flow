@@ -1,4 +1,4 @@
-/** 会话事件 → 通知 / dock 红点的纯逻辑回归 */
+// 会话事件 → 通知 / dock 红点的纯逻辑回归
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {

@@ -10,7 +10,7 @@ interface CodexGlobalState {
   }
 }
 
-/** 官方未读集合。读不到（文件不在、坏了、被锁）返回 null——调用方据此不降档 */
+// 官方未读集合。读不到（文件不在、坏了、被锁）返回 null——调用方据此不降档
 export function codexUnread(codexHome: string, sources: SourceTable): Set<string> | null {
   const path = join(codexHome, FILE)
   let mtimeMs: number

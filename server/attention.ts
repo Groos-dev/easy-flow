@@ -12,10 +12,10 @@ import type { EventState, SessionStatus } from './session-state.ts'
 
 export type AttentionState = EventState
 
-/** 角标与通知的急缓顺序，与「哪些状态算事件」是两件事 */
+// 角标与通知的急缓顺序，与「哪些状态算事件」是两件事
 const SEVERITY: readonly AttentionState[] = ['blocked', 'failed', 'done']
 
-/** 通知要跳回哪条需求。字段与服务端的 Requirement 对齐，只带用得上的 */
+// 通知要跳回哪条需求。字段与服务端的 Requirement 对齐，只带用得上的
 export interface AttentionRequirement {
   id: string
   title: string
@@ -26,36 +26,36 @@ export interface AttentionRequirement {
 export interface AttentionSession {
   agent: string
   session: string
-  /** agent 会话自己的标题；登记时由 agent 给，通知副标题用 */
+  // agent 会话自己的标题；登记时由 agent 给，通知副标题用
   sessionTitle: string
-  /** 打开这条会话的 deeplink；没有则为空串 */
+  // 打开这条会话的 deeplink；没有则为空串
   link: string
   requirement: AttentionRequirement
-  /** 通知层只需要这几项；hookEvent 用来识别 Interrupt 这类不该打扰的事件 */
+  // 通知层只需要这几项；hookEvent 用来识别 Interrupt 这类不该打扰的事件
   status: Pick<SessionStatus, 'state' | 'needsAction' | 'observedAt' | 'hookEvent'>
 }
 
 export interface AttentionEvent {
-  /** 身份键：同一会话同时只挂一个事件 */
+  // 身份键：同一会话同时只挂一个事件
   id: string
-  /** 推送键：身份 + 状态 + 时刻。重复轮询同一个观察不会重复推送 */
+  // 推送键：身份 + 状态 + 时刻。重复轮询同一个观察不会重复推送
   pushKey: string
   agent: string
   session: string
-  /** agent 会话标题；通知副标题拼在 agent 名后面 */
+  // agent 会话标题；通知副标题拼在 agent 名后面
   sessionTitle: string
   link: string
   requirement: AttentionRequirement
   state: AttentionState
   needsAction: string
   observedAt: number
-  /** hook 事件名；通知层用它识别 Interrupt 等不该打扰的事件 */
+  // hook 事件名；通知层用它识别 Interrupt 等不该打扰的事件
   hookEvent?: string
-  /** 第一次读到 unknown 的时刻；读回来就清掉，挂太久由 TTL 收掉 */
+  // 第一次读到 unknown 的时刻；读回来就清掉，挂太久由 TTL 收掉
   staleSince?: number
 }
 
-/** 一直读不到的会话挂多久就自动消账：agent 记录被删、应用卸载后不能永远占着红点 */
+// 一直读不到的会话挂多久就自动消账：agent 记录被删、应用卸载后不能永远占着红点
 export const UNKNOWN_TTL_MS = 24 * 60 * 60 * 1000
 
 /**
@@ -66,13 +66,13 @@ export const UNKNOWN_TTL_MS = 24 * 60 * 60 * 1000
 const EVENT_DEDUPE_WINDOW_MS = 10_000
 
 export interface AttentionDiff {
-  /** 当前仍然挂着的事件（含启动时恢复的） */
+  // 当前仍然挂着的事件（含启动时恢复的）
   outstanding: AttentionEvent[]
-  /** 本次新出现、需要推送的事件；启动第一轮永远是空（只对齐，不补炸） */
+  // 本次新出现、需要推送的事件；启动第一轮永远是空（只对齐，不补炸）
   added: AttentionEvent[]
-  /** 本次消账的事件 */
+  // 本次消账的事件
   cleared: AttentionEvent[]
-  /** 因为长期 unknown 被 TTL 收掉的事件（也属于消账，单独列出以便记日志） */
+  // 因为长期 unknown 被 TTL 收掉的事件（也属于消账，单独列出以便记日志）
   expired: AttentionEvent[]
 }
 
@@ -100,7 +100,7 @@ function toEvent(session: AttentionSession, state: AttentionState): AttentionEve
   }
 }
 
-/** 急的在前，同档按时刻新的在前 */
+// 急的在前，同档按时刻新的在前
 function sortEvents(events: Iterable<AttentionEvent>): AttentionEvent[] {
   return [...events].sort((a, b) => {
     const byState = SEVERITY.indexOf(a.state) - SEVERITY.indexOf(b.state)
@@ -112,7 +112,7 @@ function sortEvents(events: Iterable<AttentionEvent>): AttentionEvent[] {
 
 export class AttentionTracker {
   private current = new Map<string, AttentionEvent>()
-  /** 启动后的第一轮只对齐持久化状态，不推送停机期间堆下的事件 */
+  // 启动后的第一轮只对齐持久化状态，不推送停机期间堆下的事件
   private primed = false
 
   constructor(initial: readonly AttentionEvent[] = []) {
@@ -213,13 +213,13 @@ export interface AttentionNotification {
   title: string
   subtitle: string
   body: string
-  /** 全部是跑完时不出声；有卡住 / 失败时出声 */
+  // 全部是跑完时不出声；有卡住 / 失败时出声
   silent: boolean
   requirement: AttentionRequirement
   events: AttentionEvent[]
 }
 
-/** 通知标题只留一行：换行压成空格，超长截断加省略号 */
+// 通知标题只留一行：换行压成空格，超长截断加省略号
 const TITLE_MAX_CHARS = 14
 const SESSION_TITLE_MAX_CHARS = 18
 
@@ -233,7 +233,7 @@ function oneLineTitle(title: string): string {
   return oneLine(title, TITLE_MAX_CHARS)
 }
 
-/** 通知只报「谁、哪条需求」：副标题是 agent 名，不再写「这一轮跑完了」这类轮次描述 */
+// 通知只报「谁、哪条需求」：副标题是 agent 名，不再写「这一轮跑完了」这类轮次描述
 function agentTitles(group: readonly AttentionEvent[]): string {
   const labels = group.map((event) => {
     const agent = agentLabel(event.agent)
@@ -243,7 +243,7 @@ function agentTitles(group: readonly AttentionEvent[]): string {
   return [...new Set(labels)].sort().join('、')
 }
 
-/** 需要人回答的原话才进正文；多条时标上是谁在问 */
+// 需要人回答的原话才进正文；多条时标上是谁在问
 function questionBody(group: readonly AttentionEvent[]): string {
   const asked = group.filter((event) => event.state === 'blocked' && event.needsAction)
   return asked
@@ -278,7 +278,7 @@ export function groupAttentionNotifications(events: readonly AttentionEvent[]): 
   })
 }
 
-/** 持久化的形状：只存事件本身，标题等展示字段重启后由快照刷新 */
+// 持久化的形状：只存事件本身，标题等展示字段重启后由快照刷新
 export interface AttentionFile {
   events: AttentionEvent[]
 }

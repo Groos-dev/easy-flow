@@ -17,7 +17,7 @@ export function resolveKey(keys: string[], selected: string): string {
   return keys[0] ?? ''
 }
 
-/** 上下移动一格；已经在头 / 尾就留在原地 */
+// 上下移动一格；已经在头 / 尾就留在原地
 export function moveKey(keys: string[], selected: string, step: 1 | -1): string {
   const cur = resolveKey(keys, selected)
   return keys[keys.indexOf(cur) + step] ?? cur

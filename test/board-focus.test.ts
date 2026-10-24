@@ -1,4 +1,4 @@
-/** 看板键盘焦点的位置计算 */
+// 看板键盘焦点的位置计算
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {

@@ -16,7 +16,7 @@ import { createProjectDir, createRequirementDir } from '../server/convention.ts'
 
 const TMP = join(tmpdir(), `easy-flow-todo-loop-${process.pid}`)
 
-/** 一个干净的数据目录：项目 + 一条需求 + 若干待办 */
+// 一个干净的数据目录：项目 + 一条需求 + 若干待办
 function fixture(todos: Array<{ id: string; title: string }>): { dir: string; reqId: string } {
   rmSync(TMP, { recursive: true, force: true })
   mkdirSync(TMP, { recursive: true })
@@ -30,7 +30,7 @@ function fixture(todos: Array<{ id: string; title: string }>): { dir: string; re
   return { dir: TMP, reqId: req.id }
 }
 
-/** 在 fixture 的数据目录上跑一次真实 CLI：块拼装、批量动作这类行为只能从入口验 */
+// 在 fixture 的数据目录上跑一次真实 CLI：块拼装、批量动作这类行为只能从入口验
 function runCli(args: string[]): ReturnType<typeof spawnSync> {
   const cli = join(process.cwd(), 'server/cli.ts')
   writeFileSync(join(TMP, 'config.json'), JSON.stringify({ dataDir: TMP }), 'utf8')

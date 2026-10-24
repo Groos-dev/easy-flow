@@ -12,12 +12,12 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { unknownStatus, type SessionObservation, type SessionStatus, type ThreadState } from './session-state.ts'
 
-/** 小帮把库放在 `<root>/data/chengxiaobang.sqlite`，root 默认是 ~/.chengxiaobang */
+// 小帮把库放在 `<root>/data/chengxiaobang.sqlite`，root 默认是 ~/.chengxiaobang
 function chengxiaobangDbPath(root: string): string {
   return join(root, 'data', 'chengxiaobang.sqlite')
 }
 
-/** 只读打开；库没建或被锁时返回 null，调用方一律当「没有」 */
+// 只读打开；库没建或被锁时返回 null，调用方一律当「没有」
 function openDb(root: string): DatabaseSync | null {
   const path = chengxiaobangDbPath(root)
   if (!existsSync(path)) return null
@@ -38,7 +38,7 @@ interface Row {
   last_viewed_at?: unknown
 }
 
-/** 应用写的是 ISO 字符串；认不出就记 0，让带时刻的观察压过它 */
+// 应用写的是 ISO 字符串；认不出就记 0，让带时刻的观察压过它
 function at(value: unknown): number {
   if (typeof value !== 'string') return 0
   const ms = Date.parse(value)

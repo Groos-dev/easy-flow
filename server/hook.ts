@@ -19,15 +19,25 @@ import { type SessionStateStore, type SessionStatus, type ThreadState } from './
 import { actionOf, type SessionAction } from './action.ts'
 import { str } from './util.ts'
 
-/** hook 打过来的 JSON。字段随事件变，只挑我们认的；其余原样放着不关心 */
+// hook 打过来的 JSON。字段随事件变，只挑我们认的；其余原样放着不关心
 export interface HookPayload {
   hook_event_name?: unknown
   session_id?: unknown
+  // Cursor 的会话 id；与 session_id 同值，老事件里可能只有它
+  conversation_id?: unknown
   tool_name?: unknown
   tool_input?: unknown
   agent_id?: unknown
-  /** 程小帮的子 agent 标记；子 agent 事件不改主会话状态 */
+  // 程小帮的子 agent 标记；子 agent 事件不改主会话状态
   subagent?: unknown
+  // Cursor 的子 agent 标记
+  subagent_id?: unknown
+  parent_conversation_id?: unknown
+  is_background_agent?: unknown
+  // Cursor 的 stop / sessionEnd 结果
+  status?: unknown
+  reason?: unknown
+  error_message?: unknown
   [key: string]: unknown
 }
 
@@ -80,18 +90,36 @@ export function normalizeHookEvent(payload: HookPayload, observedAt = Date.now()
       return of('done')
     case 'StopFailure':
       return of('failed')
+    case 'sessionStart':
+      return of('idle')
+    case 'beforeSubmitPrompt':
+    case 'postToolUse':
+      return of('thinking')
+    case 'preToolUse':
+      return of('working')
+    case 'preCompact':
+      return of('sweeping')
+    case 'postToolUseFailure':
+      return of('failed')
+    case 'stop': {
+      const status = str(payload.status)
+      if (status === 'aborted') return of('blocked')
+      if (status === 'error') return of('failed')
+      return of('done')
+    }
     default:
       return null
   }
 }
 
 export function hookActionOf(payload: HookPayload, observedAt = Date.now()): SessionAction | null {
-  if (str(payload.hook_event_name) !== 'PreToolUse') return null
+  const event = str(payload.hook_event_name)
+  if (event !== 'PreToolUse' && event !== 'preToolUse') return null
   return actionOf(str(payload.tool_name), payload.tool_input, observedAt)
 }
 
 export interface RecordOptions {
-  /** 来源 agent。claude 的原生 http hook 带不了额外字段，所以缺省就是 claude */
+  // 来源 agent。claude 的原生 http hook 带不了额外字段，所以缺省就是 claude
   agent?: string
   at?: number
 }
@@ -107,13 +135,38 @@ export function recordHook(
   { agent = 'claude', at = Date.now() }: RecordOptions = {},
   store: SessionStateStore,
 ): SessionStatus | null {
-  const session = str(payload.session_id)
+  const session = str(payload.session_id) || str(payload.conversation_id)
   const event = str(payload.hook_event_name)
   if (!session || !event) return null
-  // 子 agent 的事件不改主会话状态（Claude 的 agent_id / 程小帮的 subagent 标记）
-  if (str(payload.agent_id) || payload.subagent === true) return null
-  // 下线：会话没了，抹掉这条，读的时候自然退回拉取那条路
-  if (event === 'SessionEnd') {
+  // 子 agent / 后台会话的事件不改主会话状态
+  if (
+    str(payload.agent_id) ||
+    payload.subagent === true ||
+    str(payload.subagent_id) ||
+    str(payload.parent_conversation_id) ||
+    payload.is_background_agent === true
+  ) {
+    return null
+  }
+  // 下线：会话没了，抹掉这条，读的时候自然退回拉取那条路。
+  // Cursor 的 aborted / error 还要留下最终状态，不能一抹了之。
+  if (event === 'SessionEnd' || event === 'sessionEnd') {
+    if (agent === 'cursor') {
+      const reason = str(payload.reason)
+      if (reason === 'aborted' || reason === 'error') {
+        const state: ThreadState = reason === 'aborted' ? 'blocked' : 'failed'
+        const error = str(payload.error_message)
+        const status: SessionStatus = {
+          state,
+          needsAction: '',
+          observedAt: at,
+          detail: `hook 事件：sessionEnd（${reason}${error ? `: ${error}` : ''}）`,
+          hookEvent: event,
+        }
+        store.put(agent, session, status)
+        return status
+      }
+    }
     store.remove(agent, session)
     return null
   }

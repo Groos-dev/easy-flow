@@ -9,10 +9,10 @@
  */
 import type { ChildStat, Requirement, Status } from './types'
 
-/** 看板的终态。子需求完成度按它算 */
+// 看板的终态。子需求完成度按它算
 export const DONE_STATUS: Status = '已完成'
 
-/** 父需求 id → 子需求完成度。没有子需求的需求不出现在表里 */
+// 父需求 id → 子需求完成度。没有子需求的需求不出现在表里
 export function childStatsOf(reqs: Requirement[]): Map<string, ChildStat> {
   const map = new Map<string, ChildStat>()
   for (const r of reqs) {
@@ -43,7 +43,7 @@ export function childrenOf(reqs: Requirement[]): Map<string, Requirement[]> {
   return map
 }
 
-/** 稳定的两分：未完成在前，已完成在后 */
+// 稳定的两分：未完成在前，已完成在后
 function byPending(a: Requirement, b: Requirement): number {
   return Number(a.status === DONE_STATUS) - Number(b.status === DONE_STATUS)
 }

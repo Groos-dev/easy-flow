@@ -1,4 +1,4 @@
-/** mini 面板落点与位置落盘的回归 */
+// mini 面板落点与位置落盘的回归
 import { test, describe, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -11,7 +11,7 @@ import {
 } from '../src/main/panel-position.ts'
 
 const SIZE = { width: 420, height: 480 }
-/** 主屏 + 右侧第二块屏 */
+// 主屏 + 右侧第二块屏
 const MAIN = { x: 0, y: 0, width: 1512, height: 950 }
 const SIDE = { x: 1512, y: 0, width: 1440, height: 900 }
 const CURSOR_ON_MAIN = { x: 700, y: 400 }
