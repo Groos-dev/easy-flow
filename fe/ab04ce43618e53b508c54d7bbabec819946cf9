@@ -1,0 +1,19 @@
+eslint.config.js
+  s_99c1a72ad0d8f8::t_c526792d015fb6 10-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "feab04ce43618e53b508c54d7bbabec819946cf9",
+  "prompts": {},
+  "sessions": {
+    "s_99c1a72ad0d8f8": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_lp6pzg5iyy9p",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
