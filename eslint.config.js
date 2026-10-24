@@ -7,13 +7,14 @@ import jsdoc from 'eslint-plugin-jsdoc'
 export default tseslint.config(
   {
     ignores: [
-      'node_modules/**',
-      'out/**',
-      'dist/**',
-      'dist-types/**',
-      '.tmp/**',
-      '.pet-src/**',
-      'src/renderer/public/pets/**',
+      '**/node_modules/**',
+      '**/out/**',
+      '**/dist/**',
+      '**/dist-types/**',
+      '**/.tmp/**',
+      '**/.claude/**',
+      '**/.pet-src/**',
+      '**/public/pets/**',
     ],
   },
   js.configs.recommended,
