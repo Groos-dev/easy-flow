@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import Card from '../src/renderer/src/components/Card.tsx'
-import { PetRow } from '../src/renderer/src/components/Pet.tsx'
+import Pet, { PetRow } from '../src/renderer/src/components/Pet.tsx'
 import type { Requirement, Session, SessionAction } from '../src/renderer/src/lib/types.ts'
 
 function sess(
@@ -165,6 +165,15 @@ describe('PetRow 渲染', () => {
   test('折叠卡上的程小帮换 cxb mini', () => {
     const html = render(createElement(PetRow, { sessions: [sess('chengxiaobang', 'working')], compact: true }))
     assert.match(html, /src="pets\/cxb-mini-typing\.webp"/)
+  })
+
+  test('减动效时 cxb / cursor 换静态首帧，小号仍用 mini', () => {
+    const cxb = render(createElement(Pet, { agent: 'chengxiaobang', state: 'working', still: true }))
+    assert.match(cxb, /src="pets\/cxb-working-still\.webp"/)
+    const cursor = render(createElement(Pet, { agent: 'cursor', state: 'idle', mood: 'sleeping', still: true }))
+    assert.match(cursor, /src="pets\/cursor-sleeping-still\.webp"/)
+    const mini = render(createElement(Pet, { agent: 'cursor', state: 'working', still: true, compact: true }))
+    assert.match(mini, /src="pets\/cursor-mini-typing\.webp"/)
   })
 
   test('折叠卡换 mini 素材', () => {

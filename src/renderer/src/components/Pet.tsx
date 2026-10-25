@@ -10,7 +10,8 @@ import type { Session } from '../lib/types'
 /**
  * 系统开了「减少动态效果」就换静态素材。
  * clawd 的自带动画封在 <img> 的 SVG 文档里，外部 CSS 够不进去，只能另出 *.still.svg；
- * cloudling 内联在页面里，由下面的 Cloudling 只放行首帧。都见 scripts/build-pets.mjs。
+ * cxb / cursor 是动画 WebP，换首帧的 *-still.webp；
+ * cloudling 内联在页面里，由下面的 Cloudling 只放行首帧。构建见 scripts/build-*-pet.*。
  */
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(
@@ -115,7 +116,8 @@ function useWake(agent: string, state: Pose, mood: IdleMood | undefined, enabled
 
 /**
  * 一档状态一只 pet：一个 agent 一套素材，动作与表情都来自素材本身
- * （clawd 是 SVG 自带的 @keyframes，cloudling 是素材里的脚本；宿主不再另写）。
+ * （clawd 是 SVG 自带的 @keyframes，cloudling 是素材里的脚本，cxb / cursor 是动作表合成的循环 WebP；
+ * 宿主不再另写）。
  *
  * 状态只从 props 进，组件本身不认识会话、数据源——可以拿假状态单独开发。
  * `event` 是「这是个没读过的事件」——事件边框与一次性动效靠它，读过就没了；

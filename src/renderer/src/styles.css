@@ -1507,141 +1507,16 @@ body {
   display: block;
 }
 
-/* 程小帮是位图素材：呼吸、摇摆、敲键盘这类轻动没有封在素材里，由宿主补一套。
-   都作用在 <img> 上；事件档的 pop / shake 也作用在 <img> 上，所以常驻动效用 :not(.event)
-   让位，同一条属性后写的覆盖先写的。 */
-.pet.cxb img {
-  animation: cxb-breathe 4s ease-in-out infinite;
-}
-
-.pet.cxb.s-thinking img {
-  animation: cxb-sway 4.6s ease-in-out infinite;
-}
-
-.pet.cxb.s-working img {
-  animation: cxb-bob 0.8s ease-in-out infinite;
-}
-
-.pet.cxb.s-sweeping img {
-  animation: cxb-lean 2.4s ease-in-out infinite;
-}
-
-.pet.cxb.s-blocked img {
-  animation: cxb-alert 1.6s ease-in-out infinite;
-}
-
-.pet.cxb.s-done:not(.event) img {
-  animation: cxb-hop 1.8s ease-in-out infinite;
-}
-
-.pet.cxb.s-failed:not(.event) img {
-  animation: cxb-shake 2s ease-in-out infinite;
-}
-
-/* 静止越久越困：越往后动得越慢、越小；睡着后只剩很浅的呼吸 */
-.pet.cxb img[src*="cxb-idle-yawn"] {
-  animation: cxb-breathe 5.2s ease-in-out infinite;
-}
-
-.pet.cxb img[src*="cxb-idle-doze"] {
-  animation: cxb-sway 6.4s ease-in-out infinite;
-}
-
-.pet.cxb img[src*="cxb-collapse-sleep"],
-.pet.cxb img[src*="cxb-sleeping"] {
-  animation: cxb-slow 6.8s ease-in-out infinite;
-}
-
-.pet.cxb img[src*="cxb-wake"] {
-  animation: cxb-wake 1.6s ease-in-out infinite;
-}
-
-/* Cursor 也是位图：复用同一套轻动，节奏略慢一点 */
-.pet.cursor img {
+/* 程小帮 / Cursor 的大图是生图动作表合成的循环 WebP，姿势与节奏都在素材里，宿主不再叠位移。
+   折叠卡的小号素材是静态首帧，留给宿主做一点呼吸。 */
+.pet.compact.cxb img,
+.pet.compact.cursor img {
   animation: cxb-breathe 4.4s ease-in-out infinite;
-}
-
-.pet.cursor.s-thinking img {
-  animation: cxb-sway 5s ease-in-out infinite;
-}
-
-.pet.cursor.s-working img {
-  animation: cxb-bob 0.9s ease-in-out infinite;
-}
-
-.pet.cursor.s-sweeping img {
-  animation: cxb-lean 2.6s ease-in-out infinite;
-}
-
-.pet.cursor.s-blocked img {
-  animation: cxb-alert 1.8s ease-in-out infinite;
-}
-
-.pet.cursor.s-done:not(.event) img {
-  animation: cxb-hop 2s ease-in-out infinite;
-}
-
-.pet.cursor.s-failed:not(.event) img {
-  animation: cxb-shake 2.2s ease-in-out infinite;
-}
-
-.pet.cursor img[src*="cursor-idle-yawn"] {
-  animation: cxb-breathe 5.6s ease-in-out infinite;
-}
-
-.pet.cursor img[src*="cursor-idle-doze"] {
-  animation: cxb-sway 6.8s ease-in-out infinite;
-}
-
-.pet.cursor img[src*="cursor-collapse-sleep"],
-.pet.cursor img[src*="cursor-sleeping"] {
-  animation: cxb-slow 7.2s ease-in-out infinite;
 }
 
 @keyframes cxb-breathe {
   0%, 100% { transform: translateY(0) scale(1, 1); }
   50% { transform: translateY(0.35px) scale(1.005, 0.99); }
-}
-
-@keyframes cxb-sway {
-  0%, 100% { transform: rotate(-0.8deg); }
-  50% { transform: rotate(0.8deg); }
-}
-
-@keyframes cxb-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-1px); }
-}
-
-@keyframes cxb-lean {
-  0%, 100% { transform: rotate(-1.4deg); }
-  50% { transform: rotate(1.4deg); }
-}
-
-@keyframes cxb-alert {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-}
-
-@keyframes cxb-hop {
-  0%, 100% { transform: translateY(0); }
-  45% { transform: translateY(-1.4px); }
-}
-
-@keyframes cxb-shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-0.8px); }
-  75% { transform: translateX(0.8px); }
-}
-
-@keyframes cxb-slow {
-  0%, 100% { transform: scale(1, 1); }
-  50% { transform: scale(1.006, 0.99); }
-}
-
-@keyframes cxb-wake {
-  0%, 100% { transform: scale(1, 1); }
-  50% { transform: scale(0.99, 1.02) translateY(-0.6px); }
 }
 
 /* 事件边框只给「没读过」的那三档：读过就没了，pet 本身留着（它是回到会话的入口） */

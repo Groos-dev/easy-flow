@@ -8,12 +8,10 @@
  * - Codex → cloudling 云宝，**内联成 `<svg>`**。它是脚本驱动的（素材自带 requestAnimationFrame 画眼睛、
  *   驱动呼吸），`<img>` 会禁脚本、只剩一朵静止的云；而 `<object>` 的文档画布在 Chromium 里恒为不透明，
  *   暗色卡片上就是一块白方块。内联的 SVG 是普通元素，背景天然透明、跟着主题走。
- * - 程小帮 → cxb 蓝卫衣短发女孩，走 `<img>`。素材是以应用图标为参考、用 gpt-image-2.5 生成的
- *   位图（12 档姿势 + 6 张 mini），构建见 scripts/build-cxb-pet.py。位图没有自带 CSS 动画，
- *   呼吸 / 抖动这类轻动由宿主在 styles.css 里按 `.pet.cxb` 补。
- * - Cursor → cursor 立方体小机器人（方块 logo + 指针箭头），走 `<img>`。素材是 gpt-image-2.5
- *   生成的透明底位图（11 档姿势 + 6 张 mini），构建见 scripts/build-cursor-pet.py。位图没有自带
- *   CSS 动画，宿主只做轻动。
+ * - 程小帮 → cxb 蓝卫衣短发女孩，走 `<img>`。每档是用 gpt-image-2.5 生成的三帧动作表切出的
+ *   循环动画 WebP（另出一份首帧静态版给减动效用），构建见 scripts/build-cxb-pet.py。
+ * - Cursor → cursor 立方体小机器人（方块 logo + 指针箭头），走 `<img>`。同样是生图动作表切出的
+ *   循环动画 WebP + 静态版，构建见 scripts/build-cursor-pet.py。
  *
  * 素材来源与许可见 src/renderer/public/pets/README.md；clawd / cloudling 的构建见
  * scripts/build-pets.mjs。
@@ -233,8 +231,8 @@ export function isWaking(
 
 /**
  * 相对路径，不带前导斜杠：dev 下按 vite 根解析，打包后按 index.html 同级目录解析，两边都能取到。
- * `still` 只对 `<img>` 且素材是 SVG 的主题有意义——自带动画封在文档里，只能换 `*.still.svg` 那份；
- * cxb 是位图，没有 `.still` 版本，减动效由宿主 CSS 统一停。
+ * `still` 换静态素材：clawd 自带动画封在 SVG 文档里，换 `*.still.svg`；cxb / cursor 是动画 WebP，
+ * 换首帧的 `*-still.webp`。折叠卡的小号素材本来就是静态的，不参与替换。
  * `wake` 只对带这一档素材的主题生效，且折叠卡不放——小号素材没有醒来这一张。
  */
 export function petArt(
@@ -245,7 +243,10 @@ export function petArt(
   const theme = themeFor(agent)
   const file = wake && !compact && theme.wake ? theme.wake : fileFor(theme, state, mood, compact)
   if (theme.inline) return { channel: 'inline', svg: CLOUDLING_SVG[file] }
-  return { channel: 'img', src: `pets/${still ? file.replace(/\.svg$/, '.still.svg') : file}` }
+  // 小号素材里只有 clawd 的 SVG 另出了 still 版；位图 mini 本来就是静态首帧
+  const swap = still && (!compact || file.endsWith('.svg'))
+  const src = swap ? file.replace(/\.svg$/, '.still.svg').replace(/\.webp$/, '-still.webp') : file
+  return { channel: 'img', src: `pets/${src}` }
 }
 
 const SCRIPT_RE = /<script[^>]*>([\s\S]*?)<\/script>/
