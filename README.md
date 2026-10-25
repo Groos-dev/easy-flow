@@ -25,7 +25,8 @@
 | `pnpm check` | 依次跑 lint / typecheck / dead-code / test；提交前用这个 |
 | `pnpm typecheck` | 两套 tsconfig：node 侧（server / main / preload / test）、web 侧（renderer） |
 | `pnpm dead-code` | 找仓库内无引用的导出符号；预留接口需人工判断 |
-| `pnpm build` | 三端产物打到 `out/` |
+| `pnpm build` | 三端产物打到 `out/`（含打包用的命令行 `out/cli/`） |
+| `pnpm run pack` | 打 macOS 应用（arm64）：产物在 `dist/mac-arm64/easy-flow.app`，拖进 `/Applications` 即可双击打开。注意 `pnpm pack` 是 pnpm 自己的 tarball 命令，别混 |
 | `pnpm cli <命令>` | 直接跑 CLI（`pnpm cli --help`）；装好的 shim 是 `easy-flow <命令>` |
 
 数据目录等偏好存在应用配置里，**换目录等于换一整套看板数据**（状态在库里，
@@ -99,6 +100,7 @@
 | `EASY_FLOW_CONFIG` | 配置文件路径。主进程与 MCP 注册都会带上它，好让各方开同一个库 |
 | `EASY_FLOW_USER_DATA` | 配置与默认数据目录的基目录（默认 macOS 的 Application Support） |
 | `EASY_FLOW_REPO_ROOTS` | 按仓库名找 checkout 的根目录，冒号分隔（默认 `~/repo`） |
+| `EASY_FLOW_RESOURCES` | 安装包里技能与命令行的真实目录（`Contents/Resources`）。主进程在已打包时注入；开发态不设，仍走仓库 |
 | `PORT` | 只给 `server/dev.ts` 用 |
 
 没设配置时，数据目录优先沿用已存在的 `~/requirements`（开发便利），否则落到

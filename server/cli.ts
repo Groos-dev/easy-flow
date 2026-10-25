@@ -59,7 +59,16 @@ import {
   worktreePathFor,
 } from './worktree.ts'
 
-const VERSION = createRequire(import.meta.url)('../package.json').version as string
+function cliVersion(): string {
+  if (process.env.EASY_FLOW_VERSION) return process.env.EASY_FLOW_VERSION
+  try {
+    return createRequire(import.meta.url)('../package.json').version as string
+  } catch {
+    return '0.0.0'
+  }
+}
+
+const VERSION = cliVersion()
 
 const config = readConfig()
 
