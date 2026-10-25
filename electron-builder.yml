@@ -1,0 +1,27 @@
+appId: dev.easyflow.app
+productName: easy-flow
+executableName: easy-flow
+asar: true
+npmRebuild: false
+directories:
+  output: dist
+files:
+  - package.json
+  - out/main/**
+  - out/preload/**
+  - out/renderer/**
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
+  - from: skill
+    to: skill
+  - from: out/cli
+    to: cli
+mac:
+  icon: resources/icon.png
+  category: public.app-category.productivity
+  identity: null
+  target:
+    - target: dir
+      arch:
+        - arm64

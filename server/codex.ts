@@ -9,7 +9,8 @@
  *   - 一条需求一个 project（`easy-flow:<reqId>`，review 与开发会话共用同一个），project id 不存库
  *   - thread/start 不继承 project 的 roots，必须显式传 runtimeWorkspaceRoots，否则多仓库落空
  */
-import { spawn, type ChildProcess } from 'node:child_process'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { promisify } from 'node:util'
 
 /**
  * 报给 app-server 的 clientInfo 版本。不能从 package.json 读：这个模块在 Electron 主进程里
@@ -18,6 +19,23 @@ import { spawn, type ChildProcess } from 'node:child_process'
  * 用 app.getVersion() 注入；CLI 场景拿不到就用占位值，这个字段只作标识、不影响协议。
  */
 const VERSION = process.env.EASY_FLOW_VERSION ?? '0.0.0'
+const run = promisify(execFile)
+
+// 每次现读：SHELL 是进程环境给的，测试也会换掉它
+function loginShell(): string {
+  return process.env.SHELL ?? '/bin/zsh'
+}
+
+// 从启动台打开的进程 PATH 里没有终端才有的目录，codex 的绝对路径要问登录 shell
+async function codexBinary(): Promise<string> {
+  try {
+    const found = (await run(loginShell(), ['-lc', 'command -v codex'])).stdout.trim().split('\n').pop()?.trim()
+    if (!found) throw new Error('empty')
+    return found
+  } catch (err) {
+    throw new Error('找不到 codex 命令：装好 Codex，或让它在 PATH 里再重跑', { cause: err })
+  }
+}
 
 // 建 project / thread 这类单次调用的等待上限
 const CALL_TIMEOUT_MS = 60_000
@@ -68,7 +86,13 @@ export class AppServer {
   }
 
   static async start(): Promise<AppServer> {
-    const child = spawn('codex', ['app-server', '--listen', 'stdio://'], { stdio: ['pipe', 'pipe', 'ignore'] })
+    // 光有绝对路径不够：codex 是 `#!/usr/bin/env node` 脚本，从启动台打开的进程 PATH 里没有 node。
+    // 经登录 shell exec 出去，PATH 才和终端里一致；exec 不换 pid，退出就是 codex 退出。
+    const child = spawn(
+      loginShell(),
+      ['-lc', 'exec "$0" "$@"', await codexBinary(), 'app-server', '--listen', 'stdio://'],
+      { stdio: ['pipe', 'pipe', 'ignore'] },
+    )
     const server = new AppServer(child)
     try {
       await new Promise<void>((resolve, reject) => {

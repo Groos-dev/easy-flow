@@ -28,6 +28,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
+import { APP_BINARY, packagedResources } from './app-paths.ts'
 import { configPath } from './config.ts'
 
 const run = promisify(execFile)
@@ -76,8 +77,11 @@ function upfind(...rel: string[]): string {
  */
 const SKILLS = ['easy-flow', 'todo'] as const
 
-// 仓库里的 skill 根目录（<repo>/skill）：找到任一 skill 的 SKILL.md 再往上退两级
+// 仓库里的 skill 根目录（<repo>/skill）：找到任一 skill 的 SKILL.md 再往上退两级。
+// 安装包里改读 Contents/Resources/skill，不往上爬——归档里若还留着一份会先被命中。
 function skillRoot(): string {
+  const resources = packagedResources()
+  if (resources) return join(resources, 'skill')
   return dirname(dirname(upfind('skill', SKILLS[0], 'SKILL.md')))
 }
 
@@ -87,6 +91,8 @@ function skillSource(name: string): string {
 }
 
 function cliEntry(): string {
+  const resources = packagedResources()
+  if (resources) return join(resources, 'cli', 'index.mjs')
   return upfind('server', 'cli.ts')
 }
 
@@ -191,10 +197,20 @@ function shq(text: string): string {
   return `'${text.replaceAll("'", "'\\''")}'`
 }
 
-function shimScript(node: string, cli: string): string {
+function shimScript(node: string, cli: string, resources: string | null): string {
+  const config = shq(configPath())
+  if (resources) {
+    const bin = join(resources, '..', 'MacOS', APP_BINARY)
+    return `#!/bin/sh
+# easy-flow CLI (installed by the easy-flow app; re-run Install in settings to refresh)
+export EASY_FLOW_RESOURCES=${shq(resources)}
+export ELECTRON_RUN_AS_NODE=1
+EASY_FLOW_CONFIG=${config} exec ${shq(bin)} ${shq(cli)} "$@"
+`
+  }
   return `#!/bin/sh
 # easy-flow CLI (installed by the easy-flow app; re-run Install in settings to refresh)
-EASY_FLOW_CONFIG=${shq(configPath())} exec ${shq(node)} ${shq(cli)} "$@"
+EASY_FLOW_CONFIG=${config} exec ${shq(node)} ${shq(cli)} "$@"
 `
 }
 
@@ -325,19 +341,24 @@ async function removeLegacyMcp(): Promise<string[]> {
  * 结果只回一句结论与没装上的那几步，供设置页直接显示。
  */
 export async function installSkill(): Promise<InstallOutcome> {
+  const resources = packagedResources()
   const cli = cliEntry()
 
-  const node = await nodeInfo()
-  if (!node) throw new Error('Cannot find node from a login shell; make sure it is installed and on PATH')
-  if (nodeTooOld(node.version)) {
-    throw new Error(`node ${node.version} is too old: running .ts directly needs Node >= 22.18`)
+  let nodePath = ''
+  if (!resources) {
+    const node = await nodeInfo()
+    if (!node) throw new Error('Cannot find node from a login shell; make sure it is installed and on PATH')
+    if (nodeTooOld(node.version)) {
+      throw new Error(`node ${node.version} is too old: running .ts directly needs Node >= 22.18`)
+    }
+    nodePath = node.path
   }
 
   const failed: string[] = []
 
   const shim = shimPath()
   mkdirSync(dirname(shim), { recursive: true })
-  writeFileSync(shim, shimScript(node.path, cli), { mode: 0o755 })
+  writeFileSync(shim, shimScript(nodePath, cli, resources), { mode: 0o755 })
 
   // 一个 skill 装不上不该拖垮其余的：目标位置被用户自己的真目录占着是常见情况
   // （比如 todo skill 原先手写在 ~/.agents/skills/todo），报出来让人自己处置

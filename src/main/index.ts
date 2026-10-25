@@ -10,9 +10,10 @@ import { externalOpenArgs } from './open-links.ts'
 import { placePanel, readPanelPosition, writePanelPosition } from './panel-position.ts'
 import { createAttentionService, type AttentionService } from './attention.ts'
 import { isNotificationMode } from '../shared/notification-mode.ts'
+import { iconFile } from '../../server/app-paths.ts'
 
-// 图标放在仓库根的 resources/（electron-vite 的约定），运行时从 out/main 往上两级
-const ICON = join(__dirname, '../../resources/icon.png')
+// 开发态 resourcesPath 是 Electron 自带目录。安装包里通知要读归档外的 png。
+const ICON = iconFile(app.isPackaged, process.resourcesPath, __dirname)
 
 let win: BrowserWindow | null = null
 // mini 面板窗（见下方 mini 面板段）
@@ -444,6 +445,7 @@ async function boot(): Promise<void> {
   process.env.EASY_FLOW_CONFIG = join(app.getPath('userData'), 'config.json')
   // server 侧读不到 package.json（被单独打包成 chunk），版本号由这里注入
   process.env.EASY_FLOW_VERSION = app.getVersion()
+  if (app.isPackaged) process.env.EASY_FLOW_RESOURCES = process.resourcesPath
   const { startBoardServer, DEFAULT_PORT } = await import('../../server/index.ts')
 
   registerIpc()
