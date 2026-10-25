@@ -1,0 +1,68 @@
+test/cli-version.test.ts
+  s_fa3b9e1a801293::t_24b840a831500d 1-7,9-10,12-13,15-21
+  s_fa3b9e1a801293::t_e4477604e90fa0 11
+  s_fa3b9e1a801293::t_e3694b84c3f6dc 8
+  s_fa3b9e1a801293::t_4d06667c1f7d65 14
+README.md
+  s_20b791c0a49f46::t_db979bd7c9fa09 28-29
+  s_20b791c0a49f46::t_a4638af9b2cdd6 103
+vite.cli.config.ts
+  s_fa3b9e1a801293::t_53bf397a88fcf3 1-27
+server/cli.ts
+  s_fa3b9e1a801293::t_2510cc89fd22ac 62-71
+server/skill-install.ts
+  s_fa3b9e1a801293::t_6adada5df81bfc 80-81,83-84
+  s_fa3b9e1a801293::t_fd112dbc9ad3fb 95
+  s_fa3b9e1a801293::t_e5a8fc42e39327 94,200-210,213
+  s_fa3b9e1a801293::t_185e65ad7eda5d 31
+test/package-paths.test.ts
+  s_fa3b9e1a801293::t_32b7e05272ebb1 15
+  s_fa3b9e1a801293::t_bbea6a51d52949 9
+  s_fa3b9e1a801293::t_9d140021cb3eb5 45
+  s_fa3b9e1a801293::t_0391470016eb9e 1-8,10-14,16-44,46-52,54,57-78,80-82,84-85,98-106,108-115
+  s_fa3b9e1a801293::t_5070ce0aa36c42 53
+  s_20b791c0a49f46::t_897820e4d1c0b8 79,83,88-97
+  s_fa3b9e1a801293::t_4ad9e45a7091da 86-87
+  s_fa3b9e1a801293::t_9ac8237846c174 55-56
+  s_20b791c0a49f46::t_64656b02d4d650 107
+server/codex.ts
+  s_20b791c0a49f46::t_be8bf5358f0eac 89-91,93-95
+  s_20b791c0a49f46::t_8f5b62dfefbc3e 29,32
+  s_20b791c0a49f46::t_4d144179cf3122 24-28
+  s_fa3b9e1a801293::t_7d860e2f575f66 12-13,22-23,31,33-38
+  s_20b791c0a49f46::t_eae6a4b165c8a2 92
+  s_fa3b9e1a801293::t_b3bcc134890365 30
+package.json
+  s_fa3b9e1a801293::t_187f610198c270 13-14
+electron-builder.yml
+  s_fa3b9e1a801293::t_60f5bc5fcc4fc2 1-27
+pnpm-workspace.yaml
+  s_fa3b9e1a801293::t_f248bbda0ea584 3
+server/app-paths.ts
+  s_fa3b9e1a801293::t_000e3ac2602208 1-21,23-26,28
+  s_fa3b9e1a801293::t_6b5af49f885e04 22,27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "172e2f1c8cd9dba4be4d88a6121c493505530824",
+  "prompts": {},
+  "sessions": {
+    "s_20b791c0a49f46": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_eqkprqmurj9l",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    },
+    "s_fa3b9e1a801293": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "74f3f680-bb3e-4b4d-80d9-6cfa32a7a5ec",
+        "model": "grok-4.7"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
