@@ -3271,7 +3271,8 @@ a.sess,
   gap: 8px;
 }
 
-/* agent：两三个可点的标签，比下拉少一次交互 */
+/* agent：两三个可点的标签，比下拉少一次交互。
+   整排是一个焦点块：j/k 只停一次，h/l 在块内换选中项 */
 .agent-chips {
   display: flex;
   gap: 6px;
@@ -3648,6 +3649,11 @@ code.launch-hint {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
   border-radius: 5px;
+}
+
+/* agent 整排是单选块而不是一行：外框会跟选中的那枚图标打架，焦点只由图标自己的边框表达 */
+.info-panel .launch-form .agent-chips:focus-visible {
+  outline: none;
 }
 
 .shortcut-list {

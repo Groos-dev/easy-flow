@@ -35,16 +35,15 @@ export default function LaunchSession({
     if (openSignal > 0) setOpen(true)
   }, [openSignal])
 
-  // 展开后把焦点送进表单；provider 未到时先落容器，到位后落 agent
+  // 展开后把焦点送进表单；provider 未到时先落容器，到位后落 agent 那一排
   useEffect(() => {
     if (!open) return
     const root = formRef.current
     if (!root) return
     const active = document.activeElement as HTMLElement | null
     if (active && active !== root && root.contains(active)) return
-    const chip = root.querySelector<HTMLElement>('.agent-chip[aria-pressed="true"]')
-      ?? root.querySelector<HTMLElement>('.agent-chip')
-    ;(chip ?? root).focus()
+    const chips = root.querySelector<HTMLElement>('.agent-chips')
+    ;(chips ?? root).focus()
   }, [open, openSignal, providersLoaded])
 
   // 收起后焦点回到入口；用 effect，后台标签页里 rAF 会被节流

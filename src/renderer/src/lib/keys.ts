@@ -9,6 +9,7 @@ export type KeyContext =
   | 'next'
   | 'detail'
   | 'info'
+  | 'launch'
   | 'search'
   | 'mini'
   | 'map'
@@ -33,6 +34,7 @@ export const CONTEXT_LABEL: Record<KeyContext, string> = {
   next: '下一步',
   detail: '详情页',
   info: '信息浮窗',
+  launch: '新建会话',
   search: '搜索面板',
   mini: 'mini 面板',
   map: '导图',
@@ -46,6 +48,7 @@ export const CONTEXT_ORDER: KeyContext[] = [
   'next',
   'detail',
   'info',
+  'launch',
   'search',
   'mini',
   'map',
@@ -112,6 +115,12 @@ export const SHORTCUTS: ShortcutDef[] = [
   // ------------------------------------------------------------ 信息浮窗
   { id: 'info.next', context: 'info', keys: ['J', 'ArrowDown'], label: '下一项' },
   { id: 'info.prev', context: 'info', keys: ['K', 'ArrowUp'], label: '上一项' },
+
+  // ------------------------------------------------------------ 新建会话（浮窗里的表单）
+  { id: 'launch.agent-prev', context: 'launch', keys: ['H', 'ArrowLeft'], label: '上一个 agent' },
+  { id: 'launch.agent-next', context: 'launch', keys: ['L', 'ArrowRight'], label: '下一个 agent' },
+  { id: 'launch.row-prev', context: 'launch', keys: ['K', 'ArrowUp'], label: '上一行（工作区 / agent）' },
+  { id: 'launch.row-next', context: 'launch', keys: ['J', 'ArrowDown'], label: '下一行（agent / 工作区 / 启动）' },
 
   // ------------------------------------------------------------ 搜索面板
   { id: 'search.next', context: 'search', keys: ['ArrowDown'], label: '下一条' },

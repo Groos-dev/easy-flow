@@ -27,6 +27,34 @@ export function worktreeCreationCommand(requirementId: string): string {
   return `easy-flow wt new ${requirementId} --repo <仓库> --branch feature-<需求 slug>`
 }
 
+export type LaunchRow = { kind: 'agent' } | { kind: 'worktree'; id: string } | { kind: 'launch' }
+
+/**
+ * 新建会话表单里上下走的那一列：agent 整排占一行，工作区一档一行，启动按钮殿后。
+ * 唯一工作区只是说明文字，不参与；禁用的启动按钮也不占位。
+ */
+export function launchRows(available: Worktree[], canLaunch: boolean): LaunchRow[] {
+  const rows: LaunchRow[] = [{ kind: 'agent' }]
+  if (available.length > 1) {
+    for (const w of available) rows.push({ kind: 'worktree', id: w.id })
+  }
+  if (canLaunch) rows.push({ kind: 'launch' })
+  return rows
+}
+
+/**
+ * 上下移一行。从 agent 块往下落在当前选中的工作区，没选就落第一行；两端停住。
+ */
+export function stepLaunchRow(rows: LaunchRow[], at: number, dir: 1 | -1, worktreeId: string): number {
+  if (at < 0) return 0
+  if (dir < 0) return Math.max(at - 1, 0)
+  if (at === 0) {
+    const picked = rows.findIndex((row) => row.kind === 'worktree' && row.id === worktreeId)
+    return picked > 0 ? picked : Math.min(1, rows.length - 1)
+  }
+  return Math.min(at + 1, rows.length - 1)
+}
+
 /**
  * 结果态要摆什么。文案不在这里拼——「在哪个 agent 里打开」只有组件知道（agent 显示名在 labels.ts），
  * 这里只回答「到底打开没有、失败原因是什么、兜底要给什么」。

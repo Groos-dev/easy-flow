@@ -1,7 +1,15 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { CopyButton } from './InfoBits'
 import { AgentIcon } from './icons'
-import { launchNeedsWorktree, launchResultFeedback, launchWorktreeSelection, worktreeCreationCommand } from '../lib/launch'
+import { isComposing, isEditableTarget, shortcut } from '../lib/keys'
+import {
+  launchNeedsWorktree,
+  launchResultFeedback,
+  launchRows,
+  launchWorktreeSelection,
+  stepLaunchRow,
+  worktreeCreationCommand,
+} from '../lib/launch'
 import type { LaunchAgent, LaunchProviderInfo, LaunchResult, Worktree } from '../lib/types'
 
 /**
@@ -39,6 +47,9 @@ export default function LaunchSessionForm({
 }) {
   // 提示词平时折着：它只在「deeplink 没把提示词带过去」时才需要人看
   const [promptOpen, setPromptOpen] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
+  // agent 整排放焦点，h/l 在其中换选中项
+  const chipsRef = useRef<HTMLDivElement>(null)
 
   const { available } = launchWorktreeSelection(worktrees, worktreeId)
   const picked = providers.find((p) => p.id === agent)
@@ -46,6 +57,50 @@ export default function LaunchSessionForm({
   const canLaunch = !!agent && (!needsWorktree || !!worktreeId) && !busy
   const feedback = result ? launchResultFeedback(requirementId, result) : null
   const agentName = picked?.label ?? result?.agent ?? 'Agent'
+
+  function stepAgent(dir: 1 | -1) {
+    if (providers.length < 2) return
+    const at = providers.findIndex((p) => p.id === agent)
+    const index = at < 0 ? 0 : (at + dir + providers.length) % providers.length
+    onAgentChange(providers[index].id)
+    chipsRef.current?.focus()
+  }
+
+  function stepRow(dir: 1 | -1) {
+    const root = formRef.current
+    if (!root) return
+    const rows = launchRows(available, canLaunch)
+    const elements = [
+      chipsRef.current,
+      ...(available.length > 1 ? Array.from(root.querySelectorAll<HTMLElement>('.wt-option')) : []),
+      ...(canLaunch ? [root.querySelector<HTMLElement>('.launch-go')] : []),
+    ].filter((el): el is HTMLElement => !!el)
+    const at = elements.indexOf(document.activeElement as HTMLElement)
+    const next = stepLaunchRow(rows, at, dir, worktreeId)
+    const target = elements[next]
+    if (!target) return
+    if (rows[next].kind === 'worktree') onWorktreeChange(rows[next].id)
+    target.focus()
+    target.scrollIntoView({ block: 'nearest' })
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLFormElement>) {
+    if (isComposing(e) || isEditableTarget(e.target)) return
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
+    const inAgents = !!chipsRef.current && chipsRef.current.contains(e.target as Node)
+    if (inAgents && (shortcut(e, 'launch.agent-prev') || shortcut(e, 'launch.agent-next'))) {
+      e.preventDefault()
+      e.stopPropagation()
+      stepAgent(shortcut(e, 'launch.agent-prev') ? -1 : 1)
+      return
+    }
+    if (shortcut(e, 'launch.row-prev') || shortcut(e, 'launch.row-next')) {
+      // 表单里的上下键归这里，浮窗那套线性 j/k 不再挪一次
+      e.preventDefault()
+      e.stopPropagation()
+      stepRow(shortcut(e, 'launch.row-prev') ? -1 : 1)
+    }
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -66,18 +121,29 @@ export default function LaunchSessionForm({
 
   return (
     <div className="launch-form">
-      <form onSubmit={submit}>
-        <div className="agent-chips">
+      <form ref={formRef} onSubmit={submit} onKeyDown={onKeyDown}>
+        <div
+          className="agent-chips"
+          ref={chipsRef}
+          role="radiogroup"
+          aria-label="用哪个 Agent 开始"
+          data-info-row=""
+          tabIndex={0}
+        >
           {providers.map((p) => (
             <button
               key={p.id}
               type="button"
               className={`agent-chip${p.id === agent ? ' on' : ''}`}
-              data-info-row=""
-              aria-pressed={p.id === agent}
+              role="radio"
+              aria-checked={p.id === agent}
               aria-label={p.label}
               title={p.label}
-              onClick={() => onAgentChange(p.id)}
+              tabIndex={-1}
+              onClick={() => {
+                onAgentChange(p.id)
+                chipsRef.current?.focus()
+              }}
             >
               <AgentIcon agent={p.id} size={14} />
             </button>
