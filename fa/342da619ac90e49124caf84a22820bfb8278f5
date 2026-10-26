@@ -1,0 +1,28 @@
+.gitignore
+  s_21b81fe7cd7efc::t_6a5895d3db1856 13-15
+test/core.test.ts
+  s_21b81fe7cd7efc::t_e1c66a8344aa93 2213-2216
+  s_21b81fe7cd7efc::t_bff45f9ce6c2a7 1590
+  s_21b81fe7cd7efc::t_f7a136ddb1259b 1513-1547
+server/launch-codex.ts
+  s_21b81fe7cd7efc::t_e29ed666f8c5eb 33-34
+  s_21b81fe7cd7efc::t_2fd76cf6ca8663 4
+server/codex.ts
+  s_21b81fe7cd7efc::t_4a1a5e856785f6 94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "fa342da619ac90e49124caf84a22820bfb8278f5",
+  "prompts": {},
+  "sessions": {
+    "s_21b81fe7cd7efc": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_savvmiok1n1r",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
