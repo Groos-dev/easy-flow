@@ -1,0 +1,43 @@
+src/renderer/src/components/LaunchSession.tsx
+  s_094a185b0dd707::t_dbb60051e3f698 38,45-46
+src/renderer/src/components/LaunchSessionForm.tsx
+  s_094a185b0dd707::t_2424cdcbc4165f 1,4-12
+  s_094a185b0dd707::t_c1ce423b31d246 124
+  s_094a185b0dd707::t_19cb1e31baca66 51-52,61,63-86,88-103
+  s_094a185b0dd707::t_5c9d464ae7526c 125-132,138-139,142-146
+  s_094a185b0dd707::t_e0d3226f7b5d76 50
+  s_094a185b0dd707::t_3a5b7c84762c4b 87
+  s_094a185b0dd707::t_9d4b55f40f900e 62
+src/renderer/src/lib/keys.ts
+  s_094a185b0dd707::t_0de8c0d650d984 37
+  s_094a185b0dd707::t_6c4bcd5d795afa 51
+  s_094a185b0dd707::t_0fcf888f714904 119-124
+  s_094a185b0dd707::t_2b44ff4133f01c 12
+src/renderer/src/styles.css
+  s_094a185b0dd707::t_30dfc0e36b4fe0 3275
+  s_094a185b0dd707::t_ae68d21244189a 3654-3658
+  s_094a185b0dd707::t_83bd57fedd1897 3274
+test/launch-keyboard.test.ts
+  s_094a185b0dd707::t_d0cd558f0c94df 8
+  s_094a185b0dd707::t_dbc1060b851156 79,86-87,89,93-117
+  s_094a185b0dd707::t_630b16374c2489 139-163
+src/renderer/src/lib/launch.ts
+  s_094a185b0dd707::t_4cfe5634d3a819 30-44,48-57
+  s_094a185b0dd707::t_e1c0e91eaf0bc0 45-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "d55c50294fc36612c5a8a705347c415a1932a66a",
+  "prompts": {},
+  "sessions": {
+    "s_094a185b0dd707": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_tczeea5sdbt8",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
