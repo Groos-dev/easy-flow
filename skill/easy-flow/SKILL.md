@@ -42,9 +42,6 @@ description: >-
 - 收尾时点：改动提交或开出 MR 之后——先 `easy-flow req set <req-…> --status Review`，有 MR 就 `easy-flow req link <req-…> --mr <url>`（多条 MR 用 `--mr "<别名>=<url>"` 区分，看板只显示别名）
 - **父需求不跟着子需求自动收尾**：子需求全完成时 `req set` 与 `context` 会提一句，但收不收自己判——
   父需求自己可能还有整体验收，替它改状态等于把它谎报成完成
-- 涉及多个仓库时，收尾顺手建一个 Codex review 会话：`easy-flow req session review <req-…>`。
-  它把这条需求名下全部工作区收进一个 Codex project，发一轮评审提示词，并挂到需求上——
-  人在看板「会话」块点一下就能在 Codex 里按仓库逐个看 diff。这一轮是跑完才返回的，别让工具超时掐掉它
 
 ## 什么时候才找人
 
@@ -143,7 +140,6 @@ description: >-
 | 改状态 / 优先级 | `easy-flow req set <req-…> [--status 澄清\|执行中\|Review\|已完成] [--priority p0..p3]` |
 | 追加链接 | `easy-flow req link <req-…> [--feishu <url>] [--mr <url>\|<别名>=<url>>] [--ext "<描述>=<url>"]` |
 | 登记自己的会话 | `easy-flow req session add <req-…> --agent <claude\|codex\|cursor> [--title "<在做什么>"]` |
-| 建 Codex review 会话 | `easy-flow req session review <req-…> [--handoff] [--prompt <文本>]` |
 | 看待办 / 删会话 | `easy-flow req session ls [<req-…>]` / `easy-flow req session rm <req-…> --agent <…> --id <会话 id>` |
 | 开工作区 | `easy-flow wt new <req-…> --repo <仓库> --branch <分支> [--short <短名>]` |
 | 删工作区 | `easy-flow wt rm <wt-…> [--force]` |

@@ -21,7 +21,7 @@ import {
   type RankableSession,
 } from '../server/next-up.ts'
 import { createBoardApp } from '../server/index.ts'
-import type { Requirement, Session, SessionAgent, SessionRole } from '../server/db.ts'
+import type { Requirement, Session, SessionAgent } from '../server/db.ts'
 import type { SessionStatus, ThreadState } from '../server/session-state.ts'
 
 // 夹具目录按 cwd 派生：多个 worktree 并行跑测试时互不干扰
@@ -62,7 +62,6 @@ function sess(
     requirementId,
     agent,
     session: `${agent}-1`,
-    role: 'dev' as SessionRole,
     title: '',
     cwd: '',
     link: opts.link ?? `app://${agent}/1`,

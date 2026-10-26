@@ -1449,40 +1449,6 @@ describe('数据层 · 会话', () => {
     db.close()
   })
 
-  test('会话角色：缺省 dev，review 会话能单独认出来', () => {
-    const d = fresh(() => seedReq(TMP))
-    const db = new BoardDatabase(d)
-    db.syncProjects()
-
-    assert.equal(
-      db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: 'th-dev' }).role,
-      'dev',
-      '开工登记的会话缺省是 dev',
-    )
-    assert.equal(
-      db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: 'th-review', role: 'review' }).role,
-      'review',
-    )
-    assert.deepEqual(
-      db.listSessions('req-alpha').filter((s) => s.role === 'review').map((s) => s.session),
-      ['th-review'],
-      '复用 review 会话靠这一列认人',
-    )
-
-    // 同一个会话换角色登记是刷新，不会长出第二条
-    assert.equal(
-      db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: 'th-dev', role: 'review' }).role,
-      'review',
-    )
-    assert.equal(db.listSessions('req-alpha').length, 2)
-
-    assert.throws(
-      () => db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: 'x', role: 'nope' as never }),
-      /Unknown session role/,
-    )
-    db.close()
-  })
-
   test('同一个会话改挂到别的需求：还是一条记录，跟着走', () => {
     const d = fresh(() => {
       seedReq(TMP, 'alpha')
@@ -1544,6 +1510,41 @@ describe('数据层 · 会话', () => {
     assert.equal(db.listSessions('req-beta').length, 1)
     db.close()
   })
+
+  test('老库的 role 列在开库时删掉，历史会话行原样保留', () => {
+    const d = fresh(() => seedReq(TMP))
+    const old = new DatabaseSync(join(d, 'easy-flow.db'))
+    old.exec(`CREATE TABLE session (
+      req_id   TEXT NOT NULL,
+      agent    TEXT NOT NULL,
+      session  TEXT NOT NULL,
+      role     TEXT NOT NULL DEFAULT 'dev',
+      title    TEXT,
+      cwd      TEXT,
+      link     TEXT,
+      created  TEXT,
+      updated  TEXT,
+      PRIMARY KEY (agent, session)
+    )`)
+    old.prepare('INSERT INTO session (req_id, agent, session, role, title) VALUES (?, ?, ?, ?, ?)').run(
+      'req-alpha',
+      'codex',
+      'th-old',
+      'review',
+      '旧评审会话',
+    )
+    old.close()
+
+    const db = new BoardDatabase(d)
+    db.syncProjects()
+    assert.equal(db.listSessions('req-alpha')[0]?.title, '旧评审会话', '会话行不能跟着列一起没')
+    db.close()
+
+    const check = new DatabaseSync(join(d, 'easy-flow.db'))
+    const cols = check.prepare('PRAGMA table_info(session)').all() as Array<{ name: string }>
+    check.close()
+    assert.ok(!cols.some((c) => c.name === 'role'), 'role 列已随迁移删除')
+  })
 })
 
 describe('CLI 层', () => {
@@ -1586,7 +1587,7 @@ describe('CLI 层', () => {
     }
     const reqHelp = cliOk(configFile, ['req', '--help'])
     for (const c of ['req new', 'req set', 'req link', 'req session']) assert.ok(reqHelp.includes(c), reqHelp)
-    assert.ok(cliOk(configFile, ['req', 'session', 'review', '--help']).includes('--handoff'), 'review 的用法要能看到 --handoff')
+    assert.doesNotMatch(reqHelp, /session review/, '评审会话已下掉，别再长出这个子命令')
     const wtHelp = cliOk(configFile, ['wt', '--help'])
     for (const c of ['wt new', 'wt rm']) assert.ok(wtHelp.includes(c), wtHelp)
     const todoHelp = cliOk(configFile, ['todo', '--help'])
@@ -2191,20 +2192,6 @@ describe('CLI 层', () => {
     db.close()
   })
 
-  test('req session review：需求名下没有工作区就报错，不去碰 codex', () => {
-    scaffold()
-    createProjectDir(dataDir, 'demo')
-    const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
-    const seed = new BoardDatabase(dataDir)
-    seed.syncProjects()
-    seed.close()
-
-    // 没有工作区时在起 app-server 之前就拦下来：报错要指出下一步，而不是建个空 project
-    const err = cliFail(configFile, ['req', 'session', 'review', created.id])
-    assert.match(err, /没有工作区/)
-    assert.match(err, /wt new/)
-  })
-
   test('req session：缺会话 id、未知 agent、重复登记', () => {
     scaffold()
     createProjectDir(dataDir, 'demo')
@@ -2222,6 +2209,10 @@ describe('CLI 层', () => {
       cliFail(configFile, ['req', 'session', 'add', created.id, '--agent', 'gemini', '--id', 'x']),
       /Unknown agent/,
     )
+
+    const gone = cli(configFile, ['req', 'session', 'review', created.id])
+    assert.equal(gone.code, 2)
+    assert.match(gone.stderr, /Unknown subcommand: req session review/)
 
     cliOk(configFile, ['req', 'session', 'add', created.id, '--agent', 'codex', '--id', 'th-1', '--title', '第一版'])
     cliOk(configFile, ['req', 'session', 'add', created.id, '--agent', 'codex', '--id', 'th-1', '--title', '第二版'])

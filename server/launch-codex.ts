@@ -1,7 +1,7 @@
 import type { AppServer } from './codex.ts'
 import { registerLaunchProvider, type LaunchInput, type LaunchProvider } from './launch.ts'
 
-// project 的 roots：该需求名下全部可用工作区。review 会话按它拿多仓库；开发会话 app 侧认不出这个 project，靠 deeplink 的 path 定位
+// project 的 roots：该需求名下全部可用工作区。app 侧认不出这个 project，靠 deeplink 的 path 定位
 export function codexProjectRoots(input: LaunchInput): string[] {
   return input.requirementWorktreePaths
 }
@@ -30,8 +30,8 @@ export const codexProvider: LaunchProvider = {
     // 需求还没有工作区：直接开新会话草稿，不建 project（也就不用起 app-server）
     if (!input.requirementWorktreePaths.length) return codexLaunchUrl('', prompt, input.worktreePath)
     // 新会话页发消息前 thread 尚不存在，登记留给提示词在新会话里执行，不能先写占位行。
-    // 动态载入 app-server 客户端：它顶层按自身文件位置读 package.json，静态 import 会把这段
-    // 打进 Electron 主进程 bundle，使启动阶段就去 require 一个构建产物里不存在的路径。
+    // 动态载入 app-server 客户端：静态 import 会把它打进主进程 bundle 的启动路径，
+    // 而只有「需求已有工作区」这条分支才用得上它。
     let server: AppServer
     let ensureRequirementProject: typeof import('./codex.ts').ensureRequirementProject
     try {

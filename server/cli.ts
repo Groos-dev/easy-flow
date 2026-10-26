@@ -9,18 +9,9 @@
  */
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { configPath, readConfig } from './config.ts'
-import {
-  AppServer,
-  ensureRequirementProject,
-  latestThread,
-  resumeThread,
-  sendPrompt,
-  startReviewThread,
-} from './codex.ts'
 import {
   createProjectDir,
   createRequirementDir,
@@ -547,15 +538,6 @@ codex → codex://threads/<id>，claude 的 local_ 会话 → claude://claude.ai
 chengxiaobang → chengxiaobang://session/<id>；cursor 与终端里的 claude 没有会话级 deeplink，只存 id。
 同一个会话重复 add 是幂等的：只刷新 title / cwd / link 与时间，不会长出第二条。`,
 
-  'req session review': `用法：easy-flow req session review <req-id> [--handoff] [--prompt <文本> | --prompt-file <路径>] [--json]
-
-把这条需求涉及的多个工作区交给 Codex 评审：建一个收全部工作区的 Codex project，
-在里面开会话并登记到需求上，看板「会话」块点一下即在 Codex 里打开。
---prompt 省略时按需求元数据组一段默认的评审提示词。
---handoff 只把提示词预填进新会话页，由人按发送接管（这时还没有会话可登记，
-下次调用会认领它）。
-会话在需求上是复用的：同一条需求只建一个 project、一个 review 会话，重复调用接着上一轮。`,
-
   'wt new': `用法：easy-flow wt new <req-id> --repo <仓库> --branch <分支> [--base <起点>] [--short <短名>] [--json]
 
 在主 checkout 旁边建 <仓库>.<分支>：写身份文件 AGENTS.md、建 requirement.md 与 design/ 软链，并登记。
@@ -610,7 +592,7 @@ id 与文件原样保留，已入库的跳过，所以重复跑是安全的。`,
 
 const GROUP_USAGE = {
   project: USAGE.project,
-  req: [USAGE['req new'], USAGE['req set'], USAGE['req link'], USAGE['req session'], USAGE['req session review']].join('\n\n'),
+  req: [USAGE['req new'], USAGE['req set'], USAGE['req link'], USAGE['req session']].join('\n\n'),
   wt: [USAGE['wt new'], USAGE['wt rm']].join('\n\n'),
   todo: [
     USAGE['todo new'],
@@ -1005,126 +987,6 @@ async function cmdReqSessionAdd(argv: string[]): Promise<void> {
   )
 }
 
-// 用系统默认应用打开链接；起不来就只把链接打出来，别把命令弄失败
-function openUrl(url: string): void {
-  const bin = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open'
-  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url]
-  try {
-    spawn(bin, args, { detached: true, stdio: 'ignore' }).on('error', () => {}).unref()
-  } catch {
-    // 打不开就算了：链接照样打给用户，手动点一样能进
-  }
-}
-
-// 默认评审提示词。工作区路径全列出来，Codex 自己会去读 diff
-function defaultReviewPrompt(req: Requirement, worktrees: Worktree[]): string {
-  const repos = worktrees.map((w) => `- ${w.repo}  分支 ${w.branch}  工作区 ${w.path}`).join('\n')
-  return [
-    '评审这条需求的改动。',
-    '',
-    `需求：${req.title}（${req.id}）`,
-    `需求目录：${req.path}（requirement.md 是需求描述，context.md 是背景与决策）`,
-    `涉及 ${worktrees.length} 个仓库，改动分别在这些工作区里：`,
-    repos,
-    '',
-    '逐个仓库看 diff，指出问题：正确性、边界、与需求不符的地方。先给结论，再按仓库展开。',
-    '只评审，不要改代码。',
-  ].join('\n')
-}
-
-// --prompt 优先，其次 --prompt-file；都没给返回 undefined，由调用方用默认值
-function readPromptArg(values: Record<string, unknown>): string | undefined {
-  const inline = str(values.prompt)?.trim()
-  if (inline) return inline
-  const file = str(values['prompt-file'])?.trim()
-  if (!file) return undefined
-  if (!existsSync(file)) throw new Error(`提示词文件不存在：${file}`)
-  return readFileSync(file, 'utf8').trim() || undefined
-}
-
-/**
- * review 会话：把这条需求涉及的多个工作区交给 Codex。
- *
- * 桌面应用打不开没发过消息的 thread，所以默认形态建完就发一轮、等它跑完再登记；
- * --handoff 只把提示词预填进新会话页，由人按发送接管（那时才有会话可认领）。
- */
-async function cmdReqSessionReview(argv: string[]): Promise<void> {
-  const { values, positionals } = parse(argv, {
-    handoff: { type: 'boolean' },
-    prompt: { type: 'string' },
-    'prompt-file': { type: 'string' },
-  })
-  if (bool(values.help)) return out(USAGE['req session review'])
-
-  const reqId = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req session review'])
-  const board = db()
-  board.syncProjects()
-  const req = findById(reqId)
-
-  const worktrees = board.listWorktrees(req.id)
-  if (!worktrees.length) {
-    throw new Error(
-      `${req.id} 名下没有工作区，Codex 没有可评审的东西。先 easy-flow wt new ${req.id} --repo <仓库> --branch <分支>`,
-    )
-  }
-  const roots = worktrees.map((w) => w.path)
-  const prompt = readPromptArg(values) ?? defaultReviewPrompt(req, worktrees)
-
-  const server = await AppServer.start()
-  try {
-    const projectId = await ensureRequirementProject(server, req.id, req.slug, roots)
-
-    if (bool(values.handoff)) {
-      const url = `codex://threads/new?projectId=${projectId}&prompt=${encodeURIComponent(prompt)}`
-      openUrl(url)
-      return emit(
-        { ok: true, requirementId: req.id, projectId, handoff: true, link: url },
-        [
-          `已打开 Codex 新会话页：project 收进 ${worktrees.length} 个工作区，提示词预填在输入框里。`,
-          '按下发送后这一轮才开始；发完再跑一次这条命令，会话就挂到需求上了。',
-          url,
-        ].join('\n'),
-      )
-    }
-
-    // 三步定会话：库里登记过的 review 会话 → 认领 project 下最新的一条（--handoff 之后人发出去的）
-    // → 都没有才新建。已有的会话要先 resume 才发得动
-    const sessions = board.listSessions(req.id)
-    const registered = sessions.find((s) => s.agent === 'codex' && s.role === 'review')
-    // 开发会话与 review 共用这个 project：认领时跳过它们，别把开发会话当 review 会话 resume
-    const devThreads = new Set(
-      sessions.filter((s) => s.agent === 'codex' && s.role === 'dev').map((s) => s.session),
-    )
-    const existing = registered?.session ?? (await latestThread(server, projectId, devThreads))
-    if (existing) await resumeThread(server, existing, roots[0], roots)
-    const threadId = existing ?? (await startReviewThread(server, projectId, roots[0], roots))
-
-    await sendPrompt(server, threadId, prompt)
-
-    const saved = board.addSession({
-      requirementId: req.id,
-      agent: 'codex',
-      session: threadId,
-      role: 'review',
-      title: `评审 ${worktrees.length} 个工作区`,
-      cwd: roots[0],
-      link: sessionLink('codex', threadId),
-    })
-
-    emit(
-      { ok: true, ...saved, projectId },
-      [
-        `已在需求「${req.title}」（${req.id}）上建好 review 会话`,
-        sessionLine(saved),
-        `project 收进 ${worktrees.length} 个工作区，评审提示词已发出并跑完这一轮。`,
-        '看板详情页点这一行即在 Codex 里打开。',
-      ].join('\n'),
-    )
-  } finally {
-    server.close()
-  }
-}
-
 async function cmdReqSessionRm(argv: string[]): Promise<void> {
   const { values, positionals } = parse(argv, { agent: { type: 'string' }, id: { type: 'string' } })
   if (bool(values.help)) return out(USAGE['req session'])
@@ -1182,11 +1044,10 @@ async function cmdReqSessionLs(argv: string[]): Promise<void> {
 
 async function cmdReqSession(action: string | undefined, argv: string[]): Promise<void> {
   if (action === '--help' || action === '-h') return out(USAGE['req session'])
-  if (!action) throw new UsageError('req session needs a subcommand: add / rm / ls / review', USAGE['req session'])
+  if (!action) throw new UsageError('req session needs a subcommand: add / rm / ls', USAGE['req session'])
   if (action === 'add') return cmdReqSessionAdd(argv)
   if (action === 'rm') return cmdReqSessionRm(argv)
   if (action === 'ls') return cmdReqSessionLs(argv)
-  if (action === 'review') return cmdReqSessionReview(argv)
   throw new UsageError(`Unknown subcommand: req session ${action}`, USAGE['req session'])
 }
 
