@@ -337,7 +337,6 @@ describe('需求详情页启动会话', () => {
     const session = app.db.listSessions('req-alpha')
     assert.equal(session.length, 1)
     assert.equal(session[0].session, 'thread-launch-1')
-    assert.equal(session[0].role, 'dev')
     assert.equal(session[0].cwd, realpathSync(worktreePath))
 
     const repeated = spawnSync(process.execPath, [cliPath, 'req', 'session', 'add', 'req-alpha', '--agent', 'codex', '--title', '更新标题'], {

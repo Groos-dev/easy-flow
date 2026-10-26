@@ -97,7 +97,6 @@ CREATE TABLE IF NOT EXISTS session (
   req_id   TEXT NOT NULL,
   agent    TEXT NOT NULL,
   session  TEXT NOT NULL,
-  role     TEXT NOT NULL DEFAULT 'dev',
   title    TEXT,
   cwd      TEXT,
   link     TEXT,
@@ -165,6 +164,10 @@ function migrate(db: DatabaseSync): void {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
     if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`)
   }
+  const dropIfExists = (table: string, column: string) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+    if (cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`)
+  }
   // 状态与看板列合并：老库的 stage（7 档）改名 status 并映射到 4 档
   const cols = db.prepare('PRAGMA table_info(requirement)').all() as Array<{ name: string }>
   if (cols.some((c) => c.name === 'stage') && !cols.some((c) => c.name === 'status')) {
@@ -196,8 +199,8 @@ function migrate(db: DatabaseSync): void {
   addIfMissing('requirement', 'feishu_task_links', 'feishu_task_links TEXT')
   addIfMissing('requirement', 'code_links', 'code_links TEXT')
   addIfMissing('requirement', 'ext_links', 'ext_links TEXT')
-  // 会话角色：开工登记的 dev，review 会话是 review。老库里的会话都是开工时登记的
-  addIfMissing('session', 'role', `role TEXT NOT NULL DEFAULT 'dev'`)
+  // 会话角色（review 会话）已下掉：老库里那列没有读者了，删掉
+  dropIfExists('session', 'role')
   addIfMissing('session_state', 'action_text', `action_text TEXT NOT NULL DEFAULT ''`)
   addIfMissing('session_state', 'action_called_at', 'action_called_at INTEGER NOT NULL DEFAULT 0')
   // hook 事件名单独存一列：通知层判断 Interrupt 用结构化字段，

@@ -1,10 +1,6 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import { test, describe } from 'node:test'
 import { AppServer, ensureRequirementProject } from '../server/codex.ts'
-import { BoardDatabase } from '../server/db.ts'
 import { findLaunchProvider, type LaunchInput } from '../server/launch.ts'
 import {
   codexAppServerStartError,
@@ -133,41 +129,6 @@ describe('Codex 开发会话启动', () => {
       await assert.rejects(async () => codexProvider.build(input, 'prompt'), /app-server 返回里没有 project\.id/)
     } finally {
       AppServer.start = start
-    }
-  })
-
-  test('新开发 thread 默认登记为 dev，不覆盖已有 review thread', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'easy-flow-codex-launch-'))
-    const db = new BoardDatabase(dir)
-    try {
-      db.addSession({
-        requirementId: input.requirementId,
-        agent: 'codex',
-        session: 'review-thread',
-        role: 'review',
-      })
-      const dev = db.addSession({
-        requirementId: input.requirementId,
-        agent: 'codex',
-        session: 'new-dev-thread',
-        cwd: input.requirementWorktreePaths[0],
-      })
-
-      assert.equal(dev.role, 'dev')
-      assert.equal(db.sessionBy('codex', 'review-thread')?.role, 'review')
-      assert.deepEqual(
-        db
-          .listSessions(input.requirementId)
-          .map(({ session, role }) => ({ session, role }))
-          .sort((a, b) => a.session.localeCompare(b.session)),
-        [
-          { session: 'new-dev-thread', role: 'dev' },
-          { session: 'review-thread', role: 'review' },
-        ],
-      )
-    } finally {
-      db.close()
-      rmSync(dir, { recursive: true, force: true })
     }
   })
 
