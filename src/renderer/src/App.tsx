@@ -551,6 +551,35 @@ export default function App() {
       (node) => node.dataset.slug === slug,
     ) ?? null
 
+  const focusRing = useRef<HTMLDivElement>(null)
+
+  /**
+   * 选中框是一块 fixed 浮层，画在卡片之外：换卡时用 transform 滑过去，比两张卡各自
+   * 闪一下框更像「移动」。卡片滚出列或看板视野时收起——fixed 不会被容器的 overflow 裁掉。
+   */
+  const placeRing = useCallback((el: HTMLElement, animate: boolean) => {
+    const ring = focusRing.current
+    if (!ring) return
+    const box = el.getBoundingClientRect()
+    const column = el.closest('.column-body')?.getBoundingClientRect()
+    const board = el.closest('.board')?.getBoundingClientRect()
+    const visible =
+      (!column || (box.bottom > column.top && box.top < column.bottom)) &&
+      (!board || (box.right > board.left && box.left < board.right))
+    ring.classList.toggle('on', visible)
+    if (!visible) return
+    // 跟随滚动时不做过渡，否则看起来像在追卡片
+    if (!animate) ring.style.transition = 'none'
+    ring.style.width = `${box.width + 2}px`
+    ring.style.height = `${box.height + 2}px`
+    ring.style.transform = `translate(${box.left - 1}px, ${box.top - 1}px)`
+    if (!animate) {
+      // 先把「直接落位」算进样式，再恢复过渡，否则这一步会被当成动画起点的插值
+      void ring.offsetWidth
+      ring.style.transition = ''
+    }
+  }, [])
+
   // 选中框与 DOM 焦点一起挪：旧卡摘属性、新卡挂属性，各只有一次 class/属性切换
   const moveFocus = useCallback((slug: string) => {
     const el = cardEl(slug)
@@ -567,8 +596,9 @@ export default function App() {
     // 焦点已经在这张卡里（比如停在它的 agent 头像上）就别抢回来
     if (!el.contains(document.activeElement)) el.focus({ preventScroll: true })
     el.scrollIntoView({ block: 'nearest' })
+    placeRing(el, true)
     setFlashSlug((cur) => (cur && cur !== slug ? null : cur))
-  }, [])
+  }, [placeRing])
 
   const dropFocus = useCallback(() => {
     const prev = focusedEl.current
@@ -579,6 +609,7 @@ export default function App() {
     focusedEl.current = null
     focusSlug.current = null
     pendingFocus.current = null
+    focusRing.current?.classList.remove('on')
   }, [])
 
   // 鼠标点进卡片、Tab 落回卡片时同步选中框；焦点本来就在这张卡里就不动
@@ -608,6 +639,36 @@ export default function App() {
     pendingFocus.current = null
     moveFocus(slug)
   })
+
+  // 列内滚动、窗口缩放时浮层要贴住卡片。滚动事件很密，按帧合并一次
+  useEffect(() => {
+    let queued = false
+    const follow = () => {
+      if (queued) return
+      queued = true
+      requestAnimationFrame(() => {
+        queued = false
+        const el = focusedEl.current
+        if (el) placeRing(el, false)
+      })
+    }
+    document.addEventListener('scroll', follow, true)
+    window.addEventListener('resize', follow)
+    return () => {
+      document.removeEventListener('scroll', follow, true)
+      window.removeEventListener('resize', follow)
+    }
+  }, [placeRing])
+
+  // 拖拽时卡片跟着指针跑、浮层留在原地，先收起来，松手再贴回去
+  useEffect(() => {
+    if (dragSlug) {
+      focusRing.current?.classList.remove('on')
+      return
+    }
+    const el = focusedEl.current
+    if (el?.isConnected) placeRing(el, false)
+  }, [dragSlug, placeRing])
 
   useEffect(() => {
     if (!hint) return
@@ -894,6 +955,7 @@ export default function App() {
                 onDragEnd={(e) => void handleDragEnd(e)}
               >
                 <div className="board">
+                  <div ref={focusRing} className="focus-ring" aria-hidden="true" />
                   {statuses.map((status) => (
                     <ColumnView
                       key={status}
