@@ -552,6 +552,8 @@ export default function App() {
     ) ?? null
 
   const focusRing = useRef<HTMLDivElement>(null)
+  // 卡自己会长高：pet 素材换上来、气泡换行、子需求展开。浮层不跟着量就会压在卡中间
+  const ringWatch = useRef<ResizeObserver | null>(null)
 
   /**
    * 选中框是一块 fixed 浮层，画在卡片之外：换卡时用 transform 滑过去，比两张卡各自
@@ -560,6 +562,11 @@ export default function App() {
   const placeRing = useCallback((el: HTMLElement, animate: boolean) => {
     const ring = focusRing.current
     if (!ring) return
+    // 摘下来的卡片量出来是 0×0，会被当成「在视野里」画到左上角
+    if (!el.isConnected) {
+      ring.classList.remove('on')
+      return
+    }
     const box = el.getBoundingClientRect()
     const column = el.closest('.column-body')?.getBoundingClientRect()
     const board = el.closest('.board')?.getBoundingClientRect()
@@ -589,8 +596,12 @@ export default function App() {
       return
     }
     const prev = focusedEl.current
-    if (prev && prev !== el) prev.removeAttribute('data-focused')
+    if (prev && prev !== el) {
+      prev.removeAttribute('data-focused')
+      ringWatch.current?.unobserve(prev)
+    }
     el.setAttribute('data-focused', '')
+    ringWatch.current?.observe(el)
     focusedEl.current = el
     focusSlug.current = slug
     // 焦点已经在这张卡里（比如停在它的 agent 头像上）就别抢回来
@@ -604,6 +615,7 @@ export default function App() {
     const prev = focusedEl.current
     if (prev) {
       prev.removeAttribute('data-focused')
+      ringWatch.current?.unobserve(prev)
       if (prev.contains(document.activeElement)) prev.blur()
     }
     focusedEl.current = null
@@ -629,7 +641,10 @@ export default function App() {
       dropFocus()
       return
     }
-    if (!focusedEl.current?.isConnected) moveFocus(slug)
+    if (focusedEl.current?.isConnected) return
+    // 卡还在版面上（换列重挂）就接着跟；整列收成窄条后卡没渲染，选中到此为止
+    if (cardEl(slug)) moveFocus(slug)
+    else dropFocus()
   })
 
   // 等一张还没渲染出来的卡（展开收起列、跳子需求）
@@ -657,6 +672,22 @@ export default function App() {
     return () => {
       document.removeEventListener('scroll', follow, true)
       window.removeEventListener('resize', follow)
+    }
+  }, [placeRing])
+
+  // 焦点卡自己改变尺寸（pet 换素材、气泡换行、子需求铺开）时浮层要跟着量。
+  // 这里用带过渡的落位：宽度高度是渐变，位置没变，不会把换卡时的滑动打断
+  useEffect(() => {
+    const ro = new ResizeObserver(() => {
+      const el = focusedEl.current
+      if (el) placeRing(el, true)
+    })
+    ringWatch.current = ro
+    const el = focusedEl.current
+    if (el) ro.observe(el)
+    return () => {
+      ringWatch.current = null
+      ro.disconnect()
     }
   }, [placeRing])
 
