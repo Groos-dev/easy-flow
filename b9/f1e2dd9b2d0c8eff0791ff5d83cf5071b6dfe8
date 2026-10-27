@@ -1,0 +1,27 @@
+src/renderer/src/components/Card.tsx
+  s_ec08b39c839b14::t_c95b943f96face 122
+src/renderer/src/App.tsx
+  s_ec08b39c839b14::t_e251ebbb41219d 678
+  s_ec08b39c839b14::t_4f0c71dc0e8f77 940
+src/renderer/src/styles.css
+  s_ec08b39c839b14::t_6b70d50fa5316a 931
+eslint.config.js
+  s_ec08b39c839b14::t_f80dc972af5dea 7-37
+  s_ec08b39c839b14::t_e2b7cd3ce1c5fa 58,62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "b9f1e2dd9b2d0c8eff0791ff5d83cf5071b6dfe8",
+  "prompts": {},
+  "sessions": {
+    "s_ec08b39c839b14": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_r7a0otfmu3z7",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
