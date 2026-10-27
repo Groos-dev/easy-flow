@@ -15,6 +15,7 @@ import { api } from './lib/api'
 import { DONE_STATUS, childStatsOf, childrenOf } from './lib/children'
 import { movePos, posOf, slugAt, type BoardColumn, type BoardPos } from './lib/board-focus'
 import { isInteractiveTarget, isPetTarget, shortcut, shortcutLabel, shouldIgnore } from './lib/keys'
+import { BOARD_POLL_MS } from './lib/time'
 import type { ChildStat, NextUpItem, Project, Requirement, Session, Status, Todo } from './lib/types'
 import MindMap from './components/MindMap'
 import Card from './components/Card'
@@ -140,12 +141,6 @@ function statusOf(over: DragOverEvent['over']): Status | undefined {
 
 // 同列内按优先级排：p0 在前，没设优先级的排最后
 const PRIORITY_RANK: Record<string, number> = { p0: 0, p1: 1, p2: 2, p3: 3 }
-
-/**
- * 看板自动刷新的间隔。顶栏的刷新按钮已经去掉，刷新全靠这条 tick：需求、待办、项目列表、
- * 会话状态、下一步排名一起重拉。这些接口都是纯读（毫秒级），一秒一次不占什么。
- */
-const BOARD_POLL_MS = 1_000
 
 // pin 的项目存浏览器本地：它是「这台机器上常看哪几个」，不是看板数据
 const PINNED_KEY = 'easy-flow.pinned-projects'

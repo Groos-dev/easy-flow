@@ -2790,6 +2790,42 @@ describe('HTTP 层', () => {
     assert.deepEqual((await get('/api/context?slug=beta')).todos, [])
   })
 
+  test('/api/context/live 只带浮窗会变的那四块，原文与文档正文都不带', async () => {
+    const r = await get('/api/context/live?slug=alpha')
+    assert.deepEqual(Object.keys(r).sort(), ['candidateTodos', 'sessions', 'todos', 'worktrees'])
+    // 前面用例登记的会话、工作区与待办都在这份切片里
+    assert.ok(r.sessions.some((s: any) => s.session === 'th-ctx'))
+    assert.ok(r.worktrees.some((w: any) => w.id === 'wt-ctx'))
+    assert.deepEqual(r.todos.map((t: any) => t.id), ['T-20260201-001'])
+    // 归属只存在库里：挂在 alpha 名下的，beta 看不到
+    assert.deepEqual((await get('/api/context/live?slug=beta')).sessions, [])
+    assert.match((await get('/api/context/live?slug=nope')).error, /Requirement not found/)
+  })
+
+  test('/api/context/live 跟着库走，但不扫需求目录', async () => {
+    const docsBefore = app.db.get('alpha')!.docs.length
+    writeFileSync(join(dir, 'onex', 'alpha', 'LIVE.md'), '# 新文档\n', 'utf8')
+    app.db.addSession({ requirementId: 'req-alpha', agent: 'claude', session: 'cl-live', title: '刚登记' })
+
+    const r = await get('/api/context/live?slug=alpha')
+    assert.ok(r.sessions.some((s: any) => s.session === 'cl-live'))
+    assert.equal(app.db.get('alpha')!.docs.length, docsBefore, '每秒的读口不该重扫目录')
+
+    // 打开详情页的那次 /api/context 才同步：新文件由它带进来
+    await get('/api/context?slug=alpha')
+    assert.ok(app.db.get('alpha')!.docs.some((d) => d.name === 'LIVE.md'))
+  })
+
+  test('/api/context/live 的「待确认归属」按来源会话推出来', async () => {
+    makeTodo(dir, 'T-20260202-001', '没写归属的待办')
+    await get('/api/todos')
+    app.db.setTodoFields('T-20260202-001', { session: 'codex://threads/th-ctx' })
+
+    const r = await get('/api/context/live?slug=alpha')
+    assert.deepEqual(r.candidateTodos.map((t: any) => t.id), ['T-20260202-001'])
+    assert.ok(!r.todos.some((t: any) => t.id === 'T-20260202-001'))
+  })
+
   test('GET /api/requirement 按 id 取单条', async () => {
     const r = await get('/api/requirement?id=req-alpha')
     assert.equal(r.slug, 'alpha')

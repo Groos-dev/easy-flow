@@ -427,6 +427,23 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
         return
       }
 
+      // 浮窗开着时每秒续一次的切片：只有随库变的那四块，不重扫需求目录、不读 md。
+      // 「待确认归属」要按来源会话推，所以仍留在服务端算
+      if (url.pathname === '/api/context/live' && req.method === 'GET') {
+        const slug = url.searchParams.get('slug') ?? ''
+        const project = resolveProject(db, url.searchParams.get('project'))
+        const target = db.get(slug, project)
+        if (!target) throw new Error(`Requirement not found: ${slug}`)
+        const todos = db.todosForRequirement(target.id)
+        json(req, res, 200, {
+          worktrees: db.listWorktrees(target.id),
+          sessions: readObservations(db.listSessions(target.id), stateStore),
+          todos: todos.explicit,
+          candidateTodos: todos.candidate,
+        })
+        return
+      }
+
       // 全部会话（归属在每条的 requirementId 上）：mini 面板一次拉全，
       // 逐需求拉 context 太碎；排序交给库（最近登记的在前）
       if (url.pathname === '/api/sessions' && req.method === 'GET') {

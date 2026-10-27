@@ -1,6 +1,7 @@
 import type {
   BoardData,
   CodeLinkStatus,
+  ContextLive,
   ContextPayload,
   HookPlan,
   InstallOutcome,
@@ -49,6 +50,14 @@ async function request<T>(
   return data
 }
 
+// 详情页两个读口的查询参数：slug 必填，project 只在跨项目打开时带
+function contextPath(path: string, slug: string, project?: string): string {
+  return (
+    `${path}?slug=${encodeURIComponent(slug)}` +
+    (project ? `&project=${encodeURIComponent(project)}` : '')
+  )
+}
+
 export const api = {
   list: (): Promise<BoardData> => request('/api/requirements'),
 
@@ -70,10 +79,11 @@ export const api = {
     }),
 
   context: (slug: string, project?: string): Promise<ContextPayload> =>
-    request(
-      `/api/context?slug=${encodeURIComponent(slug)}` +
-        (project ? `&project=${encodeURIComponent(project)}` : ''),
-    ),
+    request(contextPath('/api/context', slug, project)),
+
+  // 浮窗每秒续一次的切片：只查库，不带 requirement.md 与文档正文
+  contextLive: (slug: string, project?: string): Promise<ContextLive> =>
+    request(contextPath('/api/context/live', slug, project)),
 
   // MR/PR 状态与流水线汇总：取不到的不在结果里
   codeLinkStatuses: (urls: string[]): Promise<{ statuses: Record<string, CodeLinkStatus> }> =>

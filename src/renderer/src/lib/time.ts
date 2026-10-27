@@ -16,3 +16,9 @@ export function parseStamp(s: string): number {
   const t = Date.parse(s.trim().replace(' ', 'T'))
   return Number.isNaN(t) ? 0 : t
 }
+
+/**
+ * 看板与详情浮窗共用的轮询节奏：需求、待办、项目、会话、下一步一起重拉。
+ * 这些接口都是纯读（毫秒级）；两处各写一个间隔，同一份数据就会一快一慢。
+ */
+export const BOARD_POLL_MS = 1_000
