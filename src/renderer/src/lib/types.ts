@@ -103,6 +103,8 @@ export interface SyncResult {
 
 export interface BoardData {
   requirements: Requirement[]
+  // 内容版本：没变时看板跳过提交，见 App 的 applyIfChanged
+  rev: string
   // 当前项目
   project: string
   // 当前项目的显示名（取自项目根 AGENTS.md 的 frontmatter，缺省是目录名）
@@ -157,6 +159,7 @@ export interface Todo {
 
 export interface TodosPayload {
   todos: Todo[]
+  rev: string
   // 看板列顺序，也就是状态取值顺序
   statuses: TodoStatus[]
   sources: string[]

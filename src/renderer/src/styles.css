@@ -3625,14 +3625,42 @@ code.launch-hint {
 
 /* ------------------------------------------------- 键盘焦点与键位表 */
 
-/* 选中框只认 .focused，DOM 焦点不单独画框，避免两张卡各亮一个 */
+/* 选中框是一块跟着焦点走的浮层（见 App 的 placeRing）：换卡时滑过去，比两张卡各闪一下更像移动。
+   fixed 是为了跨列、跨列内滚动都不用重算坐标；位置与尺寸由 JS 按卡片矩形写进来 */
+.focus-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  /* 浮层排在列前面，列有不透明底色；不给 z-index 会被整列盖住 */
+  z-index: 5;
+  pointer-events: none;
+  border: 2px solid var(--accent);
+  border-radius: 9px;
+  opacity: 0;
+  transition:
+    transform 0.12s cubic-bezier(0.22, 0.61, 0.36, 1),
+    width 0.12s cubic-bezier(0.22, 0.61, 0.36, 1),
+    height 0.12s cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 0.16s ease;
+}
+
+.focus-ring.on {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focus-ring {
+    transition: none;
+  }
+}
+
+/* 选中框只认 data-focused，但框由浮层画，卡片自己只提一点底色 */
 .card:focus {
   outline: none;
 }
 
-.card.focused {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+.card[data-focused] {
+  background: var(--card-hover);
 }
 
 .next-row.focused {

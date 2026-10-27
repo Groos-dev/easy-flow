@@ -204,10 +204,15 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
   const [openError, setOpenError] = useState('')
+  const [onScreen, setOnScreen] = useState(true)
+  const slotRef = useRef<HTMLDivElement>(null)
   const { session, state } = item
   const hasBubble = item.bubble !== ''
   // 焦点与悬停共用一条气泡规则：移开焦点和移开鼠标一样，气泡再留 30 秒
   const shown = useBubbleShown(hasBubble && state !== 'idle', hovered || focused)
+  // 静止档只在鼠标落上来时播动画，滚出视野的也不播：满屏 pet 常驻逐帧绘制是看板空转 CPU 的大头。
+  // 键盘焦点不参与——在头像之间移动时每步都换素材，云宝那种脚本驱动的内联 SVG 得重新解析一遍
+  const stillArt = still || !onScreen || (state === 'idle' && !hovered)
   const canFocusWorkspace = session.agent === 'cursor' && !!session.cwd
   const focusable = !!session.link || canFocusWorkspace
   const openFromSlot = () => {
@@ -224,6 +229,15 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
       .then(() => api.markSessionClicked(session.agent, session.session))
       .catch((error: Error) => setOpenError(error.message || '打开失败'))
   }
+
+  // 视野外就换静态素材：滚动容器在 .column-body，viewport 作 root 能覆盖这一层
+  useEffect(() => {
+    const el = slotRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(([entry]) => setOnScreen(entry.isIntersecting))
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
 
   // 焦点停在这一格：回车走和鼠标点击同一条路，Esc 交回卡片，hjkl / 方向键在同一排头像里走；
   // 看板那套单键由 App 让位
@@ -252,6 +266,7 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
 
   return (
     <div
+      ref={slotRef}
       className={`slot${shown ? ' shown' : ''}`}
       tabIndex={focusable ? 0 : undefined}
       role={focusable ? (session.link ? 'link' : 'button') : undefined}
@@ -311,7 +326,7 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
         event={isEventState(state)}
         focus={item.focus}
         compact={compact}
-        still={still}
+        still={stillArt}
       />
     </div>
   )

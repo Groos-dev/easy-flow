@@ -144,6 +144,19 @@ describe('键位表', () => {
     assert.equal(shortcut(key('j'), 'info.next', 'darwin'), true)
     assert.equal(shortcut(key('ArrowUp'), 'info.prev', 'darwin'), true)
     assert.equal(shortcut(key('j', { altKey: true }), 'info.next', 'darwin'), false)
+    // 方向键与 hjkl 走同一套移动：App 里只有一条焦点路径
+    for (const [k, id] of [
+      ['j', 'board.next'],
+      ['ArrowDown', 'board.next'],
+      ['k', 'board.prev'],
+      ['ArrowUp', 'board.prev'],
+      ['h', 'board.left'],
+      ['ArrowLeft', 'board.left'],
+      ['l', 'board.right'],
+      ['ArrowRight', 'board.right'],
+    ] as const) {
+      assert.equal(shortcut(key(k), id, 'darwin'), true, `${k} 该触发 ${id}`)
+    }
     assert.equal(
       shortcut(key('{', { metaKey: true, shiftKey: true }), 'detail.tab-prev', 'darwin'),
       true,
