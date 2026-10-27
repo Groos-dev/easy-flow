@@ -3,9 +3,11 @@ import { api } from '../lib/api'
 import { isComposing, isEditableTarget, shortcut } from '../lib/keys'
 import { AGENT_LABELS } from '../lib/labels'
 import { codeLinkLabel, feishuTaskLabel, PIPELINE_ICON, PIPELINE_LABEL, showsPipeline } from '../lib/links'
+import { BOARD_POLL_MS } from '../lib/time'
 import {
   TODO_STATUS_LABEL,
   type CodeLinkStatus,
+  type ContextLive,
   type ContextPayload,
   type Requirement,
   type Session,
@@ -16,7 +18,8 @@ import { AgentIcon } from './icons'
 import LaunchSession from './LaunchSession'
 
 /**
- * 需求详情页的信息浮窗。数据来自详情页已加载的 /api/context。
+ * 需求详情页的信息浮窗。打开时用详情页已加载的 /api/context 摆第一版，
+ * 之后按看板的节奏从 /api/context/live 续——ctx 本身只是一份快照。
  *
  * 待办分两段：登记过的归属与由来源会话推出来的候选，后者行尾标「未确认」。
  */
@@ -32,13 +35,53 @@ export default function InfoPanel({
   onOpenTodo: (id: string) => void
   launchSignal?: number
 }) {
-  const worktrees = ctx?.worktrees ?? []
-  const sessions = ctx?.sessions ?? []
+  const [live, setLive] = useState<ContextLive | null>(null)
+  const liveError = useRef('')
+  const slug = req.slug
+  const project = req.project
+
+  // 会话、工作区、待办归属会被 CLI 或另一个窗口改掉，所以要每秒续一次
+  // 读口只查库：不重扫需求目录，也不读 requirement.md
+  useEffect(() => {
+    let alive = true
+    let inFlight = false
+    const tick = async () => {
+      // 后台没人看；上一轮没回来不叠发
+      if (document.hidden || inFlight) return
+      inFlight = true
+      try {
+        const data = await api.contextLive(slug, project)
+        if (alive) setLive(data)
+        liveError.current = ''
+      } catch (err) {
+        // 浮窗继续用上一份数据，但失败必须留痕：静默下去就是「看着新、其实冻住了」
+        const message = (err as Error).message
+        if (liveError.current !== message) {
+          liveError.current = message
+          console.warn(`[info-panel] 浮窗刷新失败（${project}/${slug}）：${message}`)
+        }
+      } finally {
+        inFlight = false
+      }
+    }
+    void tick()
+    const timer = setInterval(tick, BOARD_POLL_MS)
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      alive = false
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', tick)
+    }
+  }, [slug, project])
+
+  const data = live ?? ctx
+  const worktrees = data?.worktrees ?? []
+  const sessions = data?.sessions ?? []
   // 只列未完成的：已完成 / 已取消的不占版面
   const stillOpen = (t: Todo) => t.status === 'todo' || t.status === 'in_progress'
-  const openTodos = (ctx?.todos ?? []).filter(stillOpen)
+  const openTodos = (data?.todos ?? []).filter(stillOpen)
   // 由来源会话推出来的归属：没写进库，所以标出来，别让人误以为已经挂上了
-  const candidateTodos = (ctx?.candidateTodos ?? []).filter(stillOpen)
+  const candidateTodos = (data?.candidateTodos ?? []).filter(stillOpen)
 
   // 按 URL 列表做依赖：看板轮询换新对象时不重复请求
   const codeUrls = req.codeLinks.map((l) => l.url).join('\n')
@@ -109,8 +152,8 @@ export default function InfoPanel({
       aria-label="需求信息与链接"
       ref={panelRef}
     >
-      {/* ctx 未到时不能把空列表误当成需求没有会话 */}
-      {ctx && (
+      {/* 数据未到时不能把空列表误当成需求没有会话 */}
+      {data && (
         <InfoBlock label="会话" count={sessions.length}>
           {sessions.map((s) => (
             <SessionRow key={`${s.agent}:${s.session}`} session={s} />
