@@ -338,14 +338,23 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
  * 挂哪些会话、谁带事件样式、谁抢注意力都在 planPetRow 里算好：pet 长期留着
  * （读得到状态就挂），姿势就是状态本身；点过 pet 会被写成 idle，边框与动效跟着消失。
  * `compact` 给折叠的父需求窄条用——44px 塞不进去，收成小号，那档不挂气泡。
+ * `inert` 给拖拽浮层用：那一排只是照着画，不能抢焦点、不能点开会话。
  */
-export function PetRow({ sessions, compact = false }: { sessions: Session[]; compact?: boolean }) {
+export function PetRow({
+  sessions,
+  compact = false,
+  inert = false,
+}: {
+  sessions: Session[]
+  compact?: boolean
+  inert?: boolean
+}) {
   const { items } = planPetRow(sessions)
   const still = usePrefersReducedMotion()
   if (items.length === 0) return null
 
   return (
-    <div className={`pets${compact ? ' compact' : ''}`}>
+    <div className={`pets${compact ? ' compact' : ''}`} {...(inert ? { inert: '' } : {})}>
       {items.map((p) => (
         <PetSlot key={`${p.session.agent}:${p.session.session}`} item={p} compact={compact} still={still} />
       ))}
