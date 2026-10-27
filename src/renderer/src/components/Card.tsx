@@ -17,7 +17,6 @@ interface Props {
   onJumpChild?: (slug: string) => void
   // 刚被跳过来的那条：闪一下，好让人在满屏卡片里认出落点
   flash?: boolean
-  focused?: boolean
   kidsOpen?: boolean
   onToggleKids?: (slug: string) => void
   onFocusCard?: (slug: string) => void
@@ -32,7 +31,6 @@ export default function Card({
   kids,
   onJumpChild,
   flash,
-  focused = false,
   kidsOpen = false,
   onToggleKids,
   onFocusCard,
@@ -77,7 +75,7 @@ export default function Card({
       ref={setNodeRef}
       style={style}
       data-slug={req.slug}
-      className={`card${isDragging ? ' dragging' : ''}${flash ? ' flash' : ''}${focused ? ' focused' : ''}`}
+      className={`card${isDragging ? ' dragging' : ''}${flash ? ' flash' : ''}`}
       {...listeners}
       {...attributes}
       tabIndex={overlay ? undefined : 0}

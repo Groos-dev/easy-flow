@@ -46,7 +46,6 @@ interface BoardColumnProps {
   onJumpChild: (slug: string) => void
   // 刚跳过去的那条，闪一下
   flashSlug: string | null
-  focusSlug: string | null
   kidsOpen: Set<string>
   onToggleKids: (slug: string) => void
   onFocusCard: (slug: string) => void
@@ -65,7 +64,6 @@ function ColumnView({
   childrenByParent,
   onJumpChild,
   flashSlug,
-  focusSlug,
   kidsOpen,
   onToggleKids,
   onFocusCard,
@@ -122,7 +120,6 @@ function ColumnView({
               kids={childrenByParent.get(r.id)}
               onJumpChild={onJumpChild}
               flash={flashSlug === r.slug}
-              focused={focusSlug === r.slug}
               kidsOpen={kidsOpen.has(r.slug)}
               onToggleKids={onToggleKids}
               onFocusCard={onFocusCard}
@@ -211,10 +208,17 @@ export default function App() {
   // 正在等服务端返回：用来区分「还没查」与「查了没有」
   const [searching, setSearching] = useState(false)
   // 默认常开，第一次按键落到第一列第一张
-  const [focusSlug, setFocusSlug] = useState<string | null>(null)
   const [kidsOpen, setKidsOpen] = useState<Set<string>>(new Set())
   const [projectPicker, setProjectPicker] = useState(false)
   const [hint, setHint] = useState('')
+  /**
+   * 选中框落在哪张卡是 DOM 状态，不进 React：j/k/h/l 只切卡上的 `data-focused`
+   * 与 DOM 焦点，看板本身不重渲染（43 张卡、48 只 pet 全量渲染一次就是一次卡顿）。
+   */
+  const focusSlug = useRef<string | null>(null)
+  const focusedEl = useRef<HTMLElement | null>(null)
+  // 目标卡还没渲染出来（收起的「已完成」列要先展开）时，等下一次渲染再落焦点
+  const pendingFocus = useRef<string | null>(null)
 
   useEffect(() => {
     localStorage.setItem(PINNED_KEY, JSON.stringify(pinned))
@@ -352,9 +356,21 @@ export default function App() {
     }
   }, [query, project])
 
+  /**
+   * 轮询是每秒一次的，但内容多数时候没变：服务端给每份数据算了个版本，
+   * 版本相同就不提交——否则每秒都是一次整板重渲染。
+   */
+  const revs = useRef<Record<string, string>>({})
+  const applyIfChanged = useCallback((key: string, rev: string) => {
+    if (revs.current[key] === rev) return false
+    revs.current[key] = rev
+    return true
+  }, [])
+
   const load = useCallback(async () => {
     try {
       const data = await api.list()
+      if (!applyIfChanged('requirements', data.rev)) return
       setItems(data.requirements)
       setStatuses(data.statuses)
       setProject(data.project)
@@ -365,26 +381,28 @@ export default function App() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [applyIfChanged])
 
   const loadTodos = useCallback(async () => {
     try {
       const data = await api.todos()
+      if (!applyIfChanged('todos', data.rev)) return
       setTodos(data.todos)
       setError('')
     } catch (err) {
       setError((err as Error).message)
     }
-  }, [])
+  }, [applyIfChanged])
 
   const loadProjects = useCallback(async () => {
     try {
       const data = await api.projects()
+      if (!applyIfChanged('projects', data.rev)) return
       setProjects(data.projects)
     } catch (err) {
       setError((err as Error).message)
     }
-  }, [])
+  }, [applyIfChanged])
 
   /**
    * 会话状态读不到不该让看板报错——角标本来就只是提示，少了它看板照常能用。
@@ -393,11 +411,12 @@ export default function App() {
   const loadSessions = useCallback(async () => {
     try {
       const data = await api.sessions()
+      if (!applyIfChanged('sessions', data.rev)) return
       setSessions(data.sessions)
     } catch {
       /* 读不到就维持现状 */
     }
-  }, [])
+  }, [applyIfChanged])
 
   /**
    * 名次与理由在服务端算（要会话实时状态，渲染层拿不到同一份），这里只拉一份。
@@ -406,12 +425,13 @@ export default function App() {
   const loadNextUp = useCallback(async () => {
     try {
       const data = await api.nextUp()
+      if (!applyIfChanged('next-up', data.rev)) return
       setNextItems(data.items)
       setNextError('')
     } catch (err) {
       setNextError((err as Error).message)
     }
-  }, [])
+  }, [applyIfChanged])
 
   /**
    * 看板每秒自己刷新一次：agent 改了什么、别的窗口动了哪条，不用点刷新就能看见。
@@ -531,35 +551,68 @@ export default function App() {
     })
   }, [])
 
-  // 焦点进「已完成」列时自动展开，否则选中卡还在窄条里
-  useEffect(() => {
-    const pos = focusSlug ? posOf(focusColumns, focusSlug) : null
-    if (pos?.status === DONE_STATUS && !doneOpen) setDoneOpen(true)
-  }, [focusSlug, focusColumns, doneOpen])
+  const cardEl = (slug: string): HTMLElement | null =>
+    Array.from(document.querySelectorAll<HTMLElement>('.card')).find(
+      (node) => node.dataset.slug === slug,
+    ) ?? null
 
-  useEffect(() => {
-    if (focusSlug && !posOf(focusColumns, focusSlug)) setFocusSlug(null)
-  }, [focusColumns, focusSlug])
-
-  // 选中框只跟 focusSlug：DOM 焦点也一起挪，旧卡片才不会留着第二个框
-  useEffect(() => {
-    const active = document.activeElement as HTMLElement | null
-    if (!focusSlug) {
-      if (active?.closest?.('.card')) active.blur()
+  // 选中框与 DOM 焦点一起挪：旧卡摘属性、新卡挂属性，各只有一次 class/属性切换
+  const moveFocus = useCallback((slug: string) => {
+    const el = cardEl(slug)
+    if (!el) {
+      // 收起的「已完成」列里的卡还没渲染，等展开后的下一次渲染再落
+      pendingFocus.current = slug
       return
     }
-    const el = Array.from(document.querySelectorAll<HTMLElement>('.card')).find(
-      (node) => node.dataset.slug === focusSlug,
-    )
-    if (!el) return
+    const prev = focusedEl.current
+    if (prev && prev !== el) prev.removeAttribute('data-focused')
+    el.setAttribute('data-focused', '')
+    focusedEl.current = el
+    focusSlug.current = slug
     // 焦点已经在这张卡里（比如停在它的 agent 头像上）就别抢回来
-    if (active && el.contains(active)) {
-      el.scrollIntoView({ block: 'nearest' })
+    if (!el.contains(document.activeElement)) el.focus({ preventScroll: true })
+    el.scrollIntoView({ block: 'nearest' })
+    setFlashSlug((cur) => (cur && cur !== slug ? null : cur))
+  }, [])
+
+  const dropFocus = useCallback(() => {
+    const prev = focusedEl.current
+    if (prev) {
+      prev.removeAttribute('data-focused')
+      if (prev.contains(document.activeElement)) prev.blur()
+    }
+    focusedEl.current = null
+    focusSlug.current = null
+    pendingFocus.current = null
+  }, [])
+
+  // 鼠标点进卡片、Tab 落回卡片时同步选中框；焦点本来就在这张卡里就不动
+  const handleCardFocus = useCallback(
+    (slug: string) => {
+      if (focusSlug.current !== slug) moveFocus(slug)
+    },
+    [moveFocus],
+  )
+
+  // 卡片被筛掉、换列重挂、从详情页回来之后：焦点跟着走，卡没了就收掉选中框。
+  // 不挂依赖数组——看板重挂时 focusColumns 不一定变，只有查一下 DOM 才知道框还在不在
+  useEffect(() => {
+    const slug = focusSlug.current
+    if (!slug) return
+    if (!posOf(focusColumns, slug)) {
+      dropFocus()
       return
     }
-    el.focus({ preventScroll: true })
-    el.scrollIntoView({ block: 'nearest' })
-  }, [focusSlug])
+    if (!focusedEl.current?.isConnected) moveFocus(slug)
+  })
+
+  // 等一张还没渲染出来的卡（展开收起列、跳子需求）
+  useEffect(() => {
+    const slug = pendingFocus.current
+    if (!slug || !cardEl(slug)) return
+    pendingFocus.current = null
+    moveFocus(slug)
+  })
 
   useEffect(() => {
     if (!hint) return
@@ -571,14 +624,18 @@ export default function App() {
 
   useEffect(() => {
     if (!boardKeyboard) return
+    // 详情页按 Esc 关闭时，这一层监听是在同一个 keydown 里新挂上的，Chrome 会把还没走完的
+    // 这次按键也投给它——关详情不该顺手把选中框清掉。只接挂上之后发生的按键
+    const attachedAt = performance.now()
     const onKey = (e: KeyboardEvent) => {
+      if (e.timeStamp < attachedAt) return
       if (shouldIgnore(e)) return
       // 卡片也带 role=button，但它就是这里要接管的
       const el = e.target as HTMLElement | null
       // 焦点停在卡片里的 agent 头像上：这时在头像之间走，单键不该把人带回卡片层
       if (isPetTarget(el)) return
       if (!el?.closest?.('.card') && isInteractiveTarget(el)) return
-      const cur = posOf(focusColumns, focusSlug ?? '')
+      const cur = posOf(focusColumns, focusSlug.current ?? '')
       let next: BoardPos | null = null
       if (shortcut(e, 'board.next')) next = movePos(focusColumns, cur, 'down')
       else if (shortcut(e, 'board.prev')) next = movePos(focusColumns, cur, 'up')
@@ -586,45 +643,59 @@ export default function App() {
       else if (shortcut(e, 'board.right')) next = movePos(focusColumns, cur, 'right')
       if (next) {
         e.preventDefault()
-        setFocusSlug(slugAt(focusColumns, next))
+        // 焦点进「已完成」列时自动展开；卡是展开后才有的，落焦点由 moveFocus 记下待办
+        if (next.status === DONE_STATUS && !doneOpen) setDoneOpen(true)
+        moveFocus(slugAt(focusColumns, next))
         return
       }
-      if (shortcut(e, 'board.open') && focusSlug) {
+      const slug = focusSlug.current
+      if (shortcut(e, 'board.open') && slug) {
         e.preventDefault()
-        setDetail({ project, slug: focusSlug })
+        setDetail({ project, slug })
         return
       }
-      if (shortcut(e, 'board.kids') && focusSlug) {
+      if (shortcut(e, 'board.kids') && slug) {
         e.preventDefault()
-        toggleKids(focusSlug)
+        toggleKids(slug)
         return
       }
-      if (shortcut(e, 'board.kid-n') && focusSlug) {
-        const parent = items.find((r) => r.slug === focusSlug)
+      if (shortcut(e, 'board.kid-n') && slug) {
+        const parent = items.find((r) => r.slug === slug)
         const kids = parent ? childrenByParent.get(parent.id) : undefined
-        const kid = kidsOpen.has(focusSlug) ? kids?.[Number(e.key) - 1] : undefined
+        const kid = kidsOpen.has(slug) ? kids?.[Number(e.key) - 1] : undefined
         if (kid) {
           e.preventDefault()
           jumpToChild(kid.slug)
         }
         return
       }
-      if (shortcut(e, 'board.copy-slug') && focusSlug) {
+      if (shortcut(e, 'board.copy-slug') && slug) {
         e.preventDefault()
         void navigator.clipboard
-          ?.writeText(focusSlug)
-          .then(() => setHint(`已复制 slug：${focusSlug}`))
+          ?.writeText(slug)
+          .then(() => setHint(`已复制 slug：${slug}`))
           .catch(() => {})
         return
       }
-      if (shortcut(e, 'board.clear') && focusSlug) {
+      if (shortcut(e, 'board.clear') && slug) {
         e.preventDefault()
-        setFocusSlug(null)
+        dropFocus()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [boardKeyboard, focusColumns, focusSlug, project, toggleKids, items, childrenByParent, kidsOpen])
+  }, [
+    boardKeyboard,
+    focusColumns,
+    doneOpen,
+    project,
+    toggleKids,
+    items,
+    childrenByParent,
+    kidsOpen,
+    moveFocus,
+    dropFocus,
+  ])
 
   /**
    * 父需求的子需求完成度。父子在版面上散在各列（`byStatus` 只按状态分列），
@@ -664,14 +735,14 @@ export default function App() {
   }, [flashSlug])
 
   useEffect(() => {
-    if (focusSlug && flashSlug && focusSlug !== flashSlug) setFlashSlug(null)
-  }, [focusSlug, flashSlug])
+    if (focusSlug.current && flashSlug && focusSlug.current !== flashSlug) setFlashSlug(null)
+  }, [flashSlug])
 
   // 点父卡片上的子需求：先把它所在的那一列铺开，滚动交给上面的 effect
   function jumpToChild(slug: string) {
     const child = items.find((r) => r.slug === slug)
     if (child?.status === DONE_STATUS && !doneOpen) setDoneOpen(true)
-    setFocusSlug(slug)
+    moveFocus(slug)
     setPendingJump(slug)
   }
 
@@ -822,7 +893,7 @@ export default function App() {
                 collisionDetection={closestCorners}
                 onDragStart={({ active }: DragStartEvent) => {
                   setDragSlug(String(active.id))
-                  setFocusSlug(String(active.id))
+                  moveFocus(String(active.id))
                 }}
                 onDragOver={({ over }: DragOverEvent) => setOverStatus(statusOf(over) ?? null)}
                 onDragEnd={(e) => void handleDragEnd(e)}
@@ -838,10 +909,9 @@ export default function App() {
                       childrenByParent={childrenByParent}
                       onJumpChild={jumpToChild}
                       flashSlug={flashSlug}
-                      focusSlug={focusSlug}
                       kidsOpen={kidsOpen}
                       onToggleKids={toggleKids}
-                      onFocusCard={setFocusSlug}
+                      onFocusCard={handleCardFocus}
                       onOpen={(slug) => setDetail({ project, slug })}
                       isOver={overStatus === status}
                       collapsed={status === DONE_STATUS && !doneOpen}

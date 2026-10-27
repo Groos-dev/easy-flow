@@ -1355,7 +1355,8 @@ export class BoardDatabase {
     const updated: string[] = []
     const restored: string[] = []
 
-    const select = this.db.prepare('SELECT id, missing FROM todo WHERE id = ?')
+    // 看板每秒读一次待办：文件没动过就不写库，否则每秒一次写事务会和别的读抢锁
+    const select = this.db.prepare('SELECT id, mtime, missing FROM todo WHERE id = ?')
     const insert = this.db.prepare(
       `INSERT INTO todo (id, title, status, source, summary, path, mtime, created, updated, missing)
        VALUES (?, ?, 'todo', '', ?, ?, ?, ?, ?, 0)`,
@@ -1366,16 +1367,19 @@ export class BoardDatabase {
 
     for (const f of listTodoFiles(this.dataDir)) {
       seen.add(f.id)
-      const existing = select.get(f.id) as { id: string; missing: number } | undefined
+      const existing = select.get(f.id) as
+        | { id: string; mtime: number; missing: number }
+        | undefined
       if (!existing) {
         const at = stamp()
         insert.run(f.id, f.title || f.id, f.summary, f.file, f.mtime, at, at)
         added.push(f.id)
-      } else {
-        update.run(f.title || f.id, f.summary, f.file, f.mtime, f.id)
-        if (existing.missing) restored.push(f.id)
-        else updated.push(f.id)
+        continue
       }
+      if (!existing.missing && existing.mtime === f.mtime) continue
+      update.run(f.title || f.id, f.summary, f.file, f.mtime, f.id)
+      if (existing.missing) restored.push(f.id)
+      else updated.push(f.id)
     }
 
     const missing: string[] = []

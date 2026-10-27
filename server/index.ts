@@ -7,6 +7,7 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { execFile, spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
 import {
   BoardDatabase,
@@ -53,6 +54,14 @@ export const DEFAULT_PORT = 29170
  * agent 直接改的 md 靠这个更新
  */
 const RESCAN_INTERVAL_MS = 10_000
+
+/**
+ * 数据版本：渲染层每秒轮询一次，内容没变的响应不该再让它整块重渲染一遍。
+ * 版本只由下发的内容算出来，前端比对相同就直接丢弃。
+ */
+function digest(value: unknown): string {
+  return createHash('sha1').update(JSON.stringify(value)).digest('base64url')
+}
 
 // 不涉及目录扫描的响应回一个空 sync：列表与单条接口的对象形状保持一致
 const NO_CHANGES = {
@@ -273,8 +282,10 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
       if (url.pathname === '/api/requirements' && req.method === 'GET') {
         // 读取不重扫目录：看板每秒轮询一次，而一次全量重扫要 250ms 以上（实测 1808 个目录）。
         // md 的变化由后台兜底重扫与详情页的主动同步带进来，这里只查库
+        const requirements = db.list()
         json(req, res, 200, {
-          requirements: db.list(),
+          requirements,
+          rev: digest(requirements),
           project: db.project,
           // 顶栏显示用。name 来自项目根 AGENTS.md 的 frontmatter，缺省是目录名
           projectName: db.listProjects().find((p) => p.slug === db.project)?.name ?? db.project,
@@ -288,7 +299,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
       // ----------------------------------------------------------- 项目
 
       if (url.pathname === '/api/projects' && req.method === 'GET') {
-        json(req, res, 200, { projects: db.listProjects(), active: db.project })
+        const projects = db.listProjects()
+        json(req, res, 200, { projects, rev: digest(projects), active: db.project })
         return
       }
 
@@ -418,7 +430,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
       // 全部会话（归属在每条的 requirementId 上）：mini 面板一次拉全，
       // 逐需求拉 context 太碎；排序交给库（最近登记的在前）
       if (url.pathname === '/api/sessions' && req.method === 'GET') {
-        json(req, res, 200, { sessions: readObservations(db.listSessions(), stateStore) })
+        const sessions = readObservations(db.listSessions(), stateStore)
+        json(req, res, 200, { sessions, rev: digest(sessions) })
         return
       }
 
@@ -461,7 +474,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
         const requirements = db.list()
         const ids = new Set(requirements.map((r) => r.id))
         const sessions = readObservations(db.listSessions(), stateStore).filter((s) => ids.has(s.requirementId))
-        json(req, res, 200, { items: rankNextUp(requirements, sessions) })
+        const items = rankNextUp(requirements, sessions)
+        json(req, res, 200, { items, rev: digest(items) })
         return
       }
 
@@ -587,10 +601,12 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
 
       // 待办是全局的，不分项目，所以这里不解析 project
       if (url.pathname === '/api/todos' && req.method === 'GET') {
-        // 与需求一致：每次读取前同步一次，md 可能被 agent 改过
+        // 与需求一致：每次读取前同步一次，md 可能被 agent 改过。没变的文件不读写，见 syncTodos
         const sync = db.syncTodos()
+        const todos = db.listTodos()
         json(req, res, 200, {
-          todos: db.listTodos(),
+          todos,
+          rev: digest(todos),
           statuses: TODO_STATUSES,
           sources: TODO_SOURCES,
           sync,

@@ -116,11 +116,13 @@ describe('PetRow 渲染', () => {
     assert.equal(petCount(render(createElement(PetRow, { sessions: [sess('claude', 'done')] }))), 1)
   })
 
-  test('姿势就是状态：跑完待看 / 静止各画各的', () => {    const done = render(createElement(PetRow, { sessions: [sess('claude', 'done')] }))
+  test('姿势就是状态：跑完待看 / 静止各画各的', () => {
+    const done = render(createElement(PetRow, { sessions: [sess('claude', 'done')] }))
     assert.match(done, /src="pets\/clawd-happy.svg"/)
     assert.match(done, /aria-label="Claude Code · 跑完待看"/)
+    // 静止档默认是静态首帧，鼠标 / 焦点落上来才播动画
     const idle = render(createElement(PetRow, { sessions: [sess('claude', 'idle')] }))
-    assert.match(idle, /src="pets\/clawd-idle-follow.svg"/)
+    assert.match(idle, /src="pets\/clawd-idle-follow\.still\.svg"/)
     assert.match(idle, /aria-label="Claude Code · 静止"/)
   })
 
@@ -128,10 +130,10 @@ describe('PetRow 渲染', () => {
     const now = Date.now()
     const art = (idleMs: number) =>
       render(createElement(PetRow, { sessions: [sess('claude', 'idle', '', now - idleMs)] }))
-    assert.match(art(0), /src="pets\/clawd-idle-follow\.svg"/)
-    assert.match(art(60_000), /src="pets\/clawd-idle-yawn\.svg"/)
-    assert.match(art(20 * 60_000), /src="pets\/clawd-idle-doze\.svg"/)
-    assert.match(art(60 * 60_000), /src="pets\/clawd-sleeping\.svg"/)
+    assert.match(art(0), /src="pets\/clawd-idle-follow\.still\.svg"/)
+    assert.match(art(60_000), /src="pets\/clawd-idle-yawn\.still\.svg"/)
+    assert.match(art(20 * 60_000), /src="pets\/clawd-idle-doze\.still\.svg"/)
+    assert.match(art(60 * 60_000), /src="pets\/clawd-sleeping\.still\.svg"/)
   })
 
   test('事件边框跟状态走：事件型三档带 event，静止不带', () => {    const done = render(createElement(PetRow, { sessions: [sess('claude', 'done')] }))

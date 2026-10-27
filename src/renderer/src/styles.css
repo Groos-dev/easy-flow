@@ -3625,12 +3625,12 @@ code.launch-hint {
 
 /* ------------------------------------------------- 键盘焦点与键位表 */
 
-/* 选中框只认 .focused，DOM 焦点不单独画框，避免两张卡各亮一个 */
+/* 选中框认 data-focused：看板移动时直接切属性，不经过 React 渲染。DOM 焦点不单独画框 */
 .card:focus {
   outline: none;
 }
 
-.card.focused {
+.card[data-focused] {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
