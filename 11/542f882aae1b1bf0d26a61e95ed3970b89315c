@@ -1,0 +1,27 @@
+src/renderer/src/components/Pet.tsx
+  s_ec08b39c839b14::t_68923ed1cbdd9f 341,343-351,357
+src/renderer/src/App.tsx
+  s_ec08b39c839b14::t_92ca705c1bba35 979-983
+test/pet-card.test.ts
+  s_ec08b39c839b14::t_66e05ff8516c71 317,319-320
+src/renderer/src/styles.css
+  s_ec08b39c839b14::t_0b54434e1a21b5 931-932,934
+src/renderer/src/components/Card.tsx
+  s_ec08b39c839b14::t_2295977d53e4b5 123-124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "11542f882aae1b1bf0d26a61e95ed3970b89315c",
+  "prompts": {},
+  "sessions": {
+    "s_ec08b39c839b14": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_r7a0otfmu3z7",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
