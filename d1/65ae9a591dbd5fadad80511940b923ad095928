@@ -1,0 +1,41 @@
+src/renderer/src/App.tsx
+  s_4ff64bd5e0a602::t_b432142e479bac 18
+src/renderer/src/lib/api.ts
+  s_4ff64bd5e0a602::t_5db96323d958b8 53-60
+  s_4ff64bd5e0a602::t_f2f80ed1f21e69 82,86
+  s_4ff64bd5e0a602::t_d1d614a132db59 84-85
+  s_4ff64bd5e0a602::t_61e626d82ebf31 4
+test/core.test.ts
+  s_4ff64bd5e0a602::t_022224c7be9a5e 2793-2828
+src/renderer/src/lib/types.ts
+  s_4ff64bd5e0a602::t_6f294b293e3d8a 200
+  s_4ff64bd5e0a602::t_fbcccba28b3d4c 201-202,213-216
+server/index.ts
+  s_4ff64bd5e0a602::t_f5f4dc11cff43e 418-434
+src/renderer/src/components/InfoPanel.tsx
+  s_4ff64bd5e0a602::t_75f63d10c6eac1 39,55-60,62
+  s_4ff64bd5e0a602::t_af6580a05d84cd 21-22,38,40-42,45-54,63-67,69-79,82,84
+  s_4ff64bd5e0a602::t_d639eefdc6a6f2 10
+  s_4ff64bd5e0a602::t_d4446f762e1ccf 6
+  s_4ff64bd5e0a602::t_52eaae4a3a0805 61
+  s_4ff64bd5e0a602::t_6642564d4f5dd4 43-44,68
+  s_4ff64bd5e0a602::t_05b1086a092486 155-156
+src/renderer/src/lib/time.ts
+  s_4ff64bd5e0a602::t_aa093c57cac6cd 19-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "d165ae9a591dbd5fadad80511940b923ad095928",
+  "prompts": {},
+  "sessions": {
+    "s_4ff64bd5e0a602": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_xxs8ifmltp77",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
