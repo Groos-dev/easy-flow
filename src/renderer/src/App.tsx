@@ -675,8 +675,7 @@ export default function App() {
     }
   }, [placeRing])
 
-  // 焦点卡自己改变尺寸（pet 换素材、气泡换行、子需求铺开）时浮层要跟着量。
-  // 这里用带过渡的落位：宽度高度是渐变，位置没变，不会把换卡时的滑动打断
+  // 焦点卡长高变矮时重新量；用带过渡的落位，位置没变，不打断换卡的滑动
   useEffect(() => {
     const ro = new ResizeObserver(() => {
       const el = focusedEl.current
@@ -938,8 +937,7 @@ export default function App() {
               <div className="topbar-side" />
 
               <div className="topbar-side right">
-                {/* 筛选标记常驻：关掉面板后看板上少了卡片，得有个东西解释为什么少。
-                    「下一步」不吃这套筛，不摆 */}
+                {/* 筛选标记常驻：关掉面板后看板少了卡片，得有东西解释为什么少；「下一步」不吃这套筛 */}
                 {reqView !== 'next' && query.trim() && (
                   <button
                     className="filter-chip"
