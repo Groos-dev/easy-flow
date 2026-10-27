@@ -1007,7 +1007,11 @@ export default function App() {
                     />
                   ))}
                 </div>
-                <DragOverlay>{dragItem ? <Card req={dragItem} overlay /> : null}</DragOverlay>
+                <DragOverlay>
+                  {dragItem ? (
+                    <Card req={dragItem} sessions={sessionsByReq.get(dragItem.id) ?? []} overlay />
+                  ) : null}
+                </DragOverlay>
               </DndContext>
             ) : reqView === 'next' ? (
               <NextUp

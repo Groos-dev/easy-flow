@@ -314,9 +314,10 @@ describe('Card 挂 pet', () => {
     assert.doesNotMatch(html, /class="card-kids-list"/)
   })
 
-  test('拖拽浮层不挂 pet', () => {
+  test('拖拽浮层照着画出 pet，但那一排是 inert 的', () => {
     const html = render(createElement(Card, { req: req(), sessions: [sess('claude', 'blocked')], overlay: true }))
-    assert.doesNotMatch(html, /class="pets/)
+    // 少画一排，浮层就比真卡矮，原位那张半透明的卡会从底下露出来
+    assert.match(html, /class="pets" inert=""/)
   })
 })
 

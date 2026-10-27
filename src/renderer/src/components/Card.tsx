@@ -120,8 +120,8 @@ export default function Card({
         )}
       </div>
       {/* 每个会话一只 pet：姿势看出哪个 agent 在等你、哪个跑完了；要人回答的那句话在它头顶的气泡里。
-          拖拽浮层只负责跟手，那一层不挂 */}
-      {!overlay && <PetRow sessions={sessions ?? []} />}
+          拖拽浮层也照原样画一排——少这一排浮层就比真卡矮，原位那张 0.4 的卡会从底下露出来 */}
+      <PetRow sessions={sessions ?? []} inert={overlay} />
       {req.summary && <div className="card-summary">{req.summary}</div>}
       {/* 子需求清单：卡片上那行 1/3 只说还剩几块，这里说它们分别是什么、在哪一列 */}
       {kidsOpen && kids && kids.length > 0 && (
