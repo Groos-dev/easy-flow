@@ -197,10 +197,9 @@ export interface LaunchResult {
   promptCopied?: boolean
 }
 
-export interface ContextPayload {
-  requirement: Requirement
-  docs: Array<{ name: string; content: string }>
-  requirementMd: string | null
+// 详情页浮窗里会随库变的那四块，打开详情页时随 context 取一次
+// 之后由 /api/context/live 按看板的节奏续上
+export interface ContextLive {
   // 这个需求名下的工作区
   worktrees: Worktree[]
   // 这个需求上登记的 agent 会话。只归库，详情页的「会话」块靠它
@@ -209,6 +208,12 @@ export interface ContextPayload {
   todos: Todo[]
   // 由来源会话推出、但指针没回填的待办。只是提示，没有进库
   candidateTodos: Todo[]
+}
+
+export interface ContextPayload extends ContextLive {
+  requirement: Requirement
+  docs: Array<{ name: string; content: string }>
+  requirementMd: string | null
 }
 
 // 会话的实时状态。字面量与 server/session-state.ts 的 THREAD_STATES 一致
