@@ -548,6 +548,28 @@ export default function App() {
     })
   }, [])
 
+  // 这一列是按焦点自动展开的，还是人点开的
+  const doneAutoOpen = useRef(false)
+
+  // 焦点要落进「已完成」列时先展开，否则卡还没渲染出来
+  const revealDone = useCallback(() => {
+    if (doneOpen) return
+    doneAutoOpen.current = true
+    setDoneOpen(true)
+  }, [doneOpen])
+
+  // 只收自动展开的那一次：人点开的列由人自己收
+  const foldDone = useCallback(() => {
+    if (!doneAutoOpen.current) return
+    doneAutoOpen.current = false
+    setDoneOpen(false)
+  }, [])
+
+  const toggleDone = useCallback(() => {
+    doneAutoOpen.current = false
+    setDoneOpen((v) => !v)
+  }, [])
+
   const cardEl = (slug: string): HTMLElement | null =>
     Array.from(document.querySelectorAll<HTMLElement>('.card')).find(
       (node) => node.dataset.slug === slug,
@@ -624,7 +646,9 @@ export default function App() {
     focusSlug.current = null
     pendingFocus.current = null
     focusRing.current?.classList.remove('on')
-  }, [])
+    // 焦点收掉就是离开「已完成」列：跟着焦点展开的那次列也一起收回去
+    foldDone()
+  }, [foldDone])
 
   // 鼠标点进卡片、Tab 落回卡片时同步选中框；焦点本来就在这张卡里就不动
   const handleCardFocus = useCallback(
@@ -731,8 +755,9 @@ export default function App() {
       else if (shortcut(e, 'board.right')) next = movePos(focusColumns, cur, 'right')
       if (next) {
         e.preventDefault()
-        // 焦点进「已完成」列时自动展开；卡是展开后才有的，落焦点由 moveFocus 记下待办
-        if (next.status === DONE_STATUS && !doneOpen) setDoneOpen(true)
+        // 卡是列展开之后才有的，落焦点由 moveFocus 记下待办
+        if (next.status === DONE_STATUS) revealDone()
+        else foldDone()
         moveFocus(slugAt(focusColumns, next))
         return
       }
@@ -775,7 +800,6 @@ export default function App() {
   }, [
     boardKeyboard,
     focusColumns,
-    doneOpen,
     project,
     toggleKids,
     items,
@@ -783,6 +807,8 @@ export default function App() {
     kidsOpen,
     moveFocus,
     dropFocus,
+    revealDone,
+    foldDone,
   ])
 
   /**
@@ -829,7 +855,7 @@ export default function App() {
   // 点父卡片上的子需求：先把它所在的那一列铺开，滚动交给上面的 effect
   function jumpToChild(slug: string) {
     const child = items.find((r) => r.slug === slug)
-    if (child?.status === DONE_STATUS && !doneOpen) setDoneOpen(true)
+    if (child?.status === DONE_STATUS) revealDone()
     moveFocus(slug)
     setPendingJump(slug)
   }
@@ -1008,7 +1034,7 @@ export default function App() {
                       onOpen={(slug) => setDetail({ project, slug })}
                       isOver={overStatus === status}
                       collapsed={status === DONE_STATUS && !doneOpen}
-                      onToggleCollapsed={() => setDoneOpen((v) => !v)}
+                      onToggleCollapsed={toggleDone}
                     />
                   ))}
                 </div>
