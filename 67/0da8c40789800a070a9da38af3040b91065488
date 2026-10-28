@@ -1,0 +1,24 @@
+src/renderer/src/App.tsx
+  s_999e84a6cd14b2::t_d3f715ae5f5351 758-760
+  s_999e84a6cd14b2::t_5b1747dee3c469 1037
+  s_999e84a6cd14b2::t_082aa10e26caa1 810-811
+  s_999e84a6cd14b2::t_22f5041e823e26 649-651
+  s_999e84a6cd14b2::t_1415b7c9069852 551-572
+  s_999e84a6cd14b2::t_dfa69994827c4e 858
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "670da8c40789800a070a9da38af3040b91065488",
+  "prompts": {},
+  "sessions": {
+    "s_999e84a6cd14b2": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_xuycfarjlnh4",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
