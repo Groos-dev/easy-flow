@@ -14,6 +14,7 @@ import {
 import { api } from './lib/api'
 import { DONE_STATUS, childStatsOf, childrenOf } from './lib/children'
 import { movePos, posOf, slugAt, type BoardColumn, type BoardPos } from './lib/board-focus'
+import { lastActiveByReq, orderColumn } from './lib/board-order'
 import { isInteractiveTarget, isPetTarget, shortcut, shortcutLabel, shouldIgnore } from './lib/keys'
 import { BOARD_POLL_MS } from './lib/time'
 import type { ChildStat, NextUpItem, Project, Requirement, Session, Status, Todo } from './lib/types'
@@ -138,9 +139,6 @@ function statusOf(over: DragOverEvent['over']): Status | undefined {
   const data = over?.data.current as { status?: Status } | undefined
   return data?.status
 }
-
-// 同列内按优先级排：p0 在前，没设优先级的排最后
-const PRIORITY_RANK: Record<string, number> = { p0: 0, p1: 1, p2: 2, p3: 3 }
 
 // pin 的项目存浏览器本地：它是「这台机器上常看哪几个」，不是看板数据
 const PINNED_KEY = 'easy-flow.pinned-projects'
@@ -486,6 +484,10 @@ export default function App() {
     return map
   }, [sessions])
 
+  // 需求 id → 名下 agent 最后活跃的时刻，列内排序靠它
+  // 会话每秒拉一次，卡片顺序跟着动（BOARD_POLL_MS）
+  const lastActive = useMemo(() => lastActiveByReq(sessionsByReq), [sessionsByReq])
+
   // pin 只动左栏常驻哪几个，不切当前项目
   function togglePin(slug: string, next: boolean) {
     setPinned((list) =>
@@ -525,12 +527,10 @@ export default function App() {
       if (!map.has(st)) map.set(st, [])
       map.get(st)!.push(r)
     }
-    // 优先级只在列内体现：排前面就是更该做，不再上色。同档保持原顺序
-    for (const list of map.values()) {
-      list.sort((a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9))
-    }
+    // 顺序只在列内体现：最近动过的排在前面，没动过的按优先级沉底
+    for (const [status, list] of map) map.set(status, orderColumn(list, lastActive))
     return map
-  }, [shown, statuses])
+  }, [shown, statuses, lastActive])
 
   const focusColumns = useMemo<BoardColumn[]>(
     () => statuses.map((s) => ({ status: s, slugs: (byStatus.get(s) ?? []).map((r) => r.slug) })),

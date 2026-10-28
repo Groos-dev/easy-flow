@@ -1,7 +1,7 @@
 import type { Requirement, Session } from './types'
 import { isCodeLink, linkLabel } from './links'
-import { isEventState } from './threads'
-import { parseStamp, relTime } from './time'
+import { isEventState, sessionActive } from './threads'
+import { relTime } from './time'
 
 const VISIBLE_STATUS = new Set(['执行中', 'Review'])
 
@@ -38,11 +38,6 @@ export interface MiniInput {
   sessions: Session[]
   query: string
   expanded: string
-}
-
-// hook 推送、拉取、点 pet 都写 observed_at；没观察过的会话退回登记时间
-export function sessionActive(s: Session): number {
-  return Math.max(s.status.observedAt, parseStamp(s.updated))
 }
 
 export function miniTime(ms: number): string {

@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { isComposing, shortcut } from '../lib/keys'
 import { AGENT_LABELS, THREAD_STATE_CLASS } from '../lib/labels'
-import { buildMiniBlocks, miniTime, sessionActive, type MiniAction } from '../lib/mini'
+import { buildMiniBlocks, miniTime, type MiniAction } from '../lib/mini'
 import { moveKey, resolveKey } from '../lib/selection'
-import { badgesOf } from '../lib/threads'
+import { badgesOf, sessionActive } from '../lib/threads'
 import type { Requirement, Session } from '../lib/types'
 import {
   AgentIcon,

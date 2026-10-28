@@ -1,4 +1,6 @@
 /**
+ * 会话状态的口径：角标挂哪些、最近一次活跃在什么时候。
+ *
  * 卡片角标的挑选。一条需求名下可能挂着好几个会话，**每个会话一个角标**——
  * 同时开着几个 agent 时，看板上要能一眼看出是哪个在等你、哪个在跑。
  *
@@ -10,10 +12,19 @@
  * 都不提示。
  */
 import { isEventState } from '../../../shared/thread-events'
+import { parseStamp } from './time'
 import type { Session, ThreadState } from './types'
 
 // 从急到缓：卡住了 > 出错 > 跑完了 > 干活 > 思考。角标按这个顺序排
 const ORDER: ThreadState[] = ['blocked', 'failed', 'done', 'working', 'thinking']
+
+/**
+ * 会话最后一次活跃的时刻。
+ * hook 推送、拉取、点 pet 都写 observedAt；没观察过的退回登记时间，两处都没有时为 0。
+ */
+export function sessionActive(s: Session): number {
+  return Math.max(s.status.observedAt, parseStamp(s.updated))
+}
 
 /**
  * 事件口径与服务端、通知层共用 src/shared/thread-events.ts，

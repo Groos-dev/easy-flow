@@ -38,6 +38,7 @@ import type { SessionAction } from '../src/renderer/src/lib/types.ts'
 import { petArt, scopeCloudling, idleMoodOf, isWaking, type IdleMood } from '../src/renderer/src/lib/pet-art.ts'
 import { CLOUDLING_SVG } from '../src/renderer/src/lib/pet-cloudling-art.ts'
 import { childStatsOf, childrenOf } from '../src/renderer/src/lib/children.ts'
+import { lastActiveByReq, orderColumn } from '../src/renderer/src/lib/board-order.ts'
 import { parseStamp, relTime } from '../src/renderer/src/lib/time.ts'
 import type { Requirement, Session } from '../src/renderer/src/lib/types.ts'
 
@@ -910,6 +911,59 @@ describe('渲染层 · 子需求清单', () => {
   test('没有子需求的需求不在表里', () => {
     const map = childrenOf([req('alpha', 'req-a', '', '执行中')])
     assert.equal(map.size, 0)
+  })
+})
+
+// -------------------------------------------- 看板列内顺序
+
+describe('渲染层 · 看板列内排序', () => {
+  const req = (id: string, priority = ''): Requirement =>
+    ({ slug: id, id, priority }) as Requirement
+
+  function sess(requirementId: string, observedAt: number, updated = ''): Session {
+    return {
+      requirementId,
+      agent: 'claude',
+      session: `${requirementId}-${observedAt}`,
+      title: '',
+      cwd: '',
+      link: '',
+      created: '',
+      updated,
+      status: { state: 'idle', needsAction: '', observedAt, detail: '' },
+      action: null,
+    }
+  }
+
+  function byReq(...sessions: Session[]): Map<string, Session[]> {
+    const map = new Map<string, Session[]>()
+    for (const s of sessions) map.set(s.requirementId, [...(map.get(s.requirementId) ?? []), s])
+    return map
+  }
+
+  test('按最后活跃倒序：最近动过的在最上面', () => {
+    const last = lastActiveByReq(byReq(sess('req-a', 100), sess('req-b', 200)))
+    const got = orderColumn([req('req-a'), req('req-b')], last)
+    assert.deepEqual(got.map((r) => r.id), ['req-b', 'req-a'])
+  })
+
+  test('一条需求挂多个会话时取最晚的时刻；没观察过的按登记时间算', () => {
+    const updated = '2026-10-28 09:00'
+    const last = lastActiveByReq(byReq(sess('req-a', 100), sess('req-a', 200), sess('req-c', 0, updated)))
+    assert.equal(last.get('req-a'), 200)
+    assert.equal(last.get('req-c'), parseStamp(updated))
+  })
+
+  test('没有活跃记录的需求沉底，之间按优先级', () => {
+    const last = lastActiveByReq(byReq(sess('req-a', 100)))
+    const got = orderColumn([req('req-x', 'p3'), req('req-a'), req('req-y', 'p0')], last)
+    assert.deepEqual(got.map((r) => r.id), ['req-a', 'req-y', 'req-x'])
+  })
+
+  test('活跃时刻并列时按优先级，同档保持原顺序', () => {
+    const last = lastActiveByReq(byReq(sess('req-a', 100), sess('req-b', 100), sess('req-c', 100)))
+    const got = orderColumn([req('req-a'), req('req-b', 'p1'), req('req-c', 'p1')], last)
+    assert.deepEqual(got.map((r) => r.id), ['req-b', 'req-c', 'req-a'])
   })
 })
 
