@@ -1,0 +1,19 @@
+test/package-paths.test.ts
+  s_8a30690d9cca9f::t_31683007094d76 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "fae90a19db0ecbf901f23a1835307c5417a1a457",
+  "prompts": {},
+  "sessions": {
+    "s_8a30690d9cca9f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a2e393fd-d9b4-4410-b9f5-34d1f2624bf2",
+        "model": "composer-2.5"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
