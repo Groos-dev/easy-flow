@@ -19,9 +19,7 @@ function req(over: Partial<Requirement> & { slug: string }): Requirement {
     summary: '',
     repos: [],
     links: '',
-    feishuTaskLinks: [],
-    codeLinks: [],
-    extLinks: [],
+    linkItems: [],
     docs: [],
     path: `/tmp/${over.slug}`,
     mtime: NOW - 86400000,
@@ -159,9 +157,11 @@ describe('mini 面板的动作行', () => {
   const requirement = req({
     slug: 'demo',
     title: '示例需求',
-    codeLinks: [{ label: '', url: 'https://gitlab.example.com/onex/easy-flow/-/merge_requests/128' }],
-    feishuTaskLinks: ['https://quicket.feishu.cn/onex/story/detail/123'],
-    extLinks: [{ detail: '设计稿', url: 'https://example.com/design' }],
+    linkItems: [
+      { title: '', url: 'https://gitlab.example.com/onex/easy-flow/-/merge_requests/128' },
+      { title: '', url: 'https://quicket.feishu.cn/onex/story/detail/123' },
+      { title: '设计稿', url: 'https://example.com/design' },
+    ],
   })
   const sessions = [
     sess({ requirementId: 'req-demo', session: 'old', title: '旧方案调研', observedAt: NOW - 90_000_000, link: 'claude://1' }),

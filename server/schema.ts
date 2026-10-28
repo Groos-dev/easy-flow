@@ -26,9 +26,7 @@ CREATE TABLE IF NOT EXISTS requirement (
   summary  TEXT,
   repos    TEXT,
   links    TEXT,
-  feishu_task_links TEXT,
-  code_links     TEXT,
-  ext_links    TEXT,
+  link_items TEXT,
   mtime    INTEGER NOT NULL DEFAULT 0,
   updated  TEXT,
   missing  INTEGER NOT NULL DEFAULT 0,
@@ -195,10 +193,10 @@ function migrate(db: DatabaseSync): void {
   // 子需求：父需求的 id。层级同时体现在 slug（parent/child）里，这里存一份便于按父子查
   addIfMissing('requirement', 'parent_id', 'parent_id TEXT')
   db.exec('CREATE INDEX IF NOT EXISTS idx_req_parent ON requirement(parent_id)')
-  // Links: written by the CLI; the UI only displays them
-  addIfMissing('requirement', 'feishu_task_links', 'feishu_task_links TEXT')
-  addIfMissing('requirement', 'code_links', 'code_links TEXT')
-  addIfMissing('requirement', 'ext_links', 'ext_links TEXT')
+  // 链接：飞书任务 / 代码链接 / 扩展链接三列收成 link_items 一列 [{title,url}]。
+  // 先补列再搬数据，最后删旧列——顺序反了就没有数据可搬
+  addIfMissing('requirement', 'link_items', 'link_items TEXT')
+  migrateLinkItems(db)
   // 会话角色（review 会话）已下掉：老库里那列没有读者了，删掉
   dropIfExists('session', 'role')
   addIfMissing('session_state', 'action_text', `action_text TEXT NOT NULL DEFAULT ''`)
@@ -212,4 +210,94 @@ function migrate(db: DatabaseSync): void {
 export function applySchema(db: DatabaseSync): void {
   db.exec(SCHEMA)
   migrate(db)
+}
+
+/**
+ * 老库的三列并进 link_items。
+ * 只在三列还在时跑。
+ * 顺序是飞书、代码链接、扩展链接，与原看板的分组顺序一致。
+ * 地址已在 link_items 里的保留那边的标题，旧列多出来的追加在后面。
+ * 搬完再删列，合并与删列在同一个事务里。
+ */
+function migrateLinkItems(db: DatabaseSync): void {
+  const cols = (db.prepare('PRAGMA table_info(requirement)').all() as Array<{ name: string }>).map((c) => c.name)
+  const legacy = ['feishu_task_links', 'code_links', 'ext_links'].filter((c) => cols.includes(c))
+  if (!legacy.length) return
+
+  const rows = db
+    .prepare(`SELECT slug, project, link_items, ${legacy.join(', ')} FROM requirement`)
+    .all() as Array<Record<string, string | null>>
+
+  const update = db.prepare('UPDATE requirement SET link_items = ? WHERE slug = ? AND project = ?')
+  db.exec('BEGIN')
+  try {
+    for (const row of rows) {
+      const merged = mergeLinks(readLinkItems(row.link_items), legacyLinks(row))
+      update.run(JSON.stringify(merged), row.slug, row.project)
+    }
+    for (const col of legacy) db.exec(`ALTER TABLE requirement DROP COLUMN ${col}`)
+    db.exec('COMMIT')
+  } catch (err) {
+    db.exec('ROLLBACK')
+    throw err
+  }
+}
+
+// 读 link_items 列：这一列只有新代码写过，形状固定是 [{title,url}]，坏数据当没有
+function readLinkItems(raw: string | null): Array<{ title: string; url: string }> {
+  if (!raw) return []
+  let list: unknown
+  try {
+    list = JSON.parse(raw)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(list)) return []
+  const out: Array<{ title: string; url: string }> = []
+  for (const item of list) {
+    const obj = item as { title?: unknown; url?: unknown } | null
+    const url = String(obj?.url ?? '').trim()
+    if (url) out.push({ title: String(obj?.title ?? '').trim(), url })
+  }
+  return out
+}
+
+// 已有地址保留原标题，旧列里多出来的追加
+function mergeLinks(
+  existing: Array<{ title: string; url: string }>,
+  legacy: Array<{ title: string; url: string }>,
+): Array<{ title: string; url: string }> {
+  const out = existing.map((l) => ({ ...l }))
+  for (const link of legacy) {
+    if (!out.some((l) => l.url === link.url)) out.push(link)
+  }
+  return out
+}
+
+// 老列的条目形状各不一样：飞书是纯 URL、代码链接带别名、扩展链接带描述。统一成 {title,url}
+function legacyLinks(row: Record<string, string | null>): Array<{ title: string; url: string }> {
+  const out: Array<{ title: string; url: string }> = []
+  const push = (url: unknown, title: unknown) => {
+    const u = String(url ?? '').trim()
+    if (!u || out.some((l) => l.url === u)) return
+    out.push({ title: String(title ?? '').trim(), url: u })
+  }
+  const items = (column: string): unknown[] => {
+    const raw = row[column]
+    if (!raw) return []
+    try {
+      const list: unknown = JSON.parse(raw)
+      return Array.isArray(list) ? list : []
+    } catch {
+      return []
+    }
+  }
+  type Old = { url?: unknown; label?: unknown; detail?: unknown }
+  for (const item of items('feishu_task_links')) push(typeof item === 'string' ? item : (item as Old | null)?.url, '')
+  for (const item of items('code_links')) {
+    if (typeof item === 'string') push(item, '')
+    else push((item as Old | null)?.url, (item as Old | null)?.label)
+  }
+  for (const item of items('ext_links')) push((item as Old | null)?.url, (item as Old | null)?.detail)
+  return out
 }

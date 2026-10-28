@@ -64,34 +64,10 @@ name: ${oneLine(name)}
 `
 }
 
-/**
- * 需求目录的 AGENTS.md：agent 的说明书，身份（id）也写在这里。
- *
- * 为什么身份不放 requirement.md：那份文件是"要做什么"（人写的需求描述），
- * 而 id 是"你是谁"，跟文件约定、约束是一类东西，都属于给 agent 看的说明书。
- */
-function requirementAgents(id: string): string {
-  const frontmatter = id ? `---\nid: ${id}\n---\n\n` : ''
-  return `${frontmatter}<!-- easy-flow 需求 · agent 指令：写怎么干活、有哪些约束、要避开什么。
-     跑 easy-flow 命令时（如 easy-flow context），用上面 frontmatter 里的 id 显式传参。
-     完整流程（三阶段、每阶段做什么、内容放哪）见 easy-flow skill。 -->
-
-## 这个目录里有什么
-
-| 文件 | 作用 |
-| --- | --- |
-| \`AGENTS.md\` | 本文件：身份（frontmatter 的 id）与 agent 指令 |
-| \`requirement.md\` | 需求描述。看板卡片的标题取它的 H1、摘要取「需求」段；验收段写做到什么算完成 |
-| \`context.md\` | 需求的上下文：背景、约束、相关的人与系统、决策依据 |
-| \`docs/\` | 设计、调研、踩坑。会出现在详情页标签栏；工作区里的 \`design/\` 软链指向它下面的仓库目录 |
-
-## 约束
-`
-}
-
-// requirement.md：需求描述，卡片标题与摘要的来源。身份不在这里
-function requirementDesc(title: string, summary: string): string {
-  return `# ${oneLine(title)}
+// requirement.md：需求描述。编号写在开头，标题与摘要从正文来
+function requirementDesc(title: string, summary: string, id = ''): string {
+  const head = id ? `---\nid: ${id}\n---\n\n` : ''
+  return `${head}# ${oneLine(title)}
 
 ## 需求
 
@@ -143,10 +119,9 @@ export function newWorktreeId(): string {
   return newId('wt')
 }
 
-// 给已有需求补 id：只动 frontmatter，正文原样写回
+// 给已有需求补编号：写在 requirement.md 开头，正文原样保留
 export function setRequirementId(dir: string, id: string): void {
-  // 身份归说明书：写入 AGENTS.md 的 frontmatter，正文原样写回
-  const file = join(dir, 'AGENTS.md')
+  const file = join(dir, 'requirement.md')
   const { data, body } = parseFrontmatter(readFileSync(file, 'utf8'))
   const frontmatter = Object.entries({ ...data, id })
     .map(([k, v]) => `${k}: ${v}`)
@@ -197,7 +172,6 @@ export function ensureTemplates(dataDir: string): void {
     const root = templatesDir(dataDir)
     const files: Array<[string, string]> = [
       ['project/AGENTS.md', renderProjectTemplate('', true)],
-      ['requirement/AGENTS.md', requirementAgents('')],
       ['requirement/requirement.md', REQUIREMENT_DESC_TEMPLATE],
       ['requirement/context.md', REQUIREMENT_CONTEXT_TEMPLATE],
     ]
@@ -231,8 +205,7 @@ export function createProjectDir(dataDir: string, slug: string, name = ''): stri
 
 /**
  * 在项目目录下建一个需求（子需求就是往下再建一层，结构完全相同）。
- * 两份文件一次写齐——缺一份就不会被识别成需求。
- * 已存在则报错，不静默复用，与 createProject 的取舍一致。
+ * requirement.md 与 context.md 一次写齐。已存在则报错，不静默复用，与 createProject 的取舍一致。
  */
 export function createRequirementDir(
   root: string,
@@ -247,8 +220,7 @@ export function createRequirementDir(
   if (existsSync(dir)) throw new Error(`Directory already exists: ${dir}`)
   const id = newRequirementId()
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'AGENTS.md'), requirementAgents(id), 'utf8')
-  writeFileSync(join(dir, 'requirement.md'), requirementDesc(title, summary || PLACEHOLDER_SUMMARY), 'utf8')
+  writeFileSync(join(dir, 'requirement.md'), requirementDesc(title, summary || PLACEHOLDER_SUMMARY, id), 'utf8')
   ensureRequirementContext(dir)
   return { dir, id }
 }
@@ -256,8 +228,7 @@ export function createRequirementDir(
 /**
  * 只读地报告项目哪里不合规范，空数组表示合规。
  *
- * 需求侧没有可校验项：需求目录被识别的充要条件就是两份文件齐备，
- * 缺了就不算需求，所以这类问题归到「子目录」一条里报，天然只出现一次。
+ * 需求侧没有可校验项：有 requirement.md 就是需求。
  */
 export function projectIssues(slug: string, root: string): string[] {
   const issues: string[] = []
@@ -272,7 +243,7 @@ export function projectIssues(slug: string, root: string): string[] {
   if (stray.length) {
     const shown = stray.slice(0, 3).join('、')
     const more = stray.length > 3 ? ` 等 ${stray.length} 个` : ''
-    issues.push(`子目录 ${shown}${more} 不是需求（需 AGENTS.md + requirement.md），不会出现在看板`)
+    issues.push(`子目录 ${shown}${more} 不是需求（需 requirement.md），不会出现在看板`)
   }
   return issues
 }
@@ -285,7 +256,7 @@ export function projectIssues(slug: string, root: string): string[] {
  * 状态与来源等元数据只存在 easy-flow.db 里，不写进这里。
  *
  * 不往正文里塞说明性注释：这份 md 是给人看的文档（应用里直接渲染），
- * 格式约定写在 todo skill 里，正文只留内容。
+ * 格式约定写在 easy-flow skill 的「待办」里，正文只留内容。
  */
 export function renderTodoDoc(title: string, summary = ''): string {
   return `# ${oneLine(title)}

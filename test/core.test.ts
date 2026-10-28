@@ -18,7 +18,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { spawnSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { BoardDatabase, normalizeLinkList, normalizeCodeLinks, normalizeExtLinks } from '../server/db.ts'
+import { BoardDatabase, normalizeLinkItems } from '../server/db.ts'
 import { hookKeyOf, pullStatuses, readObservations } from '../server/threads.ts'
 import { RolloutStore, rolloutStatusOf, sessionDirFor } from '../server/rollout.ts'
 import type { SourceTable } from '../server/source-file.ts'
@@ -29,7 +29,7 @@ import { createProjectDir, createRequirementDir, setRequirementId } from '../ser
 import { createBoardApp } from '../server/index.ts'
 import { readConfig, writeConfig } from '../server/config.ts'
 import { buildTree, layoutTree, nodeWidth } from '../src/renderer/src/lib/mindmap.ts'
-import { codeLinkLabel, feishuTaskLabel } from '../src/renderer/src/lib/links.ts'
+import { linkLabel } from '../src/renderer/src/lib/links.ts'
 import { acceleratorFromEvent, formatAccelerator } from '../src/renderer/src/lib/shortcut.ts'
 import { moveKey, resolveKey } from '../src/renderer/src/lib/selection.ts'
 import { badgesOf, isEventState } from '../src/renderer/src/lib/threads.ts'
@@ -137,12 +137,6 @@ describe('markdown 解析', () => {
     const names = docs.map((x) => x.name)
     assert.ok(names.includes('docs/a.md'))
     assert.ok(!names.some((n) => n.startsWith('repo/')))
-  })
-
-  test('readDocs 跳过 AGENTS.md 本身', () => {
-    const dir = fresh((d) => makeReq(d, 'p', 'r', '# r'))
-    const names = readDocs(join(dir, 'p', 'r')).map((x) => x.name)
-    assert.ok(!names.includes('AGENTS.md'))
   })
 })
 
@@ -556,90 +550,137 @@ describe('数据层 · 单个需求同步', () => {
 // ---------------------------------------------------------- 数据层：链接字段
 
 describe('数据层 · 链接字段', () => {
-  test('normalizeLinkList 校验协议并去重', () => {
-    assert.deepEqual(normalizeLinkList(['https://a.com', 'https://a.com']), ['https://a.com'])
-    assert.throws(() => normalizeLinkList(['ftp://a.com']), /http/)
-    assert.throws(() => normalizeLinkList(['not-a-url']), /http/)
-    assert.throws(() => normalizeLinkList('str' as never), /array/)
-  })
-
-  test('normalizeExtLinks 要求 detail 与 url 成对', () => {
-    const ok = normalizeExtLinks([{ detail: '设计', url: 'https://a.com' }])
-    assert.deepEqual(ok, [{ detail: '设计', url: 'https://a.com' }])
-    assert.throws(() => normalizeExtLinks([{ detail: '缺链接' }]), /missing a url/)
-    assert.throws(() => normalizeExtLinks([{ url: 'https://a.com' }]), /missing a detail/)
-  })
-
-  test('normalizeCodeLinks 收别名与老格式，按 url 去重', () => {
+  test('normalizeLinkItems 统一形状、校验协议、按 url 去重', () => {
     assert.deepEqual(
-      normalizeCodeLinks([
-        'https://gitlab.com/mr/1',
-        { label: '主流程', url: 'https://gitlab.com/mr/2' },
-        { label: '重复的那条', url: 'https://gitlab.com/mr/1' },
+      normalizeLinkItems([
+        'https://a.com',
+        { url: 'https://a.com' },
+        { title: '设计', url: 'https://b.com' },
+        { label: '老别名', url: 'https://c.com' },
+        { detail: '老描述', url: 'https://d.com' },
       ]),
       [
-        { label: '', url: 'https://gitlab.com/mr/1' },
-        { label: '主流程', url: 'https://gitlab.com/mr/2' },
+        { title: '', url: 'https://a.com' },
+        { title: '设计', url: 'https://b.com' },
+        { title: '老别名', url: 'https://c.com' },
+        { title: '老描述', url: 'https://d.com' },
       ],
     )
-    assert.throws(() => normalizeCodeLinks([{ label: 'x', url: 'ftp://a.com' }]), /http/)
-    assert.throws(() => normalizeCodeLinks('str' as never), /array/)
+    assert.throws(() => normalizeLinkItems([{ title: 'x', url: 'ftp://a.com' }]), /http/)
+    assert.throws(() => normalizeLinkItems([{ title: '空地址', url: '' }]), /missing a url/)
+    assert.throws(() => normalizeLinkItems('str' as never), /array/)
   })
 
-  test('setLinks 部分更新，未传的字段不动', () => {
+  test('setLinks 整体替换', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
 
-    db.setLinks('alpha', { feishuTaskLinks: ['https://feishu.cn/1'] })
-    db.setLinks('alpha', { codeLinks: ['https://gitlab.com/mr/1'] })
+    db.setLinks('alpha', [{ title: '飞书', url: 'https://feishu.cn/1' }])
+    db.setLinks('alpha', ['https://gitlab.com/mr/1'])
 
-    const req = db.get('alpha')
-    assert.deepEqual(req?.feishuTaskLinks, ['https://feishu.cn/1'])
-    assert.deepEqual(req?.codeLinks, [{ label: '', url: 'https://gitlab.com/mr/1' }])
-    assert.deepEqual(req?.extLinks, [])
+    assert.deepEqual(db.get('alpha')?.linkItems, [{ title: '', url: 'https://gitlab.com/mr/1' }])
     db.close()
   })
 
-  test('读库认老格式：字符串数组当成没别名的链接', () => {
+  test('老库三列搬进 link_items，旧列删掉', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
+    const old = new DatabaseSync(join(dir, 'easy-flow.db'))
+    old.exec(`CREATE TABLE requirement (
+      slug TEXT NOT NULL, project TEXT NOT NULL DEFAULT '', id TEXT, title TEXT NOT NULL,
+      path TEXT NOT NULL, status TEXT NOT NULL, priority TEXT, summary TEXT, repos TEXT, links TEXT,
+      feishu_task_links TEXT, code_links TEXT, ext_links TEXT, mtime INTEGER NOT NULL DEFAULT 0,
+      updated TEXT, missing INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (slug, project))`)
+    old
+      .prepare(
+        `INSERT INTO requirement
+           (slug, project, id, title, path, status, repos, links,
+            feishu_task_links, code_links, ext_links, mtime, missing)
+         VALUES ('alpha', 'onex', 'req-alpha', '标题', '/x', '澄清', '[]', '',
+            '["https://feishu.cn/1"]',
+            '[{"label":"主流程","url":"https://gitlab.com/mr/1"},"https://gitlab.com/mr/9"]',
+            '[{"detail":"设计稿","url":"https://example.com/design"}]', 0, 0)`,
+      )
+      .run()
+    old.close()
+
     const db = new BoardDatabase(dir)
-    db.syncProjects()
+    assert.deepEqual(db.get('alpha', 'onex')?.linkItems, [
+      { title: '', url: 'https://feishu.cn/1' },
+      { title: '主流程', url: 'https://gitlab.com/mr/1' },
+      { title: '', url: 'https://gitlab.com/mr/9' },
+      { title: '设计稿', url: 'https://example.com/design' },
+    ])
     db.close()
 
     const raw = new DatabaseSync(join(dir, 'easy-flow.db'))
-    raw.exec(`update requirement set code_links = '["https://gitlab.com/mr/9"]'`)
+    const cols = (raw.prepare('PRAGMA table_info(requirement)').all() as Array<{ name: string }>).map(
+      (c) => c.name,
+    )
     raw.close()
+    assert.ok(cols.includes('link_items'))
+    assert.ok(!cols.includes('feishu_task_links'))
+    assert.ok(!cols.includes('code_links'))
+    assert.ok(!cols.includes('ext_links'))
+  })
 
-    const again = new BoardDatabase(dir)
-    again.syncProjects()
-    assert.deepEqual(again.get('alpha')?.codeLinks, [{ label: '', url: 'https://gitlab.com/mr/9' }])
-    again.close()
+  test('link_items 为空数组时，旧列里的地址仍并入', () => {
+    const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
+    const old = new DatabaseSync(join(dir, 'easy-flow.db'))
+    old.exec(`CREATE TABLE requirement (
+      slug TEXT NOT NULL, project TEXT NOT NULL DEFAULT '', id TEXT, title TEXT NOT NULL,
+      path TEXT NOT NULL, status TEXT NOT NULL, priority TEXT, summary TEXT, repos TEXT, links TEXT,
+      link_items TEXT, feishu_task_links TEXT, code_links TEXT, ext_links TEXT,
+      mtime INTEGER NOT NULL DEFAULT 0, updated TEXT, missing INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (slug, project))`)
+    old
+      .prepare(
+        `INSERT INTO requirement
+           (slug, project, id, title, path, status, repos, links, link_items,
+            feishu_task_links, code_links, ext_links, mtime, missing)
+         VALUES ('alpha', 'onex', 'req-alpha', '标题', '/x', '澄清', '[]', '',
+            '[{"title":"已有","url":"https://feishu.cn/old"},{"title":"保留这个标题","url":"https://feishu.cn/late"}]',
+            '["https://feishu.cn/late"]', '["https://gitlab.com/mr/2"]', '[]', 0, 0)`,
+      )
+      .run()
+    old.close()
+
+    const db = new BoardDatabase(dir)
+    assert.deepEqual(db.get('alpha', 'onex')?.linkItems, [
+      { title: '已有', url: 'https://feishu.cn/old' },
+      { title: '保留这个标题', url: 'https://feishu.cn/late' },
+      { title: '', url: 'https://gitlab.com/mr/2' },
+    ])
+    db.close()
+
+    const raw = new DatabaseSync(join(dir, 'easy-flow.db'))
+    const cols = (raw.prepare('PRAGMA table_info(requirement)').all() as Array<{ name: string }>).map(
+      (c) => c.name,
+    )
+    raw.close()
+    assert.ok(!cols.includes('feishu_task_links'))
   })
 
   test('新需求默认空链接数组', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    const req = db.get('alpha')
-    assert.deepEqual(req?.feishuTaskLinks, [])
-    assert.deepEqual(req?.codeLinks, [])
-    assert.deepEqual(req?.extLinks, [])
+    assert.deepEqual(db.get('alpha')?.linkItems, [])
     db.close()
   })
 })
 
-// ------------------------------------------------------ 渲染层：代码链接别名
+// ------------------------------------------------------ 渲染层：链接显示名
 
-describe('渲染层 · 代码链接别名', () => {
-  test('显式别名优先', () => {
-    assert.equal(codeLinkLabel({ label: '主流程', url: 'https://gitlab.com/mr/1' }), '主流程')
+describe('渲染层 · 链接显示名', () => {
+  test('显式标题优先', () => {
+    assert.equal(linkLabel({ title: '主流程', url: 'https://gitlab.com/mr/1' }), '主流程')
   })
 
   test('GitLab MR 推成 "<仓库> !<iid>"', () => {
     assert.equal(
-      codeLinkLabel({
-        label: '',
+      linkLabel({
+        title: '',
         url: 'http://git.dev.sh.ctripcorp.com/flight-onex/flight-onex-exchange-router/-/merge_requests/213',
       }),
       'flight-onex-exchange-router !213',
@@ -647,30 +688,32 @@ describe('渲染层 · 代码链接别名', () => {
   })
 
   test('GitHub PR 推成 "<仓库> #<iid>"', () => {
-    assert.equal(codeLinkLabel({ label: '', url: 'https://github.com/owner/repo/pull/12' }), 'repo #12')
+    assert.equal(linkLabel({ title: '', url: 'https://github.com/owner/repo/pull/12' }), 'repo #12')
   })
 
-  test('其余取路径末段，没有路径就用整条 URL', () => {
-    assert.equal(codeLinkLabel({ label: '', url: 'https://example.com/a/b/' }), 'b')
-    assert.equal(codeLinkLabel({ label: '', url: 'https://example.com' }), 'example.com')
-  })
-})
-
-describe('渲染层 · 飞书任务别名', () => {
-  test('去掉域名与详情页那段，只留认得出是哪条的路径', () => {
+  test('飞书 / Lark 取域名后的路径，详情页去掉 /detail 段', () => {
     assert.equal(
-      feishuTaskLabel('https://project.feishu.cn/onex/story/detail/6712345678901234567'),
+      linkLabel({ title: '', url: 'https://project.feishu.cn/onex/story/detail/6712345678901234567' }),
       'onex/story/6712345678901234567',
+    )
+    assert.equal(linkLabel({ title: '', url: 'https://project.feishu.cn/onex/story/detail/123?from=chat' }), 'onex/story/123')
+    assert.equal(linkLabel({ title: '', url: 'https://project.feishu.cn/onex/story/detail/123/' }), 'onex/story/123')
+    // 聊天 / 话题链接没有 /detail 段，但整段路径要留着，否则都只剩一个 open
+    assert.equal(linkLabel({ title: '', url: 'https://applink.feishu.cn/client/chat/open?openId=ou_1' }), 'client/chat/open')
+    assert.equal(
+      linkLabel({ title: '', url: 'https://x7mm65.feishu.cn/client/thread/open?open_thread_id=om_1' }),
+      'client/thread/open',
+    )
+    assert.equal(
+      linkLabel({ title: '', url: 'https://trip.larkenterprise.com/wiki/TSSfwskNbictkKkoEDDcOuZOnQd' }),
+      'wiki/TSSfwskNbictkKkoEDDcOuZOnQd',
     )
   })
 
-  test('查询串与结尾斜杠不影响', () => {
-    assert.equal(feishuTaskLabel('https://project.feishu.cn/onex/story/detail/123?from=chat'), 'onex/story/123')
-    assert.equal(feishuTaskLabel('https://project.feishu.cn/onex/story/detail/123/'), 'onex/story/123')
-  })
-
-  test('没有路径就退回整条 URL，不给空文案', () => {
-    assert.equal(feishuTaskLabel('https://project.feishu.cn'), 'https://project.feishu.cn')
+  test('其余取路径末段，没有路径就用域名', () => {
+    assert.equal(linkLabel({ title: '', url: 'https://example.com/a/b/' }), 'b')
+    assert.equal(linkLabel({ title: '', url: 'https://example.com/a/detail/b' }), 'b')
+    assert.equal(linkLabel({ title: '', url: 'https://example.com' }), 'example.com')
   })
 })
 
@@ -950,16 +993,15 @@ describe('数据层 · 项目与规范', () => {
 
     const tpl = join(dir, '_templates')
     assert.ok(existsSync(join(tpl, 'project', 'AGENTS.md')))
-    assert.ok(existsSync(join(tpl, 'requirement', 'AGENTS.md')))
     assert.ok(existsSync(join(tpl, 'requirement', 'requirement.md')))
     assert.ok(
       !db.listProjects().some((p) => p.slug === '_templates'),
       '模板目录不该被当成项目',
     )
 
-    writeFileSync(join(tpl, 'requirement', 'AGENTS.md'), '# 自定义模板', 'utf8')
+    writeFileSync(join(tpl, 'requirement', 'requirement.md'), '# 自定义模板', 'utf8')
     db.syncProjects()
-    assert.equal(readFileSync(join(tpl, 'requirement', 'AGENTS.md'), 'utf8'), '# 自定义模板')
+    assert.equal(readFileSync(join(tpl, 'requirement', 'requirement.md'), 'utf8'), '# 自定义模板')
     db.close()
   })
 
@@ -1077,22 +1119,16 @@ describe('创建 · 目录与模板', () => {
     assert.throws(() => createProjectDir(dir, 'demo'), /already exists/)
   })
 
-  test('createRequirementDir 写齐三份文件，id 落在 AGENTS.md', () => {
+  test('createRequirementDir 写 requirement.md 与 context.md，编号落在 requirement.md', () => {
     const dir = fresh(() => {
       createProjectDir(TMP, 'onex')
     })
     const created = createRequirementDir(join(dir, 'onex'), 'cny-not-rmb', '币种改 CNY', '上游只认 CNY')
-    // 身份 + 文件说明在 AGENTS.md，需求描述在 requirement.md，进展脚手架在 context.md
     assert.ok(existsSync(join(created.dir, 'context.md')))
-    const agents = readFileSync(join(created.dir, 'AGENTS.md'), 'utf8')
-    assert.match(agents, new RegExp(`^---\\nid: ${created.id}\\n---$`, 'm'))
-    assert.match(agents, /requirement\.md/)
-    assert.match(agents, /见 easy-flow skill/)
     const desc = readFileSync(join(created.dir, 'requirement.md'), 'utf8')
-    assert.ok(!desc.includes('id:'))
+    assert.match(desc, new RegExp(`^id: ${created.id}$`, 'm'))
     assert.match(desc, /^# 币种改 CNY$/m)
     assert.match(desc, /## 需求\n\n上游只认 CNY/)
-    // 澄清阶段要求讲清验收边界，模板给它固定位置
     assert.match(desc, /## 验收/)
     assert.match(desc, /## 需求[\s\S]*## 验收[\s\S]*## 涉及仓库/)
 
@@ -1121,21 +1157,16 @@ describe('创建 · 目录与模板', () => {
     const dir = fresh(() => {})
     const reqDir = join(dir, 'onex', 'legacy')
     mkdirSync(reqDir, { recursive: true })
-    writeFileSync(join(reqDir, 'AGENTS.md'), '<!-- 指令 -->\n', 'utf8')
     writeFileSync(join(reqDir, 'requirement.md'), '# 老需求\n\n## 需求\n\n正文不能动。\n', 'utf8')
 
     setRequirementId(reqDir, 'req-abc1234567')
-    const after = readFileSync(join(reqDir, 'AGENTS.md'), 'utf8')
-    assert.equal(after, '---\nid: req-abc1234567\n---\n\n<!-- 指令 -->\n')
-    // requirement.md 一个字都不该动
-    assert.equal(
-      readFileSync(join(reqDir, 'requirement.md'), 'utf8'),
-      '# 老需求\n\n## 需求\n\n正文不能动。\n',
-    )
+    const after = readFileSync(join(reqDir, 'requirement.md'), 'utf8')
+    assert.match(after, /^id: req-abc1234567$/m)
+    assert.match(after, /^# 老需求$/m)
+    assert.match(after, /正文不能动。/)
 
-    // 再补一次：幂等，不叠加 frontmatter
     setRequirementId(reqDir, 'req-abc1234567')
-    assert.equal(readFileSync(join(reqDir, 'AGENTS.md'), 'utf8'), after)
+    assert.equal(readFileSync(join(reqDir, 'requirement.md'), 'utf8'), after)
   })
 
   test('子需求与父需求一样入库：slug 带层级、parent_id 指向父需求，任意深度', () => {
@@ -1206,27 +1237,6 @@ describe('创建 · 目录与模板', () => {
     assert.deepEqual(
       db.get('parent', 'onex')?.docs.map((d) => d.name),
       ['context.md', 'requirement.md'],
-    )
-    db.close()
-  })
-
-  test('指令文件不进文档索引：嵌套的 AGENTS.md / CLAUDE.md 也不收', () => {
-    const dir = fresh(() => {
-      createProjectDir(TMP, 'onex')
-    })
-    const parent = createRequirementDir(join(dir, 'onex'), 'parent', '父需求')
-    // 嵌套的施工目录：只有 AGENTS.md，不算需求目录，但它照样是指令文件
-    const task = join(parent.dir, 'tasks', 'step-1')
-    mkdirSync(task, { recursive: true })
-    writeFileSync(join(task, 'AGENTS.md'), '<!-- 指令 -->\n', 'utf8')
-    writeFileSync(join(task, 'CLAUDE.md'), '# 指令\n', 'utf8')
-    writeFileSync(join(task, 'plan.md'), '# 计划\n', 'utf8')
-
-    const db = new BoardDatabase(dir)
-    db.syncProjects()
-    assert.deepEqual(
-      db.get('parent', 'onex')?.docs.map((d) => d.name),
-      ['context.md', 'requirement.md', 'tasks/step-1/plan.md'],
     )
     db.close()
   })
@@ -2041,7 +2051,7 @@ describe('CLI 层', () => {
     assert.match(cliFail(configFile, ['context', 'nope'], env), /Known projects/)
   })
 
-  test('req set 与 req link：按 id 改，链接只增不删', () => {
+  test('req set 与 req link：按 id 改，链接一条命令登记、只增不删', () => {
     scaffold()
     createProjectDir(dataDir, 'demo')
     const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
@@ -2056,46 +2066,41 @@ describe('CLI 层', () => {
       'req',
       'link',
       created.id,
-      '--mr',
-      'https://gitlab.example.com/mr/1',
-      '--ext',
+      'MR=https://gitlab.example.com/mr/1',
       '设计稿=https://example.com/design',
     ])
-    assert.match(links, /代码链接（1）/)
-    assert.match(links, /扩展链接（1）：设计稿/)
+    assert.match(links, /链接（2）：/)
+    assert.match(links, /- MR {2}https:\/\/gitlab\.example\.com\/mr\/1/)
+    assert.match(links, /- 设计稿 {2}https:\/\/example\.com\/design/)
 
-    assert.match(cliFail(configFile, ['req', 'link', created.id, '--mr', 'ftp://x']), /http\(s\)/)
+    assert.match(cliFail(configFile, ['req', 'link', created.id, 'X=ftp://x']), /http\(s\)/)
 
-    // 只增不删：再追加一条，原来那条与扩展链接都还在
+    // 只增不删：再追加一条，前面两条都还在
     const more = cliOk(configFile, [
       'req',
       'link',
       created.id,
-      '--feishu',
       'https://project.feishu.cn/x7mm65/story/detail/1',
     ])
-    assert.match(more, /飞书任务（1）/)
-    assert.match(more, /代码链接（1）/)
-    assert.match(more, /扩展链接（1）/)
+    assert.match(more, /链接（3）：/)
+    // 标题为空时，命令行给出的短名与看板同一套口径
+    assert.match(more, /- x7mm65\/story\/1 {2}https:\/\/project\.feishu\.cn\/x7mm65\/story\/detail\/1/)
 
-    // 别名：--mr "<别名>=<url>"；再传同一条链接但没给别名，旧别名留着
+    // 同一条 URL 再传只改标题；这次没给标题就留着旧的
     assert.match(
-      cliOk(configFile, ['req', 'link', created.id, '--mr', '主流程=https://gitlab.example.com/mr/2']),
-      /代码链接（2）：https:\/\/gitlab\.example\.com\/mr\/1、主流程 https:\/\/gitlab\.example\.com\/mr\/2/,
+      cliOk(configFile, ['req', 'link', created.id, '主流程=https://gitlab.example.com/mr/1']),
+      /- 主流程 {2}https:\/\/gitlab\.example\.com\/mr\/1/,
     )
     assert.match(
-      cliOk(configFile, ['req', 'link', created.id, '--mr', 'https://gitlab.example.com/mr/2']),
-      /主流程 https:\/\/gitlab\.example\.com\/mr\/2/,
+      cliOk(configFile, ['req', 'link', created.id, 'https://gitlab.example.com/mr/1']),
+      /- 主流程 {2}https:\/\/gitlab\.example\.com\/mr\/1/,
     )
-    // 带 query 的纯 URL 不会被当成别名写法拆开
+    // 带 query 的 URL 不会被当成标题写法拆开
     assert.match(
-      cliOk(configFile, ['req', 'link', created.id, '--mr', 'https://gitlab.example.com/mr/3?tab=notes']),
-      /代码链接（3）/,
+      cliOk(configFile, ['req', 'link', created.id, 'https://gitlab.example.com/mr/3?tab=notes']),
+      /链接（4）：/,
     )
-    assert.match(
-      cliFail(configFile, ['req', 'link', created.id, '--mr', '别名字段缺链接']),
-      /expects a url or/,
-    )
+    assert.match(cliFail(configFile, ['req', 'link', created.id]), /at least one link/)
 
     assert.match(cliFail(configFile, ['req', 'set', created.id]), /Pass at least one of --status/)
 
@@ -2103,14 +2108,51 @@ describe('CLI 层', () => {
     const r = db.byId(created.id)!
     assert.equal(r.status, '执行中')
     assert.equal(r.priority, 'p1')
-    assert.deepEqual(r.codeLinks, [
-      { label: '', url: 'https://gitlab.example.com/mr/1' },
-      { label: '主流程', url: 'https://gitlab.example.com/mr/2' },
-      { label: '', url: 'https://gitlab.example.com/mr/3?tab=notes' },
+    assert.deepEqual(r.linkItems, [
+      { title: '主流程', url: 'https://gitlab.example.com/mr/1' },
+      { title: '设计稿', url: 'https://example.com/design' },
+      { title: '', url: 'https://project.feishu.cn/x7mm65/story/detail/1' },
+      { title: '', url: 'https://gitlab.example.com/mr/3?tab=notes' },
     ])
-    assert.deepEqual(r.feishuTaskLinks, ['https://project.feishu.cn/x7mm65/story/detail/1'])
-    assert.deepEqual(r.extLinks, [{ detail: '设计稿', url: 'https://example.com/design' }])
     db.close()
+  })
+
+  test('没有链接时：开工或走到 Review 之后，context 与 req set 都点名', () => {
+    scaffold()
+    createProjectDir(dataDir, 'demo')
+    const created = createRequirementDir(join(dataDir, 'demo'), 'alpha', '标题', '摘要')
+    const seed = new BoardDatabase(dataDir)
+    seed.syncProjects()
+    seed.close()
+
+    // 澄清阶段没有链接不算异常，只写「（无）」
+    const fresh = cliOk(configFile, ['context', created.id])
+    assert.match(fresh, /## 链接（0）\n（无）/)
+    assert.doesNotMatch(fresh, /easy-flow req link/)
+
+    // 已经有工作区、状态仍是执行中：context 和只改优先级的 req set 都要点名
+    cliOk(configFile, ['req', 'set', created.id, '--status', '执行中'])
+    const board = new BoardDatabase(dataDir)
+    board.addWorktree({
+      id: 'wt-demo',
+      requirementId: created.id,
+      repo: 'easy-flow',
+      branch: 'feature-x',
+      path: '/tmp/easy-flow.feature-x',
+      main: '/tmp/easy-flow',
+    })
+    board.close()
+    assert.match(cliOk(configFile, ['context', created.id]), /已经开工，却还没有一条链接/)
+    assert.match(cliOk(configFile, ['req', 'set', created.id, '--priority', 'p2']), /还没有登记任何链接/)
+
+    assert.match(cliOk(configFile, ['req', 'set', created.id, '--status', 'Review']), /还没有登记任何链接/)
+
+    const ctx = cliOk(configFile, ['context', created.id])
+    assert.match(ctx, /## 链接（0）/)
+    assert.match(ctx, new RegExp(`easy-flow req link ${created.id}`))
+
+    // 只改优先级、状态已经是 Review：仍然提示
+    assert.match(cliOk(configFile, ['req', 'set', created.id, '--priority', 'p1']), /还没有登记任何链接/)
   })
 
   test('子需求全完成时提一句父需求，但不动它的状态', () => {
@@ -2992,9 +3034,7 @@ describe('导图：建树', () => {
     summary: '',
     repos: [],
     links: '',
-    feishuTaskLinks: [],
-    codeLinks: [],
-    extLinks: [],
+    linkItems: [],
     docs: [],
     path: `/tmp/${slug}`,
     mtime: 0,
@@ -3063,9 +3103,7 @@ describe('导图：布局', () => {
     summary: '',
     repos: [],
     links: '',
-    feishuTaskLinks: [],
-    codeLinks: [],
-    extLinks: [],
+    linkItems: [],
     docs: [],
     path: `/tmp/${slug}`,
     mtime: 0,

@@ -40,8 +40,8 @@
 | `src/main/` | Electron 主进程：起内嵌服务、开窗口、菜单与原生目录选择 |
 | `src/renderer/` | 渲染层（React）。数据只经 HTTP 拿（开发与打包共用同一套代码）；原生目录选择走 preload 桥的 IPC |
 | `server/cli.ts` | 给 agent 与脚本用的命令行（context / project new / req new\|set\|link\|session / wt new\|rm / todo new\|set\|list\|show\|promote\|import），与 HTTP 层共用同一个数据层 |
-| `skill/easy-flow/SKILL.md` | 需求那侧的接入说明（触发条件、意图→命令对照），由设置页链进各 agent 的 skills 目录 |
-| `skill/todo/SKILL.md` | 待办那侧的接入说明（捕获、归属三档、处置、立项、收尾）。与需求两个 skill 一起装 |
+| `skill/easy-flow/SKILL.md` | 接入说明：定位、主流程、「一切挂需求」、待办与命令索引，由设置页链进各 agent 的 skills 目录 |
+| `skill/easy-flow/REFERENCE.md` | 逐个命令的用法、场景与坑，以及待办的字段和入库步骤。SKILL.md 只留索引，细节读它 |
 
 `tsx server/dev.ts` 提供第三种跑法：只起 HTTP 服务，不拉 Electron。
 
@@ -52,8 +52,7 @@
 <dataDir>/_todos/<待办 id>.md
 ```
 
-- **需求目录**必须齐备 `requirement.md`（需求描述：看板卡片的标题取 H1、摘要取「需求」段）
-  与 `AGENTS.md`（身份 id 写在 frontmatter，外加给 agent 的指令）——缺一份就不算需求
+- **需求目录**有 `requirement.md` 即算需求（编号在文件开头，看板标题取一级标题、摘要取「需求」段）
 - **子需求**就是需求目录里的需求目录，判据与一层时完全一样，层级不限。它和普通需求
   一样入库、一样出现在看板上，也能按 id 反查；`slug` 是相对项目根的路径
   （顶层 `alpha`，子需求 `alpha/gateway`）。父子关系另存在库里（`parent_id`），

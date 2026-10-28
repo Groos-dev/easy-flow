@@ -2,12 +2,12 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   codeLinkStatuses,
-  parseCodeLink,
   pipelineOfGitlab,
   stateOfGithub,
   stateOfGitlab,
   statusOfGitlab,
 } from '../server/code-host.ts'
+import { parseCodeLink } from '../shared/link.ts'
 
 describe('代码链接 · 认出是哪条 MR/PR', () => {
   test('GitLab MR：命名空间原样留住，查询串与尾斜杠不影响', () => {

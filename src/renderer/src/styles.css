@@ -2620,19 +2620,13 @@ a.sess,
   color: var(--text-dim);
 }
 
-/* 链接：一组只标一次名，同组的其余几条跟左侧对齐成一条竖线 */
+/* 链接：标题 + URL 一种形态，右侧留给 MR 状态 */
 .link-line {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 2px 0;
   font-size: 12px;
-}
-
-.link-line .k {
-  flex: none;
-  width: 62px;
-  color: var(--text-faint);
 }
 
 .link-line .info-link {

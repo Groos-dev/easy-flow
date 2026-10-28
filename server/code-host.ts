@@ -2,6 +2,7 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { parseCodeLink, type CodeLinkRef } from '../shared/link.ts'
 import { createLogger } from './log.ts'
 import { parseJsonOrNull } from './util.ts'
 
@@ -14,38 +15,6 @@ export interface CodeLinkStatus {
   state: CodeLinkState
   // 只有 GitLab 的 MR 带；PR 与没跑过流水线的为 null
   pipeline: PipelineState | null
-}
-
-interface CodeLinkRef {
-  kind: 'gitlab' | 'github'
-  host: string
-  project: string
-  iid: string
-}
-
-export function parseCodeLink(url: string): CodeLinkRef | null {
-  let parsed: URL
-  try {
-    parsed = new URL(url)
-  } catch {
-    return null
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
-  // host 会原样进 glab 的 --hostname，别让一个以 - 开头的串被当成参数
-  if (!/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:\d+)?$/i.test(parsed.host)) return null
-
-  const gitlab = /^\/(.+)\/-\/merge_requests\/(\d+)\/?$/.exec(parsed.pathname)
-  if (gitlab) {
-    return { kind: 'gitlab', host: parsed.host, project: gitlab[1], iid: gitlab[2] }
-  }
-
-  if (!/^(www\.)?github\.com$/i.test(parsed.hostname)) return null
-  // owner/repo 会拼进 gh 的 API 路径，不允许点段与转义字符
-  const github = /^\/([a-z0-9._-]+)\/([a-z0-9._-]+)\/pull\/(\d+)\/?$/i.exec(parsed.pathname)
-  if (github && github[1] !== '.' && github[1] !== '..' && github[2] !== '.' && github[2] !== '..') {
-    return { kind: 'github', host: parsed.host, project: `${github[1]}/${github[2]}`, iid: github[3] }
-  }
-  return null
 }
 
 export function stateOfGitlab(data: unknown): CodeLinkState | null {

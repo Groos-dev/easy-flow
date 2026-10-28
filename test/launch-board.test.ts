@@ -281,7 +281,7 @@ describe('需求详情页启动会话', () => {
       const html = renderToStaticMarkup(createElement(InfoPanel, {
         req: {
           slug: 'alpha', project: 'demo', id: 'req-alpha', title: 'alpha', path: '',
-          feishuTaskLinks: [], codeLinks: [], extLinks: [], links: '',
+          linkItems: [], links: '',
         },
         ctx: null,
         onOpenTodo: () => {},

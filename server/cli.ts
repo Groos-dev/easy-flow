@@ -3,8 +3,8 @@
  * requirements, manage worktrees.
  *
  * Plain text by default (cheap for humans and agents to read); add --json for scripts.
- * Identity is explicit only — ids live in the AGENTS.md frontmatter of requirement and
- * worktree dirs. Never guessed from cwd or env: a wrong guess writes state onto another
+ * Identity is explicit only — a requirement id lives at the top of requirement.md,
+ * a worktree id at the top of that worktree's AGENTS.md. Never guessed from cwd or env: a wrong guess writes state onto another
  * requirement, while an unknown id just errors out.
  */
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
@@ -12,6 +12,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { configPath, readConfig } from './config.ts'
+import { linkLabel } from '../shared/link.ts'
 import {
   createProjectDir,
   createRequirementDir,
@@ -31,7 +32,7 @@ import {
   TODO_STATUSES,
   isOpenTodo,
   todoAgeDays,
-  type CodeLink,
+  type LinkItem,
   type Priority,
   type Requirement,
   type Session,
@@ -119,7 +120,7 @@ function projectRoot(project: string): string {
 
 function findById(id: string): Requirement {
   const req = db().byId(id)
-  if (!req) throw new Error(`Requirement not found: ${id}. The id lives in the requirement dir's AGENTS.md`)
+  if (!req) throw new Error(`Requirement not found: ${id}. The id lives at the top of the requirement's requirement.md`)
   return req
 }
 
@@ -431,6 +432,33 @@ function sessionBlock(sessions: Session[], cwd = ''): string[] {
 }
 
 /**
+ * 有工作区、或状态走到 Review 之后，看板上没有链接等于没有入口可点。
+ */
+function missingLinks(req: Requirement, hasWorktree: boolean): boolean {
+  return req.linkItems.length === 0 && (hasWorktree || req.status === 'Review' || req.status === '已完成')
+}
+
+// 登记链接的命令，提示里共用这一句
+function linkCommand(id: string): string {
+  return `easy-flow req link ${id} "<标题>=<url>"`
+}
+
+/**
+ * 没有链接、又已经开工时，把登记命令打出来。
+ */
+function linkBlock(req: Requirement, hasWorktree: boolean): string {
+  if (!req.linkItems.length) {
+    const command = missingLinks(req, hasWorktree)
+      ? `\n已经开工，却还没有一条链接——MR / 飞书 Story / 文档挂上来：\n${linkCommand(req.id)}`
+      : ''
+    return `## 链接（0）${command || '\n（无）'}`
+  }
+  return `## 链接（${req.linkItems.length}）\n${req.linkItems
+    .map((l) => `- ${linkLabel(l)}  ${l.url}`)
+    .join('\n')}`
+}
+
+/**
  * Project view: id / status / title and worktree counts only; bodies need their own call.
  */
 function projectView(slug: string) {
@@ -497,7 +525,7 @@ const USAGE = {
   context: `用法：easy-flow context <id> [--json]
 
 id 三种都收：req-…（需求）、wt-…（工作区）、项目标识（项目）。
-id 必须显式传：需求 id 在需求目录 AGENTS.md 的 frontmatter 里，worktree id 在它自己的 AGENTS.md 里。`,
+id 必须显式传：需求编号在需求目录 requirement.md 的开头，工作区编号在工作区说明的开头。`,
 
   dir: `用法：easy-flow dir [--json]
 
@@ -519,11 +547,11 @@ id 必须显式传：需求 id 在需求目录 AGENTS.md 的 frontmatter 里，w
 
 传了哪个改哪个，都没传会报错。--priority "" 清空优先级。`,
 
-  'req link': `用法：easy-flow req link <id> [--feishu <url>] [--mr <url>|<别名>=<url>>] [--ext "<描述>=<url>"] [--json]
+  'req link': `用法：easy-flow req link <id> "<标题>=<url>" ["<标题>=<url>" …] [--json]
 
-三类链接都可重复传，只增不删：同一字段合并去重，已有链接不会被顶掉。
---ext 的描述与链接按第一个 = 分隔；--mr 同理，别名可省——第一个 = 前面带 :// 就整条当 URL。
-同一条链接再传一次只更新别名（这次没给别名就留着旧的）。`,
+任何与需求相关的链接都走这一条：飞书 Story、MR/PR、设计文档、Wiki、监控、截图。
+只增不删：同一 URL 再传只更新标题（这次没给标题就留着旧的）。
+标题可省——直接写 URL 也行，看板按 URL 推一个短名。`,
 
   'req session': `用法：easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang> [--id <会话 id>] [--title <标题>] [--cwd <目录>] [--link <url>] [--json]
        easy-flow req session rm <req-id> --agent <…> --id <会话 id> [--json]
@@ -557,7 +585,7 @@ chengxiaobang → chengxiaobang://session/<id>；cursor 与终端里的 claude �
 --summary 要写成"下一个 agent 只看这一条就能接手"：进度、下一步、完成标准、关键 ID、证据入口；
 只写现象的口号不算数。--ref 重复时会报出已有条目，不再新建。
 --req 是这条待办归属的需求：还没立项就写一条现有的需求也算——不要求先新建需求。
-归属、候选（由来源会话推出）与无归属的处置见 todo skill。`,
+归属、候选（由来源会话推出）与无归属的处置见 easy-flow skill 的「待办」。`,
 
   'todo set': `用法：easy-flow todo set <id>… [--status <todo|in_progress|done|cancelled>] [--title <标题>]
        [--summary <上下文>] [--source …] [--session …] [--channel …] [--from …] [--chat …]
@@ -620,7 +648,6 @@ function parse(argv: string[], options: OptSpec): { values: Record<string, unkno
 }
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
-const strs = (v: unknown): string[] => (Array.isArray(v) ? (v as string[]) : [])
 const bool = (v: unknown): boolean => v === true
 
 /**
@@ -672,6 +699,7 @@ async function cmdContext(argv: string[]): Promise<void> {
     // 会话挂在需求上，工作区视图里照样列出来，并标出哪个会话就在这个目录里干活
     const sessions = board.listSessions(req.id)
     view.blocks.push(...sessionBlock(sessions, wt.path))
+    view.blocks.push(linkBlock(req, true))
     // 待办跟着需求走：在工作区里开工，与在需求目录里开工看到的是同一批
     const todos = todoSection(board, req.id)
     view.blocks.push(...todos.blocks)
@@ -681,6 +709,7 @@ async function cmdContext(argv: string[]): Promise<void> {
         worktree: wt,
         sessions,
         ...view.data,
+        links: req.linkItems,
         siblings,
         todoGroups: todos.groups,
         orphanTodos: todos.orphans,
@@ -705,6 +734,8 @@ async function cmdContext(argv: string[]): Promise<void> {
     )
     const sessions = board.listSessions(req.id)
     view.blocks.push(...sessionBlock(sessions))
+    // 链接是别人与下一个 agent 找东西的入口：一条都没有时把命令写到眼前
+    view.blocks.push(linkBlock(req, wts.length > 0))
     const todos = todoSection(board, req.id)
     view.blocks.push(...todos.blocks)
     return emit(
@@ -712,6 +743,7 @@ async function cmdContext(argv: string[]): Promise<void> {
         kind: 'requirement',
         sessions,
         ...view.data,
+        links: req.linkItems,
         worktrees: wts,
         todoGroups: todos.groups,
         orphanTodos: todos.orphans,
@@ -821,6 +853,10 @@ async function cmdReqSet(argv: string[]): Promise<void> {
           .filter(Boolean)
           .join('\n')
       : ''
+  // 走到 Review 却一条链接都没登记：看板上就没有 MR 可点，先把命令顶到眼前
+  const linkReminder = missingLinks(next, board.listWorktrees(next.id).length > 0)
+    ? `还没有登记任何链接——MR / 飞书 Story / 文档挂上来：${linkCommand(next.id)}`
+    : ''
 
   emit(
     {
@@ -831,10 +867,13 @@ async function cmdReqSet(argv: string[]): Promise<void> {
       priority: next.priority,
       parentHint: hint || undefined,
       todoHint: todoReminder || undefined,
+      linkHint: linkReminder || undefined,
     },
     `需求：${next.title}（${next.id}）\n状态：${next.status}${
       next.priority ? ` · 优先级：${next.priority}` : ''
-    }${hint ? `\n${hint}` : ''}${todoReminder ? `\n${todoReminder}` : ''}`,
+    }${hint ? `\n${hint}` : ''}${todoReminder ? `\n${todoReminder}` : ''}${
+      linkReminder ? `\n${linkReminder}` : ''
+    }`,
   )
 }
 
@@ -859,81 +898,58 @@ function allDone(reqs: Requirement[]): boolean {
 }
 
 /**
- * --mr 收两种写法：纯 URL，或 "<别名>=<url>"。
- * 第一个 = 前面带 :// 就整条当 URL（协议交给写侧校验），URL 自带的 = 不会被拆成别名。
+ * 一条链接收两种写法："<标题>=<url>"，或只给 URL（标题留空，展示层从 URL 推）。
+ * 第一个 = 前面带 :// 就整条当 URL——URL 自带的 = 不会被拆成标题。
+ * 等号后面没有地址直接报错，别让空链接悄悄丢掉。
  */
-function parseMrArg(item: string): CodeLink {
+function parseLinkArg(item: string): LinkItem {
   const at = item.indexOf('=')
   const head = at < 0 ? item : item.slice(0, at)
-  if (head.includes('://')) return { label: '', url: item }
-  if (at < 1) throw new Error(`--mr expects a url or "<别名>=<url>": ${item}`)
-  return { label: item.slice(0, at).trim(), url: item.slice(at + 1).trim() }
+  if (head.includes('://')) return { title: '', url: item }
+  if (at < 1) throw new Error(`Link expects "<标题>=<url>": ${item}`)
+  const url = item.slice(at + 1).trim()
+  if (!url) throw new Error(`Link is missing a url: ${item}`)
+  return { title: item.slice(0, at).trim(), url }
+}
+
+// CLI 只增不删：同 URL 已在列表里就只更新标题（这次没给标题就留着旧的）
+function mergeLinks(existing: LinkItem[], incoming: LinkItem[]): LinkItem[] {
+  const out = existing.map((l) => ({ ...l }))
+  for (const link of incoming) {
+    const hit = out.find((x) => x.url === link.url)
+    if (!hit) out.push(link)
+    else if (link.title) hit.title = link.title
+  }
+  return out
 }
 
 async function cmdReqLink(argv: string[]): Promise<void> {
-  const { values, positionals } = parse(argv, {
-    feishu: { type: 'string', multiple: true },
-    mr: { type: 'string', multiple: true },
-    ext: { type: 'string', multiple: true },
-  })
+  const { values, positionals } = parse(argv, {})
   if (bool(values.help)) return out(USAGE['req link'])
 
   const id = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req link'])
-  const feishuTaskLinks = strs(values.feishu)
-  const codeLinks = strs(values.mr).map(parseMrArg)
-  const rawExt = strs(values.ext)
-  if (!feishuTaskLinks.length && !codeLinks.length && !rawExt.length) {
-    throw new UsageError('Pass at least one kind of link (--feishu / --mr / --ext)', USAGE['req link'])
+  const incoming = positionals.slice(1).map(parseLinkArg)
+  if (!incoming.length) {
+    throw new UsageError('Pass at least one link: "<标题>=<url>"', USAGE['req link'])
   }
-  const extLinks = rawExt.map((item) => {
-    const at = item.indexOf('=')
-    if (at < 1) throw new Error(`--ext expects "<detail>=<url>": ${item}`)
-    return { detail: item.slice(0, at).trim(), url: item.slice(at + 1).trim() }
-  })
 
   const board = db()
   board.syncProjects()
   const req = findById(id)
 
-  // append, never replace: this command only adds to the lists; deleting stays out of the CLI
-  const mergedExt = [...req.extLinks]
-  for (const e of extLinks) {
-    if (!mergedExt.some((x) => x.url === e.url)) mergedExt.push(e)
-  }
-  const mergedCode = req.codeLinks.map((l) => ({ ...l }))
-  for (const l of codeLinks) {
-    const hit = mergedCode.find((x) => x.url === l.url)
-    if (!hit) mergedCode.push(l)
-    else if (l.label) hit.label = l.label
-  }
-  const next = board.setLinks(
-    req.slug,
-    {
-      ...(feishuTaskLinks.length
-        ? { feishuTaskLinks: [...new Set([...req.feishuTaskLinks, ...feishuTaskLinks])] }
-        : {}),
-      ...(codeLinks.length ? { codeLinks: mergedCode } : {}),
-      ...(extLinks.length ? { extLinks: mergedExt } : {}),
-    },
-    req.project,
-  )
+  const next = board.setLinks(req.slug, mergeLinks(req.linkItems, incoming), req.project)
 
-  const line = (label: string, list: string[]) => `${label}（${list.length}）：${list.join('、') || '（空）'}`
+  const lines = next.linkItems.map((l) => `- ${linkLabel(l)}  ${l.url}`)
   emit(
     {
       ok: true,
       id: next.id,
       title: next.title,
-      feishuTaskLinks: next.feishuTaskLinks,
-      codeLinks: next.codeLinks,
-      extLinks: next.extLinks,
+      links: next.linkItems,
     },
-    [
-      `需求：${next.title}（${next.id}）`,
-      line('飞书任务', next.feishuTaskLinks),
-      line('代码链接', next.codeLinks.map((l) => (l.label ? `${l.label} ${l.url}` : l.url))),
-      line('扩展链接', next.extLinks.map((l) => `${l.detail} ${l.url}`)),
-    ].join('\n'),
+    [`需求：${next.title}（${next.id}）`, `链接（${next.linkItems.length}）：`, ...(lines.length ? lines : ['- （空）'])].join(
+      '\n',
+    ),
   )
 }
 
@@ -1133,7 +1149,7 @@ async function cmdWtNew(argv: string[]): Promise<void> {
       provision.identityInFile
         ? `在这个目录里取上下文：easy-flow context ${id}`
         : `注意：目录里已有一份不是 easy-flow 写的 AGENTS.md，没动它，${id} 因此没落进文件。` +
-          `顺着软链 requirement.md 能走到需求目录，从那份 AGENTS.md 的 frontmatter 拿需求 id，再 easy-flow context 列出它的 worktree 对号入座。`,
+          `顺着软链 requirement.md 能走到需求目录，从那份 requirement.md 开头拿需求编号，再 easy-flow context 列出它的 worktree 对号入座。`,
     ]
       .filter(Boolean)
       .join('\n'),

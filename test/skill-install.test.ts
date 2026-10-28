@@ -22,7 +22,7 @@ const HOME = join(TMP, 'home')
 // 假装是另一份 checkout 的 skill 根目录（链接指向它，而不是当前这份）
 const OTHER = join(TMP, 'other-checkout', 'skill')
 
-const SKILLS = ['easy-flow', 'todo']
+const SKILLS = ['easy-flow']
 const AGENT_DIRS = ['.claude', '.cursor', '.codex']
 
 function writeSkill(root: string, name: string) {
@@ -52,7 +52,7 @@ describe('skill 安装状态', () => {
     rmSync(TMP, { recursive: true, force: true })
     process.env.HOME = HOME
     writeSkill(OTHER, 'easy-flow')
-    writeSkill(OTHER, 'todo')
+    writeSkill(OTHER, 'not-easy-flow')
   })
 
   after(() => {
@@ -88,7 +88,7 @@ describe('skill 安装状态', () => {
     assert.equal(cxb.linked, true)
 
     // 只拆掉 home 链接，程小帮跟着变成未安装
-    rmSync(join(HOME, '.agents', 'skills', 'todo'))
+    rmSync(join(HOME, '.agents', 'skills', 'easy-flow'))
     const after = (await skillPlan()).agents.find((a) => a.id === 'chengxiaobang')
     assert.equal(after?.linked, false)
   })
@@ -110,7 +110,7 @@ describe('skill 安装状态', () => {
     linkAll(OTHER)
     const home = join(HOME, '.agents', 'skills', 'easy-flow')
     rmSync(home)
-    link(home, join(OTHER, 'todo'))
+    link(home, join(OTHER, 'not-easy-flow'))
     assert.deepEqual(await linked(), FOUR(false))
   })
 

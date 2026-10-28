@@ -19,6 +19,7 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -75,7 +76,7 @@ function upfind(...rel: string[]): string {
  * 仓库里要装到各 agent 的 skill。目录名就是 skill 名，一个目录一个 skill。
  * 都放在同一个根下，装的时候一起链，免得加一个 skill 要改一遍安装逻辑。
  */
-const SKILLS = ['easy-flow', 'todo'] as const
+const SKILLS = ['easy-flow'] as const
 
 // 仓库里的 skill 根目录（<repo>/skill）：找到任一 skill 的 SKILL.md 再往上退两级。
 // 安装包里改读 Contents/Resources/skill，不往上爬——归档里若还留着一份会先被命中。
@@ -173,6 +174,35 @@ function linkedTo(link: string, target: string): boolean {
 function homeLinked(name: string): boolean {
   const real = resolveOrNull(homeLink(name))
   return !!real && basename(real) === name && existsSync(join(real, 'SKILL.md'))
+}
+
+// 旧包把 todo 单独链到 skill/todo。只认这种链接，避免误删别人放在同名路径上的目录
+function pointsAtLegacyTodo(link: string): boolean {
+  try {
+    return /(?:^|[/\\])skill[/\\]todo$/.test(readlinkSync(link))
+  } catch {
+    return false
+  }
+}
+
+function removeLegacyTodoLinks(): void {
+  const home = homeLink('todo')
+  const homeStat = lstatOrNull(home)
+  if (!homeStat?.isSymbolicLink() || !pointsAtLegacyTodo(home)) return
+  for (const agent of agentDirs()) {
+    if (agent.shared) continue
+    const link = join(agent.dir, 'todo')
+    const stat = lstatOrNull(link)
+    if (!stat?.isSymbolicLink()) continue
+    let raw: string
+    try {
+      raw = readlinkSync(link)
+    } catch {
+      continue
+    }
+    if (raw === home || pointsAtLegacyTodo(link)) rmSync(link)
+  }
+  rmSync(home)
 }
 
 /**
@@ -360,8 +390,10 @@ export async function installSkill(): Promise<InstallOutcome> {
   mkdirSync(dirname(shim), { recursive: true })
   writeFileSync(shim, shimScript(nodePath, cli, resources), { mode: 0o755 })
 
-  // 一个 skill 装不上不该拖垮其余的：目标位置被用户自己的真目录占着是常见情况
-  // （比如 todo skill 原先手写在 ~/.agents/skills/todo），报出来让人自己处置
+  // 待办已经并进 easy-flow。旧安装留下的 skill/todo 链接摘掉；用户自己的真目录不动
+  removeLegacyTodoLinks()
+
+  // 一个 skill 装不上不该拖垮其余的：目标位置被用户自己的真目录占着是常见情况，报出来让人自己处置
   const link = (what: string, target: string, into: string) => {
     try {
       ensureLink(target, into)

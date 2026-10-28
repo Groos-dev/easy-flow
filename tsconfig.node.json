@@ -15,5 +15,5 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["server/**/*.ts", "src/main/**/*.ts", "src/preload/**/*.ts"]
+  "include": ["server/**/*.ts", "shared/**/*.ts", "src/main/**/*.ts", "src/preload/**/*.ts"]
 }

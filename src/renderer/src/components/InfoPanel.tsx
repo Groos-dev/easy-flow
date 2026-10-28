@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { api } from '../lib/api'
 import { isComposing, isEditableTarget, shortcut } from '../lib/keys'
 import { AGENT_LABELS } from '../lib/labels'
-import { codeLinkLabel, feishuTaskLabel, PIPELINE_ICON, PIPELINE_LABEL, showsPipeline } from '../lib/links'
+import { linkLabel, PIPELINE_ICON, PIPELINE_LABEL, showsPipeline } from '../lib/links'
 import { BOARD_POLL_MS } from '../lib/time'
 import {
   TODO_STATUS_LABEL,
@@ -84,7 +84,7 @@ export default function InfoPanel({
   const candidateTodos = (data?.candidateTodos ?? []).filter(stillOpen)
 
   // 按 URL 列表做依赖：看板轮询换新对象时不重复请求
-  const codeUrls = req.codeLinks.map((l) => l.url).join('\n')
+  const codeUrls = req.linkItems.map((l) => l.url).join('\n')
   const [linkStates, setLinkStates] = useState<Record<string, CodeLinkStatus>>({})
   useEffect(() => {
     if (!codeUrls) return
@@ -105,17 +105,7 @@ export default function InfoPanel({
     }
   }, [codeUrls])
 
-  const groups: Array<{
-    title: string
-    items: Array<{ label: string; url: string; status?: CodeLinkStatus }>
-  }> = [
-    { title: '飞书任务', items: req.feishuTaskLinks.map((url) => ({ label: feishuTaskLabel(url), url })) },
-    {
-      title: '代码链接',
-      items: req.codeLinks.map((l) => ({ label: codeLinkLabel(l), url: l.url, status: linkStates[l.url] })),
-    },
-    { title: '扩展链接', items: req.extLinks.map((l) => ({ label: l.detail, url: l.url })) },
-  ].filter((g) => g.items.length)
+  const links = req.linkItems.map((l) => ({ label: linkLabel(l), url: l.url, status: linkStates[l.url] }))
 
   const openDir = () => void api.open(req.slug, req.project).catch(() => {})
 
@@ -223,27 +213,23 @@ export default function InfoPanel({
         </InfoBlock>
       )}
 
-      {groups.length > 0 && (
-        <InfoBlock label="链接" count={groups.reduce((n, g) => n + g.items.length, 0)}>
-          {groups.map((g) =>
-            g.items.map((it, index) => (
-              <div className="link-line" key={`${g.title}:${it.url}`}>
-                {/* 一组只标一次名，同组的其余几条跟着对齐 */}
-                <span className="k">{index === 0 ? g.title : ''}</span>
-                <a
-                  className="line info-link"
-                  data-info-row=""
-                  href={it.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={it.url}
-                >
-                  {it.label}
-                </a>
-                {it.status && <CodeLinkStatusCell status={it.status} />}
-              </div>
-            )),
-          )}
+      {links.length > 0 && (
+        <InfoBlock label="链接" count={links.length}>
+          {links.map((it) => (
+            <div className="link-line" key={it.url}>
+              <a
+                className="line info-link"
+                data-info-row=""
+                href={it.url}
+                target="_blank"
+                rel="noreferrer"
+                title={it.url}
+              >
+                {it.label}
+              </a>
+              {it.status && <CodeLinkStatusCell status={it.status} />}
+            </div>
+          ))}
         </InfoBlock>
       )}
 

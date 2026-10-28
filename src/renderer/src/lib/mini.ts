@@ -1,5 +1,5 @@
 import type { Requirement, Session } from './types'
-import { codeLinkLabel, feishuTaskLabel } from './links'
+import { isCodeLink, linkLabel } from './links'
 import { isEventState } from './threads'
 import { parseStamp, relTime } from './time'
 
@@ -114,32 +114,14 @@ function actionsOf(block: Omit<MiniBlock, 'children'>): MiniAction[] {
       slug: req.slug,
       session: s,
     })),
-    ...req.codeLinks.map((l) => ({
-      key: `${key}|mr|${l.url}`,
+    ...req.linkItems.map((l) => ({
+      key: `${key}|link|${l.url}`,
       kind: 'link' as const,
       project: req.project,
       slug: req.slug,
       url: l.url,
-      type: 'MR' as const,
-      value: codeLinkLabel(l),
-    })),
-    ...req.feishuTaskLinks.map((url) => ({
-      key: `${key}|fs|${url}`,
-      kind: 'link' as const,
-      project: req.project,
-      slug: req.slug,
-      url,
-      type: '链接' as const,
-      value: feishuTaskLabel(url),
-    })),
-    ...req.extLinks.map((l) => ({
-      key: `${key}|ext|${l.url}`,
-      kind: 'link' as const,
-      project: req.project,
-      slug: req.slug,
-      url: l.url,
-      type: '链接' as const,
-      value: l.detail || l.url,
+      type: isCodeLink(l.url) ? ('MR' as const) : ('链接' as const),
+      value: linkLabel(l),
     })),
   ]
 }

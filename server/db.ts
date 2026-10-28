@@ -44,7 +44,7 @@ export const PRIORITIES = ['p0', 'p1', 'p2', 'p3'] as const
 export type Priority = (typeof PRIORITIES)[number]
 
 /**
- * 待办的状态 = 待办看板的列。字面量沿用全局 todo skill 的取值（英文原样，不译成中文）：
+ * 待办的状态 = 待办在库里的取值（英文原样，不译成中文）：
  * 它要能被 agent 直接贴进命令与文件，也免得历史条目的状态在迁移时改写。
  */
 export const TODO_STATUSES = ['todo', 'in_progress', 'done', 'cancelled'] as const
@@ -85,7 +85,7 @@ export interface Requirement {
   slug: string
   // 所属项目
   project: string
-  // 不透明需求 id（AGENTS.md 的 frontmatter）。老需求可能还没有，为空串
+  // 不透明需求编号，写在 requirement.md 开头。老需求可能还没有，为空串
   id: string
   // 父需求的 id；顶层需求为空串。slug 里也带着层级（parent/child），两者互为印证
   parentId: string
@@ -94,28 +94,22 @@ export interface Requirement {
   priority: Priority | ''
   summary: string
   repos: RepoRef[]
+  // requirement.md「链接」段的原文：人翻目录时看的镜像，看板不读它
   links: string
-  // Feishu task (Meego story) links. Written by the CLI; the UI is read-only
-  feishuTaskLinks: string[]
-  // Code links: GitLab MR / GitHub PR etc. Written by the CLI; the UI is read-only
-  codeLinks: CodeLink[]
-  // 扩展链接：{ detail 描述, url 链接 }
-  extLinks: ExtLink[]
+  // 与需求相关的链接，一对 标题 + URL，不分类型
+  // 按地址去重
+  // 数组顺序即登记顺序
+  linkItems: LinkItem[]
   docs: Array<{ name: string; size: number }>
   path: string
   mtime: number
   updated: string
 }
 
-// 扩展链接：detail 是描述，url 是链接
-export interface ExtLink {
-  detail: string
-  url: string
-}
-
-// 代码链接：label 是显示别名，空串表示没给——展示层从 url 推导一个
-export interface CodeLink {
-  label: string
+// 一条需求链接
+// 标题为空时展示层从地址生成短名
+export interface LinkItem {
+  title: string
   url: string
 }
 
@@ -289,9 +283,7 @@ interface Row {
   summary: string | null
   repos: string | null
   links: string | null
-  feishu_task_links: string | null
-  code_links: string | null
-  ext_links: string | null
+  link_items: string | null
   mtime: number
   updated: string | null
   missing: number
@@ -315,62 +307,39 @@ function asTodoSource(value: string | null | undefined): TodoSource | null {
 
 // ------------------------------------------------------------------ 链接
 
-// Normalize link fields: writers are the CLI / AI; sanitize once here
-export function normalizeLinkList(input: unknown): string[] {
-  if (!Array.isArray(input)) throw new Error('Link list must be an array')
-  const out: string[] = []
-  for (const item of input) {
-    const url = String(item ?? '').trim()
-    if (!url) continue
-    if (!/^https?:\/\//i.test(url)) throw new Error(`Link must start with http(s)://: ${url}`)
-    if (!out.includes(url)) out.push(url)
-  }
-  return out
-}
-
 /**
- * 代码链接的写侧校验。老数据是纯 URL 字符串，新数据是 { label, url }，两种都收——
- * 合并旧列表时不会把老条目丢掉。
+ * 写入前的链接校验。
+ * 字符串当作没有标题的链接。
+ * label / detail 仍读成标题，旧数据会以这个形状进来。
+ * 没有地址直接报错，不静默丢掉。
  */
-export function normalizeCodeLinks(input: unknown): CodeLink[] {
-  if (!Array.isArray(input)) throw new Error('Link list must be an array')
-  const out: CodeLink[] = []
+export function normalizeLinkItems(input: unknown): LinkItem[] {
+  if (!Array.isArray(input)) throw new Error('Links must be an array')
+  const out: LinkItem[] = []
   for (const item of input) {
-    const link = toCodeLink(item)
-    if (!link.url) continue
+    const link = toLinkItem(item)
+    if (!link.url) throw new Error(`Link is missing a url${link.title ? `: ${link.title}` : ''}`)
     if (!/^https?:\/\//i.test(link.url)) throw new Error(`Link must start with http(s)://: ${link.url}`)
     if (!out.some((l) => l.url === link.url)) out.push(link)
   }
   return out
 }
 
-// 一条代码链接的形状归一：字符串当纯 URL。读侧不校验——写进来时已经校验过
-function toCodeLink(item: unknown): CodeLink {
-  const raw = (typeof item === 'string' ? { url: item } : item) as Partial<CodeLink> | null
-  return { label: String(raw?.label ?? '').trim(), url: String(raw?.url ?? '').trim() }
+function toLinkItem(item: unknown): LinkItem {
+  const raw = (typeof item === 'string' ? { url: item } : item) as
+    | (Partial<LinkItem> & { label?: string; detail?: string })
+    | null
+  return {
+    title: String(raw?.title ?? raw?.label ?? raw?.detail ?? '').trim(),
+    url: String(raw?.url ?? '').trim(),
+  }
 }
 
-// 读库里的 code_links 列：老格式（字符串数组）与新格式（对象数组）都认
-function readCodeLinks(raw: string | null): CodeLink[] {
+// 读库里的 link_items 列。老库的三列由 schema 迁移统一，这里只兜形状
+function readLinkItems(raw: string | null): LinkItem[] {
   const list = parseLinks<unknown[]>(raw, [])
   if (!Array.isArray(list)) return []
-  return list.map(toCodeLink).filter((l) => l.url)
-}
-
-export function normalizeExtLinks(input: unknown): ExtLink[] {
-  if (!Array.isArray(input)) throw new Error('Ext links must be an array')
-  const out: ExtLink[] = []
-  for (const item of input) {
-    const obj = item as Partial<ExtLink> | null
-    const detail = String(obj?.detail ?? '').trim()
-    const url = String(obj?.url ?? '').trim()
-    if (!detail && !url) continue
-    if (!url) throw new Error(`Ext link is missing a url (detail: ${detail})`)
-    if (!/^https?:\/\//i.test(url)) throw new Error(`Link must start with http(s)://: ${url}`)
-    if (!detail) throw new Error(`Ext link is missing a detail: ${url}`)
-    if (!out.some((l) => l.detail === detail && l.url === url)) out.push({ detail, url })
-  }
-  return out
+  return list.map(toLinkItem).filter((l) => l.url)
 }
 
 // 今天（YYYY-MM-DD）。多处写状态时间戳，集中一处避免格式漂移。
@@ -725,8 +694,8 @@ export class BoardDatabase {
     const insertReq = this.db.prepare(
       `INSERT INTO requirement
          (slug, project, id, parent_id, title, path, status, priority, summary, repos, links,
-          feishu_task_links, code_links, ext_links, mtime, updated, missing)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '[]', '[]', ?, ?, 0)`,
+          link_items, mtime, updated, missing)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, 0)`,
     )
     const updateReq = this.db.prepare(
       `UPDATE requirement SET id = ?, parent_id = ?, title = ?, path = ?, summary = ?, repos = ?, links = ?, mtime = ?, missing = 0
@@ -895,9 +864,7 @@ export class BoardDatabase {
       summary: row.summary ?? '',
       repos: row.repos ? (JSON.parse(row.repos) as RepoRef[]) : [],
       links: row.links ?? '',
-      feishuTaskLinks: parseLinks<string[]>(row.feishu_task_links, []) ?? [],
-      codeLinks: readCodeLinks(row.code_links),
-      extLinks: parseLinks<ExtLink[]>(row.ext_links, []) ?? [],
+      linkItems: readLinkItems(row.link_items),
       docs,
       path: row.path,
       mtime: row.mtime,
@@ -1057,38 +1024,16 @@ export class BoardDatabase {
   }
 
   /**
-   * Update a requirement's external links. Written by the CLI (the UI has no manual edit);
-   * 传 undefined 表示该字段不变，传数组表示整体替换。
+   * 整体替换一条需求的链接。
+   * 写入方是命令行，看板只读。
+   * 合并去重由调用方做完，这里只校验并落库。
    */
-  setLinks(
-    slug: string,
-    links: { feishuTaskLinks?: unknown; codeLinks?: unknown; extLinks?: unknown },
-    project = this.activeProject,
-  ): Requirement {
+  setLinks(slug: string, links: unknown, project = this.activeProject): Requirement {
     if (!this.get(slug, project)) throw new Error(`Requirement not found: ${project}/${slug}`)
 
-    const sets: string[] = []
-    const params: string[] = []
-    if (links.feishuTaskLinks !== undefined) {
-      sets.push('feishu_task_links = ?')
-      params.push(JSON.stringify(normalizeLinkList(links.feishuTaskLinks)))
-    }
-    if (links.codeLinks !== undefined) {
-      sets.push('code_links = ?')
-      params.push(JSON.stringify(normalizeCodeLinks(links.codeLinks)))
-    }
-    if (links.extLinks !== undefined) {
-      sets.push('ext_links = ?')
-      params.push(JSON.stringify(normalizeExtLinks(links.extLinks)))
-    }
-    if (!sets.length) throw new Error('No link fields to update')
-
-    sets.push('updated = ?')
-    params.push(today())
-
     this.db
-      .prepare(`UPDATE requirement SET ${sets.join(', ')} WHERE slug = ? AND project = ?`)
-      .run(...params, slug, project)
+      .prepare('UPDATE requirement SET link_items = ?, updated = ? WHERE slug = ? AND project = ?')
+      .run(JSON.stringify(normalizeLinkItems(links)), today(), slug, project)
 
     return this.get(slug, project)!
   }

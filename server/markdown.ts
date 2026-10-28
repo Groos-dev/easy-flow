@@ -168,7 +168,7 @@ export function readDocs(dir: string): DocFile[] {
 }
 
 export interface ParsedRequirement {
-  // 不透明 id，写在 AGENTS.md 的 frontmatter 里。老需求可能还没有
+  // 不透明编号，写在 requirement.md 开头。老需求可能还在 AGENTS.md 里，读的时候兜底
   id: string
   slug: string
   title: string
@@ -180,22 +180,22 @@ export interface ParsedRequirement {
 }
 
 /**
- * 解析一个需求目录。状态不在这里——状态归 sqlite 管。
+ * 解析一个需求目录。状态不在这里。
  *
- * 身份（id）读 AGENTS.md 的 frontmatter，卡片用的标题/摘要/仓库/链接读 requirement.md。
- * AGENTS.md 放 agent 指令，requirement.md 放需求描述；两者齐备才算需求
- * （见 listRequirementDirs），所以这里可以放心直接读。
+ * 编号优先读 requirement.md 开头。老目录还写在 AGENTS.md 里时，缺了再兜底。
+ * 标题、摘要、仓库、链接仍从 requirement.md 正文来。
  */
 export function parseRequirement(dir: string, fallbackSlug: string): ParsedRequirement {
   const desc = parseFrontmatter(readFileSync(join(dir, 'requirement.md'), 'utf8'))
-  const { data: identity } = parseFrontmatter(readFileSync(join(dir, 'AGENTS.md'), 'utf8'))
+  const agentsPath = join(dir, 'AGENTS.md')
+  const identity = existsSync(agentsPath) ? parseFrontmatter(readFileSync(agentsPath, 'utf8')).data : {}
 
   const docs = readDocs(dir)
   const h1 = /^#\s+(.+)$/m.exec(desc.body)?.[1]?.trim()
 
   return {
-    id: identity.id || '',
-    slug: identity.slug || fallbackSlug,
+    id: desc.data.id || identity.id || '',
+    slug: desc.data.slug || identity.slug || fallbackSlug,
     title: desc.data.title || h1 || fallbackSlug,
     summary: firstParagraph(sectionAny(desc.body, HEADINGS.summary)) || fallbackSummary(desc.body),
     repos: parseRepos(desc.body),
@@ -204,9 +204,9 @@ export function parseRequirement(dir: string, fallbackSlug: string): ParsedRequi
   }
 }
 
-// 需求目录的判据：AGENTS.md（agent 指令）与 requirement.md（需求描述）都在
+// 需求目录的判据：有 requirement.md。说明写在 easy-flow skill 里，不另放一份
 function isRequirementDir(dir: string): boolean {
-  return existsSync(join(dir, 'AGENTS.md')) && existsSync(join(dir, 'requirement.md'))
+  return existsSync(join(dir, 'requirement.md')) && !lstatSync(join(dir, 'requirement.md')).isSymbolicLink()
 }
 
 // 一个需求目录：绝对路径，以及相对项目根目录的路径（后者就是它的 slug，子需求形如 parent/child）
@@ -218,7 +218,7 @@ export interface RequirementDir {
 /**
  * 列出 root 下的需求目录，递归到任意深度。
  *
- * 判据（AGENTS.md + requirement.md 齐备）不分层级——子需求就是需求目录里的需求目录，
+ * 判据是目录里有 requirement.md，不分层级——子需求就是需求目录里的需求目录，
  * 所以递归与只看一层用的是同一把尺子。父需求先于子需求入列（先收录再下探）。
  * 软链一律不跟：工位里的软链指向代码仓 worktree，而 worktree 里也有需求文档，
  * 跟进去会把同一个需求认成两个。

@@ -430,13 +430,15 @@ export default function App() {
 
   /**
    * 看板每秒自己刷新一次：agent 改了什么、别的窗口动了哪条，不用点刷新就能看见。
-   * 不阻塞界面：上一轮没回来就跳过这一轮（不叠发）、拖拽中不刷（卡片列表不在手上换）、
-   * 窗口在后台时不拉（那时也没人看）。
+   * 不阻塞界面：上一轮没回来就跳过这一轮（不叠发）、窗口在后台时不拉（那时也没人看）。
+   * 拖拽不挡这一轮：宠物状态要跟着会话变，不能因为手里拖着卡片就停住。
+   * 这一秒若有人改了正在拖的那张卡的状态，它会换列，落点以松手时为准。
+   * 取消拖拽走 onDragCancel，把 dragSlug 清掉，否则这一轮会永远跳过。
    */
   useEffect(() => {
     let inFlight = false
     const tick = () => {
-      if (document.hidden || inFlight || dragSlug) return
+      if (document.hidden || inFlight) return
       inFlight = true
       void Promise.all([load(), loadTodos(), loadProjects(), loadSessions(), loadNextUp()]).finally(
         () => {
@@ -451,7 +453,7 @@ export default function App() {
       clearInterval(timer)
       document.removeEventListener('visibilitychange', tick)
     }
-  }, [load, loadTodos, loadProjects, loadSessions, loadNextUp, dragSlug])
+  }, [load, loadTodos, loadProjects, loadSessions, loadNextUp])
 
   // 动作之后立刻重拉一份（改完状态、退出设置页、从详情页返回）：不等下一次轮询
   const refresh = useCallback(() => {
@@ -832,9 +834,13 @@ export default function App() {
     setPendingJump(slug)
   }
 
-  async function handleDragEnd({ active, over }: DragEndEvent) {
+  function clearDrag() {
     setDragSlug(null)
     setOverStatus(null)
+  }
+
+  async function handleDragEnd({ active, over }: DragEndEvent) {
+    clearDrag()
     if (!over) return
 
     const slug = String(active.id)
@@ -982,6 +988,7 @@ export default function App() {
                 }}
                 onDragOver={({ over }: DragOverEvent) => setOverStatus(statusOf(over) ?? null)}
                 onDragEnd={(e) => void handleDragEnd(e)}
+                onDragCancel={clearDrag}
               >
                 <div className="board">
                   <div ref={focusRing} className="focus-ring" aria-hidden="true" />

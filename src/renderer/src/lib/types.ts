@@ -17,9 +17,10 @@ export interface DocRef {
   size: number
 }
 
-// 与 server/db.ts 的 CodeLink 对应。label 是显示别名，空串表示没给，由展示层从 url 推导
-export interface CodeLink {
-  label: string
+// 与 server/db.ts 的 LinkItem 对应
+// 标题为空时由展示层从地址生成短名
+export interface LinkItem {
+  title: string
   url: string
 }
 
@@ -59,7 +60,7 @@ export interface Requirement {
   slug: string
   // 所属项目
   project: string
-  // 不透明需求 id（AGENTS.md frontmatter 里那个 req-xxxxxxxxxx）
+  // 不透明需求编号（requirement.md 开头那个 req-xxxxxxxxxx）
   id: string
   // 父需求的 id；顶层需求为空串。slug 里也带着层级（parent/child）
   parentId: string
@@ -69,12 +70,9 @@ export interface Requirement {
   summary: string
   repos: RepoRef[]
   links: string
-  // Feishu task links. Written by the CLI; the UI is read-only
-  feishuTaskLinks: string[]
-  // Code links (GitLab MR / GitHub PR). Written by the CLI; the UI is read-only
-  codeLinks: CodeLink[]
-  // 扩展链接：detail 是描述，url 是链接
-  extLinks: Array<{ detail: string; url: string }>
+  // 与需求相关的链接，一对 标题 + URL，不分类型
+  // 只读，写入在命令行
+  linkItems: LinkItem[]
   docs: DocRef[]
   path: string
   mtime: number
@@ -118,7 +116,7 @@ export interface BoardData {
 
 // ------------------------------------------------------------------ 待办
 
-// 待办的状态即待办看板的列。字面量沿用 todo skill 的取值，不译成中文
+// 待办状态的字面量，与库里的取值一致，不译成中文
 export type TodoStatus = 'todo' | 'in_progress' | 'done' | 'cancelled'
 
 // 状态字面量是给 agent 用的，界面上给人看中文。看板列与详情页共用这一份

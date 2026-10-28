@@ -30,9 +30,7 @@ function mkReq(patch: Partial<Requirement> = {}): Requirement {
     summary: '',
     repos: [],
     links: '',
-    feishuTaskLinks: [],
-    codeLinks: [],
-    extLinks: [],
+    linkItems: [],
     docs: [],
     path: '/Users/groos/requirements/p/a',
     mtime: 0,
@@ -201,9 +199,11 @@ describe('详情页浮窗 · 工作区与链接', () => {
     assert.match(row, /title="目录已失联：\/Users\/groos\/repo\/java\/router\.feature-a"/)
   })
 
-  test('飞书任务不再整条 URL 当文案，完整地址退到 title', () => {
+  test('链接没标题时按 URL 出短名，完整地址退到 title', () => {
     const html = render({
-      requirement: mkReq({ feishuTaskLinks: ['https://project.feishu.cn/onex/story/detail/123'] }),
+      requirement: mkReq({
+        linkItems: [{ title: '', url: 'https://project.feishu.cn/onex/story/detail/123' }],
+      }),
     })
     assert.match(html, />onex\/story\/123<\/a>/)
     assert.match(html, /title="https:\/\/project\.feishu\.cn\/onex\/story\/detail\/123"/)
@@ -212,6 +212,12 @@ describe('详情页浮窗 · 工作区与链接', () => {
   test('requirement.md 的原文段不再搬进浮窗', () => {
     const html = render({ requirement: mkReq({ links: '- [索引](https://example.com/doc-index)' }) })
     assert.doesNotMatch(html, /doc-index/)
+  })
+
+  test('没有链接时整块不出现', () => {
+    const html = render()
+    assert.doesNotMatch(html, /class="link-line"/)
+    assert.doesNotMatch(html, />链接</)
   })
 
   test('需求目录压成末行，仍然是可点的一整行', () => {

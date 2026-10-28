@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -16,10 +16,10 @@ const REPO = fileURLToPath(new URL('..', import.meta.url))
 
 function resourcesFixture(root: string): string {
   const resources = join(root, 'Resources')
-  for (const name of ['easy-flow', 'todo']) {
-    mkdirSync(join(resources, 'skill', name), { recursive: true })
-    writeFileSync(join(resources, 'skill', name, 'SKILL.md'), `# ${name}\n`)
-  }
+  mkdirSync(join(resources, 'skill', 'easy-flow'), { recursive: true })
+  writeFileSync(join(resources, 'skill', 'easy-flow', 'SKILL.md'), '# easy-flow\n')
+  mkdirSync(join(resources, 'skill', 'todo'), { recursive: true })
+  writeFileSync(join(resources, 'skill', 'todo', 'SKILL.md'), '# todo\n')
   return resources
 }
 
@@ -45,6 +45,11 @@ test('有安装包资源时，技能和命令行指向 Resources 而不是仓库
     assert.equal(plan.cli, join(resources, 'cli', 'index.mjs'))
     assert.equal(plan.problem, null)
 
+    mkdirSync(join(home, '.agents', 'skills'), { recursive: true })
+    mkdirSync(join(home, '.claude', 'skills'), { recursive: true })
+    symlinkSync(join(resources, 'skill', 'todo'), join(home, '.agents', 'skills', 'todo'))
+    symlinkSync(join(home, '.agents', 'skills', 'todo'), join(home, '.claude', 'skills', 'todo'))
+
     const outcome = await installSkill()
     assert.deepEqual(outcome.failed, [])
     const shim = readFileSync(join(home, '.local', 'bin', 'easy-flow'), 'utf8')
@@ -53,7 +58,14 @@ test('有安装包资源时，技能和命令行指向 Resources 而不是仓库
     assert.match(shim, /cli\/index\.mjs/)
     assert.doesNotMatch(shim, /server\/cli\.ts/)
     assert.equal(realpathSync(join(home, '.agents', 'skills', 'easy-flow')), realpathSync(join(resources, 'skill', 'easy-flow')))
-    assert.equal(realpathSync(join(home, '.agents', 'skills', 'todo')), realpathSync(join(resources, 'skill', 'todo')))
+    assert.equal(existsSync(join(home, '.agents', 'skills', 'todo')), false)
+    assert.equal(existsSync(join(home, '.claude', 'skills', 'todo')), false)
+
+    mkdirSync(join(home, '.agents', 'skills', 'todo'))
+    writeFileSync(join(home, '.agents', 'skills', 'todo', 'SKILL.md'), '# mine\n')
+    const again = await installSkill()
+    assert.deepEqual(again.failed, [])
+    assert.equal(readFileSync(join(home, '.agents', 'skills', 'todo', 'SKILL.md'), 'utf8'), '# mine\n')
   } finally {
     if (prevHome === undefined) delete process.env.HOME
     else process.env.HOME = prevHome
