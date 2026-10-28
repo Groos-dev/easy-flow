@@ -1,0 +1,219 @@
+scripts/migrate-unified-links-data.mjs
+  s_8a30690d9cca9f::t_3c64c1c5fbe278 1-80
+src/renderer/src/lib/links.ts
+  s_9f222bc137715f::t_0c9d9938c18e74 1-4
+test/next-up.test.ts
+  s_9f222bc137715f::t_89d8e7367b4874 44
+README.md
+  s_8a30690d9cca9f::t_abc8ca7436a241 43-44
+  s_8a30690d9cca9f::t_c25056b9de9f05 55
+server/markdown.ts
+  s_8a30690d9cca9f::t_d2bff66c3a431c 221
+  s_8a30690d9cca9f::t_f3f5e70f8a5d2b 183,185-186,190-191,197-198
+  s_8a30690d9cca9f::t_2d39f05caa6dbf 171
+  s_8a30690d9cca9f::t_8f37f57683d4d1 207,209
+test/launch-keyboard.test.ts
+  s_9f222bc137715f::t_0d62e97163bcb0 33
+tsconfig.web.json
+  s_9f222bc137715f::t_3e53db9c46d972 18
+src/renderer/src/lib/mini.ts
+  s_9f222bc137715f::t_bcf0b33c3c778b 2
+  s_9f222bc137715f::t_41df7720f9ac7d 117-118,123-124
+test/info-panel.test.ts
+  s_9f222bc137715f::t_095f8712edd20e 217-222
+  s_9f222bc137715f::t_7770c0ea42da6f 33
+  s_9f222bc137715f::t_43a0e86cdb71cc 202,204-206
+test/mini.test.ts
+  s_9f222bc137715f::t_aee8e9bb988172 22
+  s_9f222bc137715f::t_07de98b11896ce 160-164
+server/skill-install.ts
+  s_8a30690d9cca9f::t_4dd42e28caa2c2 393-396
+  s_8a30690d9cca9f::t_d4fe7862db6682 22
+  s_8a30690d9cca9f::t_4601ccb1839c7e 197
+  s_8a30690d9cca9f::t_3fda2ee34db066 79
+  s_8a30690d9cca9f::t_7daf41bb4ea6b0 179-196,198-207
+server/convention.ts
+  s_8a30690d9cca9f::t_9f0a89bbd969e9 231
+  s_8a30690d9cca9f::t_14b7b60f5064b9 246
+  s_8a30690d9cca9f::t_bd8a8e11a75cb0 122,124
+  s_8a30690d9cca9f::t_e7e4d42a40eb24 67-70
+  s_8a30690d9cca9f::t_0f9db84e5c8f20 259
+  s_8a30690d9cca9f::t_b267c4e5f9866e 208
+  s_8a30690d9cca9f::t_51521900d47ecb 223
+skill/easy-flow/SKILL.md
+  s_8a30690d9cca9f::t_7c596a831f889e 4
+  s_8a30690d9cca9f::t_b353c29b7ae8a2 5
+  s_8a30690d9cca9f::t_6eee0408ae33a4 30,32
+  s_8a30690d9cca9f::t_aafda1c8602c29 44-47
+  s_8a30690d9cca9f::t_9166d8b6548530 125-126
+  s_8a30690d9cca9f::t_0e772a6a55f8b8 84
+  s_8a30690d9cca9f::t_c3a2ea3ca8b5f4 165
+  s_8a30690d9cca9f::t_60f4a1836c4823 70-72,74-75,79-83,85,89-90
+  s_8a30690d9cca9f::t_1027c4d7b15f5c 86-88
+  s_8a30690d9cca9f::t_c5250ea01c9ac7 113-115
+  s_8a30690d9cca9f::t_1cf1ad77e3a75b 31
+  s_8a30690d9cca9f::t_5c8b0332c2543e 24
+  s_8a30690d9cca9f::t_13f531a7ffe3d3 28,33-36
+  s_8a30690d9cca9f::t_25369963f2f0cf 12-13,15-16,18,20
+  s_8a30690d9cca9f::t_99a36329631f98 158-159
+  s_8a30690d9cca9f::t_2064bdf14e5bc3 58-62
+  s_8a30690d9cca9f::t_3fc3cd7b00598c 98-99
+  s_8a30690d9cca9f::t_47fc613bb6327c 76-78
+  s_8a30690d9cca9f::t_3b32176d93e4c3 135-152
+  s_8a30690d9cca9f::t_4bf1fe4020ca64 57
+  s_8a30690d9cca9f::t_47a2654810ed3a 124
+  s_8a30690d9cca9f::t_4c5e5912eecc17 164
+  s_8a30690d9cca9f::t_3948cc22476360 109
+  s_8a30690d9cca9f::t_23757627a6b7a6 166
+  s_8a30690d9cca9f::t_41c6521d25bbac 25
+  s_8a30690d9cca9f::t_5020631b578ef6 49
+  s_8a30690d9cca9f::t_7a42978ba9b8ed 122
+  s_8a30690d9cca9f::t_2275b374ce1531 68
+  s_8a30690d9cca9f::t_eaaf161ed99129 154
+  s_8a30690d9cca9f::t_35e07fdf6c8c26 67
+  s_9f222bc137715f::t_1238858634ba90 42-43
+  s_8a30690d9cca9f::t_fba38292f23cbd 63
+tsconfig.node.json
+  s_9f222bc137715f::t_7275d43a9a0d75 18
+test/package-paths.test.ts
+  s_8a30690d9cca9f::t_5c068d0199c2b1 48-52
+  s_8a30690d9cca9f::t_6ba4843d58ee48 19-22
+  s_8a30690d9cca9f::t_cf2b6299c712a5 61-68
+  s_8a30690d9cca9f::t_e1e8c15e346e49 7
+test/core.test.ts
+  s_9f222bc137715f::t_087369976bd8f0 3037,3106
+  s_9f222bc137715f::t_5df2dabfa5cff3 2054,2069,2072-2074,2076,2078,2085,2089,2091-2092,2095-2096,2098,2100-2101,2103,2111-2115
+  s_8a30690d9cca9f::t_5865bd8c3bebc2 1122
+  s_9f222bc137715f::t_6bd99463d294a3 21
+  s_9f222bc137715f::t_15a83e9dcfeb7b 2120-2132,2148-2157
+  s_9f222bc137715f::t_07ab3475e9d6d1 570
+  s_8a30690d9cca9f::t_8ae536f185196f 2133-2147
+  s_9f222bc137715f::t_bde7a080679911 32
+  s_8a30690d9cca9f::t_f72531a0888953 1163-1166,1169
+  s_9f222bc137715f::t_d7a8d632d50d8a 2086-2087
+  s_9f222bc137715f::t_ecc5ae540ea533 553,555-560,563-566,569,571,574,579-580,582,586,588-606,608-613,617-619,621-624,668
+  s_9f222bc137715f::t_efcdb936deb490 627-654,656-661
+  s_8a30690d9cca9f::t_068e5e04e6cc9b 1002,1004
+  s_8a30690d9cca9f::t_2ec53a9d66d728 1129
+  s_9f222bc137715f::t_0910182fc8d69b 673,675-677,682-683,691,696,699-700,714,716
+  s_9f222bc137715f::t_be0af609e8d059 694,701-710,713,715
+src/renderer/src/styles.css
+  s_9f222bc137715f::t_96add67145ddc5 2623
+skill/easy-flow/REFERENCE.md
+  s_8a30690d9cca9f::t_186e76d6160be1 108
+  s_8a30690d9cca9f::t_2fac90706b3e0b 160-163,168,170-171,173-175,177,179,181-185,187,189,191,193-199
+  s_8a30690d9cca9f::t_73cb1fbe84c3f5 10
+  s_8a30690d9cca9f::t_a21a57fdc280f2 143
+  s_8a30690d9cca9f::t_32d4c3fc3511cc 72
+  s_8a30690d9cca9f::t_05f2dc580918b8 153-155
+  s_8a30690d9cca9f::t_03648206437846 41
+  s_8a30690d9cca9f::t_c8def9a249f1fc 169
+  s_8a30690d9cca9f::t_e6983cdda3d982 16-37,43-55,66-68,73
+  s_8a30690d9cca9f::t_cb6cbcb35907d8 132-136,144
+  s_8a30690d9cca9f::t_ad3f7fae0d676a 120
+  s_8a30690d9cca9f::t_d314adf853c3d3 83-86
+  s_8a30690d9cca9f::t_fef991a0beb21d 100
+  s_8a30690d9cca9f::t_02fddd869d5be1 113
+  s_8a30690d9cca9f::t_628de1958b7650 59
+  s_8a30690d9cca9f::t_1fe2af8305d24b 142,145
+  s_8a30690d9cca9f::t_123d55db83893a 80
+server/cli.ts
+  s_9f222bc137715f::t_a9a4c0e53e6904 435,437-440,446,448,451-454,457
+  s_9f222bc137715f::t_d572c403975d34 15
+  s_8a30690d9cca9f::t_0e8e54b52b4390 528
+  s_9f222bc137715f::t_9167743fa8dfa1 856
+  s_9f222bc137715f::t_ca9d28ce0163db 901-902,905,908-909,915-923,927,931-933,940,948,950-952
+  s_9f222bc137715f::t_1291179e7c8b5b 942
+  s_9f222bc137715f::t_0b07af026a553e 447
+  s_8a30690d9cca9f::t_44474058dc8923 588
+  s_9f222bc137715f::t_64c94ebdab54c4 441-445
+  s_9f222bc137715f::t_2d5e7506741902 552-554
+  s_9f222bc137715f::t_d1cc470a560e24 903,910-912
+  s_9f222bc137715f::t_dc6475c25e1b77 35
+  s_8a30690d9cca9f::t_4e613741fb0f6b 1152
+  s_8a30690d9cca9f::t_18e9cf05e0c260 123
+  s_9f222bc137715f::t_b346860d5448f4 870,874-876
+  s_9f222bc137715f::t_e0db038a77cb43 737-738,746
+  s_9f222bc137715f::t_194eccdad7ef4c 550
+  s_9f222bc137715f::t_3a1c1f76c2f199 857-859
+  s_9f222bc137715f::t_df8673dff7196a 436,449-450,455-456,458-460
+  s_9f222bc137715f::t_771c33ee9ca3b3 712
+  s_9f222bc137715f::t_fdb62d262939bc 702
+  s_8a30690d9cca9f::t_a7e77103b8c49f 6-7
+src/renderer/src/components/InfoPanel.tsx
+  s_9f222bc137715f::t_3a947e3bd83cd0 216-232
+  s_9f222bc137715f::t_9cacf17f60fdc9 87
+  s_9f222bc137715f::t_197ad3da5c4257 5
+  s_9f222bc137715f::t_9c48eb1e42efbc 108
+src/renderer/src/lib/types.ts
+  s_9f222bc137715f::t_b70a3e9e08d87d 22-23
+  s_9f222bc137715f::t_7ffc955639f58b 73-74
+  s_9f222bc137715f::t_a08a899a50acc8 20-21
+  s_8a30690d9cca9f::t_635c5d41ed5cb9 63
+  s_9f222bc137715f::t_1bf26411d3a117 75
+  s_8a30690d9cca9f::t_3ab5696d73a068 119
+test/pet-card.test.ts
+  s_9f222bc137715f::t_fcb4051f18097c 69
+test/launch-board.test.ts
+  s_9f222bc137715f::t_abdb395ac9e725 284
+shared/link.ts
+  s_9f222bc137715f::t_c44899245bf788 1-75
+server/code-host.ts
+  s_9f222bc137715f::t_f0756ac199eec7 5
+test/code-host.test.ts
+  s_9f222bc137715f::t_a15e476ab5fb2c 10
+server/schema.ts
+  s_9f222bc137715f::t_240752940d892e 29
+  s_9f222bc137715f::t_a37f38789b03a6 196-199
+  s_9f222bc137715f::t_285ad75f342b00 214-215,221-231,275-303
+  s_9f222bc137715f::t_3fbdec3e9fdda6 216-220,232-274
+server/db.ts
+  s_9f222bc137715f::t_780fb54d60986b 109-110
+  s_9f222bc137715f::t_8569bdc8a5d2e3 1031,1035-1036
+  s_8a30690d9cca9f::t_0246a56a9df065 47
+  s_9f222bc137715f::t_1f51aa15efc073 97,102,111-112
+  s_9f222bc137715f::t_5c3fda1cfecab1 316-318,320,328-335,338-339,342
+  s_9f222bc137715f::t_40f11f65de2c50 311-314,321
+  s_9f222bc137715f::t_9e0e502fffa97c 1027-1029
+  s_9f222bc137715f::t_464db0e8e219f5 286
+  s_9f222bc137715f::t_c1ef1eddd03a11 697-698
+  s_9f222bc137715f::t_818a97d0798dd0 867
+  s_8a30690d9cca9f::t_be9f78114c1b1b 88
+  s_9f222bc137715f::t_ac869a247ab1a9 99-101
+tsconfig.test.json
+  s_9f222bc137715f::t_564343d87e6676 8
+test/skill-install.test.ts
+  s_8a30690d9cca9f::t_fd00914d11f2dc 25
+  s_8a30690d9cca9f::t_358a1201e12f85 91
+  s_8a30690d9cca9f::t_b029b9a212e190 113
+  s_8a30690d9cca9f::t_0ce67488bd828e 55
+src/renderer/src/App.tsx
+  s_8a30690d9cca9f::t_dce1d5ea98b877 433,441,456
+  s_8a30690d9cca9f::t_cc8d4b7d0ff17b 434-436
+  s_8a30690d9cca9f::t_e39bbd05c5f5f1 837,840-843
+  s_8a30690d9cca9f::t_9147d8d1553d28 991
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "ad2f24067547aad1f31e10e25192a5cd50fb7635",
+  "prompts": {},
+  "sessions": {
+    "s_8a30690d9cca9f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a2e393fd-d9b4-4410-b9f5-34d1f2624bf2",
+        "model": "composer-2.5"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    },
+    "s_9f222bc137715f": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_ue2dgiy2mfhx",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
