@@ -1,0 +1,62 @@
+test/core.test.ts
+  s_be3e387c562d4c::t_7212fdcacbbfc7 4373
+  s_be3e387c562d4c::t_15564ce42bbeb9 4414-4418,4424-4425,4428,4430,4435,4438,4440-4441
+  s_be3e387c562d4c::t_88d67c1832eff6 4365
+  s_be3e387c562d4c::t_02f4f3bd5ed13d 4227-4228
+  s_be3e387c562d4c::t_17c3caefad1cea 4381,4387,4390-4391,4393-4394
+  s_be3e387c562d4c::t_a830090c5c388e 4326
+scripts/build-pets.mjs
+  s_be3e387c562d4c::t_ebddf407558529 6-8
+  s_be3e387c562d4c::t_9fa5df5f171f8d 207
+test/pet-card.test.ts
+  s_be3e387c562d4c::t_edaa3f090b873a 160
+  s_be3e387c562d4c::t_7612f49847e8cb 13
+src/renderer/src/styles.css
+  s_be3e387c562d4c::t_20c7b09359513d 1681
+  s_be3e387c562d4c::t_2fead60e02ae5f 1511-1512
+scripts/build-cursor-pet.py
+  s_be3e387c562d4c::t_80b1a1be633a90 6,11
+  s_be3e387c562d4c::t_54c97fec2d1710 57,59,63-64,70-79
+  s_be3e387c562d4c::t_c40853c46ca551 20
+  s_be3e387c562d4c::t_b283f8a99384cf 60
+scripts/build-cxb-pet.py
+  s_be3e387c562d4c::t_da0bab2f0b2110 60
+  s_be3e387c562d4c::t_0059a312a3aa4b 12,21
+  s_be3e387c562d4c::t_15feac088d7973 57,59,63-64,72-79
+src/renderer/src/lib/pet-art.ts
+  s_be3e387c562d4c::t_87e0c3c203ebc9 253,258
+  s_be3e387c562d4c::t_76ab865e075126 12,14
+src/renderer/src/components/Pet.tsx
+  s_be3e387c562d4c::t_7c4dfce8fecfc5 61,63
+  s_be3e387c562d4c::t_bc54d58f20f3cd 189
+  s_be3e387c562d4c::t_5decfbe674544b 15-16,20,23
+  s_be3e387c562d4c::t_716b2e32699d31 44
+  s_be3e387c562d4c::t_18765cd9a362b4 119,139,141
+  s_be3e387c562d4c::t_7c1dd170b5f8a8 142
+  s_be3e387c562d4c::t_d03d94609151a1 329
+src/renderer/public/pets/README.md
+  s_be3e387c562d4c::t_963ae604181a9a 23-25
+  s_be3e387c562d4c::t_d81d249efed00c 60
+  s_be3e387c562d4c::t_4e825afcde7c91 65
+  s_be3e387c562d4c::t_d2d33accbd7a90 42,44
+scripts/pet_frames.py
+  s_be3e387c562d4c::t_c8f9ad1284f31c 152
+  s_be3e387c562d4c::t_9f345ed55382b3 2
+  s_be3e387c562d4c::t_5ec0249b41172c 130-138,140,146,149-151,153-156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "1c4158674eca58ed01aa5e9c6ed9fb39a593741e",
+  "prompts": {},
+  "sessions": {
+    "s_be3e387c562d4c": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_wqatdkvvy3p5",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
