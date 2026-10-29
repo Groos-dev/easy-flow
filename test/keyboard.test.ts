@@ -196,38 +196,38 @@ describe('键位表', () => {
   })
 })
 
-describe('⌘⌥1..9 切置顶项目', () => {
+describe('⌘1..9 切置顶项目', () => {
   test('按的是第几号置顶项目', () => {
-    assert.equal(projectSlot(key('1', { metaKey: true, altKey: true }), 'darwin'), 1)
-    assert.equal(projectSlot(key('9', { metaKey: true, altKey: true }), 'darwin'), 9)
+    assert.equal(projectSlot(key('1', { metaKey: true }), 'darwin'), 1)
+    assert.equal(projectSlot(key('9', { metaKey: true }), 'darwin'), 9)
   })
 
-  test('⌥ 把数字键改成符号时按物理键认', () => {
-    // 美式键盘上 ⌥1 出的是 ¡、⌥9 出的是 ª
-    assert.equal(
-      projectSlot(key('¡', { code: 'Digit1', metaKey: true, altKey: true }), 'darwin'),
-      1,
-    )
-    assert.equal(
-      projectSlot(key('ª', { code: 'Digit9', metaKey: true, altKey: true }), 'darwin'),
-      9,
-    )
+  test('切视图的 ⌘⌥1..3 不会被当成切项目', () => {
+    assert.equal(projectSlot(key('1', { metaKey: true, altKey: true }), 'darwin'), 0)
+    assert.equal(shortcut(key('1', { metaKey: true, altKey: true }), 'global.view-board', 'darwin'), true)
+    assert.equal(shortcut(key('1', { metaKey: true }), 'global.view-board', 'darwin'), false)
   })
 
-  test('切视图的 ⌘1..3 不会被当成切项目', () => {
-    assert.equal(projectSlot(key('1', { metaKey: true }), 'darwin'), 0)
-    assert.equal(shortcut(key('1', { metaKey: true }), 'global.view-board', 'darwin'), true)
-    assert.equal(shortcut(key('1', { metaKey: true, altKey: true }), 'global.view-board', 'darwin'), false)
+  test('⌥ 把数字键改成符号时切视图按物理键认', () => {
+    // 美式键盘上 ⌥1 出的是 ¡、⌥3 出的是 £
+    assert.equal(
+      shortcut(key('¡', { code: 'Digit1', metaKey: true, altKey: true }), 'global.view-board', 'darwin'),
+      true,
+    )
+    assert.equal(
+      shortcut(key('£', { code: 'Digit3', metaKey: true, altKey: true }), 'global.view-map', 'darwin'),
+      true,
+    )
   })
 
   test('编号外的键不命中', () => {
-    assert.equal(projectSlot(key('0', { metaKey: true, altKey: true }), 'darwin'), 0)
-    assert.equal(projectSlot(key('1', { altKey: true }), 'darwin'), 0)
+    assert.equal(projectSlot(key('0', { metaKey: true }), 'darwin'), 0)
+    assert.equal(projectSlot(key('1'), 'darwin'), 0)
   })
 
   test('键位文案：表里是范围，单个项目按序号给', () => {
-    assert.equal(shortcutLabel('global.project-n', 'darwin'), '⌘⌥1..9')
-    assert.equal(projectShortcutLabel(2, 'darwin'), '⌘⌥2')
+    assert.equal(shortcutLabel('global.project-n', 'darwin'), '⌘1..9')
+    assert.equal(projectShortcutLabel(2, 'darwin'), '⌘2')
     assert.equal(projectShortcutLabel(0, 'darwin'), '')
   })
 })

@@ -57,17 +57,17 @@ export const CONTEXT_ORDER: KeyContext[] = [
 
 const TABS = Array.from({ length: 9 }, (_, i) => `CommandOrControl+${i + 1}`)
 const SECTIONS = Array.from({ length: 4 }, (_, i) => `CommandOrControl+${i + 1}`)
-const PROJECTS = Array.from({ length: 9 }, (_, i) => `CommandOrControl+Alt+${i + 1}`)
+const PROJECTS = Array.from({ length: 9 }, (_, i) => `CommandOrControl+${i + 1}`)
 
 export const SHORTCUTS: ShortcutDef[] = [
   // ------------------------------------------------------------ 全局
   { id: 'global.panel', context: 'global', keys: ['CommandOrControl+Shift+E'], label: '呼出 / 收起 mini 面板', hidden: true },
   { id: 'global.settings', context: 'global', keys: ['CommandOrControl+,'], label: '打开设置（再按返回）' },
-  { id: 'global.view-board', context: 'global', keys: ['CommandOrControl+1'], label: '切到看板' },
-  { id: 'global.view-next', context: 'global', keys: ['CommandOrControl+2'], label: '切到下一步' },
-  { id: 'global.view-map', context: 'global', keys: ['CommandOrControl+3'], label: '切到导图' },
+  { id: 'global.view-board', context: 'global', keys: ['CommandOrControl+Alt+1'], label: '切到看板' },
+  { id: 'global.view-next', context: 'global', keys: ['CommandOrControl+Alt+2'], label: '切到下一步' },
+  { id: 'global.view-map', context: 'global', keys: ['CommandOrControl+Alt+3'], label: '切到导图' },
   { id: 'global.project', context: 'global', keys: ['CommandOrControl+P'], label: '切换项目' },
-  { id: 'global.project-n', context: 'global', keys: PROJECTS, label: '切到第 N 个置顶项目', display: '⌘⌥1..9' },
+  { id: 'global.project-n', context: 'global', keys: PROJECTS, label: '切到第 N 个置顶项目', display: '⌘1..9' },
   { id: 'global.search', context: 'global', keys: ['CommandOrControl+K'], label: '开合搜索面板' },
   { id: 'global.clear-filter', context: 'global', keys: ['CommandOrControl+Shift+K'], label: '清掉搜索筛选' },
 
@@ -312,7 +312,7 @@ export function shortcutLabel(id: string, platform = currentPlatform()): string 
   return def.display ?? def.keys.map((k) => formatAccelerator(k, platform)).join(' / ')
 }
 
-// ⌘⌥1..9 命中的是第几号置顶项目。
+// ⌘1..9 命中的是第几号置顶项目。
 // 没命中返回 0。
 export function projectSlot(e: KeyEventLike, platform = currentPlatform()): number {
   const keys = BY_ID.get('global.project-n')?.keys ?? []
