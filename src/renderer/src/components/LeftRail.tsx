@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Project } from '../lib/types'
-import { shortcutLabel } from '../lib/keys'
+import { shortcutLabel, projectShortcutLabel } from '../lib/keys'
 import { projectColor, projectInitial } from '../lib/projectIcon'
 import { BellIcon, BoardIcon, CheckIcon, InfoIcon, MapIcon, PinIcon } from './icons'
 
@@ -65,6 +65,8 @@ export default function LeftRail({
   const pinnedProjects = pinned.map((s) => bySlug.get(s)).filter((p): p is Project => !!p)
   const restProjects = projects.filter((p) => !pinned.includes(p.slug))
   const nameOf = (p: Project) => p.name || p.slug
+  // 看板、导图共用一个按钮，徽标给按下去会到的那一个
+  const viewHint = shortcutLabel(view === 'board' ? 'global.view-map' : 'global.view-board')
 
   const pick = (slug: string) => {
     setOpen(false)
@@ -137,23 +139,26 @@ export default function LeftRail({
             {current ? projectInitial(nameOf(current)) : '?'}
           </span>
           {current && <span className="rail-tip">{nameOf(current)}</span>}
+          <span className="kbd-hint">{shortcutLabel('global.project')}</span>
         </button>
 
         <div className="rail-sep" />
 
         {pinnedProjects
-          .filter((p) => p.slug !== active)
-          .map((p) => (
+          .map((p, i) => ({ project: p, key: projectShortcutLabel(i + 1) }))
+          .filter(({ project }) => project.slug !== active)
+          .map(({ project: p, key }) => (
             <button
               key={p.slug}
               className="rail-btn"
-              aria-label={nameOf(p)}
+              aria-label={`${nameOf(p)}（${key}）`}
               onClick={() => pick(p.slug)}
             >
               <span className="pico" style={{ background: projectColor(p.slug) }}>
                 {projectInitial(nameOf(p))}
               </span>
               <span className="rail-tip">{nameOf(p)}</span>
+              <span className="kbd-hint">{key}</span>
             </button>
           ))}
 
@@ -171,6 +176,7 @@ export default function LeftRail({
           onClick={() => onSwitchView(view === 'board' ? 'map' : 'board')}
         >
           {view === 'map' ? <MapIcon /> : <BoardIcon />}
+          <span className="kbd-hint">{viewHint}</span>
         </button>
 
         <button
@@ -184,6 +190,7 @@ export default function LeftRail({
         >
           <BellIcon />
           {agentCount > 0 && <span className="rail-badge">{agentCount}</span>}
+          <span className="kbd-hint">{shortcutLabel('global.view-next')}</span>
         </button>
       </div>
 

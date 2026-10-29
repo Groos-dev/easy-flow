@@ -373,6 +373,36 @@ body {
   text-align: center;
 }
 
+/* 按住 ⌘ 浮出的键位：贴在图标右侧，不占布局 */
+.kbd-hint {
+  position: absolute;
+  left: calc(100% + 7px);
+  top: 50%;
+  transform: translateY(-50%);
+  /* 左栏面板展开时也要盖在它上面 */
+  z-index: 70;
+  padding: 2px 6px;
+  border: 1px solid #333b47;
+  border-radius: 5px;
+  background: #1a1f27;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+
+.shell.cmd-hints .kbd-hint {
+  opacity: 1;
+}
+
+/* 气泡与键位抢同一个位置：按住 ⌘ 时人要看的是键位 */
+.shell.cmd-hints .rail-tip {
+  display: none;
+}
+
 /* 项目图标：底色由 slug 算出来，字是显示名的首字符 */
 .pico {
   flex: none;
