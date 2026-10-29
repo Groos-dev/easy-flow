@@ -13,8 +13,17 @@ import {
 } from '@dnd-kit/core'
 import { api } from './lib/api'
 import { DONE_STATUS, childStatsOf, childrenOf } from './lib/children'
-import { movePos, posOf, slugAt, type BoardColumn, type BoardPos } from './lib/board-focus'
+import {
+  movePos,
+  nextPetStop,
+  posOf,
+  slugAt,
+  type BoardColumn,
+  type BoardPos,
+  type PetRef,
+} from './lib/board-focus'
 import { lastActiveByReq, orderColumn } from './lib/board-order'
+import { badgesOf, isEventState } from './lib/threads'
 import { isInteractiveTarget, isPetTarget, shortcut, shortcutLabel, shouldIgnore } from './lib/keys'
 import { BOARD_POLL_MS } from './lib/time'
 import type { ChildStat, NextUpItem, Project, Requirement, Session, Status, Todo } from './lib/types'
@@ -212,6 +221,9 @@ export default function App() {
   const focusedEl = useRef<HTMLElement | null>(null)
   // 目标卡还没渲染出来（收起的「已完成」列要先展开）时，等下一次渲染再落焦点
   const pendingFocus = useRef<string | null>(null)
+  // 要落的是卡里哪只 pet
+  // 卡渲染出来后再把焦点从卡挪到那一格
+  const pendingPet = useRef<PetRef | null>(null)
 
   useEffect(() => {
     localStorage.setItem(PINNED_KEY, JSON.stringify(pinned))
@@ -537,6 +549,20 @@ export default function App() {
     [statuses, byStatus],
   )
 
+  // 要人处理的 pet：会话落在事件三档
+  // 判据与卡片角标同一份
+  // 一张卡可能挂好几只
+  const attention = useMemo(() => {
+    const bySlug = new Map<string, string[]>()
+    for (const r of shown) {
+      const ids = badgesOf(sessionsByReq.get(r.id) ?? [])
+        .filter((s) => isEventState(s.status.state))
+        .map((s) => s.session)
+      if (ids.length) bySlug.set(r.slug, ids)
+    }
+    return bySlug
+  }, [shown, sessionsByReq])
+
   const childrenByParent = useMemo(() => childrenOf(items), [items])
 
   const toggleKids = useCallback((slug: string) => {
@@ -645,6 +671,7 @@ export default function App() {
     focusedEl.current = null
     focusSlug.current = null
     pendingFocus.current = null
+    pendingPet.current = null
     focusRing.current?.classList.remove('on')
     // 焦点收掉就是离开「已完成」列：跟着焦点展开的那次列也一起收回去
     foldDone()
@@ -654,6 +681,27 @@ export default function App() {
   const handleCardFocus = useCallback(
     (slug: string) => {
       if (focusSlug.current !== slug) moveFocus(slug)
+    },
+    [moveFocus],
+  )
+
+  // 焦点落到卡里的某一格 pet 上
+  // 按 data-session 找到那一格，回车由那一格自己接
+  // 这一格不能聚焦时焦点留在卡上，回车打开需求
+  const focusPetStop = useCallback(
+    (slug: string, session: string) => {
+      pendingPet.current = { slug, session }
+      const card = cardEl(slug)
+      if (!card) {
+        moveFocus(slug)
+        return
+      }
+      moveFocus(slug)
+      pendingPet.current = null
+      const slot = Array.from(card.querySelectorAll<HTMLElement>('.slot[data-session]')).find(
+        (el) => el.dataset.session === session,
+      )
+      if (slot && slot.tabIndex >= 0) slot.focus({ preventScroll: true })
     },
     [moveFocus],
   )
@@ -678,7 +726,9 @@ export default function App() {
     const slug = pendingFocus.current
     if (!slug || !cardEl(slug)) return
     pendingFocus.current = null
-    moveFocus(slug)
+    const pet = pendingPet.current
+    if (pet?.slug === slug) focusPetStop(pet.slug, pet.session)
+    else moveFocus(slug)
   })
 
   // 列内滚动、窗口缩放时浮层要贴住卡片。滚动事件很密，按帧合并一次
@@ -742,12 +792,30 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.timeStamp < attachedAt) return
       if (shouldIgnore(e)) return
+      const cur = posOf(focusColumns, focusSlug.current ?? '')
+      // 带 ⌘⇧ 的组合键在控件上也接管
+      if (shortcut(e, 'board.attention')) {
+        e.preventDefault()
+        const slot = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('.slot')
+        const hit = nextPetStop(focusColumns, (slug) => attention.get(slug) ?? [], {
+          pos: cur,
+          session: slot?.dataset.session ?? '',
+        })
+        if (!hit) {
+          setHint('没有要人处理的 pet')
+          return
+        }
+        const at = posOf(focusColumns, hit.slug)
+        if (at?.status === DONE_STATUS) revealDone()
+        else foldDone()
+        focusPetStop(hit.slug, hit.session)
+        return
+      }
       // 卡片也带 role=button，但它就是这里要接管的
       const el = e.target as HTMLElement | null
       // 焦点停在卡片里的 agent 头像上：这时在头像之间走，单键不该把人带回卡片层
       if (isPetTarget(el)) return
       if (!el?.closest?.('.card') && isInteractiveTarget(el)) return
-      const cur = posOf(focusColumns, focusSlug.current ?? '')
       let next: BoardPos | null = null
       if (shortcut(e, 'board.next')) next = movePos(focusColumns, cur, 'down')
       else if (shortcut(e, 'board.prev')) next = movePos(focusColumns, cur, 'up')
@@ -800,12 +868,14 @@ export default function App() {
   }, [
     boardKeyboard,
     focusColumns,
+    attention,
     project,
     toggleKids,
     items,
     childrenByParent,
     kidsOpen,
     moveFocus,
+    focusPetStop,
     dropFocus,
     revealDone,
     foldDone,

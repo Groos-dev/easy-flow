@@ -240,6 +240,7 @@ function PetSlot({ item, compact }: { item: PetItem; compact: boolean }) {
   return (
     <div
       className={`slot${shown ? ' shown' : ''}`}
+      data-session={session.session}
       tabIndex={focusable ? 0 : undefined}
       role={focusable ? (session.link ? 'link' : 'button') : undefined}
       aria-label={
