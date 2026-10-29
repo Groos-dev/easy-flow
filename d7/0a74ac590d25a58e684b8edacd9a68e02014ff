@@ -1,0 +1,55 @@
+test/keyboard.test.ts
+  s_dff599a0b6976f::t_5b59d8733be166 164-167
+src/renderer/src/lib/keys.ts
+  s_dff599a0b6976f::t_e1f2f97ec95631 77-80,82
+  s_dff599a0b6976f::t_471931dd79caa6 81
+test/pet-card.test.ts
+  s_dff599a0b6976f::t_71ab59ab007aa6 191
+  s_dff599a0b6976f::t_e99cd0e4673b11 337-341
+src/renderer/src/components/Pet.tsx
+  s_dff599a0b6976f::t_598090533e6052 243
+src/renderer/src/App.tsx
+  s_dff599a0b6976f::t_e5fd68f6ff0681 674
+  s_dff599a0b6976f::t_2f630268a63cd4 796,800-803
+  s_dff599a0b6976f::t_c17e28b4d3630d 26
+  s_dff599a0b6976f::t_a84d58469eabb2 691-708
+  s_dff599a0b6976f::t_8fa881784426e5 729-731
+  s_dff599a0b6976f::t_af51455aa0a211 552-554,556,558-561
+  s_dff599a0b6976f::t_fb6bf08dc52afb 795,797-798,804,806-807,810,812-813
+  s_dff599a0b6976f::t_a6e57105854247 871
+  s_dff599a0b6976f::t_da1f16c9c725c5 563
+  s_dff599a0b6976f::t_6c007b14573568 555,557,562,564-565
+  s_dff599a0b6976f::t_c60dce77dc2044 878
+  s_dff599a0b6976f::t_56199610753cb3 16-24
+  s_dff599a0b6976f::t_a346ab24a76afe 799,805,808-809,811
+  s_dff599a0b6976f::t_f3ff2e182c3891 688-690
+  s_dff599a0b6976f::t_8619205a454e90 224-226
+src/renderer/src/lib/board-focus.ts
+  s_dff599a0b6976f::t_59424f9fdaeda9 71-74
+  s_dff599a0b6976f::t_54e2f538ae9bfc 63-70,75-76,78-81,85-93
+  s_dff599a0b6976f::t_292697676b1ae2 62,77,82-83,94-96
+  s_dff599a0b6976f::t_88aab6f47fc7ea 84
+test/board-focus.test.ts
+  s_dff599a0b6976f::t_db5b810c921b90 89,103-104,109-111,116-118,123-125,144-147,151-153,157-158
+  s_dff599a0b6976f::t_61da7cfff0c399 90
+  s_dff599a0b6976f::t_d83f9937b63a22 6
+  s_dff599a0b6976f::t_487dcd206d6a0a 133,135-139
+  s_dff599a0b6976f::t_83bd77308ed6ce 134
+  s_dff599a0b6976f::t_052e28b48f583d 91-102,105-108,112-115,119-122,126-132,140-143,148-150,154-156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "d70a74ac590d25a58e684b8edacd9a68e02014ff",
+  "prompts": {},
+  "sessions": {
+    "s_dff599a0b6976f": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_d90bs2l0cf0m",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
