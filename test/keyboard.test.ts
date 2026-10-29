@@ -163,6 +163,10 @@ describe('键位表', () => {
       shortcut(key('{', { metaKey: true, shiftKey: true }), 'detail.tab-prev', 'darwin'),
       true,
     )
+    assert.equal(
+      shortcut(key('n', { metaKey: true, shiftKey: true }), 'board.attention', 'darwin'),
+      true,
+    )
     assert.equal(shortcutLabel('board.next', 'darwin'), 'J / ↓')
     assert.equal(shortcutLabel('detail.tab-n', 'darwin'), '⌘1..9')
   })

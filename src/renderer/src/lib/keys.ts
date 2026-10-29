@@ -76,6 +76,12 @@ export const SHORTCUTS: ShortcutDef[] = [
   { id: 'board.prev', context: 'board', keys: ['K', 'ArrowUp'], label: '上一张卡' },
   { id: 'board.left', context: 'board', keys: ['H', 'ArrowLeft'], label: '左一列' },
   { id: 'board.right', context: 'board', keys: ['L', 'ArrowRight'], label: '右一列' },
+  {
+    id: 'board.attention',
+    context: 'board',
+    keys: ['CommandOrControl+Shift+N'],
+    label: '跳到下一只要人处理的 pet（回车回会话）',
+  },
   { id: 'board.open', context: 'board', keys: ['Return'], label: '打开选中需求' },
   { id: 'board.kids', context: 'board', keys: ['Space'], label: '展开 / 收起子需求' },
   { id: 'board.copy-slug', context: 'board', keys: ['Y'], label: '复制选中需求的 slug' },

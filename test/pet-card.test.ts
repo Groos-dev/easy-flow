@@ -188,13 +188,12 @@ describe('PetRow 的气泡', () => {
       createElement(PetRow, { sessions: [sess('claude', 'working', '', 0, '收口 hook 管道', act('改 hook.ts'))] }),
     )
     assert.deepEqual(bubbleOf(html).slice(1), ['bubble', '改 hook.ts'])
-    assert.match(html, /<div class="slot shown"><div class="bubble-box"><div class="bubble-clip"><div class="bubble"/)
+    assert.match(html, /<div class="slot shown"[^>]*><div class="bubble-box"><div class="bubble-clip"><div class="bubble"/)
     assert.match(html, /<span class="bubble-text">改 hook\.ts<\/span>/)
   })
 
   test('静止那档默认不露气泡（要 hover），非静止的一到就挂着', () => {
     const idle = render(createElement(PetRow, { sessions: [sess('claude', 'idle', '', 0, '补单测')] }))
-    assert.match(idle, /<div class="slot">/)
     assert.doesNotMatch(idle, /class="slot shown"/)
     for (const state of ['working', 'blocked', 'done', 'failed'] as const) {
       const html = render(createElement(PetRow, { sessions: [sess('claude', state, '', 0, '有话说')] }))
@@ -334,5 +333,10 @@ describe('agent 头像的键盘入口', () => {
     const tag = slotTag(render(createElement(PetRow, { sessions: [sess('codex', 'done', 'codex://threads/2')], compact: true })))
     assert.match(tag, /tabindex="0"/)
     assert.match(tag, /aria-label="回到 Codex 的会话"/)
+  })
+
+  test('每一格带会话 id：看板按会话找得到那只 pet', () => {
+    const tag = slotTag(render(createElement(PetRow, { sessions: [sess('claude', 'failed')] })))
+    assert.match(tag, /data-session="claude-failed-"/)
   })
 })
