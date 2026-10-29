@@ -535,7 +535,7 @@ export default function App() {
     [project, load, loadProjects, loadNextUp],
   )
 
-  // ⌘⌥1..9 直接切置顶项目，编号与左栏徽标同一份顺序
+  // ⌘1..9 直接切置顶项目，编号与左栏徽标同一份顺序
   useEffect(() => {
     if (!inMain) return
     const onKey = (e: KeyboardEvent) => {
