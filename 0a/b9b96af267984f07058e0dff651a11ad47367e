@@ -1,0 +1,23 @@
+src/renderer/src/lib/keys.ts
+  s_91c2901fd64f49::t_eff3394cd98f54 60
+  s_91c2901fd64f49::t_bea8b4504c4c4d 66-68,70
+  s_91c2901fd64f49::t_0f896f99c207a2 315
+test/keyboard.test.ts
+  s_91c2901fd64f49::t_e457f56adb98c0 199,201-202,205-212,214-215,218-219,224-225,229-230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "0ab9b96af267984f07058e0dff651a11ad47367e",
+  "prompts": {},
+  "sessions": {
+    "s_91c2901fd64f49": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_t4dyely2f4y4",
+        "model": "auto(free)"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
