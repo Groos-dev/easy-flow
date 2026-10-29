@@ -9,9 +9,9 @@
  *   驱动呼吸），`<img>` 会禁脚本、只剩一朵静止的云；而 `<object>` 的文档画布在 Chromium 里恒为不透明，
  *   暗色卡片上就是一块白方块。内联的 SVG 是普通元素，背景天然透明、跟着主题走。
  * - 程小帮 → cxb 蓝卫衣短发女孩，走 `<img>`。每档是用 gpt-image-2.5 生成的三帧动作表切出的
- *   循环动画 WebP（另出一份首帧静态版给减动效用），构建见 scripts/build-cxb-pet.py。
+ *   循环动画 WebP，构建见 scripts/build-cxb-pet.py。
  * - Cursor → cursor 立方体小机器人（方块 logo + 指针箭头），走 `<img>`。同样是生图动作表切出的
- *   循环动画 WebP + 静态版，构建见 scripts/build-cursor-pet.py。
+ *   循环动画 WebP，构建见 scripts/build-cursor-pet.py。
  *
  * 素材来源与许可见 src/renderer/public/pets/README.md；clawd / cloudling 的构建见
  * scripts/build-pets.mjs。
@@ -149,6 +149,20 @@ export function idleMoodOf(observedAt: number, now = Date.now()): IdleMood {
   return IDLE_STAGES.find((stage) => idleMs >= stage.after)?.mood ?? 'awake'
 }
 
+/**
+ * 到下一个困倦档还有多少毫秒；已经睡到底（或说不出时刻）返回 null。
+ * 困倦档是按时长算的，而看板只在数据变了才重渲染——pet 靠它排一个定时器，
+ * 睡觉的姿势不用等别的事件把整板重渲染一次才出现。
+ */
+export function nextIdleStageIn(observedAt: number, now = Date.now()): number | null {
+  if (!observedAt) return null
+  const idleMs = now - observedAt
+  for (let i = IDLE_STAGES.length - 1; i >= 0; i -= 1) {
+    if (IDLE_STAGES[i].after > idleMs) return IDLE_STAGES[i].after - idleMs
+  }
+  return null
+}
+
 // 一块素材怎么落到页面上
 export type PetArt = { channel: 'img'; src: string } | { channel: 'inline'; svg: string }
 
@@ -231,22 +245,17 @@ export function isWaking(
 
 /**
  * 相对路径，不带前导斜杠：dev 下按 vite 根解析，打包后按 index.html 同级目录解析，两边都能取到。
- * `still` 换静态素材：clawd 自带动画封在 SVG 文档里，换 `*.still.svg`；cxb / cursor 是动画 WebP，
- * 换首帧的 `*-still.webp`。折叠卡的小号素材本来就是静态的，不参与替换。
  * `wake` 只对带这一档素材的主题生效，且折叠卡不放——小号素材没有醒来这一张。
  */
 export function petArt(
   agent: string,
   state: Pose,
-  { compact, still, mood = 'awake', wake = false }: { compact: boolean; still: boolean; mood?: IdleMood; wake?: boolean },
+  { compact, mood = 'awake', wake = false }: { compact: boolean; mood?: IdleMood; wake?: boolean },
 ): PetArt {
   const theme = themeFor(agent)
   const file = wake && !compact && theme.wake ? theme.wake : fileFor(theme, state, mood, compact)
   if (theme.inline) return { channel: 'inline', svg: CLOUDLING_SVG[file] }
-  // 小号素材里只有 clawd 的 SVG 另出了 still 版；位图 mini 本来就是静态首帧
-  const swap = still && (!compact || file.endsWith('.svg'))
-  const src = swap ? file.replace(/\.svg$/, '.still.svg').replace(/\.webp$/, '-still.webp') : file
-  return { channel: 'img', src: `pets/${src}` }
+  return { channel: 'img', src: `pets/${file}` }
 }
 
 const SCRIPT_RE = /<script[^>]*>([\s\S]*?)<\/script>/

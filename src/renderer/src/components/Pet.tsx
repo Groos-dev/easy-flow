@@ -2,48 +2,25 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { api } from '../lib/api'
 import { AGENT_LABELS } from '../lib/labels'
 import { shortcut } from '../lib/keys'
-import { petArt, scopeCloudling, idleMoodOf, isWaking, type IdleMood } from '../lib/pet-art'
+import { petArt, scopeCloudling, idleMoodOf, nextIdleStageIn, isWaking, type IdleMood } from '../lib/pet-art'
 import { isEventState } from '../lib/threads'
 import { bubbleToneOf, PET_LABEL, planPetRow, type PetItem, type Pose } from '../lib/pets'
 import type { Session } from '../lib/types'
-
-/**
- * 系统开了「减少动态效果」就换静态素材。
- * clawd 的自带动画封在 <img> 的 SVG 文档里，外部 CSS 够不进去，只能另出 *.still.svg；
- * cxb / cursor 是动画 WebP，换首帧的 *-still.webp；
- * cloudling 内联在页面里，由下面的 Cloudling 只放行首帧。构建见 scripts/build-*-pet.*。
- */
-function usePrefersReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(
-    () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
-  )
-  useEffect(() => {
-    const mq = window.matchMedia?.('(prefers-reduced-motion: reduce)')
-    if (!mq) return
-    const sync = () => setReduced(mq.matches)
-    mq.addEventListener('change', sync)
-    return () => mq.removeEventListener('change', sync)
-  }, [])
-  return reduced
-}
 
 /**
  * 内联云宝的运行壳：给素材自带的脚本换一套作用域。
  *
  * - `document` 收窄到这棵子树。素材里除了 `getElementById`，还有 `querySelectorAll('.spark')`
  *   这种按文档找的调用——不收窄，同屏两只同档云宝会互相改对方的元素。
- * - `requestAnimationFrame` 也换掉：素材的循环只会一直排下一帧、自己不会停，元素一离开文档
- *   （换档、卸载）就得断在下一帧，否则每换一次状态都多一条空转的 rAF。`still` 时只放行首帧——
- *   眼睛与姿态是脚本画的，整段剥掉会剩一朵没表情的云。
+ * - `requestAnimationFrame` 也换掉：素材的循环只会一直排下一帧，元素一离开文档
+ *   （换档、卸载）就得断在下一帧，否则每换一次状态都多一条空转的 rAF。
  *
  * 用元素属性当实例句柄：壳在脚本之前求值，拿不到脚本里的变量，只能从外面按 `data-pet` 找回来。
  */
-function inlineShell(uid: string, still: boolean, script: string): string {
+function inlineShell(uid: string, script: string): string {
   return `(function (root, raf) {
-  var left = ${still ? 1 : Infinity};
   var requestAnimationFrame = function (cb) {
-    if (left <= 0 || !root.isConnected) return 0;
-    left -= 1;
+    if (!root.isConnected) return 0;
     return raf(cb);
   };
   var document = {
@@ -64,7 +41,7 @@ ${script}
  * 挂载是命令式的：那半截脚本要「插进文档之后」才会跑，React 的渲染管不到这一步。
  * 同屏多只的 id 撞车在 scopeCloudling 里按实例改写掉。
  */
-function Cloudling({ svg, still }: { svg: string; still: boolean }) {
+function Cloudling({ svg }: { svg: string }) {
   const host = useRef<HTMLSpanElement>(null)
   // 只用来当 id 后缀与查找句柄，取 useId 里能进 id 与属性选择器的那部分
   const uid = useId().replace(/\W/g, '')
@@ -81,9 +58,9 @@ function Cloudling({ svg, still }: { svg: string; still: boolean }) {
     const s = document.createElementNS('http://www.w3.org/2000/svg', 'script')
     const nonce = window.easyFlow?.cspNonce
     if (nonce) s.setAttribute('nonce', nonce)
-    s.textContent = inlineShell(uid, still, script)
+    s.textContent = inlineShell(uid, script)
     root.appendChild(s)
-  }, [svg, still, uid])
+  }, [svg, uid])
   return <span ref={host} className="pet-art" aria-hidden="true" />
 }
 
@@ -115,6 +92,22 @@ function useWake(agent: string, state: Pose, mood: IdleMood | undefined, enabled
 }
 
 /**
+ * 静止档的困倦等级由「静了多久」算出，而看板没有数据变化就不重渲染：
+ * 不自己排一个定时器，睡着的姿势要等下一次整板重渲染（常常就是鼠标落上来那一下）才出现。
+ * 每次只排到下一个档口，到点重渲染一次再算下一次；睡到底就没有下一档了。
+ */
+function useIdleMood(observedAt: number): IdleMood {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const wait = nextIdleStageIn(observedAt, Date.now())
+    if (wait === null) return
+    const timer = setTimeout(() => setNow(Date.now()), wait)
+    return () => clearTimeout(timer)
+  }, [observedAt, now])
+  return idleMoodOf(observedAt, now)
+}
+
+/**
  * 一档状态一只 pet：一个 agent 一套素材，动作与表情都来自素材本身
  * （clawd 是 SVG 自带的 @keyframes，cloudling 是素材里的脚本，cxb / cursor 是动作表合成的循环 WebP；
  * 宿主不再另写）。
@@ -123,7 +116,7 @@ function useWake(agent: string, state: Pose, mood: IdleMood | undefined, enabled
  * `event` 是「这是个没读过的事件」——事件边框与一次性动效靠它，读过就没了；
  * pet 本身不跟事件走，读过了照样留着（它是回到会话的入口）。
  * `focus` 由外面的 PetRow 选出，同一时刻最多一只（见 lib/pets.ts 的 focusIndex）；
- * `compact` 是折叠卡上的小号变体，`still` 换静态素材（减动效兜底）。
+ * `compact` 是折叠卡上的小号变体。
  * pet 只负责展示状态；跳转由外层透明命中层消费，避免内联 SVG 影响鼠标事件。
  */
 export default function Pet({
@@ -133,7 +126,6 @@ export default function Pet({
   event = false,
   focus = false,
   compact = false,
-  still = false,
 }: {
   agent: string
   state: Pose
@@ -141,19 +133,13 @@ export default function Pet({
   event?: boolean
   focus?: boolean
   compact?: boolean
-  still?: boolean
 }) {
   const name = `${AGENT_LABELS[agent] ?? agent} · ${PET_LABEL[state]}`
   const wake = useWake(agent, state, mood, !compact)
-  const art = petArt(agent, state, { compact, still, mood, wake })
+  const art = petArt(agent, state, { compact, mood, wake })
   // cloudling 内联成 <svg>（脚本驱动，且 object 的文档画布不透明）；clawd / cxb / cursor 走 <img>（每张自带同名 @keyframes，内联会互相覆盖）
-  const body =
-    art.channel === 'inline' ? (
-      <Cloudling svg={art.svg} still={still} />
-    ) : (
-      <img src={art.src} alt="" draggable={false} />
-    )
-  const cls = `pet${agent === 'chengxiaobang' ? ' cxb' : ''}${agent === 'cursor' ? ' cursor' : ''}${compact ? ' compact' : ''} s-${state}${event ? ' event' : ''}${focus ? ' focus' : ''}`
+  const body = art.channel === 'inline' ? <Cloudling svg={art.svg} /> : <img src={art.src} alt="" draggable={false} />
+  const cls = `pet${compact ? ' compact' : ''} s-${state}${event ? ' event' : ''}${focus ? ' focus' : ''}`
 
   return (
     <span className={cls} role="img" aria-label={name}>
@@ -200,19 +186,15 @@ function useBubbleShown(pinned: boolean, active: boolean): boolean {
  * 一只 pet 一格：气泡在上、pet 在下，尾巴指着自己那只。格子的宽度跟着气泡在不在变——
  * 没气泡时收成 pet 的宽度挤在一起，有气泡时撑开（过渡在 styles.css 里）。
  */
-function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; still: boolean }) {
+function PetSlot({ item, compact }: { item: PetItem; compact: boolean }) {
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
   const [openError, setOpenError] = useState('')
-  const [onScreen, setOnScreen] = useState(true)
-  const slotRef = useRef<HTMLDivElement>(null)
   const { session, state } = item
   const hasBubble = item.bubble !== ''
   // 焦点与悬停共用一条气泡规则：移开焦点和移开鼠标一样，气泡再留 30 秒
   const shown = useBubbleShown(hasBubble && state !== 'idle', hovered || focused)
-  // 静止档只在鼠标落上来时播动画，滚出视野的也不播：满屏 pet 常驻逐帧绘制是看板空转 CPU 的大头。
-  // 键盘焦点不参与——在头像之间移动时每步都换素材，云宝那种脚本驱动的内联 SVG 得重新解析一遍
-  const stillArt = still || !onScreen || (state === 'idle' && !hovered)
+  const mood = useIdleMood(state === 'idle' ? session.status.observedAt : 0)
   const canFocusWorkspace = session.agent === 'cursor' && !!session.cwd
   const focusable = !!session.link || canFocusWorkspace
   const openFromSlot = () => {
@@ -229,15 +211,6 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
       .then(() => api.markSessionClicked(session.agent, session.session))
       .catch((error: Error) => setOpenError(error.message || '打开失败'))
   }
-
-  // 视野外就换静态素材：滚动容器在 .column-body，viewport 作 root 能覆盖这一层
-  useEffect(() => {
-    const el = slotRef.current
-    if (!el || typeof IntersectionObserver === 'undefined') return
-    const io = new IntersectionObserver(([entry]) => setOnScreen(entry.isIntersecting))
-    io.observe(el)
-    return () => io.disconnect()
-  }, [])
 
   // 焦点停在这一格：回车走和鼠标点击同一条路，Esc 交回卡片，hjkl / 方向键在同一排头像里走；
   // 看板那套单键由 App 让位
@@ -266,7 +239,6 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
 
   return (
     <div
-      ref={slotRef}
       className={`slot${shown ? ' shown' : ''}`}
       tabIndex={focusable ? 0 : undefined}
       role={focusable ? (session.link ? 'link' : 'button') : undefined}
@@ -322,11 +294,10 @@ function PetSlot({ item, compact, still }: { item: PetItem; compact: boolean; st
       <Pet
         agent={session.agent}
         state={state}
-        mood={state === 'idle' ? idleMoodOf(session.status.observedAt) : undefined}
+        mood={state === 'idle' ? mood : undefined}
         event={isEventState(state)}
         focus={item.focus}
         compact={compact}
-        still={stillArt}
       />
     </div>
   )
@@ -350,13 +321,12 @@ export function PetRow({
   inert?: boolean
 }) {
   const { items } = planPetRow(sessions)
-  const still = usePrefersReducedMotion()
   if (items.length === 0) return null
 
   return (
     <div className={`pets${compact ? ' compact' : ''}`} {...(inert ? { inert: '' } : {})}>
       {items.map((p) => (
-        <PetSlot key={`${p.session.agent}:${p.session.session}`} item={p} compact={compact} still={still} />
+        <PetSlot key={`${p.session.agent}:${p.session.session}`} item={p} compact={compact} />
       ))}
     </div>
   )

@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import Card from '../src/renderer/src/components/Card.tsx'
-import Pet, { PetRow } from '../src/renderer/src/components/Pet.tsx'
+import { PetRow } from '../src/renderer/src/components/Pet.tsx'
 import type { Requirement, Session, SessionAction } from '../src/renderer/src/lib/types.ts'
 
 function sess(
@@ -118,9 +118,9 @@ describe('PetRow 渲染', () => {
     const done = render(createElement(PetRow, { sessions: [sess('claude', 'done')] }))
     assert.match(done, /src="pets\/clawd-happy.svg"/)
     assert.match(done, /aria-label="Claude Code · 跑完待看"/)
-    // 静止档默认是静态首帧，鼠标 / 焦点落上来才播动画
+    // 静止档照常播素材自带的动效，不跟鼠标走
     const idle = render(createElement(PetRow, { sessions: [sess('claude', 'idle')] }))
-    assert.match(idle, /src="pets\/clawd-idle-follow\.still\.svg"/)
+    assert.match(idle, /src="pets\/clawd-idle-follow\.svg"/)
     assert.match(idle, /aria-label="Claude Code · 静止"/)
   })
 
@@ -128,10 +128,10 @@ describe('PetRow 渲染', () => {
     const now = Date.now()
     const art = (idleMs: number) =>
       render(createElement(PetRow, { sessions: [sess('claude', 'idle', '', now - idleMs)] }))
-    assert.match(art(0), /src="pets\/clawd-idle-follow\.still\.svg"/)
-    assert.match(art(60_000), /src="pets\/clawd-idle-yawn\.still\.svg"/)
-    assert.match(art(20 * 60_000), /src="pets\/clawd-idle-doze\.still\.svg"/)
-    assert.match(art(60 * 60_000), /src="pets\/clawd-sleeping\.still\.svg"/)
+    assert.match(art(0), /src="pets\/clawd-idle-follow\.svg"/)
+    assert.match(art(60_000), /src="pets\/clawd-idle-yawn\.svg"/)
+    assert.match(art(20 * 60_000), /src="pets\/clawd-idle-doze\.svg"/)
+    assert.match(art(60 * 60_000), /src="pets\/clawd-sleeping\.svg"/)
   })
 
   test('事件边框跟状态走：事件型三档带 event，静止不带', () => {    const done = render(createElement(PetRow, { sessions: [sess('claude', 'done')] }))
@@ -157,7 +157,7 @@ describe('PetRow 渲染', () => {
   test('程小帮用专属 cxb 素材，走 <img>，并显示「程小帮」', () => {
     const html = render(createElement(PetRow, { sessions: [sess('chengxiaobang', 'blocked')] }))
     assert.match(html, /<img[^>]+src="pets\/cxb-blocked\.webp"/)
-    assert.match(html, /class="pet cxb s-blocked event focus"/, '带 cxb 类，宿主 CSS 才认得出位图那套轻动')
+    assert.match(html, /class="pet s-blocked event focus"/)
     assert.doesNotMatch(html, /class="pet-art"/)
     assert.match(html, /aria-label="程小帮 · 等你"/)
   })
@@ -165,15 +165,6 @@ describe('PetRow 渲染', () => {
   test('折叠卡上的程小帮换 cxb mini', () => {
     const html = render(createElement(PetRow, { sessions: [sess('chengxiaobang', 'working')], compact: true }))
     assert.match(html, /src="pets\/cxb-mini-typing\.webp"/)
-  })
-
-  test('减动效时 cxb / cursor 换静态首帧，小号仍用 mini', () => {
-    const cxb = render(createElement(Pet, { agent: 'chengxiaobang', state: 'working', still: true }))
-    assert.match(cxb, /src="pets\/cxb-working-still\.webp"/)
-    const cursor = render(createElement(Pet, { agent: 'cursor', state: 'idle', mood: 'sleeping', still: true }))
-    assert.match(cursor, /src="pets\/cursor-sleeping-still\.webp"/)
-    const mini = render(createElement(Pet, { agent: 'cursor', state: 'working', still: true, compact: true }))
-    assert.match(mini, /src="pets\/cursor-mini-typing\.webp"/)
   })
 
   test('折叠卡换 mini 素材', () => {

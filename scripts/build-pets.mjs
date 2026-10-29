@@ -3,11 +3,9 @@
  * 从 .pet-src/ 生成看板 pet 素材到 src/renderer/public/pets/。两套形象、两条通道：
  *
  * - clawd（Claude）：clawd-on-desk 默认主题，走 <img>。每张自带 <style> 与 @keyframes，
- *   内联到一张卡里会互相覆盖，用 <img> 让每个 SVG 文档独立、CSS 天然隔离。这里做两件事：
- *   1) 重设 viewBox：原始 `-15 -25 45 45` 留白太大，44px 里螃蟹只有十几个像素；按内容
- *      包围盒收紧成方形（只改取景框、不动图形坐标，SVG 自带 transform-origin 仍按原坐标系生效）。
- *   2) 另出 *.still.svg：往自带 <style> 里注入 `* { animation: none !important }` 停掉动画，
- *      再把「基础 opacity: 0、只靠 keyframes 显形」的装饰按文件置为可见——冻结后它们会永久消失。
+ *   内联到一张卡里会互相覆盖，用 <img> 让每个 SVG 文档独立、CSS 天然隔离。这里做一件事：
+ *   重设 viewBox：原始 `-15 -25 45 45` 留白太大，44px 里螃蟹只有十几个像素；按内容
+ *   包围盒收紧成方形（只改取景框、不动图形坐标，SVG 自带 transform-origin 仍按原坐标系生效）。
  *
  * - cloudling（Codex）：clawd-on-desk 的 cloudling 主题，**内联进宿主 DOM**，构建期落成一个 TS 模块。
  *   27/28 个文件是脚本驱动（约 5.8KB 的 requestAnimationFrame + setAttribute），<img> 会禁脚本 →
@@ -98,30 +96,8 @@ const CLAWD_ART = [
   { name: 'clawd-working-sweeping.svg', bbox: [-3, 5, 18.5, 11] },
 ]
 
-// still 版额外规则：把「基础 opacity: 0、只靠动画显形」的装饰置为可见（连同动画冻结后应有的静置 transform）。
-// 逐个文件过一遍：没有动画显形装饰的（idle / peek / mini-idle）不加；error 的烟雾基础位置在头顶之外、
-// 硬置可见会悬空，本轮选择「无烟雾」的那一帧，也不加。
-const CLAWD_STILL = {
-  // 星星：flash-center / flash-outer 只改 opacity，置 1 即可
-  'clawd-happy.svg': '.spark-center, .spark-outer { opacity: 1 !important; }',
-  'clawd-mini-happy.svg': '.spark-center, .spark-outer { opacity: 1 !important; }',
-  // 思考气泡 + 圆点：bubble 的生命只改 opacity/transform，置 1 后停在气泡本来的位置
-  'clawd-working-thinking.svg': '.left-bubble, .right-bubble, .dot { opacity: 1 !important; }',
-  // 灯泡 + 光晕：bulb-fly / rays-burst 把元素整体缩到 hold 帧，静置要连 transform 一起补
-  'clawd-notification.svg': [
-    '.bulb { opacity: 1 !important; transform: translate(9.5px, -2.7px) scale(0.24) !important; }',
-    '.rays { opacity: 0.9 !important; transform: translate(-0.1px, -0.1px) scale(0.9) !important; }',
-  ].join('\n      '),
-  // 惊叹号：alert-flash 只改 opacity/transform，本来的位置在角色左侧，置 1 即可
-  'clawd-mini-alert.svg': '.alert-pop { opacity: 1 !important; }',
-}
-
 const PAD = 2
 const FRAME = { full: 28, mini: 22 }
-const STILL_RULE = `
-      /* still：停掉自带动画，其余声明原样保留（prefers-reduced-motion 用） */
-      * { animation: none !important; }
-`
 // ---------------------------------------------------------------------------
 // cloudling（内联 <svg>）
 // ---------------------------------------------------------------------------
@@ -187,9 +163,6 @@ for (const { name, bbox, top } of CLAWD_ART) {
   const min = name.includes('-mini-') ? FRAME.mini : FRAME.full
   svg = CLAWD_HEADER + svg.replace(/viewBox="[^"]*"/, `viewBox="${frameViewBox(bbox, top, min)}"`)
   writeFileSync(join(OUT, name), svg)
-  // 这些装饰基础就 opacity: 0，只靠 keyframes 显形——冻结后会一直不显示，补回可见状态
-  const reveal = CLAWD_STILL[name] ? `      /* still：靠动画显形的装饰，冻结后置为可见 */\n      ${CLAWD_STILL[name]}\n` : ''
-  writeFileSync(join(OUT, name.replace(/\.svg$/, '.still.svg')), svg.replace('</style>', `${STILL_RULE}${reveal}    </style>`))
 }
 
 // ---- cloudling ----
@@ -231,4 +204,4 @@ writeFileSync(
   `${CLOUDLING_MODULE_HEADER}export const CLOUDLING_SVG: Record<string, string> = {\n${cloudlingArt.join('\n')}\n}\n`,
 )
 
-console.log(`生成 clawd ${CLAWD_ART.length} 份（含静态版）到 ${OUT}；cloudling ${CLOUDLING_ART.length} 份到 ${CLOUDLING_MODULE}`)
+console.log(`生成 clawd ${CLAWD_ART.length} 份到 ${OUT}；cloudling ${CLOUDLING_ART.length} 份到 ${CLOUDLING_MODULE}`)

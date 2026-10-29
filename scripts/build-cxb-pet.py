@@ -9,8 +9,7 @@
 
 生成物：
 - `cxb-<档>.webp`：256×256 循环动画，卡片上的 44px 与详情页共用
-- `cxb-<档>-still.webp`：首帧静态版，`prefers-reduced-motion` 用
-- `cxb-mini-<档>.webp`：128×128，从首帧头部裁切，折叠卡的 24px 用（静态）
+- `cxb-mini-<档>.webp`：128×128，每帧同一处头部裁切的循环动画，折叠卡的 24px 用
 
 跑法（只在本机做素材时需要）：
   uv run --with pillow python scripts/build-cxb-pet.py
@@ -19,7 +18,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from pet_frames import write_state
+from pet_frames import save_animation, steps_for, write_state
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'src/renderer/public/pets'
@@ -55,14 +54,14 @@ HEAD_BOX = (0.16, 0.01, 0.84, 0.69)
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    first: dict[str, Image.Image] = {}
+    frames: dict[str, list[Image.Image]] = {}
     for state in STATES:
-        first[state] = write_state('cxb', state, OUT)
-        print('wrote', f'cxb-{state}.webp', '+ still')
+        frames[state] = write_state('cxb', state, OUT)
+        print('wrote', f'cxb-{state}.webp')
 
     for mini, state in MINIS.items():
-        image = first[state]
-        w, h = image.size
+        sheet = frames[state]
+        w, h = sheet[0].size
         box = (
             int(w * HEAD_BOX[0]),
             int(h * HEAD_BOX[1]),
@@ -70,9 +69,14 @@ def main() -> None:
             int(h * HEAD_BOX[3]),
         )
         side = min(box[2] - box[0], box[3] - box[1])
-        crop = image.crop((box[0], box[1], box[0] + side, box[1] + side))
-        crop.resize((128, 128), Image.LANCZOS).save(
-            OUT / f'cxb-{mini}.webp', 'WEBP', quality=92, method=6
+        # 每帧用同一个裁切框，头不会跟着逐帧漂移
+        head = (box[0], box[1], box[0] + side, box[1] + side)
+        save_animation(
+            [frame.crop(head) for frame in sheet],
+            steps_for('cxb', state),
+            OUT / f'cxb-{mini}.webp',
+            128,
+            92,
         )
         print('wrote', f'cxb-{mini}.webp')
 

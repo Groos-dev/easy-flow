@@ -1,5 +1,5 @@
 """
-cxb / cursor 位图 pet 的关键帧处理：动作表 → 对齐帧 → 循环 WebP + 静态版。
+cxb / cursor 位图 pet 的关键帧处理：动作表 → 对齐帧 → 循环 WebP。
 
 动作表由 scripts/generate-pet-frames.py 用生图产出，存在 `.pet-src/frames/<theme>/<state>-sheet.webp`：
 一张 1536×512 的透明底图，横向三等分，每栏是同一角色的一个姿势。这里只做确定性的活：
@@ -21,7 +21,6 @@ OUT = ROOT / 'src/renderer/public/pets'
 
 CANVAS = 512
 FRAME = 256
-STILL_SUFFIX = '-still'
 
 # alpha 低于这个值算透明区的雾，不参与取景
 ALPHA_FLOOR = 16
@@ -128,29 +127,30 @@ def steps_for(theme: str, state: str) -> list[tuple[int, int]]:
     return STEPS.get(theme, {}).get(state, [(0, 800), (1, 800), (2, 800), (1, 800)])
 
 
-def write_state(theme: str, state: str, out: Path = OUT) -> Image.Image:
-    """写出 `<theme>-<state>.webp`（循环动画）与 `<theme>-<state>-still.webp`（首帧）。"""
-    frames = load_frames(theme, state)
-    steps = steps_for(theme, state)
-    out.mkdir(parents=True, exist_ok=True)
-    sequence = [
-        frames[index].resize((FRAME, FRAME), Image.LANCZOS)
-        for index, _ in steps
-    ]
+def save_animation(
+    frames: list[Image.Image],
+    steps: list[tuple[int, int]],
+    path: Path,
+    size: int,
+    quality: int,
+) -> None:
+    """按 steps 的帧序与停留时长写一个循环 WebP；全尺寸与 mini 共用这一份。"""
+    sequence = [frames[index].resize((size, size), Image.LANCZOS) for index, _ in steps]
     sequence[0].save(
-        out / f'{theme}-{state}.webp',
+        path,
         'WEBP',
         save_all=True,
         append_images=sequence[1:],
         duration=[duration for _, duration in steps],
         loop=0,
-        quality=85,
+        quality=quality,
         method=6,
     )
-    frames[0].resize((FRAME, FRAME), Image.LANCZOS).save(
-        out / f'{theme}-{state}{STILL_SUFFIX}.webp',
-        'WEBP',
-        quality=90,
-        method=6,
-    )
-    return frames[0]
+
+
+def write_state(theme: str, state: str, out: Path = OUT) -> list[Image.Image]:
+    """写出全尺寸循环动画，返回全部合成帧供 mini 逐帧裁。"""
+    frames = load_frames(theme, state)
+    out.mkdir(parents=True, exist_ok=True)
+    save_animation(frames, steps_for(theme, state), out / f'{theme}-{state}.webp', FRAME, 85)
+    return frames

@@ -20,9 +20,9 @@ cloudling 的 27/28 个文件是脚本驱动（`requestAnimationFrame` + `setAtt
 
 cxb 与 cursor 是位图（分别以程小帮应用图标、Cursor 方块 logo + 指针箭头为参考，用 gpt-image-2.5
 生成并用参考图逐档编辑）。每档另出一张透明底三帧动作表（`.pet-src/frames/`），构建时切帧、
-按参考图的包围盒统一缩放与基线，合成 256×256 的循环动画 WebP；同时留一张首帧 `*-still.webp`，
-`prefers-reduced-motion` 时换静态。两套都走 `<img>`，不涉及 CSS 撞名，也不需要云宝那套内联壳。
-大图的姿势与节奏全在素材里，宿主不再叠位移；折叠卡的 24px 小图仍是静态首帧，由宿主补一点呼吸。
+按参考图的包围盒统一缩放与基线，合成 256×256 的循环动画 WebP。两套都走 `<img>`，不涉及 CSS 撞名，
+也不需要云宝那套内联壳。大图的姿势与节奏全在素材里，宿主只管尺寸；折叠卡的 24px 小图是同一套帧
+逐帧同框裁头，也是循环动画。
 
 ## 许可
 
@@ -38,13 +38,10 @@ cursor 是为 Cursor 生成的原创位图素材，形象取自 Cursor 的方块
 | 文件 | 用途 |
 | --- | --- |
 | `clawd-*.svg` | Claude 各档状态的大图（44px 卡片）+ 折叠卡用的小号 mini |
-| `clawd-*.still.svg` | 同上，`prefers-reduced-motion` 时换这一份 |
 | `cxb-*.webp` | 程小帮 12 档循环动画：七档状态 + 打哈欠 / 打盹 / 瘫倒 / 睡着 / 醒来，256×256 |
-| `cxb-*-still.webp` | 同上首帧静态版，减动效用 |
-| `cxb-mini-*.webp` | 折叠卡 24px 用，从首帧头部裁的 128×128（6 张，静态） |
+| `cxb-mini-*.webp` | 折叠卡 24px 用，每帧同一处头部裁的 128×128 循环动画（6 张） |
 | `cursor-*.webp` | Cursor 11 档循环动画：七档状态 + 打哈欠 / 打盹 / 瘫倒 / 睡着，256×256 |
-| `cursor-*-still.webp` | 同上首帧静态版，减动效用 |
-| `cursor-mini-*.webp` | 折叠卡 24px 用（6 张，128×128，静态） |
+| `cursor-mini-*.webp` | 折叠卡 24px 用（6 张，128×128，循环动画） |
 | `README.md` | 本文件 |
 
 云宝不在这里——它只以内联的形态出现，素材落在生成物 `src/renderer/src/lib/pet-cloudling-art.ts`
@@ -60,12 +57,12 @@ uv run --with pillow python scripts/generate-pet-frames.py     # 重出生图动
 ```
 
 `.pet-src/` 里的原始素材与生成物都在仓库里，clone 下来就能重跑。`build-pets.mjs` 会重设
-`viewBox`（原始留白过大，44px 里角色只有十几个像素），clawd 另写一份静态版。
+`viewBox`（原始留白过大，44px 里角色只有十几个像素）。
 
 cxb 的源图是 `.pet-src/cxb/*.png`（统一缩到 512 的透明底 PNG），cursor 的是
 `.pet-src/cursor/*.png`。动作表在 `.pet-src/frames/<theme>/<state>-sheet.webp`（1536×512，
 三栏同一角色），由 `scripts/generate-pet-frames.py` 调生图生成；构建脚本切帧、对齐、合成
-动画 WebP 与静态首帧，并裁出 mini 的 128。生成这些姿势的原始 1024 图与参考图在需求目录
+动画 WebP，并裁出 mini 的 128。生成这些姿势的原始 1024 图与参考图在需求目录
 `agent-live-status/cxb-pet/docs/cxb-pet/refs/`；要换形象时先重新生成姿势图、覆盖
 `.pet-src/<theme>/`，再跑生图脚本与构建脚本。
 
@@ -74,17 +71,5 @@ cxb 的源图是 `.pet-src/cxb/*.png`（统一缩到 512 的透明底 PNG），c
 - **clawd 的 `done` / `failed` 是无限循环**：`clawd-happy.svg` / `clawd-error.svg` 自带
   `infinite` 动画，读了事件之后仍持续动，同屏多只时也各自动各自的。这是素材自带行为，
   用户已确认接受，不改成一次性。
-- **各家静态版的停法不一样**：
-  - clawd（`<img>`）进不去文档内部，构建期另出 `*.still.svg` 注入 `animation: none`；
-    基础 `opacity: 0`、只靠 keyframes 显形的装饰（happy 的星星、thinking 的气泡与圆点、
-    notification 的灯泡与光晕、mini-alert 的惊叹号）在生成时按文件置为可见，否则冻结后永久消失。
-    error 的烟雾基础位置在头顶之外、硬置可见会悬空，所以取「无烟雾」的那一帧。
-  - cxb / cursor 有 still 版：动画 WebP 不能靠 `animation: none` 停，减动效时换
-    `*-still.webp`；折叠卡的小号图本来就是静态首帧，宿主的呼吸动效由
-    `@media (prefers-reduced-motion: reduce)` 统一停。
-  - 云宝是脚本驱动，`animation: none` 停不了 JS。挂载时给它的 `requestAnimationFrame` 套一道闸：
-    放行首帧后不再调度——眼睛与姿态是脚本画的，整段剥掉会剩一朵没有表情的云；首帧里表情与姿态
-    已就位，且只画一帧。同一个闸还负责「元素离开文档就不再排下一帧」，否则每换一次状态都会多一条
-    空转的 rAF。见 `src/renderer/src/components/Pet.tsx` 的 `inlineShell`。
 - **醒来（cxb）是瞬时档**：`cxb-wake.webp` 不挂在 `ThreadState` 上，只在「上一帧还睡着 / 瘫倒、
   这一帧转出静止」时由 `Pet` 先播 1.6s。折叠卡没有小号版，直接切目标姿势。
