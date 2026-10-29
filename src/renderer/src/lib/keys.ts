@@ -57,6 +57,7 @@ export const CONTEXT_ORDER: KeyContext[] = [
 
 const TABS = Array.from({ length: 9 }, (_, i) => `CommandOrControl+${i + 1}`)
 const SECTIONS = Array.from({ length: 4 }, (_, i) => `CommandOrControl+${i + 1}`)
+const PROJECTS = Array.from({ length: 9 }, (_, i) => `CommandOrControl+Alt+${i + 1}`)
 
 export const SHORTCUTS: ShortcutDef[] = [
   // ------------------------------------------------------------ 全局
@@ -66,6 +67,7 @@ export const SHORTCUTS: ShortcutDef[] = [
   { id: 'global.view-next', context: 'global', keys: ['CommandOrControl+2'], label: '切到下一步' },
   { id: 'global.view-map', context: 'global', keys: ['CommandOrControl+3'], label: '切到导图' },
   { id: 'global.project', context: 'global', keys: ['CommandOrControl+P'], label: '切换项目' },
+  { id: 'global.project-n', context: 'global', keys: PROJECTS, label: '切到第 N 个置顶项目', display: '⌘⌥1..9' },
   { id: 'global.search', context: 'global', keys: ['CommandOrControl+K'], label: '开合搜索面板' },
   { id: 'global.clear-filter', context: 'global', keys: ['CommandOrControl+Shift+K'], label: '清掉搜索筛选' },
 
@@ -178,11 +180,14 @@ export interface KeyEventLike {
 }
 
 export function currentPlatform(): string {
+  // Electron 桥给 darwin / win32。
+  // navigator.platform 是 MacIntel / Win32，符号按前者出。
+  const bridge = typeof window === 'undefined' ? undefined : window.easyFlow?.platform
+  if (bridge) return bridge
   return typeof navigator === 'undefined' ? '' : navigator.platform
 }
 
 function isMac(platform: string): boolean {
-  // navigator.platform 给 MacIntel；window.easyFlow.platform 给 darwin
   return /mac|darwin|iphone|ipad/i.test(platform)
 }
 
@@ -305,4 +310,17 @@ export function shortcutLabel(id: string, platform = currentPlatform()): string 
   const def = BY_ID.get(id)
   if (!def) return ''
   return def.display ?? def.keys.map((k) => formatAccelerator(k, platform)).join(' / ')
+}
+
+// ⌘⌥1..9 命中的是第几号置顶项目。
+// 没命中返回 0。
+export function projectSlot(e: KeyEventLike, platform = currentPlatform()): number {
+  const keys = BY_ID.get('global.project-n')?.keys ?? []
+  return keys.findIndex((k) => matches(e, k, platform)) + 1
+}
+
+// 第 n 个置顶项目自己的键位写法，左栏徽标用
+export function projectShortcutLabel(n: number, platform = currentPlatform()): string {
+  const accel = BY_ID.get('global.project-n')?.keys[n - 1]
+  return accel ? formatAccelerator(accel, platform) : ''
 }

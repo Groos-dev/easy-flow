@@ -24,7 +24,15 @@ import {
 } from './lib/board-focus'
 import { lastActiveByReq, orderColumn } from './lib/board-order'
 import { badgesOf, isEventState } from './lib/threads'
-import { isInteractiveTarget, isPetTarget, shortcut, shortcutLabel, shouldIgnore } from './lib/keys'
+import {
+  isEditableTarget,
+  isInteractiveTarget,
+  isPetTarget,
+  projectSlot,
+  shortcut,
+  shortcutLabel,
+  shouldIgnore,
+} from './lib/keys'
 import { BOARD_POLL_MS } from './lib/time'
 import type { ChildStat, NextUpItem, Project, Requirement, Session, Status, Todo } from './lib/types'
 import MindMap from './components/MindMap'
@@ -213,6 +221,8 @@ export default function App() {
   const [kidsOpen, setKidsOpen] = useState<Set<string>>(new Set())
   const [projectPicker, setProjectPicker] = useState(false)
   const [hint, setHint] = useState('')
+  // 按住 ⌘ 时左栏浮出键位，键盘事件照常派发
+  const [cmdHeld, setCmdHeld] = useState(false)
   /**
    * 选中框落在哪张卡是 DOM 状态，不进 React：j/k/h/l 只切卡上的 `data-focused`
    * 与 DOM 焦点，看板本身不重渲染（43 张卡、48 只 pet 全量渲染一次就是一次卡顿）。
@@ -228,6 +238,12 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(PINNED_KEY, JSON.stringify(pinned))
   }, [pinned])
+
+  // 已删除的项目还留在置顶里：左栏不画它，键位也不给它编号
+  const pinnedLive = useMemo(
+    () => pinned.filter((s) => projects.some((p) => p.slug === s)),
+    [pinned, projects],
+  )
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   // 待打开的需求只取一次（主窗口刚重建时的那份交接）
@@ -279,6 +295,31 @@ export default function App() {
   useEffect(() => {
     if (!inMain) setProjectPicker(false)
   }, [inMain])
+
+  /**
+   * 按住 ⌘ 时左栏浮出键位，组合键照常派发。
+   * 焦点在输入控件里不算：那时 ⌘ 是打给编辑器的。
+   * ⌘Tab 切走收不到 keyup，靠 blur 收尾。
+   */
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (!e.metaKey && e.key !== 'Meta') return
+      if (isEditableTarget(e.target)) return
+      setCmdHeld(true)
+    }
+    const up = (e: KeyboardEvent) => {
+      if (e.key === 'Meta' || !e.metaKey) setCmdHeld(false)
+    }
+    const clear = () => setCmdHeld(false)
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    window.addEventListener('blur', clear)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', clear)
+    }
+  }, [])
 
   // 窗口级快捷键。⌘, 打开设置——Electron 里由应用菜单的加速键触发（见 main/registerMenu），
   // 浏览器开发没有菜单，这里补 ⌘,；其余组合只在主界面生效
@@ -474,6 +515,45 @@ export default function App() {
     void loadNextUp()
   }, [load, loadTodos, loadProjects, loadSessions, loadNextUp])
 
+  // 切项目：写回 activeProject，再把看板换成新项目的数据
+  const switchProject = useCallback(
+    async (slug: string) => {
+      if (slug === project) {
+        setDetail(null)
+        return
+      }
+      try {
+        await api.setActiveProject(slug)
+        setDetail(null)
+        await load()
+        await loadProjects()
+        await loadNextUp()
+      } catch (err) {
+        setError((err as Error).message)
+      }
+    },
+    [project, load, loadProjects, loadNextUp],
+  )
+
+  // ⌘⌥1..9 直接切置顶项目，编号与左栏徽标同一份顺序
+  useEffect(() => {
+    if (!inMain) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing) return
+      const slot = projectSlot(e)
+      if (!slot) return
+      const target = pinnedLive[slot - 1]
+      if (target) {
+        e.preventDefault()
+        setProjectPicker(false)
+        setSearchOpen(false)
+        void switchProject(target)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [inMain, pinnedLive, switchProject])
+
   useEffect(() => {
     void load()
     void loadTodos()
@@ -505,23 +585,6 @@ export default function App() {
     setPinned((list) =>
       next ? (list.includes(slug) ? list : [...list, slug]) : list.filter((s) => s !== slug),
     )
-  }
-
-  // 切项目：写回 activeProject，再把看板换成新项目的数据
-  async function switchProject(slug: string) {
-    if (slug === project) {
-      setDetail(null)
-      return
-    }
-    try {
-      await api.setActiveProject(slug)
-      setDetail(null)
-      await load()
-      await loadProjects()
-      await loadNextUp()
-    } catch (err) {
-      setError((err as Error).message)
-    }
   }
 
   // 搜索时看板只留命中的卡片。导图不在这里筛——它要留着祖先链，见 filterByHits
@@ -994,7 +1057,7 @@ export default function App() {
     : null
 
   return (
-    <div className={`shell${showSettings ? ' settings-open' : ''}`}>
+    <div className={`shell${showSettings ? ' settings-open' : ''}${cmdHeld ? ' cmd-hints' : ''}`}>
       <main className="main-area">
         {showSettings ? (
           <Settings onBack={() => setShowSettings(false)} onApplied={refresh} />
@@ -1025,7 +1088,7 @@ export default function App() {
             <LeftRail
               projects={projects}
               active={project}
-              pinned={pinned}
+              pinned={pinnedLive}
               view={reqView}
               agentCount={agentCount}
               onSwitchProject={(slug) => void switchProject(slug)}
