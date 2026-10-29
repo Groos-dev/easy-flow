@@ -59,3 +59,38 @@ export function slugAt(columns: BoardColumn[], pos: BoardPos | null): string {
   if (!pos) return ''
   return columns.find((c) => c.status === pos.status)?.slugs[pos.index] ?? ''
 }
+
+export interface PetRef {
+  slug: string
+  session: string
+}
+
+/**
+ * 沿看板顺序走下一个 pet 落点。
+ *
+ * 当前停在某张卡的 pet 上时先走这张卡里剩下的 pet。
+ * 走完再落到后面第一张有 pet 的卡。
+ * 到末尾绕回开头。
+ * 当前停在卡上、还没进 pet 时，先落这张卡的第一只。
+ */
+export function nextPetStop(
+  columns: BoardColumn[],
+  petsOf: (slug: string) => readonly string[],
+  current: { pos: BoardPos | null; session: string },
+): PetRef | null {
+  const order = columns.flatMap((col) => col.slugs)
+  if (!order.length) return null
+
+  const at = current.pos ? order.indexOf(slugAt(columns, current.pos)) : -1
+  if (at >= 0) {
+    const pets = petsOf(order[at])
+    const index = current.session ? pets.indexOf(current.session) : -1
+    if (index + 1 < pets.length) return { slug: order[at], session: pets[index + 1] }
+  }
+  for (let step = 1; step <= order.length; step += 1) {
+    const slug = order[(at + step) % order.length]
+    const pets = petsOf(slug)
+    if (pets.length) return { slug, session: pets[0] }
+  }
+  return null
+}
