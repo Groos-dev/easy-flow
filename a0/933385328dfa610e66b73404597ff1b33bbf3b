@@ -1,0 +1,124 @@
+test/mini.test.ts
+  s_d06ffc46b13c9f::t_3ca6d1aa84d796 24
+server/cli.ts
+  s_d06ffc46b13c9f::t_d1e272656e070e 35
+  s_d06ffc46b13c9f::t_7b869080e9d92a 646
+  s_d06ffc46b13c9f::t_c7be2c0adfbf96 1776
+  s_d06ffc46b13c9f::t_1ae6286418988d 30
+  s_d06ffc46b13c9f::t_fbe24582c0825d 981-982,990,1003-1004,1006-1011,1013
+  s_d06ffc46b13c9f::t_473a45ae946aab 521
+  s_d06ffc46b13c9f::t_09b9fbe90f4786 565,569-570
+  s_d06ffc46b13c9f::t_26b87f3addb94d 563-564,566-568,573-578
+  s_d06ffc46b13c9f::t_03ef778e510b17 256
+  s_d06ffc46b13c9f::t_7cc3e29dec2cfa 522
+  s_d06ffc46b13c9f::t_ebe70217146684 979-980,983-989,991-998,1014,1017-1054
+  s_d06ffc46b13c9f::t_6d40d89eaafba7 1780
+  s_d06ffc46b13c9f::t_4f801144174117 571-572
+  s_d06ffc46b13c9f::t_040deb3aec83c3 999-1002,1005,1012,1015-1016
+  s_d06ffc46b13c9f::t_538b2a4ce67fcd 1799
+  s_d06ffc46b13c9f::t_bbb7f171cc6a9a 36
+  s_d06ffc46b13c9f::t_761e7ebafb0978 211
+server/db.ts
+  s_d06ffc46b13c9f::t_18c3d666084c4a 1165,1167
+  s_d06ffc46b13c9f::t_41ff9af5e7988e 352
+  s_d06ffc46b13c9f::t_049c62d6352a79 348-350,353-358,367,370-380,385-388
+  s_d06ffc46b13c9f::t_ed56520a4a06c5 1002
+  s_d06ffc46b13c9f::t_90d410423b2425 958-962,964-965,969,973-984,988,991
+  s_d06ffc46b13c9f::t_e230d9c73905d7 381-383
+  s_d06ffc46b13c9f::t_012205066aaf82 351,363,365-366,368-369,384
+  s_d06ffc46b13c9f::t_697f6682d772c6 105
+  s_d06ffc46b13c9f::t_259231ed47a148 1118,1126-1127
+  s_d06ffc46b13c9f::t_09e15442fc852a 1129-1131
+  s_d06ffc46b13c9f::t_b2ca992d78c9f9 103-104
+  s_d06ffc46b13c9f::t_440602bf357ed6 920
+  s_d06ffc46b13c9f::t_ac16c7301eeb61 966-968
+  s_d06ffc46b13c9f::t_a6a50623fc519d 1003-1004
+  s_d06ffc46b13c9f::t_ec7073a1d5fabb 1116-1117,1121-1122,1128,1148-1153,1155-1156,1169,1183-1184
+  s_d06ffc46b13c9f::t_0754bba2eeba5b 1119,1123-1125,1132-1147,1154,1157-1164,1168,1170-1182
+  s_d06ffc46b13c9f::t_1fb8f5c781308c 1166
+  s_d06ffc46b13c9f::t_3757bee1d04b7f 1120
+  s_d06ffc46b13c9f::t_520127b2c9934c 647-654
+  s_d06ffc46b13c9f::t_abff9b3b524376 359-362,364
+test/launch-keyboard.test.ts
+  s_d06ffc46b13c9f::t_e436650eabb355 34
+server/schema.ts
+  s_d06ffc46b13c9f::t_ce000dd343cf92 178
+  s_d06ffc46b13c9f::t_110e479ebebcb9 107-126
+src/renderer/src/styles.css
+  s_d06ffc46b13c9f::t_cabaa2e381c133 1436-1437
+  s_d06ffc46b13c9f::t_e214d015066fd9 1411
+  s_d06ffc46b13c9f::t_f7c00fa2b3fe05 3620-3626
+  s_d06ffc46b13c9f::t_78d2d7e5f42963 1412-1414,1416-1422,1424-1428,1440-1441
+  s_d06ffc46b13c9f::t_79e8ca37bdb309 1415,1423,1432-1435,1438-1439
+  s_d06ffc46b13c9f::t_b0f99edbdb4b8c 1429-1431
+test/info-panel.test.ts
+  s_d06ffc46b13c9f::t_8d413553420158 34
+test/tags.test.ts
+  s_d06ffc46b13c9f::t_21140a0be929a4 1-35,38-55,58-72,133-144,146-152,156-160,162-166,169-172,175-182,196-199
+  s_d06ffc46b13c9f::t_61d6d14f1ec3a9 132
+  s_d06ffc46b13c9f::t_20e00cd67c2080 145
+  s_d06ffc46b13c9f::t_28b7b8cd9bd842 155
+  s_d06ffc46b13c9f::t_725d7e9dd4afd9 187,189-193
+  s_d06ffc46b13c9f::t_f37d9c228ebaf1 161
+  s_d06ffc46b13c9f::t_c84f344d072337 56-57
+  s_d06ffc46b13c9f::t_5b1a8f5e9fed9b 109-131
+  s_d06ffc46b13c9f::t_2affc2858c511c 153-154
+  s_d06ffc46b13c9f::t_de6f696d295fb2 167-168,173-174,183-186,188,194-195
+  s_d06ffc46b13c9f::t_3134eb237ed06f 73,82-103
+  s_d06ffc46b13c9f::t_a7b88992be3fe9 36-37
+  s_d06ffc46b13c9f::t_332e4318f86c4a 74-81,104-108
+src/renderer/src/components/SearchPanel.tsx
+  s_d06ffc46b13c9f::t_38e83329aea718 91-93
+  s_d06ffc46b13c9f::t_84ca27b575f3a4 68
+  s_d06ffc46b13c9f::t_110813c88d06d5 76-78
+src/renderer/src/components/Card.tsx
+  s_d06ffc46b13c9f::t_3ed03f1dba96e2 152,165-169
+  s_d06ffc46b13c9f::t_5e0ed8786b7d9a 24-25
+  s_d06ffc46b13c9f::t_37b8bcb9214190 148-149,154
+  s_d06ffc46b13c9f::t_0e2c7bccbd3aac 153,155-156,158-164
+  s_d06ffc46b13c9f::t_56eea5c2a9548f 157
+  s_d06ffc46b13c9f::t_e3bbb22df5d217 40
+src/renderer/src/lib/types.ts
+  s_d06ffc46b13c9f::t_6efa6b2ec0f020 76-77
+  s_d06ffc46b13c9f::t_1a79319f55f60d 78
+src/renderer/src/App.tsx
+  s_d06ffc46b13c9f::t_66a789e35a1700 1176
+  s_d06ffc46b13c9f::t_0a4760733232c9 72
+  s_d06ffc46b13c9f::t_1760262d23d2c0 148
+  s_d06ffc46b13c9f::t_c6d2547495486d 91
+  s_d06ffc46b13c9f::t_fa38ede774f972 593-597
+skill/easy-flow/SKILL.md
+  s_d06ffc46b13c9f::t_217a8dba471844 144
+  s_d06ffc46b13c9f::t_843f0e0a0588a9 145
+  s_d06ffc46b13c9f::t_25fa9ebdfbd618 63
+test/pet-card.test.ts
+  s_d06ffc46b13c9f::t_e748f0de5535ac 70
+test/core.test.ts
+  s_d06ffc46b13c9f::t_e49c93d836829c 3092,3162
+test/next-up.test.ts
+  s_d06ffc46b13c9f::t_10dc01028709d0 45
+skill/easy-flow/REFERENCE.md
+  s_d06ffc46b13c9f::t_53fbe16dd57dd2 80
+  s_d06ffc46b13c9f::t_46db34eb9b97c7 91-92
+  s_d06ffc46b13c9f::t_af5225d47b187c 78
+  s_d06ffc46b13c9f::t_b50dea46436d49 90
+  s_d06ffc46b13c9f::t_de07a1e9e5e704 84
+  s_d06ffc46b13c9f::t_17e969eac32803 100
+  s_d06ffc46b13c9f::t_77fbb93d74066c 79,81-83,85-89,93-99,101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "a0933385328dfa610e66b73404597ff1b33bbf3b",
+  "prompts": {},
+  "sessions": {
+    "s_d06ffc46b13c9f": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_yvsythb516lf",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
