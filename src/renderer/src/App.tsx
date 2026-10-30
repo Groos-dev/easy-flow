@@ -801,10 +801,7 @@ export default function App() {
           pos: cur,
           session: slot?.dataset.session ?? '',
         })
-        if (!hit) {
-          setHint('没有要人处理的 pet')
-          return
-        }
+        if (!hit) return
         const at = posOf(focusColumns, hit.slug)
         if (at?.status === DONE_STATUS) revealDone()
         else foldDone()
