@@ -1,0 +1,54 @@
+src/renderer/src/styles.css
+  s_ff665c3e64b6bf::t_36db5d8f6e004d 3697-3699,3705-3707
+  s_ff665c3e64b6bf::t_5569993e1c7ccc 659-661,665
+  s_ff665c3e64b6bf::t_d744152cfd419d 967-971
+  s_ff665c3e64b6bf::t_57cf8d11bb736c 1596,1605-1620
+  s_ff665c3e64b6bf::t_2cfa679c0f94ba 3220
+  s_ff665c3e64b6bf::t_24e336ac92f889 77-80
+  s_ff665c3e64b6bf::t_9e8398301e7a3b 672
+  s_ff665c3e64b6bf::t_fe59eb3cd1ab8a 1055
+  s_ff665c3e64b6bf::t_2e45b8f10fc476 688-689
+  s_ff665c3e64b6bf::t_e9a0b3d1e5c520 1331
+  s_ff665c3e64b6bf::t_4c016236c99787 1742,1747-1751
+  s_ff665c3e64b6bf::t_c7988bbed5b8eb 791-795
+  s_ff665c3e64b6bf::t_55efad5c1af1df 1047
+  s_ff665c3e64b6bf::t_921852805fe952 3453,3455,3464
+  s_ff665c3e64b6bf::t_f87cb80759ac53 3745
+  s_ff665c3e64b6bf::t_c6434915968031 3750
+  s_ff665c3e64b6bf::t_aeec76171f879e 3280
+  s_ff665c3e64b6bf::t_c8202cea1661ec 2969
+  s_ff665c3e64b6bf::t_0303ff5e56f6ea 3367-3368
+  s_ff665c3e64b6bf::t_d083206711bd53 3432-3433
+  s_ff665c3e64b6bf::t_5619b63df0ae10 11
+  s_ff665c3e64b6bf::t_f3093ea6cb6f2c 76
+  s_ff665c3e64b6bf::t_385985a49f4e6f 1363-1366
+  s_ff665c3e64b6bf::t_06b0fe33315544 613
+  s_ff665c3e64b6bf::t_f12531cfa8c3be 12
+  s_ff665c3e64b6bf::t_9f1a59ade0c919 3713-3715,3723-3724,3733-3736,3741
+  s_ff665c3e64b6bf::t_58a27579f3b67e 570
+  s_ff665c3e64b6bf::t_a77966ac9740c6 3547,3549
+  s_ff665c3e64b6bf::t_bddc1d8dbe09a9 1554-1557
+  s_ff665c3e64b6bf::t_c044071fcfb296 434,437-438
+  s_ff665c3e64b6bf::t_3d28c30554194c 1358-1359
+  s_ff665c3e64b6bf::t_ca030f1ba73f39 3702-3704,3710-3712,3718-3720,3727-3732,3739,3753
+  s_ff665c3e64b6bf::t_05021673cd1778 3557,3562
+  s_ff665c3e64b6bf::t_66ca086981ff78 3747
+src/renderer/src/App.tsx
+  s_ff665c3e64b6bf::t_5af29c52b07405 230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "03d52958aa86f93fb6d045ce4b44f9ce9941e5b5",
+  "prompts": {},
+  "sessions": {
+    "s_ff665c3e64b6bf": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_xk3jxx5di6xt",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Groos-dev <81287043+Groos-dev@users.noreply.github.com>"
+    }
+  }
+}
