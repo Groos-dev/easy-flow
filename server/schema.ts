@@ -104,6 +104,27 @@ CREATE TABLE IF NOT EXISTS session (
 );
 
 /*
+ * tag：标签词表。需求标签只归库，不写进 requirement.md。
+ * name 的 NOCASE 让同名只差 ASCII 大小写的落成同一行，写法以首次写入为准。
+ */
+CREATE TABLE IF NOT EXISTS tag (
+  id       INTEGER PRIMARY KEY,
+  name     TEXT NOT NULL COLLATE NOCASE UNIQUE,
+  created  TEXT
+);
+
+/*
+ * requirement_tag：需求挂了哪些标签。与 session / worktree 一样按需求 id 关联；
+ * position 是卡片上的展示顺序。
+ */
+CREATE TABLE IF NOT EXISTS requirement_tag (
+  req_id   TEXT NOT NULL,
+  tag_id   INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  PRIMARY KEY (req_id, tag_id)
+);
+
+/*
  * session_state：会话状态。三类来源都写它——hook 事件、拉取文件、板侧点击（点一下 pet = 这条静止）。
  * 状态一变就落库，所以重启后原样还在；读口只查这张表。
  * action_text / action_called_at 是最近一次工具调用（气泡里那句「在干什么」），没有时是空串与 0。
@@ -154,6 +175,7 @@ CREATE INDEX IF NOT EXISTS idx_todo_req ON todo(req_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wt_path ON worktree(path);
 CREATE INDEX IF NOT EXISTS idx_wt_req ON worktree(req_id);
 CREATE INDEX IF NOT EXISTS idx_session_req ON session(req_id);
+CREATE INDEX IF NOT EXISTS idx_reqtag_tag ON requirement_tag(tag_id);
 `
 
 // 老库升级：补齐后加的列

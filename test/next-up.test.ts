@@ -42,6 +42,7 @@ function req(p: Partial<Requirement> & { slug: string }): Requirement {
     repos: [],
     links: '',
     linkItems: [],
+    tags: [],
     docs: [],
     path: `/tmp/${p.slug}`,
     mtime: 0,

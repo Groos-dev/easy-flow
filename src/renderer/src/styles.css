@@ -1408,6 +1408,37 @@ body {
   font-size: 11px;
 }
 
+/* 收缩与截断都落在标签这一侧，日期始终留在右端 */
+.card-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.card-tag {
+  flex: none;
+  max-width: 92px;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.card-tag::before {
+  content: '#';
+  margin-right: 1px;
+  opacity: 0.7;
+}
+
+.card-tag:hover {
+  color: var(--text-dim);
+}
+
 .chip {
   padding: 2px 7px;
   background: #2a3038;
@@ -3583,6 +3614,13 @@ code.launch-hint {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-tags {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 11px;
   white-space: nowrap;
 }
 

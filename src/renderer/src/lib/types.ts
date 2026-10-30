@@ -73,6 +73,9 @@ export interface Requirement {
   // 与需求相关的链接，一对 标题 + URL，不分类型
   // 只读，写入在命令行
   linkItems: LinkItem[]
+  // agent 打的标签
+  // 只读，写入在命令行
+  tags: string[]
   docs: DocRef[]
   path: string
   mtime: number

@@ -31,6 +31,7 @@ function mkReq(): Requirement {
     repos: [],
     links: '',
     linkItems: [],
+    tags: [],
     docs: [],
     path: '/Users/groos/requirements/p/a',
     mtime: 0,

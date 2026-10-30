@@ -65,7 +65,7 @@ export default function SearchPanel({ query, onQuery, results, pending, onPick, 
         <input
           ref={inputRef}
           className="palette-input"
-          placeholder="搜需求：标题 / 目录名 / 摘要 / 文档内容"
+          placeholder="搜需求：标题 / 目录名 / 摘要 / 文档 / 标签，#标签 只按标签筛"
           value={query}
           spellCheck={false}
           onChange={(e) => onQuery(e.target.value)}
@@ -73,7 +73,9 @@ export default function SearchPanel({ query, onQuery, results, pending, onPick, 
         />
         <div className="palette-list">
           {!query.trim() ? (
-            <div className="palette-hint">输入关键词。命中的需求会同时筛掉看板上别的卡片</div>
+            <div className="palette-hint">
+              输入关键词，或 #标签 只按标签筛。命中的需求会同时筛掉看板上别的卡片
+            </div>
           ) : results.length === 0 ? (
             <div className="palette-hint">{pending ? '查找中…' : '没有命中的需求'}</div>
           ) : (
@@ -86,6 +88,9 @@ export default function SearchPanel({ query, onQuery, results, pending, onPick, 
               >
                 <span className={`dot ${STATUS_CLASS[r.status] ?? ''}`} title={r.status} />
                 <span className="palette-title">{r.title}</span>
+                {r.tags.length > 0 && (
+                  <span className="palette-tags">{r.tags.map((t) => `#${t}`).join(' ')}</span>
+                )}
                 <span className="palette-slug">{r.slug}</span>
               </div>
             ))

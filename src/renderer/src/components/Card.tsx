@@ -21,6 +21,8 @@ interface Props {
   onToggleKids?: (slug: string) => void
   onFocusCard?: (slug: string) => void
   onOpen?: (slug: string) => void
+  // 点标签：由看板把它换成 ⌘K 的筛选词，卡片自己不管筛选
+  onTag?: (tag: string) => void
   overlay?: boolean
 }
 
@@ -35,6 +37,7 @@ export default function Card({
   onToggleKids,
   onFocusCard,
   onOpen,
+  onTag,
   overlay = false,
 }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -142,9 +145,28 @@ export default function Card({
           ))}
         </div>
       )}
-      {/* 页脚只留日期：slug 是命令行的句柄，仓库是「涉及仓库」表里的短名，
+      {/* 页脚：标签在左、日期在右。
+          slug 是命令行的句柄，仓库是「涉及仓库」表里的短名，
           两样在看板上都扫不出信息——详情浮窗与需求文档里有 */}
       <div className="card-foot">
+        {req.tags.length > 0 && (
+          <div className="card-tags">
+            {req.tags.map((tag) => (
+              <span
+                key={tag}
+                className="card-tag"
+                title={`按 #${tag} 筛选`}
+                onClick={(e) => {
+                  // 卡片自己的点击是开详情，点标签那一下不能被它吃掉
+                  e.stopPropagation()
+                  if (!overlay) onTag?.(tag)
+                }}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
         {/* 状态更新日期优先；没有就回落到文件修改时间 */}
         <span className="stage">{req.updated ? req.updated.slice(5) : relTime(req.mtime)}</span>
       </div>

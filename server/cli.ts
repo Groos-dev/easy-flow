@@ -27,10 +27,13 @@ import {
   PRIORITIES,
   SESSION_AGENTS,
   STATUSES,
+  TAG_LIMIT,
   TODO_CHANNELS,
   TODO_SOURCES,
   TODO_STATUSES,
   isOpenTodo,
+  normalizeTags,
+  tagKey,
   todoAgeDays,
   type LinkItem,
   type Priority,
@@ -205,6 +208,7 @@ function requirementView(req: Requirement, extraHead: string[] = []) {
     `需求目录：${req.path}`,
     `状态：${req.status}${req.priority ? ` · 优先级：${req.priority}` : ''}`,
   ]
+  if (req.tags.length) head.push(`标签：${req.tags.join(' · ')}`)
   if (req.repos.length) head.push(`涉及仓库：${req.repos.map((r) => `${r.short}=${r.repo ?? ''}`).join('、')}`)
   // context.md follows in full right after, no need to list it twice
   const docs = req.docs.filter((d) => d.name !== 'requirement.md' && d.name !== 'context.md')
@@ -249,6 +253,7 @@ function requirementView(req: Requirement, extraHead: string[] = []) {
       priority: req.priority,
       summary: req.summary,
       repos: req.repos,
+      tags: req.tags,
       docs: req.docs,
     },
     ancestors: ancestors.map((r) => ({ id: r.id, slug: r.slug, title: r.title })),
@@ -513,6 +518,8 @@ const ROOT_USAGE = `easy-flow：需求看板命令行——终端里认路、建
   easy-flow dir                  打印数据目录（需求都在哪）
   easy-flow project new <slug>   新建项目
   easy-flow req new|set|link|session …  新建需求 / 改状态优先级 / 追加链接 / 登记 agent 会话
+  easy-flow req tag add|rm|set|ls …  给需求打标签 / 摘标签 / 换标签 / 看标签
+  easy-flow taglist              现有标签与引用次数（打标前先看）
   easy-flow wt new|rm …          开 / 删工作区（git worktree）
   easy-flow todo new|set|list …  全局待办：记一条 / 改状态 / 看待办
 
@@ -552,6 +559,22 @@ id 必须显式传：需求编号在需求目录 requirement.md 的开头，工�
 任何与需求相关的链接都走这一条：飞书 Story、MR/PR、设计文档、Wiki、监控、截图。
 只增不删：同一 URL 再传只更新标题（这次没给标题就留着旧的）。
 标题可省——直接写 URL 也行，看板按 URL 推一个短名。`,
+
+  'req tag': `用法：easy-flow req tag add <req-id> <tag>… [--json]
+       easy-flow req tag rm <req-id> <tag>… [--json]
+       easy-flow req tag set <req-id> <tag>… [--json]
+       easy-flow req tag ls <req-id> [--json]
+
+标签只存库，不写进 requirement.md。词表是开放的：加之前先 easy-flow taglist 看已有的，
+能复用就复用，确实没有再新建。一个需求最多 3 个标签（卡片 footer 的展示上限）：
+已经满了还想加，必须先 rm 摘掉一个，或用 set 整体替换（set 不带标签即清空）。
+一个标签最多 24 个字符，不能带空白、不能以 # 开头（看板与 ⌘K 用 #标签 筛选）。
+同名按 trim 后忽略大小写算一个，沿用词表里已有的写法。`,
+
+  taglist: `用法：easy-flow taglist [--project <项目>] [--json]
+
+列出数据目录里所有需求的标签与引用次数，按次数降序、同次数按名称排。
+--project 只看一个项目。这是给 agent 打标前对齐词表用的：先看，再决定复用还是新建。`,
 
   'req session': `用法：easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang> [--id <会话 id>] [--title <标题>] [--cwd <目录>] [--link <url>] [--json]
        easy-flow req session rm <req-id> --agent <…> --id <会话 id> [--json]
@@ -620,7 +643,7 @@ id 与文件原样保留，已入库的跳过，所以重复跑是安全的。`,
 
 const GROUP_USAGE = {
   project: USAGE.project,
-  req: [USAGE['req new'], USAGE['req set'], USAGE['req link'], USAGE['req session']].join('\n\n'),
+  req: [USAGE['req new'], USAGE['req set'], USAGE['req link'], USAGE['req tag'], USAGE['req session']].join('\n\n'),
   wt: [USAGE['wt new'], USAGE['wt rm']].join('\n\n'),
   todo: [
     USAGE['todo new'],
@@ -950,6 +973,82 @@ async function cmdReqLink(argv: string[]): Promise<void> {
     [`需求：${next.title}（${next.id}）`, `链接（${next.linkItems.length}）：`, ...(lines.length ? lines : ['- （空）'])].join(
       '\n',
     ),
+  )
+}
+
+async function cmdReqTag(action: string | undefined, argv: string[]): Promise<void> {
+  if (action === '--help' || action === '-h') return out(USAGE['req tag'])
+  if (action !== 'add' && action !== 'rm' && action !== 'set' && action !== 'ls') {
+    throw new UsageError('req tag needs a subcommand: add / rm / set / ls', USAGE['req tag'])
+  }
+
+  const { values, positionals } = parse(argv, {})
+  if (bool(values.help)) return out(USAGE['req tag'])
+
+  const reqId = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req tag'])
+  const incoming = normalizeTags(positionals.slice(1))
+  if (action !== 'ls' && action !== 'set' && !incoming.length) {
+    throw new UsageError(`Pass at least one tag: easy-flow req tag ${action} ${reqId} <tag>`, USAGE['req tag'])
+  }
+
+  const board = db()
+  board.syncProjects()
+  const req = findById(reqId)
+
+  let next = req
+  if (action === 'add' || action === 'set') {
+    const target = action === 'add' ? normalizeTags([...req.tags, ...incoming]) : incoming
+    if (target.length > TAG_LIMIT) {
+      const current = req.tags.length ? req.tags.join(' · ') : '（空）'
+      throw new UsageError(
+        [
+          `一个需求最多 ${TAG_LIMIT} 个标签，这次会变成 ${target.length} 个。现有：${current}`,
+          `要加新的，先摘掉一个：easy-flow req tag rm ${req.id} <tag>`,
+          `或整体替换：easy-flow req tag set ${req.id} <tag> <tag> <tag>`,
+        ].join('\n'),
+        USAGE['req tag'],
+      )
+    }
+    next = board.setTags(req.slug, target, req.project)
+  }
+  if (action === 'rm') {
+    const drop = new Set(incoming.map(tagKey))
+    next = board.setTags(req.slug, req.tags.filter((t) => !drop.has(tagKey(t))), req.project)
+  }
+
+  emit(
+    {
+      ok: true,
+      id: next.id,
+      title: next.title,
+      tags: next.tags,
+    },
+    [
+      `需求：${next.title}（${next.id}）`,
+      `标签（${next.tags.length}）：${next.tags.length ? next.tags.join(' · ') : '（空）'}`,
+    ].join('\n'),
+  )
+}
+
+async function cmdTagList(argv: string[]): Promise<void> {
+  const { values } = parse(argv, { project: { type: 'string' } })
+  if (bool(values.help)) return out(USAGE.taglist)
+
+  const project = str(values.project)?.trim()
+  if (project && !listProjectDirs(config.dataDir).some((p) => p.slug === project)) {
+    throw new Error(`Project not found: ${project}`)
+  }
+
+  const board = db()
+  board.syncProjects()
+  const tags = board.tagCounts(project || undefined)
+  const head = project ? `项目 ${project} 的标签（${tags.length}）` : `标签（${tags.length}）`
+
+  emit(
+    { tags, total: tags.length, project: project ?? null },
+    tags.length
+      ? `${head}：\n${tags.map((t) => `- ${t.tag}  ${t.count}`).join('\n')}`
+      : `还没有任何标签。第一个：easy-flow req tag add <req-…> <tag>`,
   )
 }
 
@@ -1674,10 +1773,11 @@ async function cmdTodo(action: string | undefined, argv: string[]): Promise<void
 
 async function cmdReq(action: string | undefined, argv: string[]): Promise<void> {
   if (action === '--help' || action === '-h') return out(GROUP_USAGE.req)
-  if (!action) throw new UsageError('req needs a subcommand: new / set / link / session', GROUP_USAGE.req)
+  if (!action) throw new UsageError('req needs a subcommand: new / set / link / tag / session', GROUP_USAGE.req)
   if (action === 'new') return cmdReqNew(argv)
   if (action === 'set') return cmdReqSet(argv)
   if (action === 'link') return cmdReqLink(argv)
+  if (action === 'tag') return cmdReqTag(argv[0], argv.slice(1))
   if (action === 'session') return cmdReqSession(argv[0], argv.slice(1))
   throw new UsageError(`Unknown subcommand: req ${action}`, GROUP_USAGE.req)
 }
@@ -1696,6 +1796,7 @@ async function run(argv: string[]): Promise<void> {
   if (group === '--version' || group === '-v') return out(VERSION)
   if (group === 'context') return cmdContext(argv.slice(1))
   if (group === 'dir') return cmdDir(argv.slice(1))
+  if (group === 'taglist') return cmdTagList(argv.slice(1))
   if (group === 'project') return cmdProject(action, rest)
   if (group === 'req') return cmdReq(action, rest)
   if (group === 'wt') return cmdWt(action, rest)

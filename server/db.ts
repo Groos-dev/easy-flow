@@ -100,6 +100,9 @@ export interface Requirement {
   // 按地址去重
   // 数组顺序即登记顺序
   linkItems: LinkItem[]
+  // agent 自己打的标签，自由词表
+  // 按登记顺序展示
+  tags: string[]
   docs: Array<{ name: string; size: number }>
   path: string
   mtime: number
@@ -340,6 +343,47 @@ function readLinkItems(raw: string | null): LinkItem[] {
   const list = parseLinks<unknown[]>(raw, [])
   if (!Array.isArray(list)) return []
   return list.map(toLinkItem).filter((l) => l.url)
+}
+
+// ------------------------------------------------------------------ 标签
+
+export const TAG_MAX_LENGTH = 24
+// 卡片 footer 的展示上限
+export const TAG_LIMIT = 3
+
+export interface TagCount {
+  tag: string
+  count: number
+}
+
+/**
+ * 标签同名判定的键，入参已经 trim 过。
+ * 只折叠 ASCII 大小写：与 tag.name 的 COLLATE NOCASE 同一口径。
+ */
+export function tagKey(tag: string): string {
+  return tag.replace(/[A-Z]+/g, (s) => s.toLowerCase())
+}
+
+/**
+ * 写入前的标签校验。
+ * 同名按 trim 后忽略大小写去重，保留先出现的写法。
+ */
+export function normalizeTags(input: unknown): string[] {
+  if (!Array.isArray(input)) throw new Error('Tags must be an array')
+  const out: string[] = []
+  for (const item of input) {
+    if (typeof item !== 'string') throw new Error('Tag must be a string')
+    const tag = item.trim()
+    if (!tag) throw new Error('Tag must not be empty')
+    if (tag.length > TAG_MAX_LENGTH) {
+      throw new Error(`Tag is longer than ${TAG_MAX_LENGTH} characters: ${tag}`)
+    }
+    // 搜索里 `#标签` 按空白切词：标签带空白或以 # 开头就筛不出来
+    if (/\s/.test(tag)) throw new Error(`Tag must not contain whitespace: ${tag}`)
+    if (tag.startsWith('#')) throw new Error(`Tag must not start with #: ${tag}`)
+    if (!out.some((t) => tagKey(t) === tagKey(tag))) out.push(tag)
+  }
+  return out
 }
 
 // 今天（YYYY-MM-DD）。多处写状态时间戳，集中一处避免格式漂移。
@@ -600,6 +644,14 @@ export class BoardDatabase {
          )`,
       )
       .run(slug)
+    this.db
+      .prepare(
+        `DELETE FROM requirement_tag WHERE req_id IN (
+           SELECT id FROM requirement WHERE project = ? AND id IS NOT NULL AND id <> ''
+         )`,
+      )
+      .run(slug)
+    this.pruneTags()
     this.db.prepare('DELETE FROM doc WHERE project = ?').run(slug)
     this.db.prepare('DELETE FROM requirement WHERE project = ?').run(slug)
     this.db.prepare('DELETE FROM project WHERE slug = ?').run(slug)
@@ -865,6 +917,7 @@ export class BoardDatabase {
       repos: row.repos ? (JSON.parse(row.repos) as RepoRef[]) : [],
       links: row.links ?? '',
       linkItems: readLinkItems(row.link_items),
+      tags: this.tagsOf(row.id ?? ''),
       docs,
       path: row.path,
       mtime: row.mtime,
@@ -902,20 +955,40 @@ export class BoardDatabase {
     return row ? this.toRequirement(row) : undefined
   }
 
-  // 全文检索：限定在当前项目内
+  /**
+   * 全文检索：限定在当前项目内，多个词之间是「且」。
+   * `#标签` 按标签精确筛，同名口径见 tagKey。
+   * 其余词在标题、目录名、摘要、仓库、文档与标签名里找。
+   */
   search(query: string): Set<string> {
-    const q = query.trim().toLowerCase()
-    if (!q) return new Set()
-    const terms = q.split(/\s+/).filter(Boolean)
+    const terms = query.trim().split(/\s+/).filter(Boolean)
+    if (!terms.length) return new Set()
+    const tagTerms = terms
+      .filter((t) => t.startsWith('#') && t.length > 1)
+      .map((t) => tagKey(t.slice(1)))
+    const textTerms = terms.filter((t) => !t.startsWith('#')).map((t) => t.toLowerCase())
     const p = this.activeProject
     const haystack = new Map<string, string>()
+
+    const tagsBySlug = new Map<string, string[]>()
+    for (const row of this.db
+      .prepare(
+        `SELECT r.slug, t.name FROM requirement r
+         JOIN requirement_tag rt ON rt.req_id = r.id
+         JOIN tag t ON t.id = rt.tag_id
+         WHERE r.project = ?`,
+      )
+      .all(p) as Array<{ slug: string; name: string }>) {
+      tagsBySlug.set(row.slug, [...(tagsBySlug.get(row.slug) ?? []), row.name])
+    }
 
     for (const row of this.db
       .prepare('SELECT * FROM requirement WHERE project = ?')
       .all(p) as unknown as Row[]) {
+      const tags = (tagsBySlug.get(row.slug) ?? []).join('\n')
       haystack.set(
         row.slug,
-        `${row.title}\n${row.slug}\n${row.summary ?? ''}\n${row.repos ?? ''}`.toLowerCase(),
+        `${row.title}\n${row.slug}\n${row.summary ?? ''}\n${row.repos ?? ''}\n${tags}`.toLowerCase(),
       )
     }
     for (const d of this.db
@@ -926,7 +999,9 @@ export class BoardDatabase {
 
     const hits = new Set<string>()
     for (const [slug, text] of haystack) {
-      if (terms.every((t) => text.includes(t))) hits.add(slug)
+      const tags = (tagsBySlug.get(slug) ?? []).map(tagKey)
+      const matched = textTerms.every((t) => text.includes(t)) && tagTerms.every((t) => tags.includes(t))
+      if (matched) hits.add(slug)
     }
     return hits
   }
@@ -1036,6 +1111,75 @@ export class BoardDatabase {
       .run(JSON.stringify(normalizeLinkItems(links)), today(), slug, project)
 
     return this.get(slug, project)!
+  }
+
+  /**
+   * 整体替换一条需求的标签。
+   * 合并由调用方做完，这里做形状校验、去重与上限。
+   * 词表里已有的同名标签直接复用，展示沿用它首次写入的写法。
+   * 不动 updated：卡片上那个日期是状态更新日，打标不是状态变更。
+   */
+  setTags(slug: string, tags: unknown, project = this.activeProject): Requirement {
+    const req = this.get(slug, project)
+    if (!req) throw new Error(`Requirement not found: ${project}/${slug}`)
+    if (!req.id) throw new Error(`Requirement has no id yet: ${project}/${slug}`)
+    const list = normalizeTags(tags)
+    if (list.length > TAG_LIMIT) throw new Error(`At most ${TAG_LIMIT} tags per requirement`)
+
+    const insertTag = this.db.prepare(
+      'INSERT INTO tag (name, created) VALUES (?, ?) ON CONFLICT(name) DO NOTHING',
+    )
+    const tagId = this.db.prepare('SELECT id FROM tag WHERE name = ?')
+    const link = this.db.prepare('INSERT INTO requirement_tag (req_id, tag_id, position) VALUES (?, ?, ?)')
+    this.db.exec('BEGIN')
+    try {
+      this.db.prepare('DELETE FROM requirement_tag WHERE req_id = ?').run(req.id)
+      list.forEach((name, position) => {
+        insertTag.run(name, today())
+        const { id } = tagId.get(name) as { id: number }
+        link.run(req.id, id, position)
+      })
+      this.pruneTags()
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
+
+    return this.get(slug, project)!
+  }
+
+  /**
+   * 现有标签的引用次数，给 agent 打标前对齐词表用。
+   * 只数还在看板上的需求（失联的不算）。
+   */
+  tagCounts(project?: string): TagCount[] {
+    const sql = `SELECT t.name AS tag, COUNT(*) AS count
+       FROM requirement_tag rt
+       JOIN tag t ON t.id = rt.tag_id
+       JOIN requirement r ON r.id = rt.req_id
+       WHERE r.missing = 0${project ? ' AND r.project = ?' : ''}
+       GROUP BY t.id
+       ORDER BY count DESC, t.name`
+    const stmt = this.db.prepare(sql)
+    const rows = (project ? stmt.all(project) : stmt.all()) as unknown as TagCount[]
+    // node:sqlite 的行是空原型对象，对外换成普通对象
+    return rows.map(({ tag, count }) => ({ tag, count }))
+  }
+
+  private tagsOf(requirementId: string): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT t.name FROM requirement_tag rt JOIN tag t ON t.id = rt.tag_id
+         WHERE rt.req_id = ? ORDER BY rt.position`,
+      )
+      .all(requirementId) as Array<{ name: string }>
+    return rows.map((r) => r.name)
+  }
+
+  // 没人引用的标签退出词表：taglist 只摆正在用的词，摘掉的错字不会一直留着
+  private pruneTags(): void {
+    this.db.exec('DELETE FROM tag WHERE id NOT IN (SELECT tag_id FROM requirement_tag)')
   }
 
   // ------------------------------------------------------------- worktree

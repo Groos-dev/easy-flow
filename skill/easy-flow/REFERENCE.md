@@ -75,6 +75,30 @@ SKILL.md 只放主流程，每个命令的参数、场景与坑在这里。本�
   - 看板按 URL 反查 GitLab / GitHub 状态，所以链接要贴 MR / PR 的页面地址，不是仓库首页
   - 一条链接都没有、却已经有工作区或状态到了 Review 时，`context` 与 `req set` 会点名提示
 
+## req tag add / rm / set / ls
+
+- 干什么：给需求打标签 / 摘标签 / 换标签 / 看标签。只存库，不写 requirement.md；卡片左下角展示
+- 用法：
+  - `easy-flow req tag add <req-…> <tag>… [--json]`
+  - `easy-flow req tag rm <req-…> <tag>… [--json]`
+  - `easy-flow req tag set <req-…> <tag>… [--json]`（整体替换；不带标签即清空）
+  - `easy-flow req tag ls <req-…> [--json]`
+- 示例：`easy-flow req tag add req-236d2ccb70 看板 卡片`
+- 场景：接手时给需求归类，让同列卡片能按类别扫
+- 坑：
+  - 词表开放：加之前先 `easy-flow taglist`，能复用就复用，别造同义词
+  - 一个需求最多 3 个标签——卡片 footer 的展示上限。已经满了还要加，必须先 `rm` 摘掉一个，或用 `set` 整体替换；`add` 会拒绝并给出这两条命令
+  - 一个标签最多 24 个字符，不能带空白、不能以 `#` 开头——看板点标签与 ⌘K 都用 `#标签` 筛选
+  - 同名按 trim 后忽略大小写算一个，沿用词表里已有的写法
+  - 重复添加幂等；`rm` 不存在的标签不报错
+
+## taglist
+
+- 干什么：列出数据目录里所有需求的标签与引用次数，按次数降序、同次数按名称排
+- 用法：`easy-flow taglist [--project <项目>] [--json]`
+- 场景：agent 打标前对齐词表；人看一眼现在都分了哪些类
+- 坑：统计包括已完成的需求；`--project` 只看一个项目；没有任何需求引用的标签会退出词表
+
 ## req session add
 
 - 干什么：把 agent 会话登记到需求上（不写进需求目录），看板据此一键回到那个会话
