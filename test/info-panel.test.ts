@@ -31,6 +31,7 @@ function mkReq(patch: Partial<Requirement> = {}): Requirement {
     repos: [],
     links: '',
     linkItems: [],
+    tags: [],
     docs: [],
     path: '/Users/groos/requirements/p/a',
     mtime: 0,

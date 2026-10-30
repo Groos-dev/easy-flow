@@ -69,6 +69,7 @@ interface BoardColumnProps {
   onToggleKids: (slug: string) => void
   onFocusCard: (slug: string) => void
   onOpen: (slug: string) => void
+  onTag: (tag: string) => void
   isOver: boolean
   // 收成窄条（只有「已完成」列会）
   collapsed: boolean
@@ -87,6 +88,7 @@ function ColumnView({
   onToggleKids,
   onFocusCard,
   onOpen,
+  onTag,
   isOver,
   collapsed,
   onToggleCollapsed,
@@ -143,6 +145,7 @@ function ColumnView({
               onToggleKids={onToggleKids}
               onFocusCard={onFocusCard}
               onOpen={onOpen}
+              onTag={onTag}
             />
           ))
         )}
@@ -586,6 +589,11 @@ export default function App() {
       next ? (list.includes(slug) ? list : [...list, slug]) : list.filter((s) => s !== slug),
     )
   }
+
+  // 点卡片标签与 ⌘K 共用同一个筛选词；再点同一个标签就是取消
+  const filterByTag = useCallback((tag: string) => {
+    setQuery((q) => (q.trim() === `#${tag}` ? '' : `#${tag}`))
+  }, [])
 
   // 搜索时看板只留命中的卡片。导图不在这里筛——它要留着祖先链，见 filterByHits
   const shown = useMemo(
@@ -1165,6 +1173,7 @@ export default function App() {
                       onToggleKids={toggleKids}
                       onFocusCard={handleCardFocus}
                       onOpen={(slug) => setDetail({ project, slug })}
+                      onTag={filterByTag}
                       isOver={overStatus === status}
                       collapsed={status === DONE_STATUS && !doneOpen}
                       onToggleCollapsed={toggleDone}

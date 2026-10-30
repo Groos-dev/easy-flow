@@ -21,6 +21,7 @@ function req(over: Partial<Requirement> & { slug: string }): Requirement {
     repos: [],
     links: '',
     linkItems: [],
+    tags: [],
     docs: [],
     path: `/tmp/${over.slug}`,
     mtime: NOW - 86400000,

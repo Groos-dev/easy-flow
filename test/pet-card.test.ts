@@ -67,6 +67,7 @@ function req(patch: Partial<Requirement> = {}): Requirement {
     repos: [],
     links: '',
     linkItems: [],
+    tags: [],
     docs: [],
     path: '',
     mtime: 0,

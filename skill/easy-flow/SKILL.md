@@ -60,6 +60,7 @@ description: >-
 | 工作区：开始实现 | `easy-flow wt new <req-…> --repo <仓库> --branch <分支> --short <短名>` |
 | 状态 | `easy-flow req set <req-…> --status 执行中` |
 | 优先级 | `easy-flow req set <req-…> --priority p1` |
+| 标签：给这条需求归类 | 先 `easy-flow taglist` 看现有词表，再 `easy-flow req tag add <req-…> <tag>…` |
 | 涉及仓库增减 | requirement.md「涉及仓库」段 |
 | 设计、调研、决策 | 需求目录 `docs/<短名>/`、context.md「决策」段 |
 
@@ -140,6 +141,8 @@ description: >-
 | 改状态 | `easy-flow req set <req-…> --status 执行中` |
 | 改优先级 | `easy-flow req set <req-…> --priority p1` |
 | 挂链接 | `easy-flow req link <req-…> "<标题>=https://…"` |
+| 打 / 摘 / 换标签 | `easy-flow req tag add|rm|set <req-…> <tag>…` |
+| 现有标签 | `easy-flow taglist [--project <项目>]` |
 | 登记当前会话 | `easy-flow req session add <req-…> --agent cursor --title "在做什么"` |
 | 列出会话 | `easy-flow req session ls <req-…>` |
 | 摘掉会话 | `easy-flow req session rm <req-…> --agent cursor --id <会话编号>` |
