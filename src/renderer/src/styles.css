@@ -1602,24 +1602,6 @@ body {
   border-color: var(--danger);
 }
 
-/* 没读过的完成只点一个角标：大号 pet 另有完成气泡，小号不挂气泡，只剩这一个记号 */
-.pet.event.s-done::after {
-  content: '';
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--status-done);
-  box-shadow: 0 0 0 2px var(--card);
-}
-
-.pet.compact.event.s-done::after {
-  width: 6px;
-  height: 6px;
-}
-
 /* 失败整体暗一档：这是姿势本身的样子，不跟事件走 */
 .pet.s-failed {
   opacity: 0.85;
