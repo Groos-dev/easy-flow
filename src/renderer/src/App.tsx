@@ -163,6 +163,9 @@ function statusOf(over: DragOverEvent['over']): Status | undefined {
 // pin 的项目存浏览器本地：它是「这台机器上常看哪几个」，不是看板数据
 const PINNED_KEY = 'easy-flow.pinned-projects'
 
+// 按住 ⌘ 满这么久才浮出键位：顺手按下的组合键不该闪一下
+const HINT_HOLD_MS = 1000
+
 function readPinned(): string[] {
   try {
     const raw = JSON.parse(localStorage.getItem(PINNED_KEY) ?? '[]')
@@ -300,27 +303,41 @@ export default function App() {
   }, [inMain])
 
   /**
-   * 按住 ⌘ 时左栏浮出键位，组合键照常派发。
+   * 按住 ⌘ 满一秒才浮出键位，组合键照常派发。
    * 焦点在输入控件里不算：那时 ⌘ 是打给编辑器的。
    * ⌘Tab 切走收不到 keyup，靠 blur 收尾。
    */
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const settle = () => {
+      clearTimeout(timer)
+      timer = undefined
+      setCmdHeld(false)
+    }
     const down = (e: KeyboardEvent) => {
-      if (!e.metaKey && e.key !== 'Meta') return
       if (isEditableTarget(e.target)) return
-      setCmdHeld(true)
+      // 按住 ⌘ 又按了别的键：这一下是在打组合键，别把提示带出来
+      if (e.key !== 'Meta') {
+        if (timer) settle()
+        return
+      }
+      if (timer) return
+      timer = setTimeout(() => {
+        timer = undefined
+        setCmdHeld(true)
+      }, HINT_HOLD_MS)
     }
     const up = (e: KeyboardEvent) => {
-      if (e.key === 'Meta' || !e.metaKey) setCmdHeld(false)
+      if (e.key === 'Meta' || !e.metaKey) settle()
     }
-    const clear = () => setCmdHeld(false)
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
-    window.addEventListener('blur', clear)
+    window.addEventListener('blur', settle)
     return () => {
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
-      window.removeEventListener('blur', clear)
+      window.removeEventListener('blur', settle)
+      clearTimeout(timer)
     }
   }, [])
 
@@ -784,10 +801,7 @@ export default function App() {
           pos: cur,
           session: slot?.dataset.session ?? '',
         })
-        if (!hit) {
-          setHint('没有要人处理的 pet')
-          return
-        }
+        if (!hit) return
         const at = posOf(focusColumns, hit.slug)
         if (at?.status === DONE_STATUS) revealDone()
         else foldDone()
