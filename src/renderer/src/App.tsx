@@ -227,7 +227,7 @@ export default function App() {
   // 按住 ⌘ 时左栏浮出键位，键盘事件照常派发
   const [cmdHeld, setCmdHeld] = useState(false)
   /**
-   * 选中框落在哪张卡是 DOM 状态，不进 React：j/k/h/l 只切卡上的 `data-focused`
+   * 选中态落在哪张卡是 DOM 状态，不进 React：j/k/h/l 只切卡上的 `data-focused`
    * 与 DOM 焦点，看板本身不重渲染（43 张卡、48 只 pet 全量渲染一次就是一次卡顿）。
    */
   const focusSlug = useRef<string | null>(null)
@@ -672,43 +672,7 @@ export default function App() {
       (node) => node.dataset.slug === slug,
     ) ?? null
 
-  const focusRing = useRef<HTMLDivElement>(null)
-  // 卡自己会长高：pet 素材换上来、气泡换行、子需求展开。浮层不跟着量就会压在卡中间
-  const ringWatch = useRef<ResizeObserver | null>(null)
-
-  /**
-   * 选中框是一块 fixed 浮层，画在卡片之外：换卡时用 transform 滑过去，比两张卡各自
-   * 闪一下框更像「移动」。卡片滚出列或看板视野时收起——fixed 不会被容器的 overflow 裁掉。
-   */
-  const placeRing = useCallback((el: HTMLElement, animate: boolean) => {
-    const ring = focusRing.current
-    if (!ring) return
-    // 摘下来的卡片量出来是 0×0，会被当成「在视野里」画到左上角
-    if (!el.isConnected) {
-      ring.classList.remove('on')
-      return
-    }
-    const box = el.getBoundingClientRect()
-    const column = el.closest('.column-body')?.getBoundingClientRect()
-    const board = el.closest('.board')?.getBoundingClientRect()
-    const visible =
-      (!column || (box.bottom > column.top && box.top < column.bottom)) &&
-      (!board || (box.right > board.left && box.left < board.right))
-    ring.classList.toggle('on', visible)
-    if (!visible) return
-    // 跟随滚动时不做过渡，否则看起来像在追卡片
-    if (!animate) ring.style.transition = 'none'
-    ring.style.width = `${box.width + 2}px`
-    ring.style.height = `${box.height + 2}px`
-    ring.style.transform = `translate(${box.left - 1}px, ${box.top - 1}px)`
-    if (!animate) {
-      // 先把「直接落位」算进样式，再恢复过渡，否则这一步会被当成动画起点的插值
-      void ring.offsetWidth
-      ring.style.transition = ''
-    }
-  }, [])
-
-  // 选中框与 DOM 焦点一起挪：旧卡摘属性、新卡挂属性，各只有一次 class/属性切换
+  // 选中态与 DOM 焦点一起挪：旧卡摘属性、新卡挂属性，各只有一次属性切换
   const moveFocus = useCallback((slug: string) => {
     const el = cardEl(slug)
     if (!el) {
@@ -717,38 +681,31 @@ export default function App() {
       return
     }
     const prev = focusedEl.current
-    if (prev && prev !== el) {
-      prev.removeAttribute('data-focused')
-      ringWatch.current?.unobserve(prev)
-    }
+    if (prev && prev !== el) prev.removeAttribute('data-focused')
     el.setAttribute('data-focused', '')
-    ringWatch.current?.observe(el)
     focusedEl.current = el
     focusSlug.current = slug
     // 焦点已经在这张卡里（比如停在它的 agent 头像上）就别抢回来
     if (!el.contains(document.activeElement)) el.focus({ preventScroll: true })
     el.scrollIntoView({ block: 'nearest' })
-    placeRing(el, true)
     setFlashSlug((cur) => (cur && cur !== slug ? null : cur))
-  }, [placeRing])
+  }, [])
 
   const dropFocus = useCallback(() => {
     const prev = focusedEl.current
     if (prev) {
       prev.removeAttribute('data-focused')
-      ringWatch.current?.unobserve(prev)
       if (prev.contains(document.activeElement)) prev.blur()
     }
     focusedEl.current = null
     focusSlug.current = null
     pendingFocus.current = null
     pendingPet.current = null
-    focusRing.current?.classList.remove('on')
     // 焦点收掉就是离开「已完成」列：跟着焦点展开的那次列也一起收回去
     foldDone()
   }, [foldDone])
 
-  // 鼠标点进卡片、Tab 落回卡片时同步选中框；焦点本来就在这张卡里就不动
+  // 鼠标点进卡片、Tab 落回卡片时同步选中态；焦点本来就在这张卡里就不动
   const handleCardFocus = useCallback(
     (slug: string) => {
       if (focusSlug.current !== slug) moveFocus(slug)
@@ -777,7 +734,7 @@ export default function App() {
     [moveFocus],
   )
 
-  // 卡片被筛掉、换列重挂、从详情页回来之后：焦点跟着走，卡没了就收掉选中框。
+  // 卡片被筛掉、换列重挂、从详情页回来之后：焦点跟着走，卡没了就收掉选中态。
   // 不挂依赖数组——看板重挂时 focusColumns 不一定变，只有查一下 DOM 才知道框还在不在
   useEffect(() => {
     const slug = focusSlug.current
@@ -802,51 +759,6 @@ export default function App() {
     else moveFocus(slug)
   })
 
-  // 列内滚动、窗口缩放时浮层要贴住卡片。滚动事件很密，按帧合并一次
-  useEffect(() => {
-    let queued = false
-    const follow = () => {
-      if (queued) return
-      queued = true
-      requestAnimationFrame(() => {
-        queued = false
-        const el = focusedEl.current
-        if (el) placeRing(el, false)
-      })
-    }
-    document.addEventListener('scroll', follow, true)
-    window.addEventListener('resize', follow)
-    return () => {
-      document.removeEventListener('scroll', follow, true)
-      window.removeEventListener('resize', follow)
-    }
-  }, [placeRing])
-
-  // 焦点卡长高变矮时重新量；用带过渡的落位，位置没变，不打断换卡的滑动
-  useEffect(() => {
-    const ro = new ResizeObserver(() => {
-      const el = focusedEl.current
-      if (el) placeRing(el, true)
-    })
-    ringWatch.current = ro
-    const el = focusedEl.current
-    if (el) ro.observe(el)
-    return () => {
-      ringWatch.current = null
-      ro.disconnect()
-    }
-  }, [placeRing])
-
-  // 拖拽时卡片跟着指针跑、浮层留在原地，先收起来，松手再贴回去
-  useEffect(() => {
-    if (dragSlug) {
-      focusRing.current?.classList.remove('on')
-      return
-    }
-    const el = focusedEl.current
-    if (el?.isConnected) placeRing(el, false)
-  }, [dragSlug, placeRing])
-
   useEffect(() => {
     if (!hint) return
     const timer = setTimeout(() => setHint(''), 1600)
@@ -858,7 +770,7 @@ export default function App() {
   useEffect(() => {
     if (!boardKeyboard) return
     // 详情页按 Esc 关闭时，这一层监听是在同一个 keydown 里新挂上的，Chrome 会把还没走完的
-    // 这次按键也投给它——关详情不该顺手把选中框清掉。只接挂上之后发生的按键
+    // 这次按键也投给它——关详情不该顺手把选中态清掉。只接挂上之后发生的按键
     const attachedAt = performance.now()
     const onKey = (e: KeyboardEvent) => {
       if (e.timeStamp < attachedAt) return
@@ -1158,7 +1070,6 @@ export default function App() {
                 onDragCancel={clearDrag}
               >
                 <div className="board">
-                  <div ref={focusRing} className="focus-ring" aria-hidden="true" />
                   {statuses.map((status) => (
                     <ColumnView
                       key={status}
