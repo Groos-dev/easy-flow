@@ -29,6 +29,7 @@ import { rankNextUp } from './next-up.ts'
 import './launch-claude.ts'
 import { logLevel, createLogger } from './log.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
+import { isTheme } from '../src/shared/theme.ts'
 import { appIconDataUrl, findOpenTarget, scanOpenTargets } from './open-with.ts'
 import { installSkill, skillPlan } from './skill-install.ts'
 import { hookPlan, installHooks, uninstallHooks } from './hook-install.ts'
@@ -668,6 +669,21 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
         }
         writeConfig({ openWith: next })
         json(req, res, 200, openWithPayload(options))
+        return
+      }
+
+      // 外观：浏览器预览与 Electron 共用这一份配置
+      // 主进程启动时另读它设置原生外观
+      if (url.pathname === '/api/settings/theme' && req.method === 'GET') {
+        json(req, res, 200, { theme: readConfig().theme })
+        return
+      }
+
+      if (url.pathname === '/api/settings/theme' && req.method === 'POST') {
+        const { theme } = await readBody(req)
+        if (!isTheme(theme)) throw new Error(`Unknown theme: ${String(theme)}`)
+        writeConfig({ theme })
+        json(req, res, 200, { theme })
         return
       }
 

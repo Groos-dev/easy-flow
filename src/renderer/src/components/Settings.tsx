@@ -4,6 +4,7 @@ import {
   NOTIFICATION_MODE_LABELS,
   type NotificationMode,
 } from '../../../shared/notification-mode'
+import { THEMES, THEME_LABELS, type Theme } from '../../../shared/theme'
 import { api } from '../lib/api'
 import {
   CONTEXT_LABEL,
@@ -20,11 +21,15 @@ interface Props {
   onBack: () => void
   // 应用后通知外层重新拉取数据
   onApplied: () => void
+  // 外观归外层：换主题时整个界面一起重挂
+  theme: Theme
+  onThemeChange: (theme: Theme) => void
 }
 
-type SectionId = 'data' | 'open' | 'shortcut' | 'notify' | 'skill' | 'hook'
+type SectionId = 'appearance' | 'data' | 'open' | 'shortcut' | 'notify' | 'skill' | 'hook'
 
 const SECTIONS: Array<{ id: SectionId; label: string }> = [
+  { id: 'appearance', label: '外观' },
   { id: 'data', label: '数据目录' },
   { id: 'open', label: '打开方式' },
   { id: 'shortcut', label: '快捷键' },
@@ -43,13 +48,14 @@ function describeSync(sync: SyncResult | null): string {
   return parts.length ? parts.join(' · ') : '无变化'
 }
 
-export default function Settings({ onBack, onApplied }: Props) {
-  const [section, setSection] = useState<SectionId>('data')
+export default function Settings({ onBack, onApplied, theme, onThemeChange }: Props) {
+  const [section, setSection] = useState<SectionId>('appearance')
   const [settings, setSettings] = useState<SettingsPayload | null>(null)
   const [draft, setDraft] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [themeError, setThemeError] = useState('')
 
   // CLI / skill install state: only read from the filesystem when that section is opened
   const [skill, setSkill] = useState<SkillPayload | null>(null)
@@ -430,6 +436,18 @@ export default function Settings({ onBack, onApplied }: Props) {
     }
   }
 
+  async function changeTheme(next: Theme) {
+    const previous = theme
+    onThemeChange(next)
+    setThemeError('')
+    try {
+      await api.setTheme(next)
+    } catch (e) {
+      onThemeChange(previous)
+      setThemeError(`保存外观失败：${(e as Error).message}`)
+    }
+  }
+
   async function openNotificationSettings() {
     setNotifyError('')
     try {
@@ -463,6 +481,32 @@ export default function Settings({ onBack, onApplied }: Props) {
       </aside>
 
       <main className="settings-main">
+        {section === 'appearance' && (
+          <>
+            <h1>外观</h1>
+
+            {themeError && <div className="notice">{themeError}</div>}
+
+            <div className="settings-row">
+              <div className="settings-row-text">
+                <div className="settings-row-title">主题</div>
+                <div className="settings-row-desc">跟随系统时，系统外观一变界面跟着变</div>
+              </div>
+              <select
+                className="settings-select"
+                value={theme}
+                onChange={(e) => void changeTheme(e.target.value as Theme)}
+              >
+                {THEMES.map((t) => (
+                  <option key={t} value={t}>
+                    {THEME_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
+
         {section === 'data' && (
           <>
             <h1>数据目录</h1>

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, Notification, screen, session, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, Notification, screen, session, shell } from 'electron'
 import { execFile } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -10,7 +10,14 @@ import { externalOpenArgs } from './open-links.ts'
 import { placePanel, readPanelPosition, writePanelPosition } from './panel-position.ts'
 import { createAttentionService, type AttentionService } from './attention.ts'
 import { isNotificationMode } from '../shared/notification-mode.ts'
+import { isTheme } from '../shared/theme.ts'
 import { iconFile } from '../../server/app-paths.ts'
+
+// 首帧渲染前露出的就是窗口底色
+// 取值与 styles.css 的 --bg 保持一致
+function windowBackground(): string {
+  return nativeTheme.shouldUseDarkColors ? '#0f1115' : '#f7f8fa'
+}
 
 // 开发态 resourcesPath 是 Electron 自带目录。安装包里通知要读归档外的 png。
 const ICON = iconFile(app.isPackaged, process.resourcesPath, __dirname)
@@ -100,7 +107,7 @@ function createPanel(): void {
     maximizable: false,
     fullscreenable: false,
     skipTaskbar: true,
-    backgroundColor: '#0f1115',
+    backgroundColor: windowBackground(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -318,6 +325,16 @@ function registerIpc(): void {
     return { ok: true }
   })
 
+  // 设置页换了主题：配置由服务端写
+  // 这里只把原生外观跟上
+  ipcMain.on('easy-flow:set-native-theme', (_event, value: unknown) => {
+    if (!isTheme(value)) return
+    nativeTheme.themeSource = value
+    const background = windowBackground()
+    if (win && !win.isDestroyed()) win.setBackgroundColor(background)
+    if (panel && !panel.isDestroyed()) panel.setBackgroundColor(background)
+  })
+
   // 渲染层起来时取走待打开的需求：事件早于订阅就会丢，靠这一份兜底
   ipcMain.handle('easy-flow:take-pending-open', () => {
     const p = pendingOpen
@@ -458,6 +475,9 @@ async function boot(): Promise<void> {
   })
   const { readConfig } = await import('../../server/config.ts')
   const config = readConfig()
+  // 原生外观（菜单、表单控件）在建窗之前定下来
+  // 否则首帧会先按系统色闪一下
+  nativeTheme.themeSource = config.theme
   attention = createAttentionService({
     file: join(app.getPath('userData'), 'attention.json'),
     getWindow: () => win,
@@ -508,7 +528,7 @@ async function createWindow(): Promise<void> {
     titleBarStyle: 'hiddenInset',
     // 显式固定交通灯位置：默认位置随系统浮动，顶栏左侧的留白没法跟它对齐
     trafficLightPosition: { x: 16, y: 15 },
-    backgroundColor: '#0f1115',
+    backgroundColor: windowBackground(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

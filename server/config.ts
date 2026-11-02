@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { isNotificationMode, type NotificationMode } from '../src/shared/notification-mode.ts'
+import { isTheme, type Theme } from '../src/shared/theme.ts'
 
 export interface AppConfig {
   dataDir: string
@@ -20,6 +21,9 @@ export interface AppConfig {
   openWith: string
   // 系统通知的显示时机；dock 红点不受影响
   notificationMode: NotificationMode
+  // 界面外观
+  // system 表示跟随系统
+  theme: Theme
 }
 
 // 配置文件路径。由 main 进程通过 EASY_FLOW_CONFIG 指定；独立运行 server 时回退到约定路径。
@@ -53,6 +57,7 @@ export function readConfig(): AppConfig {
     panelShortcut: '',
     openWith: '',
     notificationMode: 'unfocused',
+    theme: 'system',
   }
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<AppConfig>
@@ -66,6 +71,7 @@ export function readConfig(): AppConfig {
       notificationMode: isNotificationMode(raw?.notificationMode)
         ? raw.notificationMode
         : defaults.notificationMode,
+      theme: isTheme(raw?.theme) ? raw.theme : defaults.theme,
     }
   } catch {
     /* 首次运行或文件损坏，走默认值 */
