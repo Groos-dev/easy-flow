@@ -5,6 +5,7 @@ import { AGENT_LABELS, THREAD_STATE_CLASS } from '../lib/labels'
 import { buildMiniBlocks, miniTime, type MiniAction } from '../lib/mini'
 import { moveKey, resolveKey } from '../lib/selection'
 import { badgesOf, sessionActive } from '../lib/threads'
+import { useTheme } from '../lib/theme'
 import type { Requirement, Session } from '../lib/types'
 import {
   AgentIcon,
@@ -72,15 +73,20 @@ export default function MiniApp() {
     inputRef.current?.focus()
   }, [])
 
+  // 主题可能在主窗口改过，面板每次呼出时重读
+  const { reloadTheme } = useTheme()
+
   useEffect(() => {
+    void reloadTheme()
     void refresh()
     inputRef.current?.focus()
     const off = window.easyFlow?.onPanelShown?.(() => {
+      void reloadTheme()
       void refresh()
       reset()
     })
     return () => off?.()
-  }, [refresh, reset])
+  }, [reloadTheme, refresh, reset])
 
   const blocks = useMemo(
     () => buildMiniBlocks({ rows, sessions, query, expanded }),

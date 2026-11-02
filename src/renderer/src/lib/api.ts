@@ -19,6 +19,7 @@ import type {
   Todo,
   TodosPayload,
 } from './types'
+import type { Theme } from '../../../shared/theme'
 
 // 渲染层走 HTTP 访问本地服务，开发与打包共用同一套代码：
 //   dev（浏览器）  → 相对路径，由 Vite proxy 转发到 127.0.0.1:29170
@@ -207,6 +208,11 @@ export const api = {
 
   setOpenWith: (id: string): Promise<OpenWithPayload> =>
     request('/api/settings/open-with', { method: 'POST', body: JSON.stringify({ id }) }),
+
+  theme: (): Promise<{ theme: Theme }> => request('/api/settings/theme'),
+
+  setTheme: (theme: Theme): Promise<{ theme: Theme }> =>
+    request('/api/settings/theme', { method: 'POST', body: JSON.stringify({ theme }) }),
 
   switchDataDir: (dataDir: string): Promise<SwitchResult> =>
     request('/api/settings', { method: 'POST', body: JSON.stringify({ dataDir }) }),

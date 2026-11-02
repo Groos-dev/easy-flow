@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { NotificationMode } from '../shared/notification-mode.ts'
+import type { Theme } from '../shared/theme.ts'
 
 const CSP_NONCE_FLAG = '--easy-flow-csp-nonce='
 
@@ -100,4 +101,9 @@ contextBridge.exposeInMainWorld('easyFlow', {
   // 改通知时机：立即生效并写进配置
   setNotificationMode: (mode: NotificationMode): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('easy-flow:set-notification-mode', mode),
+
+  // 渲染层换主题后告知主进程：原生菜单与窗口底色按它调整
+  setNativeTheme: (theme: Theme): void => {
+    ipcRenderer.send('easy-flow:set-native-theme', theme)
+  },
 })

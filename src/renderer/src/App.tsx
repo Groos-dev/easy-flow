@@ -34,6 +34,7 @@ import {
   shouldIgnore,
 } from './lib/keys'
 import { BOARD_POLL_MS } from './lib/time'
+import { useTheme } from './lib/theme'
 import type { ChildStat, NextUpItem, Project, Requirement, Session, Status, Todo } from './lib/types'
 import MindMap from './components/MindMap'
 import Card from './components/Card'
@@ -209,6 +210,7 @@ export default function App() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
+  const { theme, setTheme } = useTheme()
   const [dragSlug, setDragSlug] = useState<string | null>(null)
   // mini 面板可能点开非当前项目的需求，这里单独持有
   const [crossReq, setCrossReq] = useState<Requirement | null>(null)
@@ -994,7 +996,12 @@ export default function App() {
     <div className={`shell${showSettings ? ' settings-open' : ''}${cmdHeld ? ' cmd-hints' : ''}`}>
       <main className="main-area">
         {showSettings ? (
-          <Settings onBack={() => setShowSettings(false)} onApplied={refresh} />
+          <Settings
+            onBack={() => setShowSettings(false)}
+            onApplied={refresh}
+            theme={theme}
+            onThemeChange={setTheme}
+          />
         ) : todoTarget ? (
           <Detail
             target={todoTarget}

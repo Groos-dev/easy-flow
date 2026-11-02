@@ -54,6 +54,8 @@ interface EasyFlowBridge {
   setNotificationMode?: (
     mode: 'never' | 'unfocused' | 'always',
   ) => Promise<{ ok: boolean; error?: string }>
+  // 换主题后同步原生外观（菜单、窗口底色）
+  setNativeTheme?: (theme: 'system' | 'light' | 'dark') => void
 }
 
 interface Window {
