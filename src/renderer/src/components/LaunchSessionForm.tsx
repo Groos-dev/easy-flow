@@ -1,14 +1,13 @@
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { CopyButton } from './InfoBits'
 import { AgentIcon } from './icons'
-import { isComposing, isEditableTarget, shortcut } from '../lib/keys'
+import { isComposing, isEditableTarget, isInteractiveTarget, shortcut } from '../lib/keys'
 import {
   launchNeedsWorktree,
   launchResultFeedback,
   launchRows,
   launchWorktreeSelection,
   stepLaunchRow,
-  worktreeCreationCommand,
 } from '../lib/launch'
 import type { LaunchAgent, LaunchProviderInfo, LaunchResult, Worktree } from '../lib/types'
 
@@ -54,7 +53,7 @@ export default function LaunchSessionForm({
   const { available } = launchWorktreeSelection(worktrees, worktreeId)
   const picked = providers.find((p) => p.id === agent)
   const needsWorktree = launchNeedsWorktree(available, picked?.requiresWorktree)
-  const canLaunch = !!agent && (!needsWorktree || !!worktreeId) && !busy
+  const ready = !!agent && (!needsWorktree || !!worktreeId)
   const feedback = result ? launchResultFeedback(requirementId, result) : null
   const agentName = picked?.label ?? result?.agent ?? 'Agent'
 
@@ -69,23 +68,30 @@ export default function LaunchSessionForm({
   function stepRow(dir: 1 | -1) {
     const root = formRef.current
     if (!root) return
-    const rows = launchRows(available, canLaunch)
+    const rows = launchRows(available, ready)
     const elements = [
       chipsRef.current,
       ...(available.length > 1 ? Array.from(root.querySelectorAll<HTMLElement>('.wt-option')) : []),
-      ...(canLaunch ? [root.querySelector<HTMLElement>('.launch-go')] : []),
+      ...(ready ? [root.querySelector<HTMLElement>('.launch-go')] : []),
     ].filter((el): el is HTMLElement => !!el)
     const at = elements.indexOf(document.activeElement as HTMLElement)
     const next = stepLaunchRow(rows, at, dir, worktreeId)
     const target = elements[next]
     if (!target) return
-    if (rows[next].kind === 'worktree') onWorktreeChange(rows[next].id)
     target.focus()
     target.scrollIntoView({ block: 'nearest' })
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLFormElement>) {
     if (isComposing(e) || isEditableTarget(e.target)) return
+    if (e.key === 'Enter' && e.repeat) {
+      e.preventDefault()
+      return
+    }
+    if (e.key === 'Enter' && !isInteractiveTarget(e.target)) {
+      e.preventDefault()
+      return
+    }
     if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
     const inAgents = !!chipsRef.current && chipsRef.current.contains(e.target as Node)
     if (inAgents && (shortcut(e, 'launch.agent-prev') || shortcut(e, 'launch.agent-next'))) {
@@ -104,7 +110,7 @@ export default function LaunchSessionForm({
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    if (canLaunch) onLaunch()
+    if (ready) onLaunch()
   }
 
   if (loading) return <p className="launch-hint">正在读取可用 Agent…</p>
@@ -171,7 +177,10 @@ export default function LaunchSessionForm({
                 tabIndex={0}
                 onClick={() => onWorktreeChange(w.id)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') onWorktreeChange(w.id)
+                  if (e.key !== 'Enter' && e.key !== ' ') return
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onWorktreeChange(w.id)
                 }}
               >
                 <span className="wt-radio" />
@@ -185,19 +194,15 @@ export default function LaunchSessionForm({
         <button
           className="launch-go"
           type="submit"
-          data-info-row={canLaunch ? '' : undefined}
-          disabled={!canLaunch}
+          data-info-row={ready ? '' : undefined}
+          disabled={!ready}
+          aria-busy={busy || undefined}
         >
           {busy ? '正在打开…' : `用 ${agentName} 打开新会话`}
         </button>
 
-        {/* 正常不说「会发生什么」，按钮上写着；只有还没工作区时得给一条能往下走的路 */}
-        {!needsWorktree && <code className="launch-hint">{worktreeCreationCommand(requirementId)}</code>}
         {picked?.requiresWorktree && !available.length && (
-          <>
-            <p className="launch-hint">{picked?.label ?? '该 Agent'} 需要先有一个工作区：</p>
-            <code className="launch-hint">{worktreeCreationCommand(requirementId)}</code>
-          </>
+          <p className="launch-hint">{picked.label} 需要先有一个工作区。</p>
         )}
       </form>
 
@@ -225,9 +230,9 @@ export default function LaunchSessionForm({
             <button
               className="launch-retry"
               type="button"
-              data-info-row={canLaunch ? '' : undefined}
+              data-info-row={ready ? '' : undefined}
               onClick={onLaunch}
-              disabled={!canLaunch}
+              disabled={!ready}
             >
               重试打开
             </button>

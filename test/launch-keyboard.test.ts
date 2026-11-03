@@ -54,7 +54,12 @@ function wt(id: string): Worktree {
   }
 }
 
-function renderForm(agent: LaunchAgent, worktrees: Worktree[], worktreeId = worktrees[0]?.id ?? ''): string {
+function renderForm(
+  agent: LaunchAgent,
+  worktrees: Worktree[],
+  worktreeId = worktrees[0]?.id ?? '',
+  busy = false,
+): string {
   return renderToStaticMarkup(
     createElement(LaunchSessionForm, {
       requirementId: 'req-1',
@@ -65,7 +70,7 @@ function renderForm(agent: LaunchAgent, worktrees: Worktree[], worktreeId = work
       loading: false,
       providerError: '',
       requestError: '',
-      busy: false,
+      busy,
       result: null,
       onWorktreeChange: () => {},
       onAgentChange: () => {},
@@ -126,6 +131,13 @@ describe('新建会话 · 键盘可达', () => {
     const html = renderForm('claude', [wt('a'), wt('b')], '')
     assert.match(html, /class="launch-go"[^>]*disabled=""/)
     assert.doesNotMatch(html, /class="launch-go"[^>]*data-info-row/)
+  })
+
+  test('启动中按钮不置灰、不退出导航，焦点才留得住', () => {
+    const html = renderForm('claude', [wt('a'), wt('b')], 'a', true)
+    assert.match(html, /class="launch-go" type="submit" data-info-row="" aria-busy="true"/)
+    assert.doesNotMatch(html, /class="launch-go"[^>]*disabled/)
+    assert.match(html, /正在打开…/)
   })
 
   test('收起态是一行可导航入口', () => {

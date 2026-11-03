@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { createServer as createViteServer } from 'vite'
 import { createBoardApp } from '../server/index.ts'
 import { launchPrompt, launchProviders, registerLaunchProvider, type LaunchInput } from '../server/launch.ts'
-import { launchResultFeedback, launchWorktreeSelection, worktreeCreationCommand } from '../src/renderer/src/lib/launch.ts'
+import { launchResultFeedback, launchWorktreeSelection } from '../src/renderer/src/lib/launch.ts'
 import type { Worktree } from '../src/renderer/src/lib/types.ts'
 
 const testRoot = mkdtempSync(join(tmpdir(), 'easy-flow-launch-board-'))
@@ -155,7 +155,6 @@ describe('需求详情页启动会话', () => {
     assert.equal(launchWorktreeSelection([one, two]).selectedId, '')
     assert.deepEqual(launchWorktreeSelection([gone]), { available: [], selectedId: '' })
     assert.equal(launchWorktreeSelection([one, two], 'wt-two').selectedId, 'wt-two')
-    assert.equal(worktreeCreationCommand('req-alpha'), 'easy-flow wt new req-alpha --repo <仓库> --branch feature-<需求 slug>')
 
     const renderScript = `
       import { createElement } from 'react'
@@ -203,11 +202,11 @@ describe('需求详情页启动会话', () => {
     assert.match(markup.multiple, /class="launch-go"[^>]*type="submit"[^>]*disabled=""/)
     // 两个 agent 都要选工作区：deeplink 只能带一个目录（Claude 当 folder、Codex 当 path）
     assert.match(markup.codex, /在哪个工作区开始/)
-    // 没有工作区不再挡下入口：照常可选 agent、可提交，只提示先开工作区
-    assert.match(markup.empty, /easy-flow wt new req-alpha/)
+    // 没有工作区不再挡下入口：照常可选 agent、可提交，也不再铺占位命令
+    assert.doesNotMatch(markup.empty, /easy-flow wt new/)
     assert.match(markup.empty, /class="launch-go"[^>]*type="submit"/)
     assert.doesNotMatch(markup.empty, /class="launch-go"[^>]*type="submit"[^>]*disabled=""/)
-    assert.match(markup.emptyClaude, /easy-flow wt new req-alpha/)
+    assert.doesNotMatch(markup.emptyClaude, /easy-flow wt new/)
     assert.doesNotMatch(markup.emptyClaude, /在哪个工作区开始/)
     assert.doesNotMatch(markup.emptyClaude, /class="launch-go"[^>]*type="submit"[^>]*disabled=""/)
     // Cursor 必须有工作区；成功后提示去弹窗点 Create Chat；失败且已复制提示词要说明

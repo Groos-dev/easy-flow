@@ -23,22 +23,18 @@ export function launchWorktreeSelection(worktrees: Worktree[], selectedId = ''):
   }
 }
 
-export function worktreeCreationCommand(requirementId: string): string {
-  return `easy-flow wt new ${requirementId} --repo <仓库> --branch feature-<需求 slug>`
-}
-
 export type LaunchRow = { kind: 'agent' } | { kind: 'worktree'; id: string } | { kind: 'launch' }
 
 /**
  * 新建会话表单里上下走的那一列：agent 整排占一行，工作区一档一行，启动按钮殿后。
- * 唯一工作区只是说明文字，不参与；禁用的启动按钮也不占位。
+ * 唯一工作区只是说明文字，不参与；还没选完整时启动按钮也不占位。
  */
-export function launchRows(available: Worktree[], canLaunch: boolean): LaunchRow[] {
+export function launchRows(available: Worktree[], ready: boolean): LaunchRow[] {
   const rows: LaunchRow[] = [{ kind: 'agent' }]
   if (available.length > 1) {
     for (const w of available) rows.push({ kind: 'worktree', id: w.id })
   }
-  if (canLaunch) rows.push({ kind: 'launch' })
+  if (ready) rows.push({ kind: 'launch' })
   return rows
 }
 
