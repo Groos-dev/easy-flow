@@ -3547,11 +3547,20 @@ a.sess,
   cursor: pointer;
 }
 
-.launch-go:disabled {
+.launch-go:disabled,
+.launch-go[aria-busy="true"] {
   border-color: var(--border);
   background: var(--column);
+}
+
+.launch-go:disabled {
   color: var(--text-faint);
   cursor: default;
+}
+
+.launch-go[aria-busy="true"] {
+  color: var(--text-dim);
+  cursor: progress;
 }
 
 /* 结果：成功一行结论，失败才把兜底铺开 */
@@ -3607,13 +3616,6 @@ a.sess,
   color: var(--text-faint);
   font-size: 11px;
   line-height: 1.5;
-}
-
-code.launch-hint {
-  color: var(--text-dim);
-  font-size: 10px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 .launch-prompt,
@@ -3832,13 +3834,22 @@ code.launch-hint {
 .info-panel [data-info-row]:focus-visible {
   outline: none;
   border-radius: 5px;
-  background: var(--card-hover);
+  background: var(--accent-soft-strong);
 }
 
 /* agent 整排是单选块而不是一行：整排提亮会跟选中的那枚图标打架，焦点只由选中的图标表达 */
 .info-panel .launch-form .agent-chips:focus-visible {
   outline: none;
   background: none;
+}
+
+.info-panel .launch-form .launch-go:focus-visible {
+  background: var(--selection);
+}
+
+.info-panel .launch-form .launch-go[aria-busy="true"]:focus-visible {
+  background: var(--column);
+  color: var(--text-dim);
 }
 
 .shortcut-list {

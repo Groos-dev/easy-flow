@@ -160,7 +160,7 @@ export default function LaunchSession({
           <div className="new-sess-head">
             新建会话
             <span className="spacer" />
-            <button className="new-sess-x" data-info-row="" title="收起（Esc）" onClick={collapse}>
+            <button className="new-sess-x" title="收起（Esc）" onClick={collapse}>
               收起
             </button>
           </div>
