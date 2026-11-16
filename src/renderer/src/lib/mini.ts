@@ -70,6 +70,8 @@ export function buildMiniBlocks({ rows, sessions, query, expanded }: MiniInput):
   }
 
   return rows
+    // TODO: 特殊逻辑 后面删除
+    .filter(({ req }) => req.project !== 'self')
     .map(({ req, projectName }) => {
       const ss = [...(byReq.get(req.id) ?? [])].sort((a, b) => sessionActive(b) - sessionActive(a))
       return {
