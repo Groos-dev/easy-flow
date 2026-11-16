@@ -51,11 +51,15 @@ SKILL.md 只放主流程，每个命令的参数、场景与坑在这里。本�
 ## req set
 
 - 干什么：改看板状态与优先级
-- 用法：`easy-flow req set <req-…> [--status 澄清|执行中|Review|已完成] [--priority p0|p1|p2|p3|""] [--json]`
+- 用法：`easy-flow req set <req-…> [--status 澄清|执行中|Review|已完成] [--priority p0|p1|p2|p3|""] [--session-analysis pending|completed|skipped] [--json]`
 - 示例：`easy-flow req set req-236d2ccb70 --status Review`
 - 场景：开工置执行中、交付置 Review、合入置已完成；优先级随事态调整
 - 坑：
   - 传了哪个改哪个，都没传会报错；`--priority ""` 清空优先级
+  - 会话分析状态只存 SQLite：`pending` 待分析、`completed` 已分析、`skipped` 已跳过分析
+  - CLI 设置「已完成」要求分析为 `completed`；拦截时状态与优先级保持原值，提醒用户另开 session 复盘全部关联会话
+  - 分析 session 完成后将结论保留在需求文档中，再用 `--session-analysis completed` 登记；无值得沉淀内容也可登记
+  - UI 直接完成，尚未分析时记为 `skipped`，已有分析结果保留；历史已完成需求升级为 `skipped`
   - 状态只在看板上改，不要写进任何 md
   - 父需求不跟着子需求自动收尾
 

@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS requirement (
   title    TEXT NOT NULL,
   path     TEXT NOT NULL,
   status   TEXT NOT NULL,
+  session_analysis_status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (session_analysis_status IN ('pending', 'completed', 'skipped')),
   priority TEXT,
   summary  TEXT,
   repos    TEXT,
@@ -215,6 +217,11 @@ function migrate(db: DatabaseSync): void {
   // 子需求：父需求的 id。层级同时体现在 slug（parent/child）里，这里存一份便于按父子查
   addIfMissing('requirement', 'parent_id', 'parent_id TEXT')
   db.exec('CREATE INDEX IF NOT EXISTS idx_req_parent ON requirement(parent_id)')
+  if (!cols.some((c) => c.name === 'session_analysis_status')) {
+    db.exec(`ALTER TABLE requirement ADD COLUMN session_analysis_status TEXT NOT NULL DEFAULT 'pending'
+      CHECK (session_analysis_status IN ('pending', 'completed', 'skipped'))`)
+    db.exec("UPDATE requirement SET session_analysis_status = 'skipped' WHERE status = '已完成'")
+  }
   // 链接：飞书任务 / 代码链接 / 扩展链接三列收成 link_items 一列 [{title,url}]。
   // 先补列再搬数据，最后删旧列——顺序反了就没有数据可搬
   addIfMissing('requirement', 'link_items', 'link_items TEXT')

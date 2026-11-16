@@ -26,6 +26,7 @@ function mkReq(patch: Partial<Requirement> = {}): Requirement {
     parentId: '',
     title: '标题',
     status: '执行中',
+    sessionAnalysisStatus: 'pending',
     priority: '',
     summary: '',
     repos: [],

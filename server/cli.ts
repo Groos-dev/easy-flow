@@ -14,6 +14,11 @@ import { parseArgs } from 'node:util'
 import { configPath, readConfig } from './config.ts'
 import { linkLabel } from '../shared/link.ts'
 import {
+  SESSION_ANALYSIS_LABELS,
+  SESSION_ANALYSIS_STATUSES,
+  type SessionAnalysisStatus,
+} from '../src/shared/session-analysis.ts'
+import {
   createProjectDir,
   createRequirementDir,
   createTodoDoc,
@@ -207,6 +212,7 @@ function requirementView(req: Requirement, extraHead: string[] = []) {
     `需求：${req.title}（${req.slug}）`,
     `需求目录：${req.path}`,
     `状态：${req.status}${req.priority ? ` · 优先级：${req.priority}` : ''}`,
+    `会话分析：${SESSION_ANALYSIS_LABELS[req.sessionAnalysisStatus]}`,
   ]
   if (req.tags.length) head.push(`标签：${req.tags.join(' · ')}`)
   if (req.repos.length) head.push(`涉及仓库：${req.repos.map((r) => `${r.short}=${r.repo ?? ''}`).join('、')}`)
@@ -250,6 +256,7 @@ function requirementView(req: Requirement, extraHead: string[] = []) {
       slug: req.slug,
       path: req.path,
       status: req.status,
+      sessionAnalysisStatus: req.sessionAnalysisStatus,
       priority: req.priority,
       summary: req.summary,
       repos: req.repos,
@@ -550,9 +557,13 @@ id 必须显式传：需求编号在需求目录 requirement.md 的开头，工�
 中文标题推不出目录名，需要显式给 --slug。
 标题要写成短句说清「在做什么」，不能等于目录名——看板上它是卡片上唯一能扫的东西。`,
 
-  'req set': `用法：easy-flow req set <id> [--status <澄清|执行中|Review|已完成>] [--priority <p0|p1|p2|p3|"">] [--json]
+  'req set': `用法：easy-flow req set <id> [--status <澄清|执行中|Review|已完成>] [--priority <p0|p1|p2|p3|"">]
+       [--session-analysis <pending|completed|skipped>] [--json]
 
-传了哪个改哪个，都没传会报错。--priority "" 清空优先级。`,
+传了哪个改哪个，都没传会报错。--priority "" 清空优先级。
+--session-analysis 记录会话分析状态：pending 待分析，completed 已分析，skipped 已跳过分析。
+CLI 设置「已完成」要求会话分析为 completed；尚未分析时，提醒用户另开 session 分析全部关联会话。
+分析 session 完成分析后用 --session-analysis completed 登记，结论保留在需求文档中。`,
 
   'req link': `用法：easy-flow req link <id> "<标题>=<url>" ["<标题>=<url>" …] [--json]
 
@@ -844,14 +855,19 @@ async function cmdReqNew(argv: string[]): Promise<void> {
 }
 
 async function cmdReqSet(argv: string[]): Promise<void> {
-  const { values, positionals } = parse(argv, { status: { type: 'string' }, priority: { type: 'string' } })
+  const { values, positionals } = parse(argv, {
+    status: { type: 'string' },
+    priority: { type: 'string' },
+    'session-analysis': { type: 'string' },
+  })
   if (bool(values.help)) return out(USAGE['req set'])
 
   const id = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req set'])
   const status = str(values.status)?.trim()
   const priority = str(values.priority)?.trim()
-  if (status === undefined && priority === undefined) {
-    throw new UsageError('Pass at least one of --status / --priority', USAGE['req set'])
+  const analysis = str(values['session-analysis'])?.trim()
+  if (status === undefined && priority === undefined && analysis === undefined) {
+    throw new UsageError('Pass at least one of --status / --priority / --session-analysis', USAGE['req set'])
   }
   if (status !== undefined && !(STATUSES as readonly string[]).includes(status)) {
     throw new Error(`Unknown status: ${status}. Valid: ${STATUSES.join(', ')}`)
@@ -859,11 +875,24 @@ async function cmdReqSet(argv: string[]): Promise<void> {
   if (priority !== undefined && priority !== '' && !(PRIORITIES as readonly string[]).includes(priority)) {
     throw new Error(`Unknown priority: ${priority}. Valid: ${PRIORITIES.join(', ')}; an empty string clears it`)
   }
+  if (analysis !== undefined && !(SESSION_ANALYSIS_STATUSES as readonly string[]).includes(analysis)) {
+    throw new Error(`Unknown session analysis status: ${analysis}. Valid: ${SESSION_ANALYSIS_STATUSES.join(', ')}`)
+  }
 
   const board = db()
   board.syncProjects()
   const req = findById(id)
+  if (status === '已完成' && (analysis ?? req.sessionAnalysisStatus) !== 'completed') {
+    throw new Error(
+      `需求 ${req.id} 尚未完成会话分析。请提醒用户另开一个 session，分析该需求关联的全部 AI Agent 会话，` +
+      `结合对话、工具调用及结果检查值得沉淀或优化到 Skill 的知识与踩坑。\n` +
+      `会话清单：easy-flow req session ls ${req.id}\n` +
+      `分析 session 完成分析后登记：easy-flow req set ${req.id} --session-analysis completed\n` +
+      `结论保留在需求文档中，再执行：easy-flow req set ${req.id} --status 已完成`,
+    )
+  }
   let next = req
+  if (analysis !== undefined) next = board.setSessionAnalysisStatus(req.slug, analysis as SessionAnalysisStatus, req.project)
   if (status !== undefined) next = board.setStatus(req.slug, status as Status, req.project)
   if (priority !== undefined) next = board.setPriority(req.slug, priority as Priority, req.project)
 
@@ -887,6 +916,7 @@ async function cmdReqSet(argv: string[]): Promise<void> {
       id: next.id,
       title: next.title,
       status: next.status,
+      sessionAnalysisStatus: next.sessionAnalysisStatus,
       priority: next.priority,
       parentHint: hint || undefined,
       todoHint: todoReminder || undefined,
@@ -894,7 +924,7 @@ async function cmdReqSet(argv: string[]): Promise<void> {
     },
     `需求：${next.title}（${next.id}）\n状态：${next.status}${
       next.priority ? ` · 优先级：${next.priority}` : ''
-    }${hint ? `\n${hint}` : ''}${todoReminder ? `\n${todoReminder}` : ''}${
+    }\n会话分析：${SESSION_ANALYSIS_LABELS[next.sessionAnalysisStatus]}${hint ? `\n${hint}` : ''}${todoReminder ? `\n${todoReminder}` : ''}${
       linkReminder ? `\n${linkReminder}` : ''
     }`,
   )

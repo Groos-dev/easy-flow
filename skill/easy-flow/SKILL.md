@@ -44,9 +44,17 @@ description: >-
 | 澄清 | 澄清 | 讲清做什么、为什么、边界与验收，定下涉及仓库。**写得出验收清单就算过** | `easy-flow req new "<标题>" --project <项目> --slug <目录名> --summary "<一句话>"` | requirement.md、context.md、`docs/<短名>/` |
 | 实现 | 执行中 | 开工作区、登记会话、按方案实现，设计有变随手更新 | `easy-flow wt new <req-…> --repo <仓库> --branch <分支> --short <短名>`；`easy-flow req session add <req-…> --agent cursor --title "在做什么"`；`easy-flow req set <req-…> --status 执行中` | 代码在工作区；设计变更 → `docs/<短名>/` |
 | Review | Review | 改动提交或开出 MR，回写链接，按评审意见改 | `easy-flow req set <req-…> --status Review`；`easy-flow req link <req-…> "<标题>=https://…"` | 看板上登记链接 + requirement.md「链接」段 |
-| 合入 | 已完成 | **代码进了主分支就算完成**——谁合的都一样，状态随手置。要不要合、要不要推送，仍按判据三问人 | `easy-flow req set <req-…> --status 已完成` | — |
+| 合入 | 已完成 | 代码进了主分支后尝试收尾；CLI 检查会话分析状态，未分析则提醒用户另开 session 复盘。要不要合、要不要推送，仍按判据三问人 | `easy-flow req set <req-…> --status 已完成` | 分析结论留在需求文档 |
 
 父需求不跟着子需求自动收尾。最后一个子需求执行 `easy-flow req set <子需求 req-…> --status 已完成` 时，命令会提示父需求。要收父需求再执行 `easy-flow req set <父需求 req-…> --status 已完成`。父需求可能还有整体验收，收不收自己判。
+
+## 收尾会话分析
+
+- CLI 设置「已完成」前，会话分析状态必须为 `completed`。`pending` 为待分析，`skipped` 为已跳过分析；`context` 会展示当前值。
+- 收尾命令被拦截后，当前 Agent 提醒用户另开 session，分析该需求关联的全部 AI Agent 会话，结合对话、工具调用与结果，检查值得沉淀或优化到 Skill 的知识与踩坑，然后等待用户安排。
+- 分析 session 通过 `easy-flow req session ls <req-…>` 取得会话清单，完成分析后将结论保留在需求文档中，再执行 `easy-flow req set <req-…> --session-analysis completed` 登记。结论可以是「无值得沉淀内容」。
+- 已登记分析完成后，再执行 `easy-flow req set <req-…> --status 已完成`。
+- UI 直接完成需求，尚未分析时默认记为 `skipped`，已有分析结果保留。
 
 ## 最重要的一条：一切挂需求
 
@@ -139,6 +147,7 @@ description: >-
 | 建需求 | `easy-flow req new "<标题>" --project <项目> --slug <目录名> --summary "<一句话>"` |
 | 建子需求 | `easy-flow req new "<标题>" --parent <req-…> --slug <目录名> --summary "<一句话>"` |
 | 改状态 | `easy-flow req set <req-…> --status 执行中` |
+| 登记分析完成 | `easy-flow req set <req-…> --session-analysis completed` |
 | 改优先级 | `easy-flow req set <req-…> --priority p1` |
 | 挂链接 | `easy-flow req link <req-…> "<标题>=https://…"` |
 | 打 / 摘 / 换标签 | `easy-flow req tag add|rm|set <req-…> <tag>…` |

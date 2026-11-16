@@ -28,6 +28,7 @@ import { applySchema } from './schema.ts'
 import { ensureTemplates, projectIssues } from './convention.ts'
 import type { SessionObservation, ThreadState } from './session-state.ts'
 import type { SourceRow } from './source-file.ts'
+import type { SessionAnalysisStatus } from '../src/shared/session-analysis.ts'
 
 /**
  * 状态 = 看板的列。两者是同一个东西，所以只有这一套取值，顺序即列顺序。
@@ -91,6 +92,7 @@ export interface Requirement {
   parentId: string
   title: string
   status: Status
+  sessionAnalysisStatus: SessionAnalysisStatus
   priority: Priority | ''
   summary: string
   repos: RepoRef[]
@@ -282,6 +284,7 @@ interface Row {
   title: string
   path: string
   status: string
+  session_analysis_status: SessionAnalysisStatus
   priority: string | null
   summary: string | null
   repos: string | null
@@ -912,6 +915,7 @@ export class BoardDatabase {
       parentId: row.parent_id ?? '',
       title: row.title,
       status,
+      sessionAnalysisStatus: row.session_analysis_status,
       priority: asPriority(row.priority) ?? '',
       summary: row.summary ?? '',
       repos: row.repos ? (JSON.parse(row.repos) as RepoRef[]) : [],
@@ -1073,7 +1077,23 @@ export class BoardDatabase {
       throw new Error(`Unknown status ${status}. Valid: ${STATUSES.join(' / ')}`)
     }
     const info = this.db
-      .prepare('UPDATE requirement SET status = ?, updated = ? WHERE slug = ? AND project = ?')
+      .prepare(`UPDATE requirement SET status = ?, updated = ?,
+        session_analysis_status = CASE
+          WHEN ? = '已完成' AND session_analysis_status = 'pending' THEN 'skipped'
+          ELSE session_analysis_status END
+        WHERE slug = ? AND project = ?`)
+      .run(status, today(), status, slug, project)
+    if (info.changes === 0) throw new Error(`Requirement not found: ${project}/${slug}`)
+    return this.get(slug, project)!
+  }
+
+  setSessionAnalysisStatus(
+    slug: string,
+    status: SessionAnalysisStatus,
+    project = this.activeProject,
+  ): Requirement {
+    const info = this.db
+      .prepare('UPDATE requirement SET session_analysis_status = ?, updated = ? WHERE slug = ? AND project = ?')
       .run(status, today(), slug, project)
     if (info.changes === 0) throw new Error(`Requirement not found: ${project}/${slug}`)
     return this.get(slug, project)!

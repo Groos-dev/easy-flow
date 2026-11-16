@@ -1804,14 +1804,14 @@ describe('CLI 层', () => {
     assert.doesNotMatch(parentCtx, /已全部完成/)
 
     // 子需求全完成就点一句收尾；父需求自己已是终态时不再点
-    cliOk(configFile, ['req', 'set', sub.id, '--status', '已完成'])
+    cliOk(configFile, ['req', 'set', sub.id, '--session-analysis', 'completed', '--status', '已完成'])
     const doneCtx = cliOk(configFile, ['context', parent.id])
     assert.match(doneCtx, /seatmap\/gateway {2}网关改造 {2}已完成/)
     assert.match(
       doneCtx,
       new RegExp(`子需求已全部完成——这条需求自己没有别的活就一并收尾：easy-flow req set ${parent.id} --status 已完成`),
     )
-    cliOk(configFile, ['req', 'set', parent.id, '--status', '已完成'])
+    cliOk(configFile, ['req', 'set', parent.id, '--session-analysis', 'completed', '--status', '已完成'])
     assert.doesNotMatch(cliOk(configFile, ['context', parent.id]), /已全部完成/)
   })
 
@@ -2220,11 +2220,11 @@ describe('CLI 层', () => {
     seed.close()
 
     // 还剩一个没完成：不提示
-    assert.doesNotMatch(cliOk(configFile, ['req', 'set', a.id, '--status', '已完成']), /已全部完成/)
+    assert.doesNotMatch(cliOk(configFile, ['req', 'set', a.id, '--session-analysis', 'completed', '--status', '已完成']), /已全部完成/)
     assert.match(cliOk(configFile, ['req', 'set', b.id, '--status', 'Review']), /状态：Review/)
 
     // 最后一个也完成：提示指向父需求，并给出收尾命令
-    const last = cliOk(configFile, ['req', 'set', b.id, '--status', '已完成'])
+    const last = cliOk(configFile, ['req', 'set', b.id, '--session-analysis', 'completed', '--status', '已完成'])
     assert.match(last, /父需求「父需求」的 2 个子需求已全部完成/)
     assert.match(last, new RegExp(`easy-flow req set ${parent.id} --status 已完成`))
 
@@ -3084,6 +3084,7 @@ describe('导图：建树', () => {
     parentId: '',
     title,
     status,
+    sessionAnalysisStatus: 'pending',
     priority: '',
     summary: '',
     repos: [],
@@ -3154,6 +3155,7 @@ describe('导图：布局', () => {
     parentId: '',
     title,
     status: '澄清',
+    sessionAnalysisStatus: 'pending',
     priority: '',
     summary: '',
     repos: [],

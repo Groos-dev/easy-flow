@@ -16,6 +16,7 @@ function req(over: Partial<Requirement> & { slug: string }): Requirement {
     parentId: '',
     title: over.slug,
     status: '执行中',
+    sessionAnalysisStatus: 'pending',
     priority: '',
     summary: '',
     repos: [],
