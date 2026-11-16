@@ -137,6 +137,7 @@ describe('标签字段', () => {
       parentId: '',
       title: '标题',
       status: '执行中',
+      sessionAnalysisStatus: 'pending',
       priority: '',
       summary: '',
       repos: [],

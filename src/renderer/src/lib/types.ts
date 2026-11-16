@@ -5,6 +5,8 @@
  * 服务端改了字段名不会在这里报错，只能靠测试与代码审查对齐。
  */
 
+import type { SessionAnalysisStatus } from '../../../shared/session-analysis.ts'
+
 // ------------------------------------------------------------------ 需求
 
 export interface RepoRef {
@@ -66,6 +68,7 @@ export interface Requirement {
   parentId: string
   title: string
   status: string
+  sessionAnalysisStatus: SessionAnalysisStatus
   priority: string
   summary: string
   repos: RepoRef[]
