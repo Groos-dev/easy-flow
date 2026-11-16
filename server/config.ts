@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { isNotificationMode, type NotificationMode } from '../src/shared/notification-mode.ts'
 import { isTheme, type Theme } from '../src/shared/theme.ts'
+import { isLogLevel, type LogLevel } from '../src/shared/log-level.ts'
 
 export interface AppConfig {
   dataDir: string
@@ -24,6 +25,7 @@ export interface AppConfig {
   // 界面外观
   // system 表示跟随系统
   theme: Theme
+  logLevel: LogLevel
 }
 
 // 配置文件路径。由 main 进程通过 EASY_FLOW_CONFIG 指定；独立运行 server 时回退到约定路径。
@@ -58,6 +60,7 @@ export function readConfig(): AppConfig {
     openWith: '',
     notificationMode: 'unfocused',
     theme: 'system',
+    logLevel: 'info',
   }
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<AppConfig>
@@ -72,6 +75,7 @@ export function readConfig(): AppConfig {
         ? raw.notificationMode
         : defaults.notificationMode,
       theme: isTheme(raw?.theme) ? raw.theme : defaults.theme,
+      logLevel: isLogLevel(raw?.logLevel) ? raw.logLevel : defaults.logLevel,
     }
   } catch {
     /* 首次运行或文件损坏，走默认值 */

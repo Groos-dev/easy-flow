@@ -1,10 +1,12 @@
 import { startBoardServer, DEFAULT_PORT } from './index.ts'
-import { createLogger } from './log.ts'
+import { createLogger, setLogLevel } from './log.ts'
+import { readConfig } from './config.ts'
 
 // 仅用于浏览器开发：`pnpm dev:server`，配合 `pnpm dev:web` 的 Vite proxy。
 // Electron 场景下由 src/main/index.ts 直接调 startBoardServer，不走这里。
 const port = Number(process.env.PORT ?? DEFAULT_PORT)
 const log = createLogger('easy-flow')
+setLogLevel(readConfig().logLevel)
 
 startBoardServer({ port }).catch((err: Error) => {
   log.error(`start failed: ${err.message}`)

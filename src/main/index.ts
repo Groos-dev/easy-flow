@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RunningBoardServer } from '../../server/index.ts'
-import { createLogger } from '../../server/log.ts'
+import { createLogger, setLogLevel, startFileLogging } from '../../server/log.ts'
 import { appIconPng, scanOpenTargets } from '../../server/open-with.ts'
 import { externalOpenArgs } from './open-links.ts'
 import { placePanel, readPanelPosition, writePanelPosition } from './panel-position.ts'
@@ -34,7 +34,9 @@ let boardServer: RunningBoardServer | null = null
  */
 let attention: AttentionService | null = null
 let stopAttention: (() => void) | null = null
+let stopFileLogging: (() => void) | null = null
 const log = createLogger('open')
+const rendererLog = createLogger('renderer')
 
 // 开发时开远程调试端口，便于用 CDP 检查渲染进程（黑屏/白屏排查）。
 // 必须在 app ready 之前设置。端口避开 Chrome 惯用的 9222。
@@ -460,6 +462,9 @@ async function boot(): Promise<void> {
   //   ESM 的 import 是静态提升的，所以这里用动态 import。
   process.env.EASY_FLOW_USER_DATA = app.getPath('userData')
   process.env.EASY_FLOW_CONFIG = join(app.getPath('userData'), 'config.json')
+  const { readConfig } = await import('../../server/config.ts')
+  setLogLevel(readConfig().logLevel)
+  stopFileLogging = startFileLogging(join(app.getPath('userData'), 'logs', 'app.log'))
   // server 侧读不到 package.json（被单独打包成 chunk），版本号由这里注入
   process.env.EASY_FLOW_VERSION = app.getVersion()
   if (app.isPackaged) process.env.EASY_FLOW_RESOURCES = process.resourcesPath
@@ -473,7 +478,6 @@ async function boot(): Promise<void> {
     // pull / hook / 点 pet 之后立刻刷通知层，不再靠主进程定时轮询
     onAttention: () => attention?.refresh(),
   })
-  const { readConfig } = await import('../../server/config.ts')
   const config = readConfig()
   // 原生外观（菜单、表单控件）在建窗之前定下来
   // 否则首帧会先按系统色闪一下
@@ -499,7 +503,7 @@ async function boot(): Promise<void> {
   if (!globalShortcut.register(panelShortcut, togglePanel)) {
     // 被别的应用占用时 register 返回 false。回落到默认，至少还能呼出——
     // 否则用户改的那个键失效后，面板就再没有入口了
-    console.warn(`[easy-flow] 快捷键 ${panelShortcut} 注册失败：可能被其它应用占用`)
+    log.warn(`shortcut registration failed: ${panelShortcut}`)
     if (panelShortcut !== DEFAULT_SHORTCUT && globalShortcut.register(DEFAULT_SHORTCUT, togglePanel)) {
       panelShortcut = DEFAULT_SHORTCUT
     }
@@ -538,7 +542,10 @@ async function createWindow(): Promise<void> {
   })
 
   win.webContents.on('console-message', (_event, level, message) => {
-    log.debug(`renderer[${level}] ${message}`)
+    if (level >= 3) rendererLog.error(message)
+    else if (level === 2) rendererLog.warn(message)
+    else if (level === 1) rendererLog.info(message)
+    else rendererLog.debug(message)
   })
 
   // 外链走系统浏览器，不在应用内打开
@@ -570,7 +577,7 @@ async function createWindow(): Promise<void> {
 void app.whenReady()
   .then(createWindow)
   .catch((err) => {
-    console.error('[easy-flow] 启动失败:', err)
+    log.error('startup failed: %s', err)
   })
 
 app.on('window-all-closed', () => {
@@ -580,7 +587,7 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     void createWindow().catch((err) => {
-      console.error('[easy-flow] 重建窗口失败:', err)
+      log.error('window creation failed: %s', err)
     })
   }
 })
@@ -592,4 +599,5 @@ app.on('before-quit', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  stopFileLogging?.()
 })

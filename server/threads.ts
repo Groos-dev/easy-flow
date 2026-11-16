@@ -36,6 +36,9 @@ import { codexTitles } from './codex-titles.ts'
 import { chengxiaobangObservations, chengxiaobangTitles } from './chengxiaobang.ts'
 import { cursorObservations, cursorTitles } from './cursor.ts'
 import { changed, type SourceTable } from './source-file.ts'
+import { createLogger } from './log.ts'
+
+const log = createLogger('claude-pull')
 
 // 停在「在干活」多久没新事件就当它没了：会话崩了不会有收尾事件
 const RUNNING_TTL_MS = 30 * 60_000
@@ -242,6 +245,7 @@ function pullClaude(
   const rec = path ? claudeRecords(roots, [session]).get(session) : undefined
   const stateKey = stateKeyOf('claude', session, rec)
   states.alias('claude', session, stateKey)
+  log.debug(`${session} stateKey=${stateKey} processStatus=${proc?.status ?? 'missing'} alive=${alive} summary=${rec?.postTurnSummary?.status_category ?? 'missing'} activityAt=${rec?.lastActivityAt ?? 0} focusedAt=${rec?.lastFocusedAt ?? 0}`)
 
   // 进程在跑是「此刻的事实」，不是一条带时刻的观察——所以时刻记现在，不是文件里的 statusUpdatedAt
   // （那个只在 busy/idle 切换时写，比记录里的 lastActivityAt 旧得多，拿它排序会被上一轮的结论顶掉）。

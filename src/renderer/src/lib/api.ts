@@ -20,6 +20,7 @@ import type {
   TodosPayload,
 } from './types'
 import type { Theme } from '../../../shared/theme'
+import type { LogLevel } from '../../../shared/log-level'
 
 // 渲染层走 HTTP 访问本地服务，开发与打包共用同一套代码：
 //   dev（浏览器）  → 相对路径，由 Vite proxy 转发到 127.0.0.1:29170
@@ -213,6 +214,9 @@ export const api = {
 
   setTheme: (theme: Theme): Promise<{ theme: Theme }> =>
     request('/api/settings/theme', { method: 'POST', body: JSON.stringify({ theme }) }),
+  logLevel: (): Promise<{ logLevel: LogLevel }> => request('/api/settings/log-level'),
+  setLogLevel: (logLevel: LogLevel): Promise<{ logLevel: LogLevel }> =>
+    request('/api/settings/log-level', { method: 'POST', body: JSON.stringify({ logLevel }) }),
 
   switchDataDir: (dataDir: string): Promise<SwitchResult> =>
     request('/api/settings', { method: 'POST', body: JSON.stringify({ dataDir }) }),

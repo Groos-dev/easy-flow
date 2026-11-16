@@ -5,6 +5,7 @@ import {
   type NotificationMode,
 } from '../../../shared/notification-mode'
 import { THEMES, THEME_LABELS, type Theme } from '../../../shared/theme'
+import { LOG_LEVELS, type LogLevel } from '../../../shared/log-level'
 import { api } from '../lib/api'
 import {
   CONTEXT_LABEL,
@@ -26,7 +27,7 @@ interface Props {
   onThemeChange: (theme: Theme) => void
 }
 
-type SectionId = 'appearance' | 'data' | 'open' | 'shortcut' | 'notify' | 'skill' | 'hook'
+type SectionId = 'appearance' | 'data' | 'open' | 'shortcut' | 'notify' | 'skill' | 'hook' | 'log'
 
 const SECTIONS: Array<{ id: SectionId; label: string }> = [
   { id: 'appearance', label: '外观' },
@@ -36,6 +37,7 @@ const SECTIONS: Array<{ id: SectionId; label: string }> = [
   { id: 'notify', label: '通知' },
   { id: 'skill', label: 'CLI 与 Skill' },
   { id: 'hook', label: '钩子' },
+  { id: 'log', label: '日志' },
 ]
 
 function describeSync(sync: SyncResult | null): string {
@@ -56,6 +58,8 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [themeError, setThemeError] = useState('')
+  const [logLevel, setLogLevel] = useState<LogLevel>('info')
+  const [logError, setLogError] = useState('')
 
   // CLI / skill install state: only read from the filesystem when that section is opened
   const [skill, setSkill] = useState<SkillPayload | null>(null)
@@ -132,6 +136,12 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
       .hooks()
       .then(setHook)
       .catch((e: Error) => setHookError(`读取安装状态失败：${e.message}`))
+  }, [section])
+
+  useEffect(() => {
+    if (section !== 'log') return
+    void api.logLevel().then((result) => setLogLevel(result.logLevel))
+      .catch((e: Error) => setLogError(`读取日志级别失败：${e.message}`))
   }, [section])
 
   useEffect(() => {
@@ -448,6 +458,16 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
     }
   }
 
+  async function changeLogLevel(next: LogLevel) {
+    setLogError('')
+    try {
+      await api.setLogLevel(next)
+      setLogLevel(next)
+    } catch (e) {
+      setLogError(`保存日志级别失败：${(e as Error).message}`)
+    }
+  }
+
   async function openNotificationSettings() {
     setNotifyError('')
     try {
@@ -481,6 +501,22 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
       </aside>
 
       <main className="settings-main">
+        {section === 'log' && (
+          <>
+            <h1>日志</h1>
+            {logError && <div className="notice">{logError}</div>}
+            <div className="settings-row">
+              <div className="settings-row-text">
+                <div className="settings-row-title">日志级别</div>
+                <div className="settings-row-desc">日志保留最近 24 小时</div>
+              </div>
+              <select className="settings-select" value={logLevel}
+                onChange={(e) => void changeLogLevel(e.target.value as LogLevel)}>
+                {LOG_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}
+              </select>
+            </div>
+          </>
+        )}
         {section === 'appearance' && (
           <>
             <h1>外观</h1>

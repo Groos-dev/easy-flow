@@ -18,6 +18,9 @@
 import { type SessionStateStore, type SessionStatus, type ThreadState } from './session-state.ts'
 import { actionOf, type SessionAction } from './action.ts'
 import { str } from './util.ts'
+import { createLogger } from './log.ts'
+
+const log = createLogger('hook')
 
 // hook 打过来的 JSON。字段随事件变，只挑我们认的；其余原样放着不关心
 export interface HookPayload {
@@ -138,14 +141,16 @@ export function recordHook(
   const session = str(payload.session_id) || str(payload.conversation_id)
   const event = str(payload.hook_event_name)
   if (!session || !event) return null
-  // 子 agent / 后台会话的事件不改主会话状态
-  if (
+  const subagent = Boolean(
     str(payload.agent_id) ||
     payload.subagent === true ||
     str(payload.subagent_id) ||
     str(payload.parent_conversation_id) ||
-    payload.is_background_agent === true
-  ) {
+    payload.is_background_agent === true,
+  )
+  log.debug(`${agent}/${session} event=${event} subagent=${subagent}`)
+  // 子 agent / 后台会话的事件不改主会话状态
+  if (subagent) {
     return null
   }
   // 下线：会话没了，抹掉这条，读的时候自然退回拉取那条路。
@@ -172,6 +177,7 @@ export function recordHook(
   }
   const status = normalizeHookEvent(payload, at)
   if (!status) return null
-  store.put(agent, session, status, hookActionOf(payload, at))
+  const accepted = store.put(agent, session, status, hookActionOf(payload, at))
+  log.debug(`${agent}/${session} event=${event} state=${status.state} accepted=${accepted}`)
   return status
 }

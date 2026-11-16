@@ -27,7 +27,8 @@ import { idleStatus, SessionStateStore, unknownStatus } from './session-state.ts
 import type { SourceTable } from './source-file.ts'
 import { rankNextUp } from './next-up.ts'
 import './launch-claude.ts'
-import { logLevel, createLogger } from './log.ts'
+import { logLevel, createLogger, setLogLevel } from './log.ts'
+import { isLogLevel } from '../src/shared/log-level.ts'
 import { readConfig, writeConfig, defaultDataDir } from './config.ts'
 import { isTheme } from '../src/shared/theme.ts'
 import { appIconDataUrl, findOpenTarget, scanOpenTargets } from './open-with.ts'
@@ -460,6 +461,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
         const agent = String(body.agent)
         const session = String(body.session)
         const key = hookKeyOf(agent, session)
+        log.debug(`session clicked agent=${agent} session=${session} stateKey=${key}`)
         stateStore.put(agent, key, idleStatus())
         // 点 pet 就是消账：badge 立刻减，不等下一次 pull
         notifyAttention()
@@ -654,6 +656,20 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
       }
 
       // ----------------------------------------------------------- 设置
+
+      if (url.pathname === '/api/settings/log-level' && req.method === 'GET') {
+        json(req, res, 200, { logLevel: readConfig().logLevel })
+        return
+      }
+
+      if (url.pathname === '/api/settings/log-level' && req.method === 'POST') {
+        const { logLevel } = await readBody(req)
+        if (!isLogLevel(logLevel)) throw new Error(`Unknown log level: ${String(logLevel)}`)
+        writeConfig({ logLevel })
+        setLogLevel(logLevel)
+        json(req, res, 200, { logLevel })
+        return
+      }
 
       if (url.pathname === '/api/settings/open-with' && req.method === 'GET') {
         json(req, res, 200, openWithPayload())
@@ -878,7 +894,7 @@ export function startBoardServer({
   return new Promise((resolve, reject) => {
     server.once('error', reject)
     server.listen(port, host, () => {
-      log.info(`listening on http://${host}:${port} (log level ${logLevel}, EASY_FLOW_LOG=debug for detail)`)
+      log.info(`listening on http://${host}:${port} (log level ${logLevel})`)
       log.info(`data dir   ${app.dataDir}`)
       log.info(`database   ${app.db.file}`)
       resolve({
