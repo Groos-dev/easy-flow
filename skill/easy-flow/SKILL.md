@@ -2,7 +2,7 @@
 name: easy-flow
 description: >-
   管理开发需求和待办。识别到是长期任务或需求、上下文还要留下来时使用：先确认归哪条需求，没有就新建。要改代码再开工作区。
-  也用于查看需求上下文、改状态和优先级、登记飞书任务 / 合并请求 / 文档链接、登记当前会话、记待办、看待办、把待办立项、收尾。
+  也用于查看需求上下文、改状态和优先级、登记飞书任务 / 合并请求 / 文档链接、登记当前会话、记待办、看待办、把待办立项、收尾与会话复盘。
 ---
 
 # easy-flow
@@ -43,7 +43,7 @@ description: >-
 | --- | --- | --- | --- | --- |
 | 澄清 | 澄清 | 讲清做什么、为什么、边界与验收，定下涉及仓库。**写得出验收清单就算过** | `easy-flow req new "<标题>" --project <项目> --slug <目录名> --summary "<一句话>"` | requirement.md、context.md、`docs/<短名>/` |
 | 实现 | 执行中 | 开工作区、登记会话、按方案实现，设计有变随手更新 | `easy-flow wt new <req-…> --repo <仓库> --branch <分支> --short <短名>`；`easy-flow req session add <req-…> --agent cursor --title "在做什么"`；`easy-flow req set <req-…> --status 执行中` | 代码在工作区；设计变更 → `docs/<短名>/` |
-| Review | Review | 改动提交或开出 MR，回写链接，按评审意见改 | `easy-flow req set <req-…> --status Review`；`easy-flow req link <req-…> "<标题>=https://…"` | 看板上登记链接 + requirement.md「链接」段 |
+| Review | Review | 改动提交或开出 MR，回写链接，按评审意见改 | `easy-flow req set <req-…> --status Review`；`easy-flow req link <req-…> "<标题>=https://…"` | 看板登记链接并回读核验 |
 | 合入 | 已完成 | 代码进了主分支后尝试收尾；CLI 检查会话分析状态，未分析则提醒用户另开 session 复盘。要不要合、要不要推送，仍按判据三问人 | `easy-flow req set <req-…> --status 已完成` | 分析结论留在需求文档 |
 
 父需求不跟着子需求自动收尾。最后一个子需求执行 `easy-flow req set <子需求 req-…> --status 已完成` 时，命令会提示父需求。要收父需求再执行 `easy-flow req set <父需求 req-…> --status 已完成`。父需求可能还有整体验收，收不收自己判。
@@ -55,6 +55,7 @@ description: >-
 - 分析 session 通过 `easy-flow req session ls <req-…>` 取得会话清单，完成分析后将结论保留在需求文档中，再执行 `easy-flow req set <req-…> --session-analysis completed` 登记。结论可以是「无值得沉淀内容」。
 - 已登记分析完成后，再执行 `easy-flow req set <req-…> --status 已完成`。
 - UI 直接完成需求，尚未分析时默认记为 `skipped`，已有分析结果保留。
+- 解析不同客户端、历史改绑或缺失源时，按需读 [会话复盘来源](references/session-retrospective.md)。
 
 ## 最重要的一条：一切挂需求
 
@@ -73,7 +74,7 @@ description: >-
 | 设计、调研、决策 | 需求目录 `docs/<短名>/`、context.md「决策」段 |
 
 - 为什么这么硬：看板与 `context` 是别人和下一个 agent 唯一的事实面；不挂上去，接手的人得从头问一遍
-- 链接「两边都落」：看板上登记一条，requirement.md 的「链接」段同步补一行
+- 链接以看板为事实来源：创建/更新MR或取得文档后，用 `req link ... --json` 幂等登记，确认 `links[].url` 包含目标URL；不再手工复制到requirement.md维护第二份。
 - 链接标题尽量短，同时还能看出这条链接是什么
 
 ## 待办
@@ -87,13 +88,13 @@ description: >-
 | 无归属 | 没有指针，会话也推不出需求 | 做：`easy-flow todo set <T-…> --status in_progress`。不做：`easy-flow todo set <T-…> --status cancelled`。立项：`easy-flow todo promote <T-…> --project <项目> --slug <目录名>` |
 
 - 候选是推出来的。`context` 和详情页标「未确认」。看到了就要回填指针，不能当成已经挂上
-- 指针指向的需求没了，或归属需求已经完成而待办还开着：`context` 会点名。重新挂到一条存在的需求上，或置 `cancelled` / `done`
+- `context`点名关联需求缺失/已完成的开放待办时，先读收尾决定和待办完成条件。一般失效关联重新归属或按实际结果置cancelled/done；用户明确要求暂挂并保留恢复入口时，保留原关联与开放状态，写清阻塞、恢复步骤和完成标准。
 - 无归属超过 7 天标超期。超期是该做决定，`cancelled` 是正常收法
 - 默认一条主任务。同一来源、同一件事里的多个诉求合成一条，关注点写进摘要。另建一条只在能独立关单、负责人或排期不同、或体量够单独排期时
 - 摘要按「下一个 agent 只有这一条、没有这段对话」来写：进度、下一步、完成标准、关键编号、证据入口。只有标题的空壳不要记
 - 来源是 `agent` 或 `chat` 时，会话标识必填，用来回到原会话
 - 立项用 `easy-flow todo promote <T-…> --project <项目> --slug <目录名>`，一次建需求并回填指针
-- 需求收到 Review 或已完成时，`easy-flow req set <req-…> --status 已完成` 会点出名下未完成的待办。收掉用 `easy-flow todo set <T-…> <T-…> --status done`
+- 需求进入Review或已完成时，CLI会提示名下开放待办；仅将已满足完成条件的条目用 `easy-flow todo set <T-…> <T-…> --status done` 收尾。用户结束跟踪/暂挂不等于功能交付或恢复待办完成，关闭原因留在context。
 - 状态只在看板上改。待办文件在数据目录 `_todos/<id>.md`：一级标题是标题，摘要段是交接，进度段往下续。改标题和摘要用 `easy-flow todo set <T-…> --title "<标题>" --summary "<交接>"`，不手改文件里的状态
 
 字段、入库步骤和不要这样做的清单见 [REFERENCE.md](REFERENCE.md)「待办」。
@@ -128,7 +129,8 @@ description: >-
 
 | 文件 / 目录 | 放什么 | 不放什么 |
 | --- | --- | --- |
-| requirement.md | 开头是需求编号。H1=看板标题、需求段=摘要、验收、涉及仓库、链接 | 进度、流水账 |
+| requirement.md | 开头是需求编号。H1=看板标题、需求段=摘要、验收、涉及仓库 | 进度、流水账 |
+| 链接 | 看板登记，使用req link回读核验 | 手工重复维护的链接列表 |
 | context.md | 背景（为什么做）、约束（边界）、决策 | 进度（会过期） |
 | docs/<短名>/ | 设计、调研、踩坑；工作区里用 `design/` 打开同一处 | — |
 | `_todos/<id>.md` | 一条待办：一级标题、摘要段是交接、进度段往下续 | 状态 |
