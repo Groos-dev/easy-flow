@@ -50,6 +50,7 @@ function fixture(t: TestContext) {
   mkdirSync(bin)
   symlinkSync(execFileSync('which', ['git'], { encoding: 'utf8' }).trim(), join(bin, 'git'))
   const capture = join(dir, 'capture.json')
+  const stateFile = join(dir, 'codex-state.json')
   const shell = join(bin, 'login-shell')
   writeFileSync(shell, '#!/bin/sh\nif [ "$2" = "command -v codex" ]; then command -v codex; else shift 2; exec "$@"; fi\n')
   chmodSync(shell, 0o755)
@@ -58,13 +59,25 @@ function fixture(t: TestContext) {
 const fs = require('node:fs')
 const args = process.argv.slice(2)
 const capture = { args }
+const stateFile = process.env.REVIEW_TEST_STATE
+const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : { created: 0, sessions: [] }
+let threadId = ''
 const send = message => process.stdout.write(JSON.stringify(message) + '\\n')
 require('node:readline').createInterface({ input: process.stdin }).on('line', line => {
   const { id, method, params } = JSON.parse(line)
   if (method === 'initialize') return send({ id, result: {} })
   if (method === 'thread/start') {
     capture.start = params
-    return send({ id, result: { thread: { id: 'review-session', source: 'vscode', cwd: params.cwd } } })
+    threadId = 'review-session-' + ++state.created
+    state.sessions.push(threadId)
+    fs.writeFileSync(stateFile, JSON.stringify(state))
+    return send({ id, result: { thread: { id: threadId, source: 'vscode', cwd: params.cwd } } })
+  }
+  if (method === 'thread/resume') {
+    capture.resume = params
+    threadId = params.threadId
+    if (process.env.REVIEW_TEST_MODE === 'resume-fail' || !state.sessions.includes(threadId)) return send({ id, error: { message: 'session unavailable' } })
+    return send({ id, result: { thread: { id: threadId, source: 'vscode', cwd: params.cwd } } })
   }
   if (method === 'thread/name/set') {
     capture.name = params.name
@@ -79,9 +92,9 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
       process.stderr.write('provider unavailable')
       process.exit(7)
     }
-    send({ method: 'item/completed', params: { threadId: 'review-session', item: { type: 'agentMessage', phase: 'commentary', text: '评审中' } } })
-    if (process.env.REVIEW_TEST_MODE !== 'empty') send({ method: 'item/completed', params: { threadId: 'review-session', item: { type: 'agentMessage', phase: 'final_answer', text: '## 评审结论\\n\\n### F-1 [high] 契约遗漏\\n- 位置：app.ts:1\\n- 证据：实现与验收不符。\\n- 影响：调用方行为变化。\\n- 改法：补齐契约。\\n' } } })
-    send({ method: 'turn/completed', params: { threadId: 'review-session', turn: { status: process.env.REVIEW_TEST_MODE === 'failed-turn' ? 'failed' : 'completed', error: { message: 'provider unavailable' } } } })
+    send({ method: 'item/completed', params: { threadId, item: { type: 'agentMessage', phase: 'commentary', text: '评审中' } } })
+    if (process.env.REVIEW_TEST_MODE !== 'empty') send({ method: 'item/completed', params: { threadId, item: { type: 'agentMessage', phase: 'final_answer', text: '## 评审结论\\n\\n### F-1 [high] 契约遗漏\\n- 位置：app.ts:1\\n- 证据：实现与验收不符。\\n- 影响：调用方行为变化。\\n- 改法：补齐契约。\\n' } } })
+    send({ method: 'turn/completed', params: { threadId, turn: { status: process.env.REVIEW_TEST_MODE === 'failed-turn' ? 'failed' : 'completed', error: { message: 'provider unavailable' } } } })
   }, 5)
 })
 `)
@@ -90,12 +103,12 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
     process.execPath, ['--import', import.meta.resolve('tsx'), join(process.cwd(), 'server/cli.ts'), ...args],
     {
       cwd: worktree,
-      env: { ...gitEnv, PATH: bin, SHELL: shell, TSX_TSCONFIG_PATH: join(process.cwd(), 'tsconfig.test.json'), EASY_FLOW_CONFIG: config, REVIEW_TEST_CAPTURE: capture, REVIEW_TEST_MODE: mode },
+      env: { ...gitEnv, PATH: bin, SHELL: shell, TSX_TSCONFIG_PATH: join(process.cwd(), 'tsconfig.test.json'), EASY_FLOW_CONFIG: config, REVIEW_TEST_CAPTURE: capture, REVIEW_TEST_STATE: stateFile, REVIEW_TEST_MODE: mode },
       encoding: 'utf8',
       timeout: 20_000,
     },
   )
-  return { dir, data, req, base, main, worktree, git, commit, cli, capture, codex }
+  return { dir, data, req, base, main, worktree, git, commit, cli, capture, codex, stateFile }
 }
 
 test('评审通过真实 CLI 带入需求、文档和完整改动范围，报告与会话挂回需求', (t) => {
@@ -104,7 +117,7 @@ test('评审通过真实 CLI 带入需求、文档和完整改动范围，报告
   assert.equal(result.status, 0, result.stderr || result.stdout)
   const output = JSON.parse(result.stdout)
   assert.equal(output.ok, true)
-  assert.equal(output.sessionId, 'review-session')
+  assert.equal(output.sessionId, 'review-session-1')
   assert.equal(output.reportPath, join(f.req.dir, 'docs/review/01-review.md'))
   const report = readFileSync(output.reportPath, 'utf8')
   assert.equal(parseFrontmatter(report).data.status, 'completed')
@@ -126,14 +139,14 @@ test('评审通过真实 CLI 带入需求、文档和完整改动范围，报告
   }
   assert.match(prompt, /self-codereview/)
   const db = new BoardDatabase(f.data)
-  assert.equal(db.listSessions(f.req.id)[0].session, 'review-session')
+  assert.equal(db.listSessions(f.req.id)[0].session, 'review-session-1')
   assert.equal(db.byId(f.req.id)?.status, '澄清')
   db.syncProjects()
   assert.ok(db.byId(f.req.id)?.docs.some((doc) => doc.name === 'docs/review/01-review.md'))
   db.close()
 })
 
-test('复查保留原始报告和基线，带入逐条处理记录', (t) => {
+test('连续复查复用首次评审会话，保留报告、基线与处理记录', (t) => {
   const f = fixture(t)
   const first = f.cli(['review', 'wt-test', '--json'])
   assert.equal(first.status, 0, first.stderr || first.stdout)
@@ -145,10 +158,40 @@ test('复查保留原始报告和基线，带入逐条处理记录', (t) => {
   const second = f.cli(['review', 'wt-test', '--recheck', original, '--json'])
   assert.equal(second.status, 0, second.stderr || second.stdout)
   const output = JSON.parse(second.stdout)
+  assert.equal(output.sessionId, JSON.parse(first.stdout).sessionId)
   assert.equal(output.reportPath, join(f.req.dir, 'docs/review/02-recheck.md'))
   assert.equal(parseFrontmatter(readFileSync(output.reportPath, 'utf8')).data.base, f.base)
   assert.equal(readFileSync(original, 'utf8'), handled)
   assert.match(JSON.parse(readFileSync(f.capture, 'utf8')).prompt, /F-1：已修复/)
+  const third = f.cli(['review', 'wt-test', '--recheck', output.reportPath, '--json'])
+  assert.equal(third.status, 0, third.stderr || third.stdout)
+  assert.equal(JSON.parse(third.stdout).sessionId, output.sessionId)
+  const capture = JSON.parse(readFileSync(f.capture, 'utf8'))
+  assert.equal(capture.start, undefined)
+  assert.equal(capture.resume.threadId, output.sessionId)
+  assert.equal(capture.resume.cwd, f.worktree)
+  assert.deepEqual(capture.resume.runtimeWorkspaceRoots, [f.worktree])
+  assert.equal(JSON.parse(readFileSync(f.stateFile, 'utf8')).created, 1)
+  const db = new BoardDatabase(f.data)
+  assert.equal(db.listSessions(f.req.id).length, 1)
+  db.close()
+})
+
+test('缺少会话或恢复失败时终止复查并保留原会话标识', (t) => {
+  const f = fixture(t)
+  const first = f.cli(['review', 'wt-test', '--json'])
+  assert.equal(first.status, 0, first.stderr || first.stdout)
+  const { reportPath, sessionId } = JSON.parse(first.stdout)
+  const failed = f.cli(['review', 'wt-test', '--recheck', reportPath, '--json'], 'resume-fail')
+  assert.equal(failed.status, 1)
+  const result = JSON.parse(failed.stdout)
+  assert.match(result.error, /session unavailable/)
+  assert.equal(result.sessionId, sessionId)
+  assert.equal(parseFrontmatter(readFileSync(result.reportPath, 'utf8')).data.status, 'failed')
+  assert.equal(JSON.parse(readFileSync(f.stateFile, 'utf8')).created, 1)
+  writeFileSync(reportPath, readFileSync(reportPath, 'utf8').replace(`session: ${sessionId}`, 'session: '))
+  assert.equal(f.cli(['review', 'wt-test', '--recheck', reportPath, '--json']).status, 1)
+  assert.equal(JSON.parse(readFileSync(f.stateFile, 'utf8')).created, 1)
 })
 
 test('显式基线和复查基线即使不是 HEAD 的祖先也保持原值', (t) => {
