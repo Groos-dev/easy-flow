@@ -4112,6 +4112,38 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
     assert.equal(statusOf('claude', 'local_stale_blocked', store).state, 'done')
   })
 
+  for (const category of ['review_ready', 'completed']) {
+    test(`已点击的 Claude pet 在 SessionEnd 后保持静止：${category}`, () => {
+      const { store } = newState()
+      const session = `local_session_end_${category}`
+      const cli = `cli_session_end_${category}`
+      const clickedAt = Date.now() - 1_000
+      const rec = {
+        cliSessionId: cli,
+        lastActivityAt: clickedAt - 1_000,
+        lastFocusedAt: clickedAt - 2_000,
+        postTurnSummary: { status_category: category },
+      }
+      claudeRecord(session, rec)
+      assert.equal(statusOf('claude', session, store).state, 'done')
+      store.put('claude', hookKeyOf('claude', session, roots), idleStatus(clickedAt))
+
+      recordHook({ hook_event_name: 'SessionEnd', session_id: cli }, {}, store)
+      assert.deepEqual(readObservations([{ agent: 'claude', session }], store)[0].status, idleStatus(clickedAt))
+
+      claudeRecord(session, rec)
+      const file = join(roots.appSupport, 'Claude-3p', 'claude-code-sessions', 'acct', 'org', `${session}.json`)
+      const changedAt = new Date(Date.now() + 1_000)
+      utimesSync(file, changedAt, changedAt)
+      assert.deepEqual(statusOf('claude', session, store), idleStatus(clickedAt))
+
+      recordHook({ hook_event_name: 'UserPromptSubmit', session_id: cli }, { at: clickedAt + 1 }, store)
+      assert.equal(statusOf('claude', session, store).state, 'thinking')
+      recordHook({ hook_event_name: 'Stop', session_id: cli }, { at: clickedAt + 2 }, store)
+      assert.equal(statusOf('claude', session, store).state, 'done')
+    })
+  }
+
   test('没有 hook 时走原路：落盘结论 + activity 空串', () => {
     claudeRecord('local_disk', {
       lastActivityAt: Date.now(),
