@@ -28,6 +28,19 @@ SKILL.md 只放主流程，每个命令的参数、场景与坑在这里。本�
   - 待办段里标「未确认」的，是由来源会话推出来的归属；确认后用 `todo set <id> --req <req-…>` 补上
   - 状态到 Review / 已完成时，末尾会点名名下未完成的待办
 
+## review
+
+`easy-flow review <wt-id> [--base <ref>] [--recheck <报告路径>] [--model <模型>] [--json]`
+
+- 只接受显式工作区 ID，所属需求和文档目录从看板解析。
+- 默认比较主 checkout HEAD 与工作区 HEAD 的共同祖先到当前工作区，含已提交、暂存、未暂存和未跟踪文件。
+- `--recheck` 只接受同一工作区的已完成报告，读取处理记录并继承原基线，与 `--base` 互斥。
+- 独立 Codex 以只读模式执行，调用方等待结果；命令返回 `ok`、`reportPath`、`logPath`、`sessionId`。
+- `ok=true` 表示评审执行完成，缺陷与验收结论见报告正文。失败返回 `error` 和非零退出码，失败报告仍保存在需求目录。
+- 每轮文档及运行日志保存在 `docs/review/`，报告按轮次递增。原会话追加处理结果，修复后复查一次再交给用户。
+
+完整流程见 [Coding 评审闭环](references/coding-review.md)。
+
 ## project new
 
 - 干什么：建项目（需求的容器），同时建目录与项目 AGENTS.md

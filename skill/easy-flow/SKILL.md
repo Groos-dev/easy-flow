@@ -3,6 +3,7 @@ name: easy-flow
 description: >-
   管理开发需求和待办。识别到是长期任务或需求、上下文还要留下来时使用：先确认归哪条需求，没有就新建。要改代码再开工作区。
   也用于查看需求上下文、改状态和优先级、登记飞书任务 / 合并请求 / 文档链接、登记当前会话、记待办、看待办、把待办立项、收尾与会话复盘。
+  代码实现完成后，用独立 Codex 评审并将报告交回原会话修复与复查。
 ---
 
 # easy-flow
@@ -43,10 +44,18 @@ description: >-
 | --- | --- | --- | --- | --- |
 | 澄清 | 澄清 | 讲清做什么、为什么、边界与验收，定下涉及仓库。**写得出验收清单就算过** | `easy-flow req new "<标题>" --project <项目> --slug <目录名> --summary "<一句话>"` | requirement.md、context.md、`docs/<短名>/` |
 | 实现 | 执行中 | 开工作区、登记会话、按方案实现，设计有变随手更新 | `easy-flow wt new <req-…> --repo <仓库> --branch <分支> --short <短名>`；`easy-flow req session add <req-…> --agent cursor --title "在做什么"`；`easy-flow req set <req-…> --status 执行中` | 代码在工作区；设计变更 → `docs/<短名>/` |
-| Review | Review | 改动提交或开出 MR，回写链接，按评审意见改 | `easy-flow req set <req-…> --status Review`；`easy-flow req link <req-…> "<标题>=https://…"` | 看板登记链接并回读核验 |
+| Review | Review | 自动评审、修复与复查后交给用户；后续登记提交或 MR 链接，按评审意见改 | `easy-flow req set <req-…> --status Review`；`easy-flow req link <req-…> "<标题>=https://…"` | 需求目录评审文档、看板链接 |
 | 合入 | 已完成 | 代码进了主分支后尝试收尾；CLI 检查会话分析状态，未分析则提醒用户另开 session 复盘。要不要合、要不要推送，仍按判据三问人 | `easy-flow req set <req-…> --status 已完成` | 分析结论留在需求文档 |
 
 父需求不跟着子需求自动收尾。最后一个子需求执行 `easy-flow req set <子需求 req-…> --status 已完成` 时，命令会提示父需求。要收父需求再执行 `easy-flow req set <父需求 req-…> --status 已完成`。父需求可能还有整体验收，收不收自己判。
+
+## Coding 评审闭环
+
+代码实现与验证完成后，原 coding 会话自动运行 `easy-flow review <wt-id> --json`，等待结果、读取报告，核实并修复已确认需求内的问题，再用 `--recheck <首轮报告路径>` 复查一次，最后交给用户 review。全部评审结论保存在需求目录 `docs/review/`，逐条处理结果追加到对应报告。
+
+实现、修复和自动评审期间保持「执行中」，交给用户时置「Review」。遇到需求或契约取舍，按「什么时候才找人」处理。Claude Desktop 与程小帮都由原会话调用并等待 CLI；长任务继续使用该客户端工具的等待或结果取回能力。
+
+执行前读取 [Coding 评审闭环](references/coding-review.md)。独立 reviewer 本轮只产出评审结论，流程由原 coding 会话推进。
 
 ## 收尾会话分析
 
@@ -133,6 +142,7 @@ description: >-
 | 链接 | 看板登记，使用req link回读核验 | 手工重复维护的链接列表 |
 | context.md | 背景（为什么做）、约束（边界）、决策 | 进度（会过期） |
 | docs/<短名>/ | 设计、调研、踩坑；工作区里用 `design/` 打开同一处 | — |
+| docs/review/ | 每轮评审、复查结论及逐条修复处理与验证证据 | — |
 | `_todos/<id>.md` | 一条待办：一级标题、摘要段是交接、进度段往下续 | 状态 |
 | 状态 / 优先级 | 只在看板上改 | 任何 md 文件 |
 
@@ -159,6 +169,8 @@ description: >-
 | 摘掉会话 | `easy-flow req session rm <req-…> --agent cursor --id <会话编号>` |
 | 开工作区 | `easy-flow wt new <req-…> --repo <仓库> --branch <分支> --short <短名>` |
 | 删工作区 | `easy-flow wt rm <wt-…>` |
+| 独立评审 | `easy-flow review <wt-…> --json` |
+| 修复后复查 | `easy-flow review <wt-…> --recheck <报告路径> --json` |
 | 记待办 | `easy-flow todo new "<标题>" --req <req-…> --source agent --summary "<交接>"` |
 | 改待办状态 | `easy-flow todo set <T-…> --status done` |
 | 看待办 | `easy-flow todo list --req <req-…>` |

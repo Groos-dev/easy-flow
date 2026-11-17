@@ -1,7 +1,7 @@
 /**
  * Codex 桌面应用的 app-server 客户端：起一个 codex 子进程，用 stdio 上的 JSON-RPC 说话。
  *
- * 只做一件事：按需求建/复用 project，好让 deeplink 起来的开发会话落在这个需求上。
+ * 承载需求 project 与独立评审会话的创建、调用和通知。
  * project id 不存库——键是 `easy-flow:<reqId>`，幂等由 app-server 保证。
  */
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
@@ -60,6 +60,13 @@ export class AppServer {
   private buffer = ''
   private nextId = 1
   private dead: Error | null = null
+  private turn: {
+    threadId: string
+    text: string
+    onEvent: (message: Params) => void
+    resolve: (text: string) => void
+    reject: (error: Error) => void
+  } | null = null
 
   private constructor(child: ChildProcess) {
     this.child = child
@@ -69,14 +76,18 @@ export class AppServer {
     child.on('error', (err) => this.die(err))
   }
 
-  static async start(): Promise<AppServer> {
+  static async start(onStderr?: (text: string) => void): Promise<AppServer> {
     // 光有绝对路径不够：codex 是 `#!/usr/bin/env node` 脚本，从启动台打开的进程 PATH 里没有 node。
     // 经登录 shell exec 出去，PATH 才和终端里一致；exec 不换 pid，退出就是 codex 退出。
     const child = spawn(
       loginShell(),
       ['-lc', 'exec "$0" "$@"', await codexBinary(), 'app-server', '--listen', 'stdio://'],
-      { stdio: ['pipe', 'pipe', 'ignore'] },
+      { stdio: ['pipe', 'pipe', onStderr ? 'pipe' : 'ignore'] },
     )
+    if (onStderr) {
+      child.stderr!.setEncoding('utf8')
+      child.stderr!.on('data', onStderr)
+    }
     const server = new AppServer(child)
     try {
       await new Promise<void>((resolve, reject) => {
@@ -112,6 +123,8 @@ export class AppServer {
       p.reject(err)
     }
     this.pending.clear()
+    this.turn?.reject(err)
+    this.turn = null
   }
 
   private feed(chunk: string): void {
@@ -132,6 +145,24 @@ export class AppServer {
   }
 
   private dispatch(msg: Params): void {
+    const waiting = this.turn
+    if (waiting && typeof msg.method === 'string') {
+      waiting.onEvent(msg)
+      const params = msg.params as Params
+      if (params?.threadId === waiting.threadId) {
+        const item = params.item as Params | undefined
+        if (msg.method === 'item/completed' && item?.type === 'agentMessage' &&
+          item.phase !== 'commentary' && typeof item.text === 'string') {
+          waiting.text = item.text
+        }
+        if (msg.method === 'turn/completed') {
+          this.turn = null
+          const turn = params.turn as Params
+          if (turn.status === 'completed') waiting.resolve(waiting.text)
+          else waiting.reject(new Error(`Codex turn ${turn.status}: ${JSON.stringify(turn.error)}`))
+        }
+      }
+    }
     const id = msg.id as number | undefined
     if (id == null || !this.pending.has(id)) return
     const p = this.pending.get(id)!
@@ -157,6 +188,20 @@ export class AppServer {
   notify(method: string, params: Params): void {
     if (this.dead) return
     this.child.stdin!.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`)
+  }
+
+  runTurn(threadId: string, prompt: string, onEvent: (message: Params) => void): Promise<string> {
+    if (this.dead) return Promise.reject(this.dead)
+    return new Promise((resolve, reject) => {
+      this.turn = { threadId, text: '', onEvent, resolve, reject }
+      void this.call('turn/start', {
+        threadId,
+        input: [{ type: 'text', text: prompt }],
+      }).catch((error: Error) => {
+        this.turn = null
+        reject(error)
+      })
+    })
   }
 
   close(): void {
