@@ -1,23 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { api } from '../lib/api'
 import { isComposing, shortcut } from '../lib/keys'
-import { AGENT_LABELS, THREAD_STATE_CLASS } from '../lib/labels'
-import { buildMiniBlocks, miniTime, type MiniAction } from '../lib/mini'
+import { AGENT_LABELS } from '../lib/labels'
+import {
+  buildMiniBlocks, miniSearchTokens, miniSessionOpenable, miniTime, type MiniAction,
+} from '../lib/mini'
 import { moveKey, resolveKey } from '../lib/selection'
-import { badgesOf, sessionActive } from '../lib/threads'
+import { isEventState } from '../lib/threads'
+import { PET_LABEL } from '../lib/pets'
 import { useTheme } from '../lib/theme'
 import type { Requirement, Session } from '../lib/types'
-import {
-  AgentIcon,
-  ChevronIcon,
-  DocIcon,
-  GoIcon,
-  LinkIcon,
-  MergeIcon,
-  SearchIcon,
-} from '../components/icons'
+import { AgentIcon, ChevronIcon, GoIcon, LinkIcon, MergeIcon, SearchIcon } from '../components/icons'
 
 type NavItem = { key: string; kind: 'req'; project: string; slug: string } | MiniAction
+
+const PRODUCT_ICONS: Record<string, string> = {
+  codex: 'agents/codex.png',
+  claude: 'agents/claude.png',
+  cursor: 'agents/cursor.png',
+  chengxiaobang: 'agents/chengxiaobang.png',
+}
 
 export default function MiniApp() {
   const [rows, setRows] = useState<Array<{ req: Requirement; projectName: string }>>([])
@@ -25,25 +28,22 @@ export default function MiniApp() {
   const [query, setQuery] = useState('')
   const [selectedKey, setSelectedKey] = useState('')
   const [expanded, setExpanded] = useState('')
+  const [expandedSessions, setExpandedSessions] = useState(false)
+  const [expandedLinks, setExpandedLinks] = useState(false)
   const [error, setError] = useState('')
-  // 首份数据到手前画骨架
   const [ready, setReady] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const pointer = useRef({ x: -1, y: -1 })
   const syncedAt = useRef(0)
-  // 卡片与动作行的节点：展开、键盘移动时滚进视野
   const rowRefs = useRef(new Map<string, HTMLElement>())
-  // 只有键盘挪的选中才跟着滚，鼠标划过不让列表跳
   const keyMoved = useRef(false)
 
   const load = useCallback(async () => {
     try {
       const [tree, sess] = await Promise.all([api.tree(), api.sessions()])
-      setRows(
-        tree.tree.flatMap((p) =>
-          p.requirements.map((req) => ({ req, projectName: p.name || p.slug })),
-        ),
-      )
+      setRows(tree.tree.flatMap((p) =>
+        p.requirements.map((req) => ({ req, projectName: p.name || p.slug })),
+      ))
       setSessions(sess.sessions)
       setError('')
     } catch (e) {
@@ -53,7 +53,7 @@ export default function MiniApp() {
     }
   }, [])
 
-  // 先读库画骨架，再让服务端扫目录；两秒内重复呼出不重扫
+  // 两秒内重复呼出不重扫目录。
   const refresh = useCallback(async () => {
     await load()
     if (Date.now() - syncedAt.current < 2000) return
@@ -69,11 +69,11 @@ export default function MiniApp() {
   const reset = useCallback(() => {
     setQuery('')
     setExpanded('')
+    setExpandedSessions(false)
+    setExpandedLinks(false)
     setSelectedKey('')
     inputRef.current?.focus()
   }, [])
-
-  // 主题可能在主窗口改过，面板每次呼出时重读
   const { reloadTheme } = useTheme()
 
   useEffect(() => {
@@ -88,34 +88,25 @@ export default function MiniApp() {
     return () => off?.()
   }, [reloadTheme, refresh, reset])
 
+  const words = useMemo(() => miniSearchTokens(query), [query])
   const blocks = useMemo(
-    () => buildMiniBlocks({ rows, sessions, query, expanded }),
-    [rows, sessions, query, expanded],
+    () => buildMiniBlocks({ rows, sessions, query, expanded, expandedSessions, expandedLinks }),
+    [rows, sessions, query, expanded, expandedSessions, expandedLinks],
   )
-
-  const items = useMemo<NavItem[]>(
-    () =>
-      blocks.flatMap((b) => [
-        { key: b.key, kind: 'req' as const, project: b.req.project, slug: b.req.slug },
-        ...b.children,
-      ]),
-    [blocks],
-  )
+  const items = useMemo<NavItem[]>(() => blocks.flatMap((b) => [
+    { key: b.key, kind: 'req' as const, project: b.req.project, slug: b.req.slug },
+    ...b.children.filter((c) => c.kind !== 'session' || miniSessionOpenable(c.session)),
+  ]), [blocks])
   const keys = useMemo(() => items.map((it) => it.key), [items])
   const selKey = resolveKey(keys, selectedKey)
-  const selIdx = keys.indexOf(selKey)
+  const selected = items.find((it) => it.key === selKey)
+
+  useEffect(() => { setSelectedKey('') }, [query])
 
   useEffect(() => {
-    setSelectedKey('')
-  }, [query])
-
-  // 展开的卡片长高了，只滚到刚好看全
-  useEffect(() => {
-    if (!expanded) return
-    rowRefs.current.get(expanded)?.scrollIntoView({ block: 'nearest' })
+    if (expanded) rowRefs.current.get(expanded)?.scrollIntoView({ block: 'nearest' })
   }, [expanded])
 
-  // 鼠标 hover 也写 selectedKey，所以得分清来源
   useEffect(() => {
     if (!selectedKey || !keyMoved.current) return
     keyMoved.current = false
@@ -124,42 +115,47 @@ export default function MiniApp() {
 
   function toggle(project: string, slug: string) {
     const key = `${project}:${slug}`
-    setExpanded((prev) => (prev === key ? '' : key))
+    setExpanded((prev) => prev === key ? '' : key)
+    setExpandedSessions(false)
+    setExpandedLinks(false)
   }
 
-  /**
-   * 只认指针真的动过的那种 hover：展开动作行会把下面的行顶到静止的指针底下，
-   * 浏览器会为此再发一次 mouseenter，不拦的话按 Enter 展开后选中会跳走。
-   */
+  // 展开把行推到静止的指针下方时，不覆盖键盘选中。
   function hover(e: React.MouseEvent, key: string) {
     const moved = e.clientX !== pointer.current.x || e.clientY !== pointer.current.y
     pointer.current = { x: e.clientX, y: e.clientY }
     if (moved) setSelectedKey(key)
   }
 
-  function openSession(s: Session) {
-    if (!s.link) return
-    window.open(s.link, '_blank')
-    window.easyFlow?.hidePanel?.()
+  async function openSession(session: Session) {
+    if (!miniSessionOpenable(session)) return
+    setError('')
+    try {
+      if (session.link) {
+        if (window.easyFlow?.openExternal) await window.easyFlow.openExternal(session.link)
+        else window.open(session.link, '_blank')
+      } else {
+        await api.openSessionWorkspace(session.agent, session.session)
+      }
+      // 已查看登记失败不阻断打开会话。
+      void api.markSessionClicked(session.agent, session.session).catch(() => {})
+      window.easyFlow?.hidePanel?.()
+    } catch (e) {
+      setError((e as Error).message)
+    }
   }
 
   function activate(item: NavItem | undefined) {
     if (!item) return
-    if (item.kind === 'req') {
-      toggle(item.project, item.slug)
-      return
-    }
-    if (item.kind === 'detail') {
-      void window.easyFlow?.openRequirement?.({ project: item.project, slug: item.slug })
+    if (item.kind === 'req') toggle(item.project, item.slug)
+    else if (item.kind === 'more') {
+      if (item.group === 'sessions') setExpandedSessions((prev) => !prev)
+      else setExpandedLinks((prev) => !prev)
+    } else if (item.kind === 'session') void openSession(item.session)
+    else {
+      window.open(item.url, '_blank')
       window.easyFlow?.hidePanel?.()
-      return
     }
-    if (item.kind === 'session') {
-      openSession(item.session)
-      return
-    }
-    window.open(item.url, '_blank')
-    window.easyFlow?.hidePanel?.()
   }
 
   function openDetail(project: string, slug: string) {
@@ -167,16 +163,18 @@ export default function MiniApp() {
     window.easyFlow?.hidePanel?.()
   }
 
+  function close() {
+    if (query) setQuery('')
+    else if (expanded) setExpanded('')
+    else window.easyFlow?.hidePanel?.()
+    inputRef.current?.focus()
+  }
+
   function onKeyDown(e: React.KeyboardEvent) {
-    // 输入法选词中的回车 / 方向键归输入法
     if (isComposing(e.nativeEvent)) return
-    // ⌘↵ 直接开选中卡片的需求详情；⌘1..9 开第 N 张卡。数字不带 ⌘ 时照常输入搜索词
     if (shortcut(e, 'mini.open-detail')) {
       e.preventDefault()
-      const cur = items[selIdx]
-      if (!cur) return
-      if (cur.kind === 'req') openDetail(cur.project, cur.slug)
-      else activate(cur)
+      if (selected) openDetail(selected.project, selected.slug)
       return
     }
     if (shortcut(e, 'mini.nth')) {
@@ -185,219 +183,200 @@ export default function MiniApp() {
       if (block) openDetail(block.req.project, block.req.slug)
       return
     }
-    if (shortcut(e, 'mini.next')) {
+    if (shortcut(e, 'mini.next') || shortcut(e, 'mini.prev')) {
       e.preventDefault()
       keyMoved.current = true
-      setSelectedKey(moveKey(keys, selectedKey, 1))
+      setSelectedKey(moveKey(keys, selectedKey, shortcut(e, 'mini.next') ? 1 : -1))
+      inputRef.current?.focus()
       return
     }
-    if (shortcut(e, 'mini.prev')) {
-      e.preventDefault()
-      keyMoved.current = true
-      setSelectedKey(moveKey(keys, selectedKey, -1))
-      return
-    }
+    // 搜索文字的左右键交给输入框移动光标。
+    if (e.target === inputRef.current && query && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return
     if (shortcut(e, 'mini.expand')) {
       e.preventDefault()
-      const cur = items[selIdx]
-      if (cur?.kind === 'req' && expanded !== `${cur.project}:${cur.slug}`) toggle(cur.project, cur.slug)
+      if (selected?.kind === 'req' && expanded !== selected.key) toggle(selected.project, selected.slug)
       return
     }
     if (shortcut(e, 'mini.collapse')) {
       e.preventDefault()
-      const cur = items[selIdx]
-      if (!cur) return
-      const key = `${cur.project}:${cur.slug}`
-      if (cur.kind !== 'req' && expanded === key) setSelectedKey(key)
-      else if (cur.kind === 'req' && expanded === key) setExpanded('')
+      if (!selected) return
+      const key = `${selected.project}:${selected.slug}`
+      if (selected.kind !== 'req') setSelectedKey(key)
+      else if (expanded === key) setExpanded('')
+      inputRef.current?.focus()
       return
     }
     if (shortcut(e, 'mini.activate')) {
       e.preventDefault()
-      activate(items[selIdx])
+      if (e.target === inputRef.current) activate(selected)
+      else if (e.target instanceof HTMLElement) e.target.closest('button')?.click()
       return
     }
     if (shortcut(e, 'mini.close')) {
-      if (query) setQuery('')
-      else if (expanded) setExpanded('')
-      else window.easyFlow?.hidePanel?.()
+      e.preventDefault()
+      close()
     }
   }
 
-  function actionRow(c: MiniAction, childOn: boolean, title: string, off = false) {
+  function highlight(text: string) {
+    if (!words.length) return text
+    const pattern = words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+    return text.split(new RegExp(`(${pattern})`, 'ig')).map((part, i) =>
+      words.includes(part.toLowerCase()) ? <mark key={i}>{part}</mark> : part,
+    )
+  }
+
+  function actionRow(action: MiniAction) {
+    const on = selKey === action.key
+    const off = action.kind === 'session' && !miniSessionOpenable(action.session)
+    let title: string | undefined
+    let content: ReactNode
+    if (action.kind === 'session') {
+      const session = action.session
+      const attention = isEventState(session.status.state)
+      const parts = [AGENT_LABELS[session.agent] ?? session.agent, session.title || session.session]
+      if (attention) parts.push(session.status.needsAction || PET_LABEL[session.status.state])
+      if (off) parts.push('没有可用的会话链接')
+      else if (session.agent === 'cursor' && !session.link) parts.push('打开工作区')
+      title = parts.join(' · ')
+      const image = PRODUCT_ICONS[session.agent]
+      content = <>
+        <span className={`mini-agent-icon${attention ? ' mini-needs-input' : ''}`}>
+          {image
+            ? <img src={image} alt="" aria-hidden="true" />
+            : <AgentIcon agent={session.agent} size={18} />}
+        </span>
+        <span className={`mini-val${session.title ? '' : ' mono'}`}>
+          {session.title || session.session}
+        </span>
+      </>
+    } else if (action.kind === 'link') {
+      title = action.url
+      content = <>
+        <span className="mini-ico">{action.type === 'MR' ? <MergeIcon /> : <LinkIcon />}</span>
+        <span className="mini-val">{action.value}</span>
+        <span className="mini-go"><GoIcon /></span>
+      </>
+    } else {
+      content = action.expanded ? '收起' : `更多 ${action.remaining} 条`
+    }
     return (
-      <div
-        key={c.key}
+      <button
+        type="button"
+        key={action.key}
         ref={(el) => {
-          if (el) rowRefs.current.set(c.key, el)
-          else rowRefs.current.delete(c.key)
+          if (el) rowRefs.current.set(action.key, el)
+          else rowRefs.current.delete(action.key)
         }}
-        className={`mini-act${childOn ? ' on' : ''}${off ? ' off' : ''}`}
+        className={`${action.kind === 'more' ? 'mini-more' : 'mini-act'}${on ? ' on' : ''}`}
         title={title}
-        onMouseEnter={(e) => hover(e, c.key)}
+        aria-label={action.kind === 'session' ? title : undefined}
+        aria-expanded={action.kind === 'more' ? action.expanded : undefined}
+        disabled={off}
+        onFocus={() => setSelectedKey(action.key)}
+        onMouseEnter={(e) => { if (!off) hover(e, action.key) }}
         onMouseDown={(e) => e.preventDefault()}
-        onClick={(e) => {
-          e.stopPropagation()
-          activate(c)
+        onClick={() => {
+          setSelectedKey(action.key)
+          activate(action)
         }}
       >
-        <span className="mini-ico">{iconOf(c)}</span>
-        {c.kind === 'session' ? (
-          <>
-            <span className={`mini-val${c.session.title ? '' : ' mono'}`}>
-              {c.session.title || c.session.session}
-            </span>
-            <span className="mini-when">{miniTime(sessionActive(c.session))}</span>
-          </>
-        ) : (
-          <span className={`mini-val${c.kind === 'link' && c.type === 'MR' ? ' mono' : ''}`}>
-            {c.kind === 'detail' ? '详情' : c.value}
-          </span>
-        )}
-        <span className="mini-go">
-          <GoIcon />
-        </span>
-      </div>
+        {content}
+      </button>
     )
   }
 
   return (
     <div className="mini" onKeyDown={onKeyDown}>
       <div className="mini-drag" />
-
       <div className="mini-head">
         <div className="mini-search">
           <SearchIcon />
           <input
             ref={inputRef}
-            placeholder="搜索需求"
+            aria-label="搜索需求或项目"
+            aria-controls="mini-results"
+            placeholder="搜索需求、项目…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
           />
-          <span className="mini-esc" title="Esc 收起面板">
-            esc
-          </span>
+          <button type="button" className="mini-esc" aria-label={query ? '清除搜索' : expanded ? '收起操作' : '收起面板'} onClick={close}>esc</button>
+        </div>
+        <div className="mini-scope">
+          <span>{words.length ? '搜索结果' : '最近任务'}</span>
+          {ready && <span aria-live="polite">{blocks.length} 项</span>}
         </div>
       </div>
-
-      <div className="mini-list">
-        {error && <div className="notice">{error}</div>}
+      <div className="mini-list" id="mini-results">
+        {error && <div className="notice" role="alert">{error}</div>}
         {!error && !ready && <MiniSkeleton />}
         {!error && ready && blocks.length === 0 && <div className="mini-empty">没有匹配的需求</div>}
-
-        {blocks.map((b) => {
-          const on = selKey === b.key
-          const attention = badgesOf(b.sessions)[0]
-          const last = attention ?? b.sessions[0]
-          const tint =
-            last &&
-            (last.status.state === 'done' ||
-              last.status.state === 'blocked' ||
-              last.status.state === 'failed')
-              ? ` ${last.status.state}`
-              : ''
+        {blocks.map((block) => {
+          const open = expanded === block.key
           return (
-            <div
-              key={b.key}
+            <section
+              key={block.key}
               ref={(el) => {
-                if (el) rowRefs.current.set(b.key, el)
-                else rowRefs.current.delete(b.key)
+                if (el) rowRefs.current.set(block.key, el)
+                else rowRefs.current.delete(block.key)
               }}
-              className={`mini-card${on ? ' on' : ''}`}
-              onMouseEnter={(e) => hover(e, b.key)}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => toggle(b.req.project, b.req.slug)}
+              className={`mini-card${selKey === block.key || selKey.startsWith(`${block.key}|`) ? ' on' : ''}${open ? ' expanded' : ''}`}
             >
-              <div className="mini-top">
-                <span className="mini-title">{b.req.title || b.req.slug}</span>
-                <span className="mini-caret">
-                  <ChevronIcon dir={expanded === b.key ? 'down' : 'right'} />
+              <button
+                type="button"
+                className="mini-top"
+                title={`${block.req.title}${!open && block.needsHuman ? ' · 有会话需要介入' : ''}`}
+                aria-expanded={open}
+                aria-controls={`mini-actions-${block.req.id}`}
+                onFocus={() => setSelectedKey(block.key)}
+                onMouseEnter={(e) => hover(e, block.key)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setSelectedKey(block.key)
+                  toggle(block.req.project, block.req.slug)
+                }}
+              >
+                <span className="mini-title">{highlight(block.req.title || block.req.slug)}</span>
+                <span className={`mini-caret${!open && block.needsHuman ? ' mini-needs-input' : ''}`}>
+                  <ChevronIcon dir={open ? 'down' : 'right'} />
                 </span>
-              </div>
-
-              {b.children.length > 0 && (
-                <div className="mini-acts">
-                  {b.children.map((c) => {
-                    const childOn = selKey === c.key
-                    if (c.kind === 'detail') return actionRow(c, childOn, '打开需求详情')
-                    if (c.kind === 'session') {
-                      const s = c.session
-                      const name = s.title || s.session
-                      return actionRow(
-                        c,
-                        childOn,
-                        s.link
-                          ? `${AGENT_LABELS[s.agent] ?? s.agent} · ${name}`
-                          : `没有会话级链接，会话 id：${s.session}`,
-                        !s.link,
-                      )
-                    }
-                    return actionRow(c, childOn, c.url)
-                  })}
-                </div>
-              )}
-
+              </button>
               <div className="mini-foot">
-                <span className="mini-proj">{b.projectName}</span>
-                <span className="mini-time">{miniTime(b.active)}</span>
-                {last && (
-                  <span
-                    className={`mini-agent${last.link ? '' : ' off'}${tint}`}
-                    title={
-                      last.link
-                        ? `${AGENT_LABELS[last.agent] ?? last.agent}：${last.title || last.session}（回到这个会话）`
-                        : `${AGENT_LABELS[last.agent] ?? last.agent} 没有会话级链接：${last.session}`
-                    }
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      openSession(last)
-                    }}
-                  >
-                    {attention && (
-                      <span className={`thread-dot ${THREAD_STATE_CLASS[attention.status.state] ?? ''}`} />
-                    )}
-                    <AgentIcon agent={last.agent} />
-                  </span>
-                )}
+                <span className="mini-proj">{highlight(block.projectName)}</span>
+                <span className="mini-time">{miniTime(block.active)}</span>
               </div>
-            </div>
+              <div id={`mini-actions-${block.req.id}`} hidden={!open}>
+                {open && (['sessions', 'links'] as const).map((group) => {
+                  const actions = block.children.filter((c) => c.kind === 'more' ? c.group === group : c.kind === (group === 'sessions' ? 'session' : 'link'))
+                  if (!actions.length) return null
+                  return (
+                    <div className="mini-acts" key={group}>
+                      <div className="mini-group">
+                        <span>{group === 'sessions' ? '会话' : '链接'}</span>
+                        {actions.filter((c) => c.kind === 'more').map(actionRow)}
+                      </div>
+                      {actions.filter((c) => c.kind !== 'more').map(actionRow)}
+                    </div>
+                  )
+                })}
+                {open && block.children.length === 0 && <div className="mini-empty">暂无会话或链接</div>}
+              </div>
+            </section>
           )
         })}
-      </div>
-
-      <div className="mini-hints">
-        <span>↑↓ 选择</span>
-        <span>→ 展开</span>
-        <span>↵ 打开</span>
-        <span>⌘↵ 详情</span>
-        <span>esc 收起</span>
       </div>
     </div>
   )
 }
 
 function MiniSkeleton() {
-  return (
-    <>
-      {[0, 1, 2].map((i) => (
-        <div className="mini-card mini-skel" key={i}>
-          <div className="mini-top">
-            <span className="mini-skel-bar" />
-          </div>
-          <div className="mini-foot">
-            <span className="mini-skel-bar short" />
-            <span className="mini-skel-bar tiny" />
-          </div>
-        </div>
-      ))}
-    </>
-  )
-}
-
-function iconOf(c: MiniAction) {
-  if (c.kind === 'detail') return <DocIcon />
-  if (c.kind === 'session') return <AgentIcon agent={c.session.agent} size={13} />
-  return c.type === 'MR' ? <MergeIcon /> : <LinkIcon />
+  return <>{[0, 1, 2].map((i) => (
+    <div className="mini-card mini-skel" key={i}>
+      <div className="mini-top"><span className="mini-skel-bar" /></div>
+      <div className="mini-foot">
+        <span className="mini-skel-bar short" /><span className="mini-skel-bar tiny" />
+      </div>
+    </div>
+  ))}</>
 }

@@ -24,13 +24,3 @@ export const NEXT_UP_LEVEL_LABEL: Record<string, string> = {
   now: '现在就得动',
   soon: '有空再看',
 }
-
-// 会话实时状态的配色：沿用看板那四个色，失败用 p0 的红。unknown 不给配色，它不该出现在角标上
-export const THREAD_STATE_CLASS: Record<string, string> = {
-  thinking: 't-thinking',
-  working: 't-working',
-  idle: 't-idle',
-  done: 't-done',
-  blocked: 't-blocked',
-  failed: 't-failed',
-}

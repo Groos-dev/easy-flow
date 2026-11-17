@@ -3,11 +3,17 @@ import { isCodeLink, linkLabel } from './links'
 import { isEventState, sessionActive } from './threads'
 import { relTime } from './time'
 
-const VISIBLE_STATUS = new Set(['执行中', 'Review'])
-
 export type MiniAction =
-  | { key: string; kind: 'detail'; project: string; slug: string }
   | { key: string; kind: 'session'; project: string; slug: string; session: Session }
+  | {
+      key: string
+      kind: 'more'
+      project: string
+      slug: string
+      group: 'sessions' | 'links'
+      remaining: number
+      expanded: boolean
+    }
   | {
       key: string
       kind: 'link'
@@ -38,6 +44,8 @@ export interface MiniInput {
   sessions: Session[]
   query: string
   expanded: string
+  expandedSessions?: boolean
+  expandedLinks?: boolean
 }
 
 export function miniTime(ms: number): string {
@@ -53,15 +61,16 @@ export function needsHuman(sessions: Session[]): boolean {
   return sessions.some((s) => isEventState(s.status.state))
 }
 
-function latestEvent(sessions: Session[]): number {
-  return sessions.reduce(
-    (t, s) => (isEventState(s.status.state) ? Math.max(t, s.status.observedAt) : t),
-    0,
-  )
+export function miniSessionOpenable(session: Session): boolean {
+  return !!session.link || (session.agent === 'cursor' && !!session.cwd)
 }
 
-export function buildMiniBlocks({ rows, sessions, query, expanded }: MiniInput): MiniBlock[] {
-  const q = query.trim().toLowerCase()
+export function miniSearchTokens(query: string): string[] {
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+}
+
+export function buildMiniBlocks({ rows, sessions, query, expanded, expandedSessions = false, expandedLinks = false }: MiniInput): MiniBlock[] {
+  const words = miniSearchTokens(query)
   const byReq = new Map<string, Session[]>()
   for (const s of sessions) {
     const list = byReq.get(s.requirementId)
@@ -73,7 +82,10 @@ export function buildMiniBlocks({ rows, sessions, query, expanded }: MiniInput):
     // TODO: 特殊逻辑 后面删除
     .filter(({ req }) => req.project !== 'self')
     .map(({ req, projectName }) => {
-      const ss = [...(byReq.get(req.id) ?? [])].sort((a, b) => sessionActive(b) - sessionActive(a))
+      const ss = [...(byReq.get(req.id) ?? [])].sort(
+        (a, b) => Number(isEventState(b.status.state)) - Number(isEventState(a.status.state))
+          || sessionActive(b) - sessionActive(a),
+      )
       return {
         key: `${req.project}:${req.slug}`,
         req,
@@ -81,37 +93,45 @@ export function buildMiniBlocks({ rows, sessions, query, expanded }: MiniInput):
         sessions: ss,
         active: ss.reduce((t, s) => Math.max(t, sessionActive(s)), req.mtime),
         needsHuman: needsHuman(ss),
-        eventAt: latestEvent(ss),
       }
     })
-    // 有过滤词就穿透状态过滤：刚合入的需求也该搜得到
     .filter(({ req, projectName }) =>
-      q
-        ? `${req.title} ${req.slug} ${req.summary} ${projectName}`.toLowerCase().includes(q)
-        : VISIBLE_STATUS.has(req.status),
+      words.every((word) =>
+        `${req.title} ${req.slug} ${req.summary} ${projectName}`.toLowerCase().includes(word),
+      ),
     )
     .sort((a, b) => {
       if (a.needsHuman !== b.needsHuman) return a.needsHuman ? -1 : 1
-      return a.needsHuman ? b.eventAt - a.eventAt : b.active - a.active
+      return b.active - a.active
     })
-    .map(({ eventAt: _eventAt, ...block }) => ({
+    .map((block) => ({
       ...block,
-      children: expanded === block.key ? actionsOf(block) : [],
+      children: expanded === block.key ? actionsOf(block, expandedSessions, expandedLinks) : [],
     }))
 }
 
-function actionsOf(block: Omit<MiniBlock, 'children'>): MiniAction[] {
+function actionsOf(block: Omit<MiniBlock, 'children'>, expandedSessions: boolean, expandedLinks: boolean): MiniAction[] {
   const { key, req, sessions } = block
+  const sessionLimit = Math.max(2, sessions.filter((s) => isEventState(s.status.state)).length)
+  const sessionMore: MiniAction[] = sessions.length > sessionLimit ? [{
+    key: `${key}|more|sessions`, kind: 'more', project: req.project, slug: req.slug,
+    group: 'sessions', remaining: sessions.length - sessionLimit, expanded: expandedSessions,
+  }] : []
+  const linkMore: MiniAction[] = req.linkItems.length > 2 ? [{
+    key: `${key}|more|links`, kind: 'more', project: req.project, slug: req.slug,
+    group: 'links', remaining: req.linkItems.length - 2, expanded: expandedLinks,
+  }] : []
   return [
-    { key: `${key}|detail`, kind: 'detail', project: req.project, slug: req.slug },
-    ...sessions.map((s) => ({
+    ...sessionMore,
+    ...(expandedSessions ? sessions : sessions.slice(0, sessionLimit)).map((s) => ({
       key: `${key}|s|${s.agent}|${s.session}`,
       kind: 'session' as const,
       project: req.project,
       slug: req.slug,
       session: s,
     })),
-    ...req.linkItems.map((l) => ({
+    ...linkMore,
+    ...(expandedLinks ? req.linkItems : req.linkItems.slice(0, 2)).map((l) => ({
       key: `${key}|link|${l.url}`,
       kind: 'link' as const,
       project: req.project,
