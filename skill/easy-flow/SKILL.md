@@ -51,7 +51,7 @@ description: >-
 
 ## Coding 评审闭环
 
-代码实现与验证完成后，原 coding 会话自动运行 `easy-flow review <wt-id> --json`，等待结果、读取报告，核实并修复已确认需求内的问题，再用 `--recheck <首轮报告路径>` 复查一次，最后交给用户 review。全部评审结论保存在需求目录 `docs/review/`，逐条处理结果追加到对应报告。
+代码实现与验证完成后，原 coding 会话自动运行 `easy-flow review <wt-id> --json`，等待结果、读取报告，核实并修复已确认需求内的问题，再用 `--recheck <首轮报告路径>` 在同一 Codex session 中复查一次，最后交给用户 review。全部评审结论保存在需求目录 `docs/review/`，逐条处理结果追加到对应报告。
 
 实现、修复和自动评审期间保持「执行中」，交给用户时置「Review」。遇到需求或契约取舍，按「什么时候才找人」处理。Claude Desktop 与程小帮都由原会话调用并等待 CLI；长任务继续使用该客户端工具的等待或结果取回能力。
 

@@ -39,6 +39,7 @@ export async function reviewWorktree(input: ReviewInput) {
   let previous = ''
   let previousPath = ''
   let baseRef = input.base
+  let sessionId = ''
   if (input.recheck) {
     previousPath = realpathSync(input.recheck)
     if (dirname(previousPath) !== realpathSync(reviewDir)) {
@@ -47,10 +48,11 @@ export async function reviewWorktree(input: ReviewInput) {
     previous = readFileSync(previousPath, 'utf8')
     const { data } = parseFrontmatter(previous)
     if (data.requirement !== worktree.requirementId || data.worktree !== worktree.id ||
-      data.status !== 'completed' || !data.base) {
-      throw new Error('Recheck requires a completed report for the same worktree')
+      data.status !== 'completed' || !data.base || !data.session) {
+      throw new Error('Recheck requires a completed report with a session for the same worktree')
     }
     baseRef = data.base
+    sessionId = data.session
   }
   if (baseRef === undefined) {
     const mainHead = await git(['rev-parse', 'HEAD'], worktree.main)
@@ -67,7 +69,6 @@ export async function reviewWorktree(input: ReviewInput) {
   const name = `${String(round).padStart(2, '0')}-${input.recheck ? 'recheck' : 'review'}`
   const reportPath = join(reviewDir, `${name}.md`)
   const logPath = join(reviewDir, `${name}.log`)
-  let sessionId = ''
   const save = (status: string, body: string) => {
     const report = [
       '---',
@@ -124,13 +125,15 @@ export async function reviewWorktree(input: ReviewInput) {
   let server: AppServer | undefined
   try {
     server = await AppServer.start((text) => appendFileSync(logPath, text))
-    const started = await server.call('thread/start', {
+    const started = await server.call(sessionId ? 'thread/resume' : 'thread/start', {
       cwd: worktree.path,
       runtimeWorkspaceRoots: [worktree.path],
       sandbox: 'read-only',
       approvalPolicy: 'never',
-      ephemeral: false,
-      threadSource: 'easy-flow-review',
+      ...(sessionId ? { threadId: sessionId } : {
+        ephemeral: false,
+        threadSource: 'easy-flow-review',
+      }),
       ...(input.model ? { model: input.model } : {}),
     }) as { thread: { id: string } }
     sessionId = started.thread.id
