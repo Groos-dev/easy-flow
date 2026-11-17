@@ -2,12 +2,13 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { buildMiniBlocks, miniTime, needsHuman } from '../src/renderer/src/lib/mini.ts'
+import * as mini from '../src/renderer/src/lib/mini.ts'
 import { sessionActive } from '../src/renderer/src/lib/threads.ts'
 import MiniApp from '../src/renderer/src/mini/MiniApp.tsx'
 import type { Requirement, Session, ThreadState } from '../src/renderer/src/lib/types.ts'
 
 const NOW = Date.parse('2026-10-20T12:00:00')
+const { buildMiniBlocks, miniTime, needsHuman } = mini
 
 function req(over: Partial<Requirement> & { slug: string }): Requirement {
   return {
@@ -56,11 +57,12 @@ describe('mini 面板的首屏', () => {
     const html = renderToStaticMarkup(createElement(MiniApp))
     assert.match(html, /mini-skel/)
     assert.ok(!html.includes('没有匹配的需求'))
+    assert.ok(!html.includes('mini-hints'))
   })
 })
 
 describe('mini 面板的过滤', () => {
-  test('默认只列执行中与 Review', () => {
+  test('全部需求阶段均按最近活跃出现', () => {
     const rows = rowsOf(
       req({ slug: 'doing', status: '执行中', mtime: NOW - 3000 }),
       req({ slug: 'review', status: 'Review', mtime: NOW - 2000 }),
@@ -68,9 +70,26 @@ describe('mini 面板的过滤', () => {
       req({ slug: 'done', status: '已完成', mtime: NOW - 500 }),
     )
     assert.deepEqual(slugs(buildMiniBlocks({ rows, sessions: [], query: '', expanded: '' })), [
+      'done',
+      'clarify',
       'review',
       'doing',
     ])
+  })
+
+  test('项目和标题分词搜索，忽略词序、大小写和多余空格', () => {
+    const rows = rowsOf(req({ slug: 'tf', title: 'TF 标准价接入' }), req({ slug: 'other' }))
+    for (const query of ['easy-flow TF 标准价', '标准价  EASY-FLOW   tf', '  TF   标准价  ']) {
+      assert.deepEqual(slugs(buildMiniBlocks({ rows, sessions: [], query, expanded: '' })), ['tf'])
+    }
+    assert.deepEqual(slugs(buildMiniBlocks({ rows, sessions: [], query: 'TF 无此关键词', expanded: '' })), [])
+  })
+
+  test('self 项目在默认与搜索列表中均隐藏', () => {
+    const rows = rowsOf(req({ slug: 'self', project: 'self', title: 'mini' }), req({ slug: 'mini', title: 'mini' }))
+    for (const query of ['', 'mini']) {
+      assert.deepEqual(slugs(buildMiniBlocks({ rows, sessions: [], query, expanded: '' })), ['mini'])
+    }
   })
 
   test('有过滤词时穿透状态：刚合入的需求也搜得到', () => {
@@ -108,6 +127,15 @@ describe('mini 面板的排序', () => {
       'failed',
       'blocked',
     ])
+  })
+
+  test('介入任务同组按最近活跃排序，包含最近文档活动', () => {
+    const rows = rowsOf(req({ slug: 'recent-doc', mtime: NOW }), req({ slug: 'recent-event' }))
+    const sessions = [
+      sess({ requirementId: 'req-recent-doc', session: 'a', state: 'blocked', observedAt: NOW - 10_000 }),
+      sess({ requirementId: 'req-recent-event', session: 'b', state: 'done', observedAt: NOW - 1_000 }),
+    ]
+    assert.deepEqual(slugs(buildMiniBlocks({ rows, sessions, query: '', expanded: '' })), ['recent-doc', 'recent-event'])
   })
 
   test('活跃取会话状态更新时刻，而不是登记时刻', () => {
@@ -171,7 +199,7 @@ describe('mini 面板的动作行', () => {
     sess({ requirementId: 'req-demo', session: 'new', title: '', observedAt: NOW - 60_000, link: 'codex://2' }),
   ]
 
-  test('只有展开的那条带动作，详情在第一条', () => {
+  test('展开后会话与链接依序排列，长链接列表带更多入口', () => {
     const blocks = buildMiniBlocks({
       rows: rowsOf(requirement),
       sessions,
@@ -179,8 +207,9 @@ describe('mini 面板的动作行', () => {
       expanded: 'easy-flow:demo',
     })
     const kinds = blocks[0].children.map((c) => c.kind)
-    assert.deepEqual(kinds, ['detail', 'session', 'session', 'link', 'link', 'link'])
-    assert.equal(blocks[0].children[0].kind === 'detail' && blocks[0].children[0].slug, 'demo')
+    assert.deepEqual(kinds, ['session', 'session', 'more', 'link', 'link'])
+    const more = blocks[0].children.find(c => c.kind === 'more')
+    assert.ok(more?.kind === 'more' && more.group === 'links' && more.remaining === 1 && !more.expanded)
   })
 
   test('没展开就没有动作行', () => {
@@ -199,12 +228,57 @@ describe('mini 面板的动作行', () => {
   })
 
   test('MR 与飞书链接用短标签，扩展链接用描述', () => {
-    const [block] = buildMiniBlocks({ rows: rowsOf(requirement), sessions: [], query: '', expanded: 'easy-flow:demo' })
+    const [block] = buildMiniBlocks({ rows: rowsOf(requirement), sessions: [], query: '', expanded: 'easy-flow:demo', expandedLinks: true })
     const links = block.children.filter((c) => c.kind === 'link')
     assert.deepEqual(
       links.map((c) => (c.kind === 'link' ? c.value : '')),
       ['easy-flow !128', 'onex/story/123', '设计稿'],
     )
+  })
+
+  test('较早的介入会话排在较新的普通会话之前', () => {
+    const ss = [
+      sess({ requirementId: 'req-demo', session: 'normal', observedAt: NOW }),
+      sess({ requirementId: 'req-demo', session: 'waiting', state: 'blocked', observedAt: NOW - 5_000 }),
+    ]
+    const [block] = buildMiniBlocks({ rows: rowsOf(requirement), sessions: ss, query: '', expanded: 'easy-flow:demo' })
+    assert.deepEqual(block.sessions.map(s => s.session), ['waiting', 'normal'])
+  })
+
+  test('默认展示两条会话，展开更多可访问全部，保持会话键稳定', () => {
+    const ss = Array.from({ length: 4 }, (_, i) => sess({ requirementId: 'req-demo', session: `s${i}`, observedAt: NOW - i * 1000 }))
+    const input = { rows: rowsOf(requirement), sessions: ss, query: '', expanded: 'easy-flow:demo' }
+    const compact = buildMiniBlocks(input)[0].children
+    const full = buildMiniBlocks({ ...input, expandedSessions: true })[0].children
+    const compactSessions = compact.filter(c => c.kind === 'session')
+    const fullSessions = full.filter(c => c.kind === 'session')
+    assert.equal(compactSessions.length, 2)
+    assert.equal(fullSessions.length, 4)
+    assert.deepEqual(compactSessions.map(c => c.key), fullSessions.slice(0, 2).map(c => c.key))
+    assert.ok(compact.some(c => c.kind === 'more' && c.group === 'sessions' && c.remaining === 2 && !c.expanded))
+    assert.ok(full.some(c => c.kind === 'more' && c.group === 'sessions' && c.expanded))
+  })
+
+  test('全部介入会话始终可见，普通会话可通过更多查看', () => {
+    const ss = ['blocked', 'failed', 'done', 'idle'].map((state, i) => sess({ requirementId: 'req-demo', session: `s${i}`, state: state as ThreadState, observedAt: NOW - i * 1000 }))
+    const [block] = buildMiniBlocks({ rows: rowsOf(requirement), sessions: ss, query: '', expanded: 'easy-flow:demo' })
+    assert.deepEqual(block.children.filter(c => c.kind === 'session').map(c => c.session.status.state), ['blocked', 'failed', 'done'])
+    assert.ok(block.children.some(c => c.kind === 'more' && c.group === 'sessions' && c.remaining === 1))
+  })
+
+  test('没有会话与链接时，展开列表为空', () => {
+    const [block] = buildMiniBlocks({ rows: rowsOf(req({ slug: 'empty' })), sessions: [], query: '', expanded: 'easy-flow:empty' })
+    assert.deepEqual(block.children, [])
+  })
+})
+
+describe('mini 会话可打开性', () => {
+  test('深链与 Cursor 工作区可打开，其余无链接会话不可打开', () => {
+    const base = { requirementId: 'r', session: 's' }
+    assert.equal(mini.miniSessionOpenable(sess({ ...base, link: 'codex://threads/s' })), true)
+    assert.equal(mini.miniSessionOpenable(sess({ ...base, agent: 'cursor', cwd: '/repo' })), true)
+    assert.equal(mini.miniSessionOpenable(sess({ ...base, agent: 'cursor' })), false)
+    assert.equal(mini.miniSessionOpenable(sess({ ...base, agent: 'claude', cwd: '/repo' })), false)
   })
 })
 

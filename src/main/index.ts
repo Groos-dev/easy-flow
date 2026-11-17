@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import type { RunningBoardServer } from '../../server/index.ts'
 import { createLogger, setLogLevel, startFileLogging } from '../../server/log.ts'
 import { appIconPng, scanOpenTargets } from '../../server/open-with.ts'
-import { externalOpenArgs } from './open-links.ts'
+import { openExternalLink } from './open-links.ts'
 import { placePanel, readPanelPosition, writePanelPosition } from './panel-position.ts'
 import { createAttentionService, type AttentionService } from './attention.ts'
 import { isNotificationMode } from '../shared/notification-mode.ts'
@@ -125,7 +125,7 @@ function createPanel(): void {
 
   // 外链走系统浏览器（会话 deeplink、MR 等链接），不在面板窗里开
   panel.webContents.setWindowOpenHandler(({ url }) => {
-    openExternal(url)
+    void openExternal(url).catch(() => {})
     return { action: 'deny' }
   })
 
@@ -211,24 +211,16 @@ function openInApp(appPath: string, dir: string): void {
   execFile('open', ['-a', appPath, dir], () => {})
 }
 
-/**
- * Codex 的会话深链要显式指定 bundle：裸 `open <url>` 在 Codex 已打开别的会话时
- * 只把应用拉到前台，不再投递 URL；`open -b com.openai.codex` 才会稳定切到目标会话。
- */
-function openExternal(url: string): void {
-  const args = externalOpenArgs(url)
-  log.debug(`openExternal url=${url} args=${JSON.stringify(args)}`)
-  if (args.length > 1) {
-    execFile('open', args, (error, stdout, stderr) => {
-      if (error) log.error(`open failed code=${(error as NodeJS.ErrnoException).code ?? ''} stderr=${stderr.trim()} error=${error.message}`)
-      else log.debug(`open ok stdout=${stdout.trim()} stderr=${stderr.trim()}`)
-    })
-    return
+// 系统打开的失败在这里统一记录。
+async function openExternal(url: string): Promise<void> {
+  log.debug(`openExternal url=${url}`)
+  try {
+    await openExternalLink(url, (target) => shell.openExternal(target))
+    log.debug('openExternal ok')
+  } catch (error) {
+    log.error(`openExternal failed: ${(error as Error).message}`)
+    throw error
   }
-  void shell.openExternal(url).then(
-    () => log.debug('shell.openExternal ok'),
-    (error) => log.error(`shell.openExternal failed: ${(error as Error).message}`),
-  )
 }
 
 // 主窗口前置并打开需求。窗口被关过就重建（macOS 常态）
@@ -387,7 +379,7 @@ function registerIpc(): void {
   // 渲染层的外链统一走这里：Codex 会话深链需要指定 bundle，其它仍交给系统
   ipcMain.handle('easy-flow:open-external', (event, url: string) => {
     log.debug(`ipc open-external url=${String(url)} sender=${event.sender.getURL()}`)
-    openExternal(String(url))
+    return openExternal(String(url))
   })
 
   // mini 面板 Esc 到顶（没展开、没过滤词）时藏起自己
@@ -489,7 +481,7 @@ async function boot(): Promise<void> {
     mode: config.notificationMode,
     icon: ICON,
     openRequirement: (target) => void openRequirement(target),
-    openExternal,
+    openExternal: (url) => { void openExternal(url).catch(() => {}) },
     onFailure: (message) => {
       if (win && !win.isDestroyed()) win.webContents.send('easy-flow:notification-failed', message)
     },
@@ -551,7 +543,7 @@ async function createWindow(): Promise<void> {
   // 外链走系统浏览器，不在应用内打开
   win.webContents.setWindowOpenHandler(({ url }) => {
     log.debug(`window.open url=${url}`)
-    openExternal(url)
+    void openExternal(url).catch(() => {})
     return { action: 'deny' }
   })
 

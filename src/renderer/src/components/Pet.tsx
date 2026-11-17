@@ -202,8 +202,10 @@ function PetSlot({ item, compact }: { item: PetItem; compact: boolean }) {
     setOpenError('')
     if (session.link) {
       api.markSessionClicked(session.agent, session.session).catch(() => {})
-      if (window.easyFlow?.openExternal) void window.easyFlow.openExternal(session.link)
-      else window.open(session.link, '_blank')
+      if (window.easyFlow?.openExternal) {
+        void window.easyFlow.openExternal(session.link)
+          .catch((error: Error) => setOpenError(error.message || '打开失败'))
+      } else window.open(session.link, '_blank')
       return
     }
     void api
