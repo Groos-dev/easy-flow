@@ -51,6 +51,7 @@ import {
   type Worktree,
 } from './db.ts'
 import { listProjectDirs, parseFrontmatter, readProjectConvention } from './markdown.ts'
+import { reviewWorktree } from './review.ts'
 import {
   deprovisionWorktree,
   provisionWorktree,
@@ -528,6 +529,7 @@ const ROOT_USAGE = `easy-flow：需求看板命令行——终端里认路、建
   easy-flow req tag add|rm|set|ls …  给需求打标签 / 摘标签 / 换标签 / 看标签
   easy-flow taglist              现有标签与引用次数（打标前先看）
   easy-flow wt new|rm …          开 / 删工作区（git worktree）
+  easy-flow review <wt-id>       独立 Codex 评审，报告保存到需求目录
   easy-flow todo new|set|list …  全局待办：记一条 / 改状态 / 看待办
 
 选项：
@@ -536,6 +538,13 @@ const ROOT_USAGE = `easy-flow：需求看板命令行——终端里认路、建
   --version   版本号`
 
 const USAGE = {
+  review: `用法：easy-flow review <wt-id> [--base <ref>] [--recheck <报告路径>] [--model <模型>] [--json]
+
+等待独立 Codex 完成只读评审，结论保存到需求目录 docs/review/，返回报告与日志路径。
+范围含基线之后的提交、暂存、未暂存和未跟踪文件；--base 默认取主 checkout HEAD 的共同祖先。
+--recheck 读取同一工作区的上一轮报告与处理记录，沿用原基线，不能同时指定 --base。
+执行成功表示已取得报告，是否需修复以报告正文为准；执行失败退出 1 并保留失败报告。
+原 coding 会话等待并读取报告后继续处理，评审期间暂停修改代码。`,
   context: `用法：easy-flow context <id> [--json]
 
 id 三种都收：req-…（需求）、wt-…（工作区）、项目标识（项目）。
@@ -694,6 +703,51 @@ async function cmdDir(argv: string[]): Promise<void> {
     { dataDir: config.dataDir, configPath: configPath(), activeProject: config.activeProject },
     `数据目录：${config.dataDir}\n配置文件：${configPath()}`,
   )
+}
+
+async function cmdReview(argv: string[]): Promise<void> {
+  const { values, positionals } = parse(argv, {
+    base: { type: 'string' },
+    recheck: { type: 'string' },
+    model: { type: 'string' },
+  })
+  if (bool(values.help)) return out(USAGE.review)
+  const id = required(positionals[0], 'Missing worktree id (wt-…)', USAGE.review)
+  if (positionals.length !== 1) throw new UsageError('Review accepts one worktree id', USAGE.review)
+  if (values.base !== undefined && values.recheck !== undefined) {
+    throw new UsageError('--base and --recheck cannot be combined', USAGE.review)
+  }
+  const board = db()
+  board.syncProjects()
+  const worktree = board.worktreeById(id)
+  if (!worktree) throw new Error(`Worktree not found: ${id}`)
+  const req = findById(worktree.requirementId)
+  const title = `${values.recheck ? '复查' : '评审'}：${req.title}`
+  const view = requirementView(req)
+  view.blocks.push(linkBlock(req, true))
+  view.blocks.push(`## 相关工作区\n${board.listWorktrees(req.id).map(worktreeLine).join('\n')}`)
+  const result = await reviewWorktree({
+    worktree,
+    requirementPath: req.path,
+    context: view.blocks.join('\n\n'),
+    title,
+    base: str(values.base),
+    recheck: str(values.recheck),
+    model: str(values.model),
+    onSessionStarted(session) {
+      board.addSession({
+        requirementId: req.id, agent: 'codex', session,
+        title,
+        cwd: worktree.path, link: sessionLink('codex', session),
+      })
+    },
+  })
+  emit(result, [
+    result.ok ? '评审执行完成，请读取报告结论并继续处理。' : result.error,
+    `报告：${result.reportPath}`,
+    `日志：${result.logPath}`,
+  ].join('\n'))
+  if (!result.ok) process.exitCode = 1
 }
 
 async function cmdContext(argv: string[]): Promise<void> {
@@ -1826,6 +1880,7 @@ async function run(argv: string[]): Promise<void> {
   if (group === '--version' || group === '-v') return out(VERSION)
   if (group === 'context') return cmdContext(argv.slice(1))
   if (group === 'dir') return cmdDir(argv.slice(1))
+  if (group === 'review') return cmdReview(argv.slice(1))
   if (group === 'taglist') return cmdTagList(argv.slice(1))
   if (group === 'project') return cmdProject(action, rest)
   if (group === 'req') return cmdReq(action, rest)
