@@ -153,9 +153,10 @@ export function recordHook(
   if (subagent) {
     return null
   }
-  // 下线：会话没了，抹掉这条，读的时候自然退回拉取那条路。
-  // Cursor 的 aborted / error 还要留下最终状态，不能一抹了之。
+  // 下线时保留 Claude 的静止状态，已读时间用于挡住旧的落盘结论。
+  // Cursor 的 aborted / error 保留最终状态。
   if (event === 'SessionEnd' || event === 'sessionEnd') {
+    if (agent === 'claude' && store.get(agent, session)?.status.state === 'idle') return null
     if (agent === 'cursor') {
       const reason = str(payload.reason)
       if (reason === 'aborted' || reason === 'error') {
