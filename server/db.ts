@@ -1272,6 +1272,20 @@ export class BoardDatabase {
     return this.db.prepare('DELETE FROM worktree WHERE id = ?').run(id).changes > 0
   }
 
+  reviewSession(requirementId: string, worktreeId: string): string | undefined {
+    const row = this.db.prepare('SELECT session FROM review_binding WHERE req_id = ? AND worktree_id = ?')
+      .get(requirementId, worktreeId) as { session: string } | undefined
+    return row?.session
+  }
+
+  bindReviewSession(requirementId: string, worktreeId: string, session: string): void {
+    this.db.prepare(`INSERT INTO review_binding (req_id, worktree_id, session) VALUES (?, ?, ?)
+      ON CONFLICT(req_id, worktree_id) DO NOTHING`).run(requirementId, worktreeId, session)
+    if (this.reviewSession(requirementId, worktreeId) !== session) {
+      throw new Error(`Reviewer is already bound for worktree ${worktreeId}`)
+    }
+  }
+
   // ------------------------------------------------------------- 会话
 
   /**

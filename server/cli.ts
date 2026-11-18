@@ -541,8 +541,9 @@ const USAGE = {
   review: `用法：easy-flow review <wt-id> [--base <ref>] [--recheck <报告路径>] [--model <模型>] [--json]
 
 等待独立 Codex 完成只读评审，结论保存到需求目录 docs/review/，返回报告与日志路径。
+同一需求和工作区固定一个 reviewer；普通 review、换基线、换模型、失败重试和复核均复用。
 范围含基线之后的提交、暂存、未暂存和未跟踪文件；--base 默认取主 checkout HEAD 的共同祖先。
---recheck 恢复上一轮报告记录的同一 Codex 会话，读取处理记录并沿用原基线，不能同时指定 --base。
+--recheck 读取同一工作区上一轮成功或失败报告的处理记录并沿用基线，不能同时指定 --base。
 执行成功表示已取得报告，是否需修复以报告正文为准；执行失败退出 1 并保留失败报告。
 原 coding 会话等待并读取报告后继续处理，评审期间暂停修改代码。`,
   context: `用法：easy-flow context <id> [--json]
@@ -734,7 +735,9 @@ async function cmdReview(argv: string[]): Promise<void> {
     base: str(values.base),
     recheck: str(values.recheck),
     model: str(values.model),
-    onSessionStarted(session) {
+    getSession: () => board.reviewSession(req.id, worktree.id),
+    onSessionResolved(session) {
+      board.bindReviewSession(req.id, worktree.id, session)
       board.addSession({
         requirementId: req.id, agent: 'codex', session,
         title,
