@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../lib/api'
+import { reuseRows } from '../lib/rows'
 import { isComposing, shortcut } from '../lib/keys'
 import { AGENT_LABELS } from '../lib/labels'
 import {
@@ -41,10 +42,9 @@ export default function MiniApp() {
   const load = useCallback(async () => {
     try {
       const [tree, sess] = await Promise.all([api.tree(), api.sessions()])
-      setRows(tree.tree.flatMap((p) =>
-        p.requirements.map((req) => ({ req, projectName: p.name || p.slug })),
-      ))
-      setSessions(sess.sessions)
+      const rows = tree.tree.flatMap(p => p.requirements.map(req => ({ req, projectName: p.name || p.slug })))
+      setRows(previous => reuseRows(previous, rows, r => `${r.req.project}:${r.req.slug}`))
+      setSessions(previous => reuseRows(previous, sess.sessions, s => `${s.agent}:${s.session}`))
       setError('')
     } catch (e) {
       setError((e as Error).message)
@@ -53,17 +53,16 @@ export default function MiniApp() {
     }
   }, [])
 
-  // 两秒内重复呼出不重扫目录。
   const refresh = useCallback(async () => {
     await load()
     if (Date.now() - syncedAt.current < 2000) return
     syncedAt.current = Date.now()
     try {
-      await api.resync()
+      const { sync } = await api.resync()
+      if (sync.projects?.length || sync.added.length || sync.updated.length || sync.missing.length || sync.restored.length) await load()
     } catch {
-      return
+      // 当前快照继续可用，后续巡检重试同步。
     }
-    await load()
   }, [load])
 
   const reset = useCallback(() => {

@@ -7,6 +7,11 @@ import { SessionStateStore, type SessionObservation } from '../server/session-st
 function newStore(): SessionStateStore {
   const table = new Map<string, SessionObservation>()
   return new SessionStateStore({
+    list: () => [...table].map(([key, observation]) => {
+      const [agent, session] = key.split(':')
+      return { agent, session, observation }
+    }),
+    keys: () => [],
     get: (agent, session) => table.get(`${agent}:${session}`),
     put: (agent, session, observation) => { table.set(`${agent}:${session}`, observation) },
     drop: (agent, session) => table.delete(`${agent}:${session}`),

@@ -11,7 +11,7 @@
  *   DB 有、目录没了 → 标记为失联，保留在列表中可见
  */
 import { DatabaseSync } from 'node:sqlite'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import {
   listProjectDirs,
@@ -504,10 +504,19 @@ function toTodo(row: TodoRow): Todo {
 }
 
 
+const SYNC_REQUIREMENT_SQL = `
+  UPDATE requirement SET id = $id, parent_id = $parentId, title = $title, path = $path,
+    summary = $summary, repos = $repos, links = $links, mtime = $mtime, missing = 0
+  WHERE slug = $slug AND project = $project
+    AND (id, parent_id, title, path, summary, repos, links, mtime, missing)
+      IS NOT ($id, $parentId, $title, $path, $summary, $repos, $links, $mtime, 0)`
+
 export class BoardDatabase {
   readonly dataDir: string
   readonly file: string
   private db: DatabaseSync
+  private parsed = new Map<string, ReturnType<typeof parseRequirement>>()
+  private todoFiles: ReturnType<typeof listTodoFiles> = []
   // 当前看板展示的项目
   private activeProject = DEFAULT_PROJECT_SLUG
 
@@ -522,6 +531,7 @@ export class BoardDatabase {
     this.db = new DatabaseSync(this.file)
     // 应用与每个 agent 会话各持一个连接，写撞车时先等一会儿，别直接抛 SQLITE_BUSY
     this.db.exec('PRAGMA busy_timeout = 5000')
+    this.db.exec('PRAGMA journal_mode = WAL')
     applySchema(this.db)
   }
 
@@ -546,7 +556,7 @@ export class BoardDatabase {
    *   - 当前项目已不存在（被删或被改名）
    * 用户显式切换过的项目不会被这里覆盖。
    */
-  private reconcileProject(): void {
+  reconcileProject(): void {
     if (this.activeProject && this.listProjects().some((p) => p.slug === this.activeProject)) return
     this.pickProject()
   }
@@ -610,7 +620,7 @@ export class BoardDatabase {
     const stmt = this.db.prepare('SELECT * FROM requirement WHERE project = ? ORDER BY mtime DESC')
     return projects.map((p) => {
       const rows = stmt.all(p.slug) as unknown as Row[]
-      return { ...p, requirements: rows.map((r) => this.toRequirement(r)) }
+      return { ...p, requirements: this.toRequirements(rows) }
     })
   }
 
@@ -662,13 +672,39 @@ export class BoardDatabase {
 
   // ------------------------------------------------------------- 同步
 
+  private syncDocs(slug: string, project: string, docs: DocFile[]): boolean {
+    const known = new Map((this.db.prepare('SELECT name, content FROM doc WHERE slug = ? AND project = ?')
+      .all(slug, project) as Array<{ name: string; content: string }>).map(d => [d.name, d.content]))
+    const names = new Set(docs.map(d => d.name))
+    const remove = this.db.prepare('DELETE FROM doc WHERE slug = ? AND project = ? AND name = ?')
+    let changed = false
+    for (const name of known.keys()) {
+      if (!names.has(name)) {
+        remove.run(slug, project, name)
+        changed = true
+      }
+    }
+    const upsert = this.db.prepare(
+      `INSERT INTO doc (slug, project, name, content) VALUES (?, ?, ?, ?)
+       ON CONFLICT(slug, project, name) DO UPDATE SET content = excluded.content`,
+    )
+    for (const doc of docs) {
+      if (doc.content !== known.get(doc.name)) {
+        upsert.run(slug, project, doc.name, doc.content)
+        changed = true
+      }
+    }
+    return changed
+  }
+
   // 只同步一个需求目录（路径取自库里），不扫整个数据目录。
   syncRequirement(slug: string, project = this.activeProject): boolean {
-    const existing = this.get(slug, project)
+    const existing = this.db.prepare('SELECT slug, path FROM requirement WHERE slug = ? AND project = ?')
+      .get(slug, project) as Pick<Row, 'slug' | 'path'> | undefined
     if (!existing) return false
     let parsed: ReturnType<typeof parseRequirement>
     try {
-      parsed = parseRequirement(existing.path, existing.slug)
+      parsed = parseRequirement(existing.path, existing.slug, this.parsed.get(existing.path))
     } catch {
       return false
     }
@@ -684,28 +720,20 @@ export class BoardDatabase {
     const parentId = cut === -1 ? '' : (this.get(existing.slug.slice(0, cut), project)?.id ?? '')
     const mtime = parsed.docs.reduce((latest, d) => Math.max(latest, d.mtime), 0)
 
-    this.db
-      .prepare(
-        `UPDATE requirement SET id = ?, parent_id = ?, title = ?, path = ?, summary = ?, repos = ?, links = ?, mtime = ?, missing = 0
-         WHERE slug = ? AND project = ?`,
-      )
-      .run(
-        id,
-        parentId,
-        parsed.title,
-        existing.path,
-        parsed.summary,
-        JSON.stringify(parsed.repos),
-        parsed.links,
-        mtime,
-        slug,
-        project,
-      )
-    this.db.prepare('DELETE FROM doc WHERE slug = ? AND project = ?').run(slug, project)
-    const insertDoc = this.db.prepare(
-      'INSERT INTO doc (slug, project, name, content) VALUES (?, ?, ?, ?)',
-    )
-    for (const d of parsed.docs) insertDoc.run(slug, project, d.name, d.content)
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db.prepare(SYNC_REQUIREMENT_SQL).run({
+        $id: id || null, $parentId: parentId, $title: parsed.title, $path: existing.path,
+        $summary: parsed.summary, $repos: JSON.stringify(parsed.repos), $links: parsed.links,
+        $mtime: mtime, $slug: slug, $project: project,
+      })
+      this.syncDocs(slug, project, parsed.docs)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    this.parsed.set(existing.path, parsed)
     return true
   }
 
@@ -720,6 +748,7 @@ export class BoardDatabase {
    * worktree 一并校对，但只 stat 路径：它的归属是库里的关系，文件系统证明不了。
    */
   syncProjects(): {
+    projects: string[]
     added: string[]
     updated: string[]
     missing: string[]
@@ -729,13 +758,15 @@ export class BoardDatabase {
     // 模板随扫描补齐。这里是唯一扫 dataDir 的入口，看板/树/设置页/切换数据目录都会经过
     ensureTemplates(this.dataDir)
     const dirs = listProjectDirs(this.dataDir)
+    const nextParsed = new Map<string, ReturnType<typeof parseRequirement>>()
+    const projectChanges: string[] = []
     const seenProjects = new Set<string>()
     const seenReqs = new Set<string>()
     const added: string[] = []
     const updated: string[] = []
     const restored: string[] = []
 
-    const selectProject = this.db.prepare('SELECT slug FROM project WHERE slug = ?')
+    const selectProject = this.db.prepare('SELECT * FROM project WHERE slug = ?')
     const insertProject = this.db.prepare(
       'INSERT INTO project (slug, name, root, has_convention, mtime, updated) VALUES (?, ?, ?, ?, ?, ?)',
     )
@@ -744,7 +775,7 @@ export class BoardDatabase {
     )
 
     const selectReq = this.db.prepare(
-      'SELECT slug, mtime, missing FROM requirement WHERE slug = ? AND project = ?',
+      'SELECT missing FROM requirement WHERE slug = ? AND project = ?',
     )
     const insertReq = this.db.prepare(
       `INSERT INTO requirement
@@ -752,14 +783,7 @@ export class BoardDatabase {
           link_items, mtime, updated, missing)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, 0)`,
     )
-    const updateReq = this.db.prepare(
-      `UPDATE requirement SET id = ?, parent_id = ?, title = ?, path = ?, summary = ?, repos = ?, links = ?, mtime = ?, missing = 0
-       WHERE slug = ? AND project = ?`,
-    )
-    const clearDocs = this.db.prepare('DELETE FROM doc WHERE slug = ? AND project = ?')
-    const insertDoc = this.db.prepare(
-      'INSERT INTO doc (slug, project, name, content) VALUES (?, ?, ?, ?)',
-    )
+    const updateReq = this.db.prepare(SYNC_REQUIREMENT_SQL)
     const idOwner = this.db.prepare('SELECT slug, project FROM requirement WHERE id = ?')
 
     /**
@@ -773,27 +797,31 @@ export class BoardDatabase {
       return !owner || (owner.slug === slug && owner.project === project) ? id : null
     }
 
-    // 整段一个事务：逐条自动提交时 102 个需求要 0.5s，几乎全花在 fsync 上
-    this.db.exec('BEGIN')
-    try {
-      for (const proj of dirs) {
-        seenProjects.add(proj.slug)
-        const convention = readProjectConvention(proj.root)
-        const name = projectDisplayName(convention, proj.slug)
-        const projectMtime = Date.now()
+    const scanned = dirs.map(proj => {
+      const convention = readProjectConvention(proj.root)
+      const name = projectDisplayName(convention, proj.slug)
+      let mtime = statSync(proj.root).mtimeMs
+      if (convention !== null) mtime = Math.max(mtime, statSync(join(proj.root, 'AGENTS.md')).mtimeMs)
+      const requirements = listRequirementDirs(proj.root).map(({ dir, slug }) => {
+        const parsed = parseRequirement(dir, slug, this.parsed.get(dir))
+        nextParsed.set(dir, parsed)
+        return { dir, parsed }
+      })
+      return { proj, convention, name, mtime, requirements }
+    })
 
-        if (!selectProject.get(proj.slug)) {
-          insertProject.run(proj.slug, name, proj.root, convention ? 1 : 0, projectMtime, today())
-        } else {
-          touchProject.run(proj.root, name, convention ? 1 : 0, projectMtime, proj.slug)
-        }
+    // 文件读取在事务外完成，写锁只覆盖索引提交。
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      for (const { proj, convention, name, mtime: initialMtime, requirements } of scanned) {
+        seenProjects.add(proj.slug)
+        let projectMtime = initialMtime
 
         // 本次扫描里 slug → 需求在库里的 id。子需求的 parent_id 直接从这里取——
         // 父需求先于子需求入列（listRequirementDirs 先收录再下探）
         const idBySlug = new Map<string, string>()
 
-        for (const { dir, slug: relSlug } of listRequirementDirs(proj.root)) {
-          const parsed = parseRequirement(dir, relSlug)
+        for (const { dir, parsed } of requirements) {
           const key = `${proj.slug}/${parsed.slug}`
           seenReqs.add(key)
 
@@ -804,14 +832,14 @@ export class BoardDatabase {
           const cut = parsed.slug.lastIndexOf('/')
           const parentId = cut === -1 ? '' : (idBySlug.get(parsed.slug.slice(0, cut)) ?? '')
 
-          clearDocs.run(parsed.slug, proj.slug)
-          for (const d of parsed.docs) insertDoc.run(parsed.slug, proj.slug, d.name, d.content)
+          const docsChanged = this.syncDocs(parsed.slug, proj.slug, parsed.docs)
 
           // 取所有文档中最新的修改时间。
           // 之前这里写的是 content.length 之和，于是「最近更新优先」实际变成「文档越长越靠前」。
           const mtime = parsed.docs.reduce((latest, d) => Math.max(latest, d.mtime), 0)
+          projectMtime = Math.max(projectMtime, mtime)
           const existing = selectReq.get(parsed.slug, proj.slug) as
-            | { slug: string; mtime: number; missing: number }
+            | { missing: number }
             | undefined
 
           if (!existing) {
@@ -835,21 +863,25 @@ export class BoardDatabase {
             )
             added.push(key)
           } else {
-            updateReq.run(
-              id,
-              parentId,
-              parsed.title,
-              dir,
-              parsed.summary,
-              JSON.stringify(parsed.repos),
-              parsed.links,
-              mtime,
-              parsed.slug,
-              proj.slug,
-            )
+            const changed = updateReq.run({
+              $id: id, $parentId: parentId, $title: parsed.title, $path: dir,
+              $summary: parsed.summary, $repos: JSON.stringify(parsed.repos), $links: parsed.links,
+              $mtime: mtime, $slug: parsed.slug, $project: proj.slug,
+            }).changes
             if (existing.missing) restored.push(key)
-            else updated.push(key)
+            else if (changed || docsChanged) updated.push(key)
           }
+        }
+        const project = selectProject.get(proj.slug) as
+          | { root: string; name: string; has_convention: number; mtime: number }
+          | undefined
+        if (!project) {
+          insertProject.run(proj.slug, name, proj.root, convention ? 1 : 0, projectMtime, today())
+          projectChanges.push(proj.slug)
+        } else if (project.root !== proj.root || project.name !== name ||
+          project.has_convention !== Number(convention !== null) || project.mtime !== projectMtime) {
+          touchProject.run(proj.root, name, convention !== null ? 1 : 0, projectMtime, proj.slug)
+          projectChanges.push(proj.slug)
         }
       }
 
@@ -869,8 +901,9 @@ export class BoardDatabase {
 
       const worktrees = this.syncWorktrees()
       this.db.exec('COMMIT')
+      this.parsed = nextParsed
       this.reconcileProject()
-      return { added, updated, missing, restored, worktrees }
+      return { projects: projectChanges, added, updated, missing, restored, worktrees }
     } catch (err) {
       this.db.exec('ROLLBACK')
       throw err
@@ -900,9 +933,9 @@ export class BoardDatabase {
 
   // ------------------------------------------------------------- 读取
 
-  private toRequirement(row: Row): Requirement {
+  private toRequirement(row: Row, cachedDocs?: Requirement['docs'], cachedTags?: string[]): Requirement {
     const status = asStatus(row.status) ?? '澄清'
-    const docs = this.db
+    const docs = cachedDocs ?? this.db
       .prepare(
         'SELECT name, length(content) AS size FROM doc WHERE slug = ? AND project = ? ORDER BY name',
       )
@@ -921,7 +954,7 @@ export class BoardDatabase {
       repos: row.repos ? (JSON.parse(row.repos) as RepoRef[]) : [],
       links: row.links ?? '',
       linkItems: readLinkItems(row.link_items),
-      tags: this.tagsOf(row.id ?? ''),
+      tags: cachedTags ?? this.tagsOf(row.id ?? ''),
       docs,
       path: row.path,
       mtime: row.mtime,
@@ -929,12 +962,45 @@ export class BoardDatabase {
     }
   }
 
+  private toRequirements(rows: Row[]): Requirement[] {
+    if (!rows.length) return []
+    const projects = [...new Set(rows.map(r => r.project))]
+    const marks = projects.map(() => '?').join(', ')
+    const docs = new Map<string, Requirement['docs']>()
+    for (const d of this.db.prepare(
+      `SELECT project, slug, name, length(content) AS size FROM doc
+       WHERE project IN (${marks}) ORDER BY name`,
+    ).all(...projects) as Array<{ project: string; slug: string; name: string; size: number }>) {
+      const key = `${d.project}/${d.slug}`
+      const list = docs.get(key) ?? []
+      list.push({ name: d.name, size: d.size })
+      docs.set(key, list)
+    }
+    const tags = new Map<string, string[]>()
+    for (const t of this.db.prepare(
+      `SELECT rt.req_id, t.name FROM requirement_tag rt
+       JOIN tag t ON t.id = rt.tag_id
+       JOIN requirement r ON r.id = rt.req_id
+       WHERE r.project IN (${marks}) ORDER BY rt.position`,
+    ).all(...projects) as Array<{ req_id: string; name: string }>) {
+      const list = tags.get(t.req_id) ?? []
+      list.push(t.name)
+      tags.set(t.req_id, list)
+    }
+    return rows.map(r => this.toRequirement(r, docs.get(`${r.project}/${r.slug}`) ?? [], tags.get(r.id ?? '') ?? []))
+  }
+
+  listRequirementRefs(): Array<Pick<Requirement, 'id' | 'title' | 'slug' | 'project'>> {
+    return this.db.prepare("SELECT id, title, slug, project FROM requirement WHERE id IS NOT NULL AND id <> ''")
+      .all() as Array<Pick<Requirement, 'id' | 'title' | 'slug' | 'project'>>
+  }
+
   // 指定项目下的需求
   listIn(project: string): Requirement[] {
     const rows = this.db
       .prepare('SELECT * FROM requirement WHERE project = ? ORDER BY mtime DESC')
       .all(project) as unknown as Row[]
-    return rows.map((r) => this.toRequirement(r))
+    return this.toRequirements(rows)
   }
 
   // 当前项目下的需求
@@ -948,7 +1014,7 @@ export class BoardDatabase {
    */
   allRequirements(): Requirement[] {
     const rows = this.db.prepare('SELECT * FROM requirement ORDER BY mtime DESC').all() as unknown as Row[]
-    return rows.map((r) => this.toRequirement(r))
+    return this.toRequirements(rows)
   }
 
   // 在指定项目内按 slug 找需求
@@ -972,40 +1038,35 @@ export class BoardDatabase {
       .map((t) => tagKey(t.slice(1)))
     const textTerms = terms.filter((t) => !t.startsWith('#')).map((t) => t.toLowerCase())
     const p = this.activeProject
-    const haystack = new Map<string, string>()
-
     const tagsBySlug = new Map<string, string[]>()
-    for (const row of this.db
-      .prepare(
-        `SELECT r.slug, t.name FROM requirement r
-         JOIN requirement_tag rt ON rt.req_id = r.id
-         JOIN tag t ON t.id = rt.tag_id
-         WHERE r.project = ?`,
-      )
-      .all(p) as Array<{ slug: string; name: string }>) {
-      tagsBySlug.set(row.slug, [...(tagsBySlug.get(row.slug) ?? []), row.name])
+    for (const row of this.db.prepare(
+      `SELECT r.slug, t.name FROM requirement r
+       JOIN requirement_tag rt ON rt.req_id = r.id
+       JOIN tag t ON t.id = rt.tag_id WHERE r.project = ?`,
+    ).all(p) as Array<{ slug: string; name: string }>) {
+      const list = tagsBySlug.get(row.slug) ?? []
+      list.push(row.name)
+      tagsBySlug.set(row.slug, list)
     }
-
-    for (const row of this.db
-      .prepare('SELECT * FROM requirement WHERE project = ?')
-      .all(p) as unknown as Row[]) {
-      const tags = (tagsBySlug.get(row.slug) ?? []).join('\n')
-      haystack.set(
-        row.slug,
-        `${row.title}\n${row.slug}\n${row.summary ?? ''}\n${row.repos ?? ''}\n${tags}`.toLowerCase(),
-      )
-    }
-    for (const d of this.db
-      .prepare('SELECT slug, name, content FROM doc WHERE project = ?')
+    const rows = this.db.prepare('SELECT slug, title, summary, repos FROM requirement WHERE project = ?')
+      .all(p) as Array<{ slug: string; title: string; summary: string | null; repos: string | null }>
+    const candidates = rows.filter(r => {
+      const tags = (tagsBySlug.get(r.slug) ?? []).map(tagKey)
+      return tagTerms.every(t => tags.includes(t))
+    })
+    if (!textTerms.length) return new Set(candidates.map(r => r.slug))
+    const documents = new Map<string, string[]>()
+    for (const d of this.db.prepare('SELECT slug, name, content FROM doc WHERE project = ?')
       .all(p) as Array<{ slug: string; name: string; content: string }>) {
-      haystack.set(d.slug, `${haystack.get(d.slug) ?? ''}\n${d.name}\n${d.content}`.toLowerCase())
+      const list = documents.get(d.slug) ?? []
+      list.push(d.name, d.content)
+      documents.set(d.slug, list)
     }
-
     const hits = new Set<string>()
-    for (const [slug, text] of haystack) {
-      const tags = (tagsBySlug.get(slug) ?? []).map(tagKey)
-      const matched = textTerms.every((t) => text.includes(t)) && tagTerms.every((t) => tags.includes(t))
-      if (matched) hits.add(slug)
+    for (const row of candidates) {
+      const text = [row.title, row.slug, row.summary ?? '', row.repos ?? '',
+        ...(tagsBySlug.get(row.slug) ?? []), ...(documents.get(row.slug) ?? [])].join('\n').toLowerCase()
+      if (textTerms.every(t => text.includes(t))) hits.add(row.slug)
     }
     return hits
   }
@@ -1060,7 +1121,7 @@ export class BoardDatabase {
     const rows = this.db
       .prepare('SELECT * FROM requirement WHERE parent_id = ? ORDER BY slug')
       .all(parentId) as unknown as Row[]
-    return rows.map((r) => this.toRequirement(r))
+    return this.toRequirements(rows)
   }
 
   // 还没拿到 id 的需求（frontmatter 里缺 id 的老需求）
@@ -1488,7 +1549,8 @@ export class BoardDatabase {
       'UPDATE todo SET title = ?, summary = ?, path = ?, mtime = ?, missing = 0 WHERE id = ?',
     )
 
-    for (const f of listTodoFiles(this.dataDir)) {
+    const files = listTodoFiles(this.dataDir, this.todoFiles)
+    for (const f of files) {
       seen.add(f.id)
       const existing = select.get(f.id) as
         | { id: string; mtime: number; missing: number }
@@ -1517,6 +1579,7 @@ export class BoardDatabase {
         missing.push(r.id)
       }
     }
+    this.todoFiles = files
     return { added, updated, missing, restored }
   }
 

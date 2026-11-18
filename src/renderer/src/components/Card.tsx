@@ -1,5 +1,5 @@
 import { useDraggable } from '@dnd-kit/core'
-import { useRef, type KeyboardEvent } from 'react'
+import { memo, useRef, type KeyboardEvent } from 'react'
 import { shortcutLabel } from '../lib/keys'
 import type { ChildStat, Requirement, Session } from '../lib/types'
 import { relTime } from '../lib/time'
@@ -26,20 +26,23 @@ interface Props {
   overlay?: boolean
 }
 
-export default function Card({
-  req,
-  sessions,
-  childStat,
-  kids,
-  onJumpChild,
-  flash,
-  kidsOpen = false,
-  onToggleKids,
-  onFocusCard,
-  onOpen,
-  onTag,
-  overlay = false,
-}: Props) {
+function sameProps(a: Props, b: Props): boolean {
+  return (Object.keys({ ...a, ...b }) as Array<keyof Props>).every(key => {
+    if (key === 'sessions' || key === 'kids') {
+      const left = a[key]
+      const right = b[key]
+      return left === right || (left?.length === right?.length &&
+        !!left && !!right && left.every((value, i) => value === right[i]))
+    }
+    if (key === 'childStat') {
+      return a.childStat?.total === b.childStat?.total && a.childStat?.done === b.childStat?.done
+    }
+    return a[key] === b[key]
+  })
+}
+
+function Card(props: Props) {
+  const { req, flash, onOpen, onFocusCard, overlay = false } = props
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: req.slug,
     data: { type: 'card', slug: req.slug, status: req.status },
@@ -92,6 +95,17 @@ export default function Card({
       }}
       onKeyDown={onTabToggle}
     >
+      <CardContent {...props} />
+    </div>
+  )
+}
+
+const CardContent = memo(function CardContent({
+  req, sessions, childStat, kids, onJumpChild, kidsOpen = false,
+  onToggleKids, onTag, overlay = false,
+}: Props) {
+  return (
+    <>
       <div className="card-top">
         <span className="card-title">{req.title}</span>
         {/* 完成度与展开键挨着，一起靠右：它们说的都是子需求那一块，不是整张卡 */}
@@ -170,6 +184,8 @@ export default function Card({
         {/* 状态更新日期优先；没有就回落到文件修改时间 */}
         <span className="stage">{req.updated ? req.updated.slice(5) : relTime(req.mtime)}</span>
       </div>
-    </div>
+    </>
   )
-}
+}, sameProps)
+
+export default memo(Card, sameProps)

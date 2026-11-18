@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { memo, useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import { api } from '../lib/api'
 import { AGENT_LABELS } from '../lib/labels'
 import { shortcut } from '../lib/keys'
@@ -7,22 +7,76 @@ import { isEventState } from '../lib/threads'
 import { bubbleToneOf, PET_LABEL, planPetRow, type PetItem, type Pose } from '../lib/pets'
 import type { Session } from '../lib/types'
 
-/**
- * 内联云宝的运行壳：给素材自带的脚本换一套作用域。
- *
- * - `document` 收窄到这棵子树。素材里除了 `getElementById`，还有 `querySelectorAll('.spark')`
- *   这种按文档找的调用——不收窄，同屏两只同档云宝会互相改对方的元素。
- * - `requestAnimationFrame` 也换掉：素材的循环只会一直排下一帧，元素一离开文档
- *   （换档、卸载）就得断在下一帧，否则每换一次状态都多一条空转的 rAF。
- *
- * 用元素属性当实例句柄：壳在脚本之前求值，拿不到脚本里的变量，只能从外面按 `data-pet` 找回来。
- */
+const visibility = new Map<Element, { visible: boolean; set: (visible: boolean) => void }>()
+let petObserver: IntersectionObserver | null = null
+
+function pageVisibility() {
+  for (const entry of visibility.values()) entry.set(entry.visible && !document.hidden)
+}
+
+function usePetVisible(ref: RefObject<HTMLElement>): boolean {
+  const [visible, setVisible] = useState(true)
+  useEffect(() => {
+    const el = ref.current!
+    if (!petObserver) {
+      petObserver = new IntersectionObserver(entries => {
+        for (const entry of entries) {
+          const pet = visibility.get(entry.target)
+          if (!pet) continue
+          pet.visible = entry.isIntersecting
+          pet.set(entry.isIntersecting && !document.hidden)
+        }
+      })
+      document.addEventListener('visibilitychange', pageVisibility)
+    }
+    visibility.set(el, { visible: false, set: setVisible })
+    petObserver.observe(el)
+    return () => {
+      petObserver!.unobserve(el)
+      visibility.delete(el)
+      if (!visibility.size) {
+        petObserver!.disconnect()
+        petObserver = null
+        document.removeEventListener('visibilitychange', pageVisibility)
+      }
+    }
+  }, [ref])
+  return visible
+}
+
 function inlineShell(uid: string, script: string): string {
-  return `(function (root, raf) {
+  return `(function (root, raf, cancel) {
+  var frame = 0;
+  var pending;
+  var active = !root.hasAttribute('data-paused') && !window.document.hidden;
   var requestAnimationFrame = function (cb) {
-    if (!root.isConnected) return 0;
-    return raf(cb);
+    pending = cb;
+    if (!active || !root.isConnected) return 0;
+    frame = raf(function (now) {
+      frame = 0;
+      if (active && root.isConnected) cb(now);
+    });
+    return frame;
   };
+  var update = function () {
+    active = !root.hasAttribute('data-paused') && !window.document.hidden;
+    cancel(frame);
+    frame = 0;
+    if (active && pending) requestAnimationFrame(pending);
+    root.getAnimations({ subtree: true }).forEach(function (animation) {
+      if (active) animation.play(); else animation.pause();
+    });
+  };
+  var dispose = function () {
+    active = false;
+    cancel(frame);
+    root.removeEventListener('pet-visibility', update);
+    root.removeEventListener('pet-dispose', dispose);
+    window.document.removeEventListener('visibilitychange', update);
+  };
+  root.addEventListener('pet-visibility', update);
+  root.addEventListener('pet-dispose', dispose);
+  window.document.addEventListener('visibilitychange', update);
   var document = {
     createElement: window.document.createElement.bind(window.document),
     createElementNS: window.document.createElementNS.bind(window.document),
@@ -31,7 +85,8 @@ function inlineShell(uid: string, script: string): string {
     querySelectorAll: function (s) { return root.querySelectorAll(s) },
   };
 ${script}
-})(window.document.querySelector('[data-pet="${uid}"]'), window.requestAnimationFrame.bind(window))`
+  if (!active) update();
+})(window.document.querySelector('[data-pet="${uid}"]'), window.requestAnimationFrame.bind(window), window.cancelAnimationFrame.bind(window))`
 }
 
 /**
@@ -41,7 +96,9 @@ ${script}
  * 挂载是命令式的：那半截脚本要「插进文档之后」才会跑，React 的渲染管不到这一步。
  * 同屏多只的 id 撞车在 scopeCloudling 里按实例改写掉。
  */
-function Cloudling({ svg }: { svg: string }) {
+function Cloudling({ svg, active }: { svg: string; active: boolean }) {
+  const playing = useRef(active)
+  playing.current = active
   const host = useRef<HTMLSpanElement>(null)
   // 只用来当 id 后缀与查找句柄，取 useId 里能进 id 与属性选择器的那部分
   const uid = useId().replace(/\W/g, '')
@@ -52,6 +109,7 @@ function Cloudling({ svg }: { svg: string }) {
     const { markup, script } = scopeCloudling(svg, uid)
     const root = document.importNode(new DOMParser().parseFromString(markup, 'image/svg+xml').documentElement, true)
     root.setAttribute('data-pet', uid)
+    root.toggleAttribute('data-paused', !playing.current)
     el.replaceChildren(root)
     if (!script) return
     // 脚本顶层有一堆 const，同屏多只会重复声明，包一层 IIFE（在 inlineShell 里）
@@ -60,7 +118,13 @@ function Cloudling({ svg }: { svg: string }) {
     if (nonce) s.setAttribute('nonce', nonce)
     s.textContent = inlineShell(uid, script)
     root.appendChild(s)
+    return () => { root.dispatchEvent(new Event('pet-dispose')) }
   }, [svg, uid])
+  useEffect(() => {
+    const root = host.current?.firstElementChild
+    root?.toggleAttribute('data-paused', !active)
+    root?.dispatchEvent(new Event('pet-visibility'))
+  }, [active, svg])
   return <span ref={host} className="pet-art" aria-hidden="true" />
 }
 
@@ -119,7 +183,7 @@ function useIdleMood(observedAt: number): IdleMood {
  * `compact` 是折叠卡上的小号变体。
  * pet 只负责展示状态；跳转由外层透明命中层消费，避免内联 SVG 影响鼠标事件。
  */
-export default function Pet({
+const Pet = memo(function Pet({
   agent,
   state,
   mood,
@@ -134,19 +198,25 @@ export default function Pet({
   focus?: boolean
   compact?: boolean
 }) {
+  const host = useRef<HTMLSpanElement>(null)
+  const visible = usePetVisible(host)
   const name = `${AGENT_LABELS[agent] ?? agent} · ${PET_LABEL[state]}`
   const wake = useWake(agent, state, mood, !compact)
   const art = petArt(agent, state, { compact, mood, wake })
   // cloudling 内联成 <svg>（脚本驱动，且 object 的文档画布不透明）；clawd / cxb / cursor 走 <img>（每张自带同名 @keyframes，内联会互相覆盖）
-  const body = art.channel === 'inline' ? <Cloudling svg={art.svg} /> : <img src={art.src} alt="" draggable={false} />
+  const body = art.channel === 'inline'
+    ? <Cloudling svg={art.svg} active={visible} />
+    : <img src={visible ? art.src : art.src.replace('pets/', 'pets/still/').replace('.webp', '.png')} alt="" draggable={false} />
   const cls = `pet${compact ? ' compact' : ''} s-${state}${event ? ' event' : ''}${focus ? ' focus' : ''}`
 
   return (
-    <span className={cls} role="img" aria-label={name}>
+    <span ref={host} className={cls} data-paused={visible ? undefined : ''} role="img" aria-label={name}>
       {body}
     </span>
   )
-}
+})
+
+export default Pet
 
 function Bubble({ text, state }: { text: string; state: Pose }) {
   const tone = bubbleToneOf(state)

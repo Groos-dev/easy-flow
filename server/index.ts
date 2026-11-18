@@ -84,6 +84,7 @@ export interface BoardAppOptions {
    * 通知层不用另起定时器轮询。
    */
   onAttention?: () => void
+  syncFiles?: (dataDir: string) => Promise<ReturnType<BoardDatabase['syncProjects']>>
 }
 
 export interface BoardApp {
@@ -171,23 +172,24 @@ function openWithPayload(options = openOptions()) {
   }
 }
 
-export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: BoardAppOptions = {}): BoardApp {
+export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, syncFiles }: BoardAppOptions = {}): BoardApp {
   const initial = readConfig()
   let currentDir = dataDir ?? initial.dataDir
   let db = new BoardDatabase(currentDir, initial.activeProject)
   db.syncProjects()
   db.pickProject()
 
-  // 兜底重扫：读取路径上不再扫目录，md 的变化只能靠它带进来。
-  // 扫失败不呛到读取（看板照常用上一次的数据），下一次接着扫
+  let scanning: Promise<ReturnType<BoardDatabase['syncProjects']>> | null = null
   const rescan = () => {
-    try {
-      db.syncProjects()
-    } catch (err) {
-      log.warn(`rescan failed: ${(err as Error).message}`)
-    }
+    if (scanning) return scanning
+    scanning = Promise.resolve().then(() => syncFiles ? syncFiles(currentDir) : db.syncProjects())
+      .then(sync => { db.reconcileProject(); return sync })
+      .finally(() => { scanning = null })
+    return scanning
   }
-  const rescanTimer = setInterval(rescan, RESCAN_INTERVAL_MS)
+  const rescanTimer = setInterval(() => {
+    void rescan().catch(error => log.warn(`rescan failed: ${(error as Error).message}`))
+  }, RESCAN_INTERVAL_MS)
   rescanTimer.unref()
 
   const sources: SourceTable = {
@@ -197,6 +199,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
   }
 
   const stateStore = new SessionStateStore({
+    list: () => db.listSessionObservations(),
+    keys: () => db.listSessionKeys(),
     get: (agent, session) => db.getSessionObservation(agent, session),
     put: (agent, session, observation) => db.putSessionObservation(agent, session, observation),
     drop: (agent, session) => db.dropSessionObservation(agent, session),
@@ -221,6 +225,19 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
       writeConfig({ dataDir: currentDir })
     } catch {
       /* 配置目录不可写时不影响主流程 */
+    }
+  }
+
+  function boardPayload(requirements = db.list(), projects = db.listProjects()) {
+    const projectName = projects.find(p => p.slug === db.project)?.name ?? db.project
+    return {
+      requirements,
+      rev: digest([db.project, projectName, requirements]),
+      project: db.project,
+      projectName,
+      statuses: STATUSES,
+      priorities: PRIORITIES,
+      sync: NO_CHANGES,
     }
   }
 
@@ -282,19 +299,32 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
       }
 
       if (url.pathname === '/api/requirements' && req.method === 'GET') {
-        // 读取不重扫目录：看板每秒轮询一次，而一次全量重扫要 250ms 以上（实测 1808 个目录）。
-        // md 的变化由后台兜底重扫与详情页的主动同步带进来，这里只查库
+        json(req, res, 200, boardPayload())
+        return
+      }
+
+      if (url.pathname === '/api/snapshot' && req.method === 'GET') {
         const requirements = db.list()
-        json(req, res, 200, {
-          requirements,
-          rev: digest(requirements),
-          project: db.project,
-          // 顶栏显示用。name 来自项目根 AGENTS.md 的 frontmatter，缺省是目录名
-          projectName: db.listProjects().find((p) => p.slug === db.project)?.name ?? db.project,
-          statuses: STATUSES,
-          priorities: PRIORITIES,
-          sync: NO_CHANGES,
-        })
+        const projects = db.listProjects()
+        const sync = db.syncTodos()
+        const todos = db.listTodos()
+        const payload = {
+          board: boardPayload(requirements, projects),
+          projects: { projects, active: db.project, rev: digest(projects) },
+          todos: { todos, rev: digest(todos), statuses: TODO_STATUSES, sources: TODO_SOURCES, sync },
+        }
+        if (url.searchParams.get('view') === 'detail') {
+          json(req, res, 200, payload)
+        } else {
+          const sessions = readObservations(db.listSessions(), stateStore)
+          const ids = new Set(requirements.map(r => r.id))
+          const items = rankNextUp(requirements, sessions.filter(s => ids.has(s.requirementId)))
+          json(req, res, 200, {
+            ...payload,
+            sessions: { sessions, rev: digest(sessions) },
+            nextUp: { items, rev: digest(items) },
+          })
+        }
         return
       }
 
@@ -405,18 +435,19 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
       }
 
       // Full context of one requirement (raw markdown included), for the detail page
-      if (url.pathname === '/api/context' && req.method === 'GET') {
+      if ((url.pathname === '/api/context' || url.pathname === '/api/detail') && req.method === 'GET') {
         const slug = url.searchParams.get('slug') ?? ''
         const project = resolveProject(db, url.searchParams.get('project'))
         // 只扫这一条需求，避免为一次打开做全量重扫
         db.syncRequirement(slug, project)
-        const ctx = db.context(slug, project)
-        if (!ctx) throw new Error(`Requirement not found: ${slug}`)
+        const full = url.pathname === '/api/context'
+        const ctx = full ? db.context(slug, project) : { requirement: db.get(slug, project) }
+        if (!ctx?.requirement) throw new Error(`Requirement not found: ${slug}`)
         // 三档一次算好：详情页要显式与候选分开摆，不必再查两次
         const todos = db.todosForRequirement(ctx.requirement.id)
         json(req, res, 200, {
           ...ctx,
-          requirementMd: db.readRequirementMd(slug, project),
+          ...(full ? { requirementMd: db.readRequirementMd(slug, project) } : {}),
           // 归属只存在库里，详情页要展示工作区就得从这儿带出去
           worktrees: db.listWorktrees(ctx.requirement.id),
           // 同理：会话只归库，详情页的「会话」块靠这一份；状态是读 agent 应用的落盘文件得来的
@@ -730,7 +761,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
         try {
           db = new BoardDatabase(dir, readConfig().activeProject)
           currentDir = dir
-          const sync = db.syncProjects()
+          const sync = syncFiles ? await syncFiles(dir) : db.syncProjects()
           db.pickProject()
           writeConfig({ dataDir: dir })
           json(req, res, 200, { dataDir: dir, dbFile: db.file, previous, sync })
@@ -745,7 +776,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention }: Bo
       }
 
       if (url.pathname === '/api/settings/resync' && req.method === 'POST') {
-        json(req, res, 200, { sync: db.syncProjects(), dataDir: currentDir })
+        json(req, res, 200, { sync: await rescan(), dataDir: currentDir })
         return
       }
 
@@ -812,6 +843,7 @@ export interface StartOptions {
   host?: string
   // 会话状态变化后的回调（hook / 点 pet / 每次 pull）
   onAttention?: () => void
+  syncFiles?: (dataDir: string) => Promise<ReturnType<BoardDatabase['syncProjects']>>
 }
 
 export interface RunningBoardServer {
@@ -831,8 +863,9 @@ export function startBoardServer({
   dataDir,
   host = '127.0.0.1',
   onAttention,
+  syncFiles,
 }: StartOptions = {}): Promise<RunningBoardServer> {
-  const app = createBoardApp({ dataDir, port, onAttention })
+  const app = createBoardApp({ dataDir, port, onAttention, syncFiles })
   const server = createServer((req, res) => void app.handle(req, res))
 
   /**
@@ -843,7 +876,7 @@ export function startBoardServer({
     // 没有 id 的旧需求不能进表：空 key 会互相覆盖，
     // 会话会挂到错误的需求上
     const requirements = new Map(
-      app.db.allRequirements().filter((r) => r.id).map((r) => [r.id, r]),
+      app.db.listRequirementRefs().map((r) => [r.id, r]),
     )
     const aliases = new Map(
       app.db.listSessionKeys().map((k) => [`${k.agent}:${k.session}`, k.stateKey]),
@@ -904,6 +937,7 @@ export function startBoardServer({
         attentionSnapshot,
         close: () => {
           server.close()
+          clearInterval(timer)
           app.close()
         },
       })

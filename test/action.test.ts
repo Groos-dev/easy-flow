@@ -25,6 +25,8 @@ let storeSeq = 0
 function newStore(): { db: BoardDatabase; store: SessionStateStore } {
   const db = new BoardDatabase(join(tmpdir(), `easy-flow-test-action-${process.pid}`, String(storeSeq++)), 'p')
   const store = new SessionStateStore({
+    list: () => db.listSessionObservations(),
+    keys: () => db.listSessionKeys(),
     get: (agent, session) => db.getSessionObservation(agent, session),
     put: (agent, session, observation) => db.putSessionObservation(agent, session, observation),
     drop: (agent, session) => db.dropSessionObservation(agent, session),
@@ -155,6 +157,8 @@ describe('动作与状态并排进状态层', () => {
     store.put('claude', 'a', status({ observedAt: calledAt }), { text: '改 hook.ts', calledAt })
 
     const reopened = new SessionStateStore({
+      list: () => db.listSessionObservations(),
+      keys: () => db.listSessionKeys(),
       get: (agent, session) => db.getSessionObservation(agent, session),
       put: (agent, session, observation) => db.putSessionObservation(agent, session, observation),
       drop: (agent, session) => db.dropSessionObservation(agent, session),

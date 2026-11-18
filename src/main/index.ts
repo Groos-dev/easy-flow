@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RunningBoardServer } from '../../server/index.ts'
+import { createFileSync } from '../../server/file-sync.ts'
 import { createLogger, setLogLevel, startFileLogging } from '../../server/log.ts'
 import { appIconPng, scanOpenTargets } from '../../server/open-with.ts'
 import { openExternalLink } from './open-links.ts'
@@ -28,6 +29,7 @@ let panel: BrowserWindow | null = null
 // 待主窗口渲染层取走的「打开需求」请求
 let pendingOpen: { project: string; slug: string } | null = null
 let boardServer: RunningBoardServer | null = null
+let fileSync: ReturnType<typeof createFileSync> | null = null
 /**
  * 会话事件 → dock 红点 / 系统通知。
  * 检测放主进程，窗口收起也能发现。
@@ -465,7 +467,9 @@ async function boot(): Promise<void> {
   registerIpc()
   registerMenu()
   applyCsp()
+  fileSync = createFileSync(join(__dirname, 'sync-worker.js'))
   boardServer = await startBoardServer({
+    syncFiles: dir => fileSync!.scan(dir),
     port: DEFAULT_PORT,
     // pull / hook / 点 pet 之后立刻刷通知层，不再靠主进程定时轮询
     onAttention: () => attention?.refresh(),
@@ -587,6 +591,7 @@ app.on('activate', () => {
 app.on('before-quit', () => {
   stopAttention?.()
   boardServer?.close()
+  void fileSync?.close()
 })
 
 app.on('will-quit', () => {
