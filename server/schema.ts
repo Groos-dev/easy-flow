@@ -105,6 +105,13 @@ CREATE TABLE IF NOT EXISTS session (
   PRIMARY KEY (agent, session)
 );
 
+CREATE TABLE IF NOT EXISTS review_binding (
+  req_id       TEXT NOT NULL,
+  worktree_id  TEXT NOT NULL REFERENCES worktree(id) ON DELETE CASCADE,
+  session      TEXT NOT NULL,
+  PRIMARY KEY (req_id, worktree_id)
+);
+
 /*
  * tag：标签词表。需求标签只归库，不写进 requirement.md。
  * name 的 NOCASE 让同名只差 ASCII 大小写的落成同一行，写法以首次写入为准。

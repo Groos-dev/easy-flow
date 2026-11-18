@@ -53,6 +53,8 @@ description: >-
 
 代码实现与验证完成后，原 coding 会话自动运行 `easy-flow review <wt-id> --json`，等待结果、读取报告，核实并修复已确认需求内的问题，再用 `--recheck <首轮报告路径>` 在同一 Codex session 中复查一次，最后交给用户 review。全部评审结论保存在需求目录 `docs/review/`，逐条处理结果追加到对应报告。
 
+同一需求、同一工作区固定一个 reviewer session，由工具持久绑定。普通 review、变更基线、变更模型、失败重试和复核都恢复这个会话；只有没有绑定且没有历史 reviewer 时才创建。恢复失败立即停止。
+
 实现、修复和自动评审期间保持「执行中」，交给用户时置「Review」。遇到需求或契约取舍，按「什么时候才找人」处理。Claude Desktop 与程小帮都由原会话调用并等待 CLI；长任务继续使用该客户端工具的等待或结果取回能力。
 
 执行前读取 [Coding 评审闭环](references/coding-review.md)。独立 reviewer 本轮只产出评审结论，流程由原 coding 会话推进。
