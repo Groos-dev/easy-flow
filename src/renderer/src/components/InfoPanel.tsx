@@ -8,7 +8,7 @@ import {
   TODO_STATUS_LABEL,
   type CodeLinkStatus,
   type ContextLive,
-  type ContextPayload,
+  type DetailPayload,
   type Requirement,
   type Session,
   type Todo,
@@ -30,7 +30,7 @@ export default function InfoPanel({
   launchSignal = 0,
 }: {
   req: Requirement
-  ctx: ContextPayload | null
+  ctx: DetailPayload | null
   // 点一条关联待办即在详情页打开它
   onOpenTodo: (id: string) => void
   launchSignal?: number
@@ -51,7 +51,7 @@ export default function InfoPanel({
       inFlight = true
       try {
         const data = await api.contextLive(slug, project)
-        if (alive) setLive(data)
+        if (alive) setLive(previous => JSON.stringify(previous) === JSON.stringify(data) ? previous : data)
         liveError.current = ''
       } catch (err) {
         // 浮窗继续用上一份数据，但失败必须留痕：静默下去就是「看着新、其实冻住了」

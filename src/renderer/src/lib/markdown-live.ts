@@ -107,7 +107,7 @@ function activeLines(state: EditorState): Set<number> {
 }
 
 // 把 md 渲染成装饰集：只描述长什么样，不改内容
-export function liveDecorations(state: EditorState): DecorationSet {
+export function liveDecorations(state: EditorState, rangeFrom = 0, rangeTo = state.doc.length): DecorationSet {
   const doc = state.doc
   const active = activeLines(state)
   const isFocused = state.field(focused, false)
@@ -117,14 +117,14 @@ export function liveDecorations(state: EditorState): DecorationSet {
   // 显原文的行就是「活跃」的；记号只在不活跃的行上收起来
   const quiet = (from: number) => !isFocused || !active.has(lineOf(from))
   const paintLines = (cls: string, from: number, to: number) => {
-    const last = lineOf(Math.max(from, to - 1))
-    for (let n = lineOf(from); n <= last; n++) out.push(line(cls).range(doc.line(n).from))
+    const last = Math.min(lineOf(Math.max(from, to - 1)), lineOf(rangeTo))
+    for (let n = Math.max(lineOf(from), lineOf(rangeFrom)); n <= last; n++) out.push(line(cls).range(doc.line(n).from))
   }
   const hide = (from: number, to: number) => out.push(HIDDEN.range(from, to))
 
   syntaxTree(state).iterate({
-    from: 0,
-    to: doc.length,
+    from: rangeFrom,
+    to: rangeTo,
     enter: (n) => {
       const { name, from, to } = n
       if (from === to) return
@@ -251,15 +251,30 @@ export function liveDecorations(state: EditorState): DecorationSet {
   })
 
   // 行装饰与标记装饰交错取出来，交给 RangeSet 排序
-  return Decoration.set(out, true)
+  return Decoration.set(out.filter(r => r.from >= rangeFrom && r.from <= rangeTo), true)
 }
 
 const decorations = StateField.define<DecorationSet>({
-  create: liveDecorations,
-  update: (value, tr) =>
-    tr.docChanged || tr.selection || tr.effects.some((e) => e.is(focusEffect))
-      ? liveDecorations(tr.state)
-      : value.map(tr.changes),
+  create: state => liveDecorations(state),
+  update: (value, tr) => {
+    if (tr.docChanged || tr.startState.field(focused) !== tr.state.field(focused)) {
+      return liveDecorations(tr.state)
+    }
+    if (!tr.selection || !tr.state.field(focused)) return value
+    const before = activeLines(tr.startState)
+    const after = activeLines(tr.state)
+    if (before.size === after.size && [...before].every(n => after.has(n))) return value
+    const lines = [...before, ...after]
+    const from = tr.state.doc.line(Math.min(...lines)).from
+    const to = tr.state.doc.line(Math.max(...lines)).to
+    const add: Range<Decoration>[] = []
+    liveDecorations(tr.state, from, to).between(from, to, (a, b, d) => { add.push(d.range(a, b)) })
+    return value.update({
+      filterFrom: from, filterTo: to,
+      filter: a => a < from || a > to,
+      add, sort: true,
+    })
+  },
 })
 
 // 编辑器扩展：把正文按 md 渲染出来，同时保持它是可编辑的原文

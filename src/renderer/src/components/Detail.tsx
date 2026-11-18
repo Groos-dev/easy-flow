@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { isComposing, isEditableTarget, shortcut, shortcutLabel } from '../lib/keys'
-import { type ContextPayload, type Requirement, type Todo } from '../lib/types'
+import { type DetailPayload, type Requirement, type Todo } from '../lib/types'
 import InfoPanel from './InfoPanel'
 import MarkdownEditor from './MarkdownEditor'
 import TodoPanel from './TodoPanel'
@@ -60,7 +60,7 @@ export default function Detail({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   // 需求上下文（含工作区列表）。项目页用不到，保持 null
-  const [ctx, setCtx] = useState<ContextPayload | null>(null)
+  const [ctx, setCtx] = useState<DetailPayload | null>(null)
   // 待办挂的需求：待办上只有 id，标题与跳转目标要按它换回来
   const [todoReq, setTodoReq] = useState<Requirement | null>(null)
   const [infoOpen, setInfoOpen] = useState(false)
@@ -94,7 +94,7 @@ export default function Detail({
       : isTodo
         ? Promise.resolve([`${todo!.id}.md`])
         : api
-            .context(target.slug!, target.project)
+            .detail(target.slug!, target.project)
             .then((c) => {
               // 浮窗要用工作区与链接，顺手存下这次载荷，免得再发一次请求
               if (alive) setCtx(c)

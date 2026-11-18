@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { isComposing, isEditableTarget, shortcut } from '../lib/keys'
 import type { Requirement } from '../lib/types'
 import { STATUS_CLASS } from '../lib/labels'
-import { buildTree, layoutTree, type LaidNode } from '../lib/mindmap'
+import { buildTree, layoutTree, type LaidNode, type MapLayout } from '../lib/mindmap'
 
 // 顶层分支的连线颜色，循环取用；刻意避开状态色，免得两种颜色打架
 const BRANCH_COLORS = ['#a78bfa', '#f472b6', '#22d3ee', '#eab308', '#fb7185', '#2dd4bf']
@@ -79,6 +79,21 @@ export default function MindMap({ requirements, projectName, hits, onOpen, onBac
   const [size, setSize] = useState({ w: 0, h: 0 })
   // 画布位移与缩放；容器坐标，transform-origin 是左上角
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1 })
+  const currentView = useRef(view)
+  currentView.current = view
+  const queued = useRef<typeof view | null>(null)
+  const frame = useRef(0)
+  const queueView = useCallback((update: (v: typeof view) => typeof view) => {
+    queued.current = update(queued.current ?? currentView.current)
+    if (frame.current) return
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0
+      setView(queued.current!)
+      queued.current = null
+    })
+  }, [])
+  useEffect(() => () => cancelAnimationFrame(frame.current), [])
+
 
   const layout = useMemo(
     () => layoutTree(buildTree(requirements), { collapsed, hits }),
@@ -172,10 +187,10 @@ export default function MindMap({ requirements, projectName, hits, onOpen, onBac
       const rect = el.getBoundingClientRect()
       const px = ev.clientX - rect.left
       const py = ev.clientY - rect.top
-      setView((v) => {
+      queueView((v) => {
         const zoom = Math.min(
           MAX_ZOOM,
-          Math.max(MIN_ZOOM, v.zoom * (ev.deltaY < 0 ? 1.1 : 1 / 1.1)),
+          Math.max(MIN_ZOOM, v.zoom * Math.exp(-ev.deltaY * (ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? el.clientHeight : 1) * 0.002)),
         )
         const k = zoom / v.zoom
         return { zoom, x: px - (px - v.x) * k, y: py - (py - v.y) * k }
@@ -183,7 +198,7 @@ export default function MindMap({ requirements, projectName, hits, onOpen, onBac
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [])
+  }, [queueView])
 
   const toggle = useCallback((slug: string) => {
     setCollapsed((prev) => {
@@ -205,7 +220,7 @@ export default function MindMap({ requirements, projectName, hits, onOpen, onBac
   function movePan(e: PointerEvent<HTMLDivElement>) {
     const p = panRef.current
     if (!p) return
-    setView((v) => ({ ...v, x: p.vx + (e.clientX - p.px), y: p.vy + (e.clientY - p.py) }))
+    queueView((v) => ({ ...v, x: p.vx + (e.clientX - p.px), y: p.vy + (e.clientY - p.py) }))
   }
 
   function endPan(e: PointerEvent<HTMLDivElement>) {
@@ -249,6 +264,20 @@ export default function MindMap({ requirements, projectName, hits, onOpen, onBac
           transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`,
         }}
       >
+        <MapContent layout={layout} projectName={projectName} onOpen={onOpen} onToggle={toggle} />
+      </div>
+    </div>
+  )
+}
+
+const MapContent = memo(function MapContent({ layout, projectName, onOpen, onToggle }: {
+  layout: MapLayout
+  projectName: string
+  onOpen: (slug: string) => void
+  onToggle: (slug: string) => void
+}) {
+  return (
+    <>
         <svg className="mindmap-links" width={layout.width} height={layout.height}>
           {layout.edges.map((edge) => {
             const bend = (edge.x2 - edge.x1) / 2
@@ -278,9 +307,8 @@ export default function MindMap({ requirements, projectName, hits, onOpen, onBac
         </div>
 
         {layout.nodes.map((node) => (
-          <MapNodeBox key={node.req.slug} node={node} onOpen={onOpen} onToggle={toggle} />
+          <MapNodeBox key={node.req.slug} node={node} onOpen={onOpen} onToggle={onToggle} />
         ))}
-      </div>
-    </div>
+    </>
   )
-}
+})

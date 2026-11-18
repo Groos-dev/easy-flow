@@ -88,6 +88,8 @@ export function isActive(state: ThreadState): boolean {
 }
 
 export interface StateTable {
+  list: () => Array<{ agent: string; session: string; observation: SessionObservation }>
+  keys: () => Array<{ agent: string; session: string; stateKey: string }>
   get(agent: string, session: string): SessionObservation | undefined
   put(agent: string, session: string, observation: SessionObservation): void
   drop(agent: string, session: string): boolean
@@ -112,6 +114,17 @@ export class SessionStateStore {
 
   get(agent: string, session: string): SessionObservation | undefined {
     return this.table.get(agent, session)
+  }
+
+  snapshot(): Map<string, SessionObservation> {
+    const observations = new Map(this.table.list().map(o => [`${o.agent}:${o.session}`, o.observation]))
+    const snapshot = new Map(observations)
+    for (const key of this.table.keys()) {
+      const observation = observations.get(`${key.agent}:${key.stateKey}`)
+      if (observation) snapshot.set(`${key.agent}:${key.session}`, observation)
+      else snapshot.delete(`${key.agent}:${key.session}`)
+    }
+    return snapshot
   }
 
   remove(agent: string, session: string): void {

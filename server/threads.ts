@@ -197,8 +197,9 @@ export function readObservations<T extends { agent: string; session: string }>(
   sessions: readonly T[],
   states: SessionStateStore,
 ): Array<T & { status: SessionStatus; action: SessionAction | null }> {
+  const observations = states.snapshot()
   return sessions.map((s) => {
-    const stored = states.get(s.agent, states.keyOf(s.agent, s.session))
+    const stored = observations.get(`${s.agent}:${s.session}`)
     const status = stored?.status ?? unknownStatus(`${s.agent} 没有可读的状态来源`)
     return { ...s, status, action: stored?.action ?? null }
   })

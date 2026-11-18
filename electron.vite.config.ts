@@ -7,7 +7,10 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
-        input: { index: resolve(__dirname, 'src/main/index.ts') },
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          'sync-worker': resolve(__dirname, 'server/sync-worker.ts'),
+        },
       },
     },
   },

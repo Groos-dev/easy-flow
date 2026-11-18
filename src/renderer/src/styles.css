@@ -1628,7 +1628,7 @@ body {
 }
 
 /* 每只 pet 一格：气泡在上、pet 在下，尾巴指着自己那只。气泡不在时格子只有 pet 那么宽，
-   几只挤在一起；气泡出来才撑开，宽度跟着 .shown 过渡。
+   气泡展开时为内容分配宽度。
    78px 是「一句动作一行写完」的下限，卡片窄到 3 只挤不下就折成 2 只一行；120px 是气泡的宽度上限 */
 .slot {
   position: relative;
@@ -1640,7 +1640,6 @@ body {
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  transition: flex-basis 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), max-width 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .slot.shown {
@@ -1708,16 +1707,13 @@ body {
   opacity: 0.85;
 }
 
-/* 气泡的高度也一起收：0fr → 1fr 是唯一能对「内容高度未知」做过渡的写法，pet 跟着上移。
-   收在这一层而不是气泡身上——放气泡身上会把尾巴一起裁掉。
-   底部内边距是给尾巴留的位置（4px 偏移 + 转角），收起时也得归零，不然它会撑着盒子的高度 */
+/* 底部内边距为气泡尾巴留出空间。 */
 .bubble-box {
   display: grid;
   grid-template-rows: 0fr;
   width: 100%;
   padding-bottom: 0;
   overflow: hidden;
-  transition: grid-template-rows 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), padding-bottom 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .slot.shown .bubble-box {
@@ -3955,4 +3951,9 @@ a.sess,
 .shortcut-label {
   color: var(--text-dim);
   font-size: 12px;
+}
+
+.pet[data-paused],
+.pet[data-paused] * {
+  animation-play-state: paused !important;
 }

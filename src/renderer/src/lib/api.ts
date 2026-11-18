@@ -1,5 +1,7 @@
 import type {
   BoardData,
+  BoardSnapshot,
+  DetailPayload,
   CodeLinkStatus,
   ContextLive,
   ContextPayload,
@@ -61,11 +63,17 @@ function contextPath(path: string, slug: string, project?: string): string {
 }
 
 export const api = {
+  snapshot: (detail = false): Promise<BoardSnapshot> =>
+    request(`/api/snapshot${detail ? '?view=detail' : ''}`),
+
+  detail: (slug: string, project?: string): Promise<DetailPayload> =>
+    request(contextPath('/api/detail', slug, project)),
+
   list: (): Promise<BoardData> => request('/api/requirements'),
 
   // 服务端全文检索：md 与索引都在服务端，前端不做遍历
-  search: (q: string): Promise<{ requirements: Requirement[] }> =>
-    request(`/api/search?q=${encodeURIComponent(q)}`),
+  search: (q: string, signal?: AbortSignal): Promise<{ requirements: Requirement[] }> =>
+    request(`/api/search?q=${encodeURIComponent(q)}`, { signal }),
 
   move: (slug: string, status: string): Promise<Requirement> =>
     request('/api/move', { method: 'POST', body: JSON.stringify({ slug, status }) }),
@@ -221,7 +229,7 @@ export const api = {
   switchDataDir: (dataDir: string): Promise<SwitchResult> =>
     request('/api/settings', { method: 'POST', body: JSON.stringify({ dataDir }) }),
 
-  resync: (): Promise<{ sync: SwitchResult['sync']; dataDir: string }> =>
+  resync: (): Promise<{ sync: NonNullable<SwitchResult['sync']>; dataDir: string }> =>
     request('/api/settings/resync', { method: 'POST' }),
 
   skill: (): Promise<SkillPayload> => request('/api/skill'),

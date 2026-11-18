@@ -216,10 +216,11 @@ export class RolloutStore {
       }
     }
 
+    const dirty = track.rewrite || !known || known.offset !== offset || known.mtimeMs !== stats.mtimeMs
     track.offset = offset
     track.mtimeMs = stats.mtimeMs
     track.observation = observation
-    if (track.rewrite || !known || known.offset !== offset || known.mtimeMs !== stats.mtimeMs) {
+    if (dirty) {
       this.sources.touchSource(path, { mtimeMs: stats.mtimeMs, offset, state: observation })
       track.rewrite = false
     }

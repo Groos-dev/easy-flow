@@ -56,6 +56,8 @@ function newState(): { store: SessionStateStore; sources: SourceTable } {
   const db = new BoardDatabase(join(tmpdir(), `easy-flow-test-state-${process.pid}`, String(storeSeq++)), 'p')
   return {
     store: new SessionStateStore({
+      list: () => db.listSessionObservations(),
+      keys: () => db.listSessionKeys(),
       get: (agent, session) => db.getSessionObservation(agent, session),
       put: (agent, session, observation) => db.putSessionObservation(agent, session, observation),
       drop: (agent, session) => db.dropSessionObservation(agent, session),

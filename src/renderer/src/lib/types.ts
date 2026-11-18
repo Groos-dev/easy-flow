@@ -97,6 +97,7 @@ export interface ChildStat {
 }
 
 export interface SyncResult {
+  projects?: string[]
   added: string[]
   updated: string[]
   missing: string[]
@@ -161,6 +162,14 @@ export interface Todo {
   missing: boolean
 }
 
+export interface BoardSnapshot {
+  board: BoardData
+  projects: { projects: Project[]; active: string; rev: string }
+  todos: TodosPayload
+  sessions?: { sessions: Session[]; rev: string }
+  nextUp?: { items: NextUpItem[]; rev: string }
+}
+
 export interface TodosPayload {
   todos: Todo[]
   rev: string
@@ -217,7 +226,11 @@ export interface ContextLive {
   candidateTodos: Todo[]
 }
 
-export interface ContextPayload extends ContextLive {
+export interface DetailPayload extends ContextLive {
+  requirement: Requirement
+}
+
+export interface ContextPayload extends DetailPayload {
   requirement: Requirement
   docs: Array<{ name: string; content: string }>
   requirementMd: string | null

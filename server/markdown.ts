@@ -124,6 +124,7 @@ export interface DocFile {
   content: string
   // 文件真实修改时间（毫秒）。用于排序"最近动过的需求优先"
   mtime: number
+  bytes?: number
 }
 
 /**
@@ -136,7 +137,8 @@ export interface DocFile {
  *   子需求目录 —— 它自己是一份需求，文件归它自己；下探会让父需求的标签栏里
  *                 冒出一堆别人的 AGENTS.md
  */
-export function readDocs(dir: string): DocFile[] {
+export function readDocs(dir: string, previous: DocFile[] = []): DocFile[] {
+  const known = new Map(previous.map(d => [d.name, d]))
   const out: DocFile[] = []
   let total = 0
   const walk = (d: string, prefix: string): void => {
@@ -154,9 +156,14 @@ export function readDocs(dir: string): DocFile[] {
         if (!entry.endsWith('.md')) continue
         if (entry === 'AGENTS.md' || entry === 'CLAUDE.md') continue
 
-        let content = readFileSync(p, 'utf8')
-        if (content.length > MAX_DOC_CHARS) content = content.slice(0, MAX_DOC_CHARS)
-        out.push({ name: rel, content, mtime: lst.mtimeMs })
+        const cached = known.get(rel)
+        if (cached?.mtime === lst.mtimeMs && cached.bytes === lst.size) {
+          out.push(cached)
+          total += cached.content.length
+          continue
+        }
+        const content = readFileSync(p, 'utf8').slice(0, MAX_DOC_CHARS)
+        out.push({ name: rel, content, mtime: lst.mtimeMs, bytes: lst.size })
         total += content.length
       } catch {
         /* 忽略读不到的条目 */
@@ -164,10 +171,11 @@ export function readDocs(dir: string): DocFile[] {
     }
   }
   walk(dir, '')
-  return out
+  return out.length === previous.length && out.every((d, i) => d === previous[i]) ? previous : out
 }
 
 export interface ParsedRequirement {
+  sourceStamp: string
   // 不透明编号，写在 requirement.md 开头。老需求可能还在 AGENTS.md 里，读的时候兜底
   id: string
   slug: string
@@ -185,15 +193,28 @@ export interface ParsedRequirement {
  * 编号优先读 requirement.md 开头。老目录还写在 AGENTS.md 里时，缺了再兜底。
  * 标题、摘要、仓库、链接仍从 requirement.md 正文来。
  */
-export function parseRequirement(dir: string, fallbackSlug: string): ParsedRequirement {
-  const desc = parseFrontmatter(readFileSync(join(dir, 'requirement.md'), 'utf8'))
+export function parseRequirement(
+  dir: string,
+  fallbackSlug: string,
+  previous?: ParsedRequirement,
+): ParsedRequirement {
+  const source = statSync(join(dir, 'requirement.md'))
   const agentsPath = join(dir, 'AGENTS.md')
+  const agents = existsSync(agentsPath) ? statSync(agentsPath) : null
+  const sourceStamp = `${source.mtimeMs}:${source.size}:${agents?.mtimeMs}:${agents?.size}`
+  const docs = readDocs(dir, previous?.docs)
+  if (previous?.sourceStamp === sourceStamp) {
+    return docs.length === previous.docs.length && docs.every((d, i) => d === previous.docs[i])
+      ? previous
+      : { ...previous, docs }
+  }
+  const desc = parseFrontmatter(readFileSync(join(dir, 'requirement.md'), 'utf8'))
   const identity = existsSync(agentsPath) ? parseFrontmatter(readFileSync(agentsPath, 'utf8')).data : {}
 
-  const docs = readDocs(dir)
   const h1 = /^#\s+(.+)$/m.exec(desc.body)?.[1]?.trim()
 
   return {
+    sourceStamp,
     id: desc.data.id || identity.id || '',
     slug: desc.data.slug || identity.slug || fallbackSlug,
     title: desc.data.title || h1 || fallbackSlug,
@@ -322,6 +343,7 @@ export function parseTodo(text: string): ParsedTodo {
 }
 
 export interface TodoFile extends ParsedTodo {
+  bytes?: number
   // 文件名去掉 .md 就是待办 id（T-YYYYMMDD-NNN）
   id: string
   file: string
@@ -329,7 +351,8 @@ export interface TodoFile extends ParsedTodo {
 }
 
 // 列出待办目录下的所有 md。文件名即 id，读不到内容的条目跳过
-export function listTodoFiles(dataDir: string): TodoFile[] {
+export function listTodoFiles(dataDir: string, previous: TodoFile[] = []): TodoFile[] {
+  const known = new Map(previous.map(f => [f.id, f]))
   const dir = join(dataDir, TODOS_DIR)
   const out: TodoFile[] = []
   for (const entry of entries(dir)) {
@@ -338,7 +361,11 @@ export function listTodoFiles(dataDir: string): TodoFile[] {
     try {
       const st = lstatSync(file)
       if (st.isSymbolicLink() || !st.isFile()) continue
-      out.push({ id: entry.slice(0, -3), file, ...parseTodo(readFileSync(file, 'utf8')), mtime: st.mtimeMs })
+      const id = entry.slice(0, -3)
+      const cached = known.get(id)
+      out.push(cached?.mtime === st.mtimeMs && cached.bytes === st.size
+        ? cached
+        : { id, file, ...parseTodo(readFileSync(file, 'utf8')), mtime: st.mtimeMs, bytes: st.size })
     } catch {
       /* 读不到的条目当它不存在 */
     }

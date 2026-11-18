@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -12,6 +12,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { api } from './lib/api'
+import { reuseRows } from './lib/rows'
 import { DONE_STATUS, childStatsOf, childrenOf } from './lib/children'
 import {
   movePos,
@@ -77,7 +78,10 @@ interface BoardColumnProps {
   onToggleCollapsed: () => void
 }
 
-function ColumnView({
+const EMPTY_SESSIONS: Session[] = []
+const POINTER_OPTIONS = { activationConstraint: { distance: 4 } }
+
+const ColumnView = memo(function ColumnView({
   status,
   items,
   sessionsByReq,
@@ -137,7 +141,7 @@ function ColumnView({
             <Card
               key={r.slug}
               req={r}
-              sessions={sessionsByReq.get(r.id) ?? []}
+              sessions={sessionsByReq.get(r.id) ?? EMPTY_SESSIONS}
               childStat={childStats.get(r.id)}
               kids={childrenByParent.get(r.id)}
               onJumpChild={onJumpChild}
@@ -153,7 +157,9 @@ function ColumnView({
       </div>
     </div>
   )
-}
+})
+
+ColumnView.displayName = 'ColumnView'
 
 // dnd-kit 的 data 是 unknown，这里收窄一次
 function statusOf(over: DragOverEvent['over']): Status | undefined {
@@ -197,6 +203,8 @@ export default function App() {
   // 详情页挂载点：需求或项目。slugs 用 'project:<slug>' 区分
   const [detail, setDetail] = useState<{ project: string; slug: string | null } | null>(null)
   const [items, setItems] = useState<Requirement[]>([])
+  const currentItems = useRef(items)
+  currentItems.current = items
   // 全部会话（含实时状态）。卡片角标与详情页的「会话」块共用
   const [sessions, setSessions] = useState<Session[]>([])
   // 「下一步」的排名（服务端算好，每条带理由），只在「下一步」视图里读
@@ -221,6 +229,7 @@ export default function App() {
    */
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const deferredQuery = useDeferredValue(query)
   // 命中集合；null 表示没在筛。看板的过滤与导图的 hits 共用它
   const [hits, setHits] = useState<Set<string> | null>(null)
   // 正在等服务端返回：用来区分「还没查」与「查了没有」
@@ -253,7 +262,7 @@ export default function App() {
     [pinned, projects],
   )
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+  const sensors = useSensors(useSensor(PointerSensor, POINTER_OPTIONS))
   // 待打开的需求只取一次（主窗口刚重建时的那份交接）
   const tookPending = useRef(false)
 
@@ -270,7 +279,7 @@ export default function App() {
       setCrossReq(local ?? null)
       if (!local) {
         void api
-          .context(slug, proj)
+          .detail(slug, proj)
           .then((c) => setCrossReq(c.requirement))
           .catch((e: Error) => setError(e.message))
       }
@@ -398,7 +407,7 @@ export default function App() {
    * 防抖只是别让每个按键都发一次请求；换了项目就重查，命中集合是按项目算的。
    */
   useEffect(() => {
-    const q = query.trim()
+    const q = deferredQuery.trim()
     if (!q) {
       setHits(null)
       setSearching(false)
@@ -406,11 +415,12 @@ export default function App() {
     }
     setSearching(true)
     let alive = true
+    const controller = new AbortController()
     const timer = setTimeout(() => {
       void api
-        .search(q)
+        .search(q, controller.signal)
         .then((r) => {
-          if (alive) setHits(new Set(r.requirements.map((x) => x.slug)))
+          if (alive) startTransition(() => setHits(new Set(r.requirements.map((x) => x.slug))))
         })
         // 搜挂了不该把看板一起弄坏：维持上一次的命中集合，界面照常能用
         .catch(() => {})
@@ -420,9 +430,10 @@ export default function App() {
     }, 120)
     return () => {
       alive = false
+      controller.abort()
       clearTimeout(timer)
     }
-  }, [query, project])
+  }, [deferredQuery, project])
 
   /**
    * 轮询是每秒一次的，但内容多数时候没变：服务端给每份数据算了个版本，
@@ -435,107 +446,61 @@ export default function App() {
     return true
   }, [])
 
+  const detailMode = useRef(!inMain)
+  detailMode.current = !inMain
+  const loadSeq = useRef(0)
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current
     try {
-      const data = await api.list()
-      if (!applyIfChanged('requirements', data.rev)) return
-      setItems(data.requirements)
-      setStatuses(data.statuses)
-      setProject(data.project)
-      setProjectName(data.projectName)
-      setError('')
+      const snapshot = await api.snapshot(detailMode.current)
+      if (seq !== loadSeq.current) return
+      startTransition(() => {
+        const { board, projects: projectData, todos: todoData, sessions: sessionData, nextUp } = snapshot
+        if (applyIfChanged('requirements', board.rev)) {
+          setItems(previous => reuseRows(previous, board.requirements, r => `${r.project}/${r.slug}`))
+          setStatuses(previous => previous.join() === board.statuses.join() ? previous : board.statuses)
+          setProject(board.project)
+          setProjectName(board.projectName)
+        }
+        if (applyIfChanged('projects', projectData.rev)) {
+          setProjects(previous => reuseRows(previous, projectData.projects, p => p.slug))
+        }
+        if (applyIfChanged('todos', todoData.rev)) {
+          setTodos(previous => reuseRows(previous, todoData.todos, t => t.id))
+        }
+        if (sessionData && applyIfChanged('sessions', sessionData.rev)) {
+          setSessions(previous => reuseRows(previous, sessionData.sessions, s => `${s.agent}:${s.session}`))
+        }
+        if (nextUp && applyIfChanged('next-up', nextUp.rev)) setNextItems(nextUp.items)
+        setNextError('')
+        setError('')
+        setLoading(false)
+      })
     } catch (err) {
+      if (seq !== loadSeq.current) return
       setError((err as Error).message)
-    } finally {
+      setNextError((err as Error).message)
       setLoading(false)
     }
   }, [applyIfChanged])
 
-  const loadTodos = useCallback(async () => {
-    try {
-      const data = await api.todos()
-      if (!applyIfChanged('todos', data.rev)) return
-      setTodos(data.todos)
-      setError('')
-    } catch (err) {
-      setError((err as Error).message)
-    }
-  }, [applyIfChanged])
-
-  const loadProjects = useCallback(async () => {
-    try {
-      const data = await api.projects()
-      if (!applyIfChanged('projects', data.rev)) return
-      setProjects(data.projects)
-    } catch (err) {
-      setError((err as Error).message)
-    }
-  }, [applyIfChanged])
-
-  /**
-   * 会话状态读不到不该让看板报错——角标本来就只是提示，少了它看板照常能用。
-   * 所以这里失败不写全局 error，只把上次的数据留着。
-   */
-  const loadSessions = useCallback(async () => {
-    try {
-      const data = await api.sessions()
-      if (!applyIfChanged('sessions', data.rev)) return
-      setSessions(data.sessions)
-    } catch {
-      /* 读不到就维持现状 */
-    }
-  }, [applyIfChanged])
-
-  /**
-   * 名次与理由在服务端算（要会话实时状态，渲染层拿不到同一份），这里只拉一份。
-   * 失败时留着上一次的列表、记下原话——空列表分不清「没事」和「没算出来」。
-   */
-  const loadNextUp = useCallback(async () => {
-    try {
-      const data = await api.nextUp()
-      if (!applyIfChanged('next-up', data.rev)) return
-      setNextItems(data.items)
-      setNextError('')
-    } catch (err) {
-      setNextError((err as Error).message)
-    }
-  }, [applyIfChanged])
-
-  /**
-   * 看板每秒自己刷新一次：agent 改了什么、别的窗口动了哪条，不用点刷新就能看见。
-   * 不阻塞界面：上一轮没回来就跳过这一轮（不叠发）、窗口在后台时不拉（那时也没人看）。
-   * 拖拽不挡这一轮：宠物状态要跟着会话变，不能因为手里拖着卡片就停住。
-   * 这一秒若有人改了正在拖的那张卡的状态，它会换列，落点以松手时为准。
-   * 取消拖拽走 onDragCancel，把 dragSlug 清掉，否则这一轮会永远跳过。
-   */
   useEffect(() => {
     let inFlight = false
     const tick = () => {
       if (document.hidden || inFlight) return
       inFlight = true
-      void Promise.all([load(), loadTodos(), loadProjects(), loadSessions(), loadNextUp()]).finally(
-        () => {
-          inFlight = false
-        },
-      )
+      void load().finally(() => { inFlight = false })
     }
-    const timer = setInterval(tick, BOARD_POLL_MS)
-    // 切回窗口立刻补一次，别让人盯着过期数据等下一轮
+    tick()
+    const timer = setInterval(tick, BOARD_POLL_MS * (inMain ? 1 : 3))
     document.addEventListener('visibilitychange', tick)
     return () => {
       clearInterval(timer)
       document.removeEventListener('visibilitychange', tick)
     }
-  }, [load, loadTodos, loadProjects, loadSessions, loadNextUp])
+  }, [load, inMain])
 
-  // 动作之后立刻重拉一份（改完状态、退出设置页、从详情页返回）：不等下一次轮询
-  const refresh = useCallback(() => {
-    void load()
-    void loadTodos()
-    void loadProjects()
-    void loadSessions()
-    void loadNextUp()
-  }, [load, loadTodos, loadProjects, loadSessions, loadNextUp])
+  const refresh = useCallback(() => { void load() }, [load])
 
   // 切项目：写回 activeProject，再把看板换成新项目的数据
   const switchProject = useCallback(
@@ -548,13 +513,11 @@ export default function App() {
         await api.setActiveProject(slug)
         setDetail(null)
         await load()
-        await loadProjects()
-        await loadNextUp()
       } catch (err) {
         setError((err as Error).message)
       }
     },
-    [project, load, loadProjects, loadNextUp],
+    [project, load],
   )
 
   // ⌘1..9 直接切置顶项目，编号与左栏徽标同一份顺序
@@ -575,14 +538,6 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [inMain, pinnedLive, switchProject])
-
-  useEffect(() => {
-    void load()
-    void loadTodos()
-    void loadProjects()
-    void loadSessions()
-    void loadNextUp()
-  }, [load, loadTodos, loadProjects, loadSessions, loadNextUp])
 
   // 铃铛角标：agent 卡住等你、要人介入的需求数（档位 1 就是 level now）
   const agentCount = useMemo(() => nextItems.filter((i) => i.level === 'now').length, [nextItems])
@@ -784,6 +739,13 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [hint])
 
+  const jumpToChild = useCallback((slug: string) => {
+    const child = currentItems.current.find((r) => r.slug === slug)
+    if (child?.status === DONE_STATUS) revealDone()
+    moveFocus(slug)
+    setPendingJump(slug)
+  }, [revealDone, moveFocus])
+
   const boardKeyboard = inMain && reqView === 'board' && !searchOpen
 
   useEffect(() => {
@@ -866,6 +828,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [
     boardKeyboard,
+    jumpToChild,
     focusColumns,
     attention,
     project,
@@ -922,19 +885,14 @@ export default function App() {
   }, [flashSlug])
 
   // 点父卡片上的子需求：先把它所在的那一列铺开，滚动交给上面的 effect
-  function jumpToChild(slug: string) {
-    const child = items.find((r) => r.slug === slug)
-    if (child?.status === DONE_STATUS) revealDone()
-    moveFocus(slug)
-    setPendingJump(slug)
-  }
 
-  function clearDrag() {
+
+  const clearDrag = useCallback(() => {
     setDragSlug(null)
     setOverStatus(null)
-  }
+  }, [])
 
-  async function handleDragEnd({ active, over }: DragEndEvent) {
+  const handleDragEnd = useCallback(async ({ active, over }: DragEndEvent) => {
     clearDrag()
     if (!over) return
 
@@ -954,9 +912,58 @@ export default function App() {
       setItems(previous)
       setError(`移动失败：${(err as Error).message}`)
     }
-  }
+  }, [clearDrag, items])
+
+  const openCard = useCallback((slug: string) => setDetail({ project, slug }), [project])
 
   const dragItem = items.find((r) => r.slug === dragSlug) ?? null
+
+  const boardView = useMemo(() => {
+    if (!inMain || reqView !== 'board') return null
+    return (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCorners}
+                onDragStart={({ active }: DragStartEvent) => {
+                  setDragSlug(String(active.id))
+                  moveFocus(String(active.id))
+                }}
+                onDragOver={({ over }: DragOverEvent) => setOverStatus(statusOf(over) ?? null)}
+                onDragEnd={(e) => void handleDragEnd(e)}
+                onDragCancel={clearDrag}
+              >
+                <div className="board">
+                  {statuses.map((status) => (
+                    <ColumnView
+                      key={status}
+                      status={status}
+                      items={byStatus.get(status) ?? []}
+                      sessionsByReq={sessionsByReq}
+                      childStats={childStats}
+                      childrenByParent={childrenByParent}
+                      onJumpChild={jumpToChild}
+                      flashSlug={flashSlug}
+                      kidsOpen={kidsOpen}
+                      onToggleKids={toggleKids}
+                      onFocusCard={handleCardFocus}
+                      onOpen={openCard}
+                      onTag={filterByTag}
+                      isOver={overStatus === status}
+                      collapsed={status === DONE_STATUS && !doneOpen}
+                      onToggleCollapsed={toggleDone}
+                    />
+                  ))}
+                </div>
+                <DragOverlay>
+                  {dragItem ? (
+                    <Card req={dragItem} sessions={sessionsByReq.get(dragItem.id) ?? []} overlay />
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
+    )
+  }, [inMain, reqView, sensors, moveFocus, handleDragEnd, clearDrag, statuses, byStatus,
+    sessionsByReq, childStats, childrenByParent, jumpToChild, flashSlug, kidsOpen,
+    toggleKids, handleCardFocus, openCard, filterByTag, overStatus, doneOpen, toggleDone, dragItem])
 
   if (loading) return <div className="loading">加载中…</div>
 
@@ -1079,45 +1086,7 @@ export default function App() {
             {hint && <div className="notice ok">{hint}</div>}
 
             {reqView === 'board' ? (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCorners}
-                onDragStart={({ active }: DragStartEvent) => {
-                  setDragSlug(String(active.id))
-                  moveFocus(String(active.id))
-                }}
-                onDragOver={({ over }: DragOverEvent) => setOverStatus(statusOf(over) ?? null)}
-                onDragEnd={(e) => void handleDragEnd(e)}
-                onDragCancel={clearDrag}
-              >
-                <div className="board">
-                  {statuses.map((status) => (
-                    <ColumnView
-                      key={status}
-                      status={status}
-                      items={byStatus.get(status) ?? []}
-                      sessionsByReq={sessionsByReq}
-                      childStats={childStats}
-                      childrenByParent={childrenByParent}
-                      onJumpChild={jumpToChild}
-                      flashSlug={flashSlug}
-                      kidsOpen={kidsOpen}
-                      onToggleKids={toggleKids}
-                      onFocusCard={handleCardFocus}
-                      onOpen={(slug) => setDetail({ project, slug })}
-                      onTag={filterByTag}
-                      isOver={overStatus === status}
-                      collapsed={status === DONE_STATUS && !doneOpen}
-                      onToggleCollapsed={toggleDone}
-                    />
-                  ))}
-                </div>
-                <DragOverlay>
-                  {dragItem ? (
-                    <Card req={dragItem} sessions={sessionsByReq.get(dragItem.id) ?? []} overlay />
-                  ) : null}
-                </DragOverlay>
-              </DndContext>
+              boardView
             ) : reqView === 'next' ? (
               <NextUp
                 items={nextItems}
@@ -1129,7 +1098,7 @@ export default function App() {
                 requirements={items}
                 projectName={projectName || project}
                 hits={hits}
-                onOpen={(slug) => setDetail({ project, slug })}
+                onOpen={openCard}
                 onBack={() => setReqView('board')}
               />
             )}
