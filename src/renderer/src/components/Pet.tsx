@@ -230,11 +230,11 @@ function Bubble({ text, state }: { text: string; state: Pose }) {
 }
 
 // 鼠标移开 / 焦点移走之后气泡还留多久
-const LINGER_MS = 30_000
+const LINGER_MS = 60_000
 
 /**
  * 气泡在不在：非静止那几档一到就一直挂着，直到状态变了；静止那档要鼠标停在这只 pet 上
- * （或 Tab 把焦点落上来）才出，移开后再留 30 秒——点过 pet 会把它写成静止，所以点完也是「过一会儿才收」。
+ * （或 Tab 把焦点落上来）才出，移开后再留 1 分钟——点过 pet 会把它写成静止，所以点完也是「过一会儿才收」。
  * 悬停与焦点是同一个信号：两者都撤了才开始计时。
  */
 function useBubbleShown(pinned: boolean, active: boolean): boolean {
@@ -244,7 +244,7 @@ function useBubbleShown(pinned: boolean, active: boolean): boolean {
       setShown(true)
       return
     }
-    // 本来就没露，不排这个队：不然一只静止的 pet 一挂载就白等 30 秒再走一遍 setState
+    // 本来就没露，不排这个队：不然一只静止的 pet 一挂载就白等 1 分钟再走一遍 setState
     if (!shown) return
     const timer = setTimeout(() => setShown(false), LINGER_MS)
     return () => clearTimeout(timer)
@@ -262,7 +262,7 @@ function PetSlot({ item, compact }: { item: PetItem; compact: boolean }) {
   const [openError, setOpenError] = useState('')
   const { session, state } = item
   const hasBubble = item.bubble !== ''
-  // 焦点与悬停共用一条气泡规则：移开焦点和移开鼠标一样，气泡再留 30 秒
+  // 焦点与悬停共用一条气泡规则：移开焦点和移开鼠标一样，气泡再留 1 分钟
   const shown = useBubbleShown(hasBubble && state !== 'idle', hovered || focused)
   const mood = useIdleMood(state === 'idle' ? session.status.observedAt : 0)
   const canFocusWorkspace = session.agent === 'cursor' && !!session.cwd
