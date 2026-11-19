@@ -92,6 +92,7 @@ export interface Requirement {
   parentId: string
   title: string
   status: Status
+  pinned: boolean
   sessionAnalysisStatus: SessionAnalysisStatus
   priority: Priority | ''
   summary: string
@@ -284,6 +285,7 @@ interface Row {
   title: string
   path: string
   status: string
+  pinned: number
   session_analysis_status: SessionAnalysisStatus
   priority: string | null
   summary: string | null
@@ -948,6 +950,7 @@ export class BoardDatabase {
       parentId: row.parent_id ?? '',
       title: row.title,
       status,
+      pinned: !!row.pinned,
       sessionAnalysisStatus: row.session_analysis_status,
       priority: asPriority(row.priority) ?? '',
       summary: row.summary ?? '',
@@ -1156,6 +1159,14 @@ export class BoardDatabase {
     const info = this.db
       .prepare('UPDATE requirement SET session_analysis_status = ?, updated = ? WHERE slug = ? AND project = ?')
       .run(status, today(), slug, project)
+    if (info.changes === 0) throw new Error(`Requirement not found: ${project}/${slug}`)
+    return this.get(slug, project)!
+  }
+
+  setPinned(slug: string, pinned: boolean, project = this.activeProject): Requirement {
+    const info = this.db
+      .prepare('UPDATE requirement SET pinned = ? WHERE slug = ? AND project = ?')
+      .run(pinned ? 1 : 0, slug, project)
     if (info.changes === 0) throw new Error(`Requirement not found: ${project}/${slug}`)
     return this.get(slug, project)!
   }

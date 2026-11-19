@@ -21,43 +21,73 @@ export function posOf(columns: BoardColumn[], slug: string): BoardPos | null {
   return null
 }
 
-function firstPos(columns: BoardColumn[]): BoardPos | null {
-  const col = columns.find((c) => c.slugs.length > 0)
-  return col ? { status: col.status, index: 0 } : null
-}
-
-// 左右跳过空列，越界时夹到目标列最后一张
-export function movePos(
-  columns: BoardColumn[],
-  current: BoardPos | null,
-  dir: BoardDir,
-): BoardPos | null {
-  if (!current) return firstPos(columns)
-
-  const idx = columns.findIndex((c) => c.status === current.status)
-  if (idx < 0) return firstPos(columns)
-  const col = columns[idx]
-  if (!col.slugs.length) return firstPos(columns)
-
-  if (dir === 'up' || dir === 'down') {
-    const delta = dir === 'down' ? 1 : -1
-    const next = current.index + delta
-    if (next < 0 || next >= col.slugs.length) return current
-    return { status: col.status, index: next }
-  }
-
-  const step = dir === 'right' ? 1 : -1
-  for (let i = idx + step; i >= 0 && i < columns.length; i += step) {
-    const target = columns[i]
-    if (!target.slugs.length) continue
-    return { status: target.status, index: Math.min(current.index, target.slugs.length - 1) }
-  }
-  return current
-}
-
 export function slugAt(columns: BoardColumn[], pos: BoardPos | null): string {
   if (!pos) return ''
   return columns.find((c) => c.status === pos.status)?.slugs[pos.index] ?? ''
+}
+
+export interface FocusRect {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+export interface FocusCardCandidate {
+  kind: 'card'
+  slug: string
+  rect: FocusRect
+}
+
+export interface FocusDoneCandidate {
+  kind: 'done-bar'
+  rect: FocusRect
+}
+
+export type FocusCandidate = FocusCardCandidate | FocusDoneCandidate
+
+/**
+ * 按屏幕几何找方向上的下一个落点。
+ *
+ * 主轴取沿方向的中心距离，侧向偏移乘 2 计入代价：
+ * 同一排的相邻卡优先于斜下方的更近卡，置顶横向排列也能按左右走。
+ * 方向上没有候选时返回 null。
+ */
+export function nextCandidateInDirection(
+  current: FocusRect,
+  candidates: readonly FocusCandidate[],
+  dir: BoardDir,
+): FocusCandidate | null {
+  const cx = (current.left + current.right) / 2
+  const cy = (current.top + current.bottom) / 2
+  let best: { candidate: FocusCandidate; score: number } | null = null
+
+  for (const c of candidates) {
+    const dx = (c.rect.left + c.rect.right) / 2 - cx
+    const dy = (c.rect.top + c.rect.bottom) / 2 - cy
+    let along: number
+    let across: number
+    if (dir === 'right') {
+      if (c.rect.left <= current.right) continue
+      along = dx
+      across = Math.abs(dy)
+    } else if (dir === 'left') {
+      if (c.rect.right >= current.left) continue
+      along = -dx
+      across = Math.abs(dy)
+    } else if (dir === 'down') {
+      if (c.rect.top <= current.bottom) continue
+      along = dy
+      across = Math.abs(dx)
+    } else {
+      if (c.rect.bottom >= current.top) continue
+      along = -dy
+      across = Math.abs(dx)
+    }
+    const score = along + across * 2
+    if (!best || score < best.score) best = { candidate: c, score }
+  }
+  return best?.candidate ?? null
 }
 
 export interface PetRef {

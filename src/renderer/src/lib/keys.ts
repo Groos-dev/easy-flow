@@ -74,8 +74,8 @@ export const SHORTCUTS: ShortcutDef[] = [
   // ------------------------------------------------------------ 看板
   { id: 'board.next', context: 'board', keys: ['J', 'ArrowDown'], label: '下一张卡' },
   { id: 'board.prev', context: 'board', keys: ['K', 'ArrowUp'], label: '上一张卡' },
-  { id: 'board.left', context: 'board', keys: ['H', 'ArrowLeft'], label: '左一列' },
-  { id: 'board.right', context: 'board', keys: ['L', 'ArrowRight'], label: '右一列' },
+  { id: 'board.left', context: 'board', keys: ['H', 'ArrowLeft'], label: '左边一张卡' },
+  { id: 'board.right', context: 'board', keys: ['L', 'ArrowRight'], label: '右边一张卡' },
   {
     id: 'board.attention',
     context: 'board',
@@ -85,6 +85,7 @@ export const SHORTCUTS: ShortcutDef[] = [
   { id: 'board.open', context: 'board', keys: ['Return'], label: '打开选中需求' },
   { id: 'board.kids', context: 'board', keys: ['Space'], label: '展开 / 收起子需求' },
   { id: 'board.copy-slug', context: 'board', keys: ['Y'], label: '复制选中需求的 slug' },
+  { id: 'board.pin', context: 'board', keys: ['P'], label: '置顶 / 取消置顶选中需求' },
   {
     id: 'board.kid-n',
     context: 'board',

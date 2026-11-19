@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS requirement (
   title    TEXT NOT NULL,
   path     TEXT NOT NULL,
   status   TEXT NOT NULL,
+  pinned   INTEGER NOT NULL DEFAULT 0,
   session_analysis_status TEXT NOT NULL DEFAULT 'pending'
     CHECK (session_analysis_status IN ('pending', 'completed', 'skipped')),
   priority TEXT,
@@ -224,6 +225,7 @@ function migrate(db: DatabaseSync): void {
   // 子需求：父需求的 id。层级同时体现在 slug（parent/child）里，这里存一份便于按父子查
   addIfMissing('requirement', 'parent_id', 'parent_id TEXT')
   db.exec('CREATE INDEX IF NOT EXISTS idx_req_parent ON requirement(parent_id)')
+  addIfMissing('requirement', 'pinned', 'pinned INTEGER NOT NULL DEFAULT 0')
   if (!cols.some((c) => c.name === 'session_analysis_status')) {
     db.exec(`ALTER TABLE requirement ADD COLUMN session_analysis_status TEXT NOT NULL DEFAULT 'pending'
       CHECK (session_analysis_status IN ('pending', 'completed', 'skipped'))`)

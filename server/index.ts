@@ -403,14 +403,18 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
       }
 
       if (url.pathname === '/api/update' && req.method === 'POST') {
-        const { slug, status, priority, title, project: projectRaw } = await readBody(req)
+        const { slug, status, priority, title, pinned, project: projectRaw } = await readBody(req)
         const project = resolveProject(db, projectRaw ? String(projectRaw) : null)
         const id = String(slug)
+        if (pinned !== undefined && typeof pinned !== 'boolean') {
+          throw new Error('pinned must be a boolean')
+        }
         let result = db.get(id, project)
         if (!result) throw new Error(`Requirement not found: ${id}`)
         if (status !== undefined) result = db.setStatus(id, status as Status, project)
         if (priority !== undefined) result = db.setPriority(id, (priority as Priority) || '', project)
         if (title !== undefined) result = db.rename(id, String(title), project)
+        if (pinned !== undefined) result = db.setPinned(id, pinned, project)
         json(req, res, 200, { ...result, sync: NO_CHANGES })
         return
       }

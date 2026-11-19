@@ -176,16 +176,18 @@ describe('数据层 · 项目与需求同步', () => {
     db.close()
   })
 
-  test('★ 同步不覆盖已有状态（status/priority 是权威的）', () => {
+  test('★ 同步不覆盖已有状态（status/priority/pinned 是权威的）', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha\n\n## 需求\n\n内容'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
     db.setStatus('alpha', 'Review')
+    db.setPinned('alpha', true)
 
     // 再同步多次，状态必须保持
     db.syncProjects()
     db.syncProjects()
     assert.equal(db.get('alpha')?.status, 'Review')
+    assert.equal(db.get('alpha')?.pinned, true)
     db.close()
   })
 
@@ -290,6 +292,7 @@ describe('数据层 · 项目与需求同步', () => {
     const r = db.get('alpha', 'onex')!
     assert.equal(r.status, '已完成', '老库的状态是权威，同步不能动它')
     assert.equal(r.parentId, '')
+    assert.equal(r.pinned, false, '老库补列后默认不置顶')
     db.close()
   })
 })
@@ -472,9 +475,20 @@ describe('数据层 · 状态读写', () => {
     assert.ok(before !== undefined)
   })
 
+  test('setPinned 只改置顶标记，不动状态与日期', () => {
+    const before = db.get('alpha')
+    assert.equal(db.setPinned('alpha', true).pinned, true)
+    const pinned = db.get('alpha')
+    assert.equal(pinned?.pinned, true)
+    assert.equal(pinned?.status, before?.status)
+    assert.equal(pinned?.updated, before?.updated)
+    assert.equal(db.setPinned('alpha', false).pinned, false)
+  })
+
   test('操作不存在的需求会报错', () => {
     assert.throws(() => db.setStatus('nope', '澄清'), /Requirement not found/)
     assert.throws(() => db.setPriority('nope', 'p0'), /Requirement not found/)
+    assert.throws(() => db.setPinned('nope', true), /Requirement not found/)
     assert.throws(() => db.rename('nope', 'x'), /Requirement not found/)
   })
 
@@ -2767,9 +2781,24 @@ describe('HTTP 层', () => {
     assert.equal(r.priority, 'p1')
   })
 
+  test('POST /api/update 支持置顶与取消置顶', async () => {
+    const pinned = await post('/api/update', { slug: 'alpha', pinned: true })
+    assert.equal(pinned.pinned, true)
+    const list = await get('/api/requirements')
+    assert.equal(list.requirements.find((x: any) => x.slug === 'alpha').pinned, true)
+    const unpinned = await post('/api/update', { slug: 'alpha', pinned: false })
+    assert.equal(unpinned.pinned, false)
+  })
+
   test('POST /api/update 拒绝非法枚举', async () => {
     assert.match((await post('/api/update', { slug: 'alpha', status: '开发中' })).error, /Unknown status/)
     assert.match((await post('/api/update', { slug: 'alpha', priority: 'high' })).error, /Unknown priority/)
+  })
+
+  test('POST /api/update 的 pinned 只接布尔值', async () => {
+    assert.match((await post('/api/update', { slug: 'alpha', pinned: 'false' })).error, /pinned must be a boolean/)
+    const list = await get('/api/requirements')
+    assert.equal(list.requirements.find((x: any) => x.slug === 'alpha').pinned, false)
   })
 
   test('GET /api/search 返回命中的完整需求对象', async () => {
@@ -3086,6 +3115,7 @@ describe('导图：建树', () => {
     parentId: '',
     title,
     status,
+    pinned: false,
     sessionAnalysisStatus: 'pending',
     priority: '',
     summary: '',
@@ -3157,6 +3187,7 @@ describe('导图：布局', () => {
     parentId: '',
     title,
     status: '澄清',
+    pinned: false,
     sessionAnalysisStatus: 'pending',
     priority: '',
     summary: '',

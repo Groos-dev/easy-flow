@@ -169,6 +169,8 @@ describe('键位表', () => {
     )
     assert.equal(shortcutLabel('board.next', 'darwin'), 'J / ↓')
     assert.equal(shortcutLabel('detail.tab-n', 'darwin'), '⌘1..9')
+    assert.equal(shortcut(key('p'), 'board.pin', 'darwin'), true)
+    assert.equal(shortcut(key('p', { metaKey: true }), 'board.pin', 'darwin'), false)
   })
 
   test('agent 头像那一组：Tab 来回切、hjkl 与方向键走头像、回车回会话、Esc 回卡片', () => {
