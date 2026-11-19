@@ -68,6 +68,7 @@ export interface Requirement {
   parentId: string
   title: string
   status: string
+  pinned: boolean
   sessionAnalysisStatus: SessionAnalysisStatus
   priority: string
   summary: string

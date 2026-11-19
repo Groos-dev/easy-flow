@@ -1,4 +1,4 @@
-import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -7,6 +7,7 @@ import {
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -15,12 +16,12 @@ import { api } from './lib/api'
 import { reuseRows } from './lib/rows'
 import { DONE_STATUS, childStatsOf, childrenOf } from './lib/children'
 import {
-  movePos,
+  nextCandidateInDirection,
   nextPetStop,
   posOf,
-  slugAt,
   type BoardColumn,
-  type BoardPos,
+  type BoardDir,
+  type FocusCandidate,
   type PetRef,
 } from './lib/board-focus'
 import { lastActiveByReq, orderColumn } from './lib/board-order'
@@ -39,6 +40,7 @@ import { useTheme } from './lib/theme'
 import type { ChildStat, NextUpItem, Project, Requirement, Session, Status, Todo } from './lib/types'
 import MindMap from './components/MindMap'
 import Card from './components/Card'
+import { PinIcon } from './components/icons'
 import NextUp from './components/NextUp'
 import Detail from './components/Detail'
 import SearchPanel from './components/SearchPanel'
@@ -72,6 +74,7 @@ interface BoardColumnProps {
   onFocusCard: (slug: string) => void
   onOpen: (slug: string) => void
   onTag: (tag: string) => void
+  onTogglePin: (req: Requirement, next: boolean) => void
   isOver: boolean
   // 收成窄条（只有「已完成」列会）
   collapsed: boolean
@@ -80,6 +83,47 @@ interface BoardColumnProps {
 
 const EMPTY_SESSIONS: Session[] = []
 const POINTER_OPTIONS = { activationConstraint: { distance: 4 } }
+const PIN_STATUS = '置顶'
+const PIN_DROP_ID = 'pinned-drop'
+
+function visibleInBoard(el: HTMLElement): boolean {
+  const rect = el.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return false
+  let left = 0
+  let top = 0
+  let right = window.innerWidth
+  let bottom = window.innerHeight
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    const style = getComputedStyle(node)
+    if (style.overflowX === 'visible' && style.overflowY === 'visible') continue
+    const box = node.getBoundingClientRect()
+    left = Math.max(left, box.left)
+    top = Math.max(top, box.top)
+    right = Math.min(right, box.right)
+    bottom = Math.min(bottom, box.bottom)
+  }
+  return rect.right > left && rect.left < right && rect.bottom > top && rect.top < bottom
+}
+
+const collisionDetection: CollisionDetection = (args) => {
+  const pointer = args.pointerCoordinates
+  const pinned = args.droppableContainers.find((c) => c.id === PIN_DROP_ID)
+  const rect = pinned ? args.droppableRects.get(pinned.id) : undefined
+  if (
+    pointer &&
+    rect &&
+    pointer.x >= rect.left &&
+    pointer.x <= rect.right &&
+    pointer.y >= rect.top &&
+    pointer.y <= rect.bottom
+  ) {
+    return [{ id: PIN_DROP_ID }]
+  }
+  return closestCorners({
+    ...args,
+    droppableContainers: args.droppableContainers.filter((c) => c.id !== PIN_DROP_ID),
+  })
+}
 
 const ColumnView = memo(function ColumnView({
   status,
@@ -94,6 +138,7 @@ const ColumnView = memo(function ColumnView({
   onFocusCard,
   onOpen,
   onTag,
+  onTogglePin,
   isOver,
   collapsed,
   onToggleCollapsed,
@@ -151,6 +196,7 @@ const ColumnView = memo(function ColumnView({
               onFocusCard={onFocusCard}
               onOpen={onOpen}
               onTag={onTag}
+              onTogglePin={onTogglePin}
             />
           ))
         )}
@@ -160,6 +206,15 @@ const ColumnView = memo(function ColumnView({
 })
 
 ColumnView.displayName = 'ColumnView'
+
+function PinnedSection({ className, children }: { className: string; children: ReactNode }) {
+  const { setNodeRef } = useDroppable({ id: PIN_DROP_ID })
+  return (
+    <section ref={setNodeRef} className={className}>
+      {children}
+    </section>
+  )
+}
 
 // dnd-kit 的 data 是 unknown，这里收窄一次
 function statusOf(over: DragOverEvent['over']): Status | undefined {
@@ -194,6 +249,10 @@ export default function App() {
   const [pinned, setPinned] = useState<string[]>(readPinned)
   // 「已完成」列是否展开。默认收成窄条：历史只增不减，全铺开会把活跃三列挤窄
   const [doneOpen, setDoneOpen] = useState(false)
+  const [pinsOpen, setPinsOpen] = useState(true)
+  const [petFocus, setPetFocus] = useState<{ project: string; slug: string; session: string } | null>(null)
+  const petFocusRef = useRef(petFocus)
+  petFocusRef.current = petFocus
   // 从父卡片点过来的那条子需求：等它在版面上出现再滚过去
   const [pendingJump, setPendingJump] = useState<string | null>(null)
   // 刚跳到的卡片：闪一下，好在一屏卡片里认出落点
@@ -251,6 +310,8 @@ export default function App() {
   // 要落的是卡里哪只 pet
   // 卡渲染出来后再把焦点从卡挪到那一格
   const pendingPet = useRef<PetRef | null>(null)
+  // 置顶卡接住焦点后再收「已完成」列，收早了会把待落焦点清掉
+  const pendingFold = useRef(false)
 
   useEffect(() => {
     localStorage.setItem(PINNED_KEY, JSON.stringify(pinned))
@@ -509,6 +570,8 @@ export default function App() {
         setDetail(null)
         return
       }
+      petFocusRef.current = null
+      setPetFocus(null)
       try {
         await api.setActiveProject(slug)
         setDetail(null)
@@ -575,11 +638,14 @@ export default function App() {
     [items, hits],
   )
 
+  const pinnedItems = useMemo(() => shown.filter((r) => r.pinned), [shown])
+
   const byStatus = useMemo(() => {
     const map = new Map<Status, Requirement[]>(
       (statuses ?? []).map((s) => [s, []]),
     )
     for (const r of shown) {
+      if (r.pinned) continue
       const st = (r.status ?? '澄清') as Status
       if (!map.has(st)) map.set(st, [])
       map.get(st)!.push(r)
@@ -589,9 +655,27 @@ export default function App() {
     return map
   }, [shown, statuses, lastActive])
 
-  const focusColumns = useMemo<BoardColumn[]>(
+  const pinColumn = useMemo<BoardColumn | null>(
+    () =>
+      pinnedItems.length > 0
+        ? { status: PIN_STATUS, slugs: pinnedItems.map((r) => r.slug) }
+        : null,
+    [pinnedItems],
+  )
+
+  const statusColumns = useMemo<BoardColumn[]>(
     () => statuses.map((s) => ({ status: s, slugs: (byStatus.get(s) ?? []).map((r) => r.slug) })),
     [statuses, byStatus],
+  )
+
+  const focusColumns = useMemo<BoardColumn[]>(
+    () => (pinsOpen && pinColumn ? [pinColumn, ...statusColumns] : statusColumns),
+    [pinsOpen, pinColumn, statusColumns],
+  )
+
+  const attentionColumns = useMemo<BoardColumn[]>(
+    () => (pinColumn ? [pinColumn, ...statusColumns] : statusColumns),
+    [pinColumn, statusColumns],
   )
 
   // 要人处理的 pet：会话落在事件三档
@@ -648,6 +732,10 @@ export default function App() {
 
   // 选中态与 DOM 焦点一起挪：旧卡摘属性、新卡挂属性，各只有一次属性切换
   const moveFocus = useCallback((slug: string) => {
+    if (petFocusRef.current && petFocusRef.current.slug !== slug) {
+      petFocusRef.current = null
+      setPetFocus(null)
+    }
     const el = cardEl(slug)
     if (!el) {
       // 收起的「已完成」列里的卡还没渲染，等展开后的下一次渲染再落
@@ -666,6 +754,11 @@ export default function App() {
   }, [])
 
   const dropFocus = useCallback(() => {
+    pendingFold.current = false
+    if (petFocusRef.current) {
+      petFocusRef.current = null
+      setPetFocus(null)
+    }
     const prev = focusedEl.current
     if (prev) {
       prev.removeAttribute('data-focused')
@@ -731,6 +824,10 @@ export default function App() {
     const pet = pendingPet.current
     if (pet?.slug === slug) focusPetStop(pet.slug, pet.session)
     else moveFocus(slug)
+    if (pendingFold.current) {
+      pendingFold.current = false
+      foldDone()
+    }
   })
 
   useEffect(() => {
@@ -741,10 +838,37 @@ export default function App() {
 
   const jumpToChild = useCallback((slug: string) => {
     const child = currentItems.current.find((r) => r.slug === slug)
-    if (child?.status === DONE_STATUS) revealDone()
+    if (child?.pinned) setPinsOpen(true)
+    else if (child?.status === DONE_STATUS) revealDone()
     moveFocus(slug)
     setPendingJump(slug)
   }, [revealDone, moveFocus])
+
+  const toggleRequirementPin = useCallback(async (req: Requirement, next: boolean) => {
+    if (petFocusRef.current?.project === req.project && petFocusRef.current.slug === req.slug) {
+      petFocusRef.current = null
+      setPetFocus(null)
+    }
+    if (next) setPinsOpen(true)
+    setItems((list) =>
+      list.map((r) => (r.project === req.project && r.slug === req.slug ? { ...r, pinned: next } : r)),
+    )
+    try {
+      const updated = await api.update(req.slug, { pinned: next }, req.project)
+      setItems((list) =>
+        list.map((r) =>
+          r.project === req.project && r.slug === req.slug ? { ...r, pinned: updated.pinned } : r,
+        ),
+      )
+    } catch (err) {
+      setItems((list) =>
+        list.map((r) =>
+          r.project === req.project && r.slug === req.slug ? { ...r, pinned: req.pinned } : r,
+        ),
+      )
+      setError(`置顶失败：${(err as Error).message}`)
+    }
+  }, [])
 
   const boardKeyboard = inMain && reqView === 'board' && !searchOpen
 
@@ -761,15 +885,37 @@ export default function App() {
       if (shortcut(e, 'board.attention')) {
         e.preventDefault()
         const slot = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('.slot')
-        const hit = nextPetStop(focusColumns, (slug) => attention.get(slug) ?? [], {
+        const hit = nextPetStop(attentionColumns, (slug) => attention.get(slug) ?? [], {
           pos: cur,
           session: slot?.dataset.session ?? '',
         })
         if (!hit) return
-        const at = posOf(focusColumns, hit.slug)
-        if (at?.status === DONE_STATUS) revealDone()
-        else foldDone()
+        pendingFold.current = false
+        const at = posOf(attentionColumns, hit.slug)
+        if (at?.status === PIN_STATUS) {
+          const card = cardEl(hit.slug)
+          const visible =
+            !!card &&
+            Array.from(card.querySelectorAll<HTMLElement>('.slot[data-session]')).some(
+              (el) => el.dataset.session === hit.session,
+            )
+          const focus = { project, slug: hit.slug, session: hit.session }
+          petFocusRef.current = focus
+          setPetFocus(focus)
+          setPinsOpen(true)
+          if (!pinsOpen || !visible) {
+            pendingFocus.current = hit.slug
+            pendingPet.current = focus
+            pendingFold.current = true
+            return
+          }
+        } else if (at?.status === DONE_STATUS) {
+          revealDone()
+        } else {
+          foldDone()
+        }
         focusPetStop(hit.slug, hit.session)
+        if (at?.status === PIN_STATUS) foldDone()
         return
       }
       // 卡片也带 role=button，但它就是这里要接管的
@@ -777,17 +923,61 @@ export default function App() {
       // 焦点停在卡片里的 agent 头像上：这时在头像之间走，单键不该把人带回卡片层
       if (isPetTarget(el)) return
       if (!el?.closest?.('.card') && isInteractiveTarget(el)) return
-      let next: BoardPos | null = null
-      if (shortcut(e, 'board.next')) next = movePos(focusColumns, cur, 'down')
-      else if (shortcut(e, 'board.prev')) next = movePos(focusColumns, cur, 'up')
-      else if (shortcut(e, 'board.left')) next = movePos(focusColumns, cur, 'left')
-      else if (shortcut(e, 'board.right')) next = movePos(focusColumns, cur, 'right')
-      if (next) {
+      let dir: BoardDir | null = null
+      if (shortcut(e, 'board.next')) dir = 'down'
+      else if (shortcut(e, 'board.prev')) dir = 'up'
+      else if (shortcut(e, 'board.left')) dir = 'left'
+      else if (shortcut(e, 'board.right')) dir = 'right'
+      if (dir) {
+        const settleDone = (slug: string) => {
+          const req = currentItems.current.find((r) => r.slug === slug)
+          if (req?.pinned) foldDone()
+          else if (req?.status === DONE_STATUS) revealDone()
+          else foldDone()
+        }
+        const focusDone = () => {
+          revealDone()
+          const first = byStatus.get(DONE_STATUS)?.[0]
+          if (first) pendingFocus.current = first.slug
+        }
+        const focusedCard = focusSlug.current ? cardEl(focusSlug.current) : null
+        const currentEl = focusedCard && visibleInBoard(focusedCard) ? focusedCard : null
+        const cards = Array.from(
+          document.querySelectorAll<HTMLElement>('.board-wrap .card[data-slug]'),
+        ).filter(
+          (node) =>
+            node !== currentEl && !node.classList.contains('dragging') && visibleInBoard(node),
+        )
+        const targets: FocusCandidate[] = cards.map((node) => ({
+          kind: 'card',
+          slug: node.dataset.slug ?? '',
+          rect: node.getBoundingClientRect(),
+        }))
+        const doneBar = document.querySelector<HTMLElement>('.board-wrap .column.collapsed')
+        if (doneBar && visibleInBoard(doneBar) && (byStatus.get(DONE_STATUS)?.length ?? 0) > 0) {
+          targets.push({ kind: 'done-bar', rect: doneBar.getBoundingClientRect() })
+        }
+        if (!currentEl) {
+          const first = targets.find((t) => t.kind === 'card')
+          if (first && first.kind === 'card') {
+            e.preventDefault()
+            settleDone(first.slug)
+            moveFocus(first.slug)
+          } else if (targets.some((t) => t.kind === 'done-bar')) {
+            e.preventDefault()
+            focusDone()
+          }
+          return
+        }
+        const target = nextCandidateInDirection(currentEl.getBoundingClientRect(), targets, dir)
+        if (!target) return
         e.preventDefault()
-        // 卡是列展开之后才有的，落焦点由 moveFocus 记下待办
-        if (next.status === DONE_STATUS) revealDone()
-        else foldDone()
-        moveFocus(slugAt(focusColumns, next))
+        if (target.kind === 'done-bar') {
+          focusDone()
+          return
+        }
+        settleDone(target.slug)
+        moveFocus(target.slug)
         return
       }
       const slug = focusSlug.current
@@ -819,6 +1009,12 @@ export default function App() {
           .catch(() => {})
         return
       }
+      if (shortcut(e, 'board.pin') && slug) {
+        e.preventDefault()
+        const req = currentItems.current.find((r) => r.slug === slug)
+        if (req) void toggleRequirementPin(req, !req.pinned)
+        return
+      }
       if (shortcut(e, 'board.clear') && slug) {
         e.preventDefault()
         dropFocus()
@@ -830,6 +1026,8 @@ export default function App() {
     boardKeyboard,
     jumpToChild,
     focusColumns,
+    attentionColumns,
+    byStatus,
     attention,
     project,
     toggleKids,
@@ -841,6 +1039,8 @@ export default function App() {
     dropFocus,
     revealDone,
     foldDone,
+    toggleRequirementPin,
+    pinsOpen,
   ])
 
   /**
@@ -894,7 +1094,7 @@ export default function App() {
 
   const handleDragEnd = useCallback(async ({ active, over }: DragEndEvent) => {
     clearDrag()
-    if (!over) return
+    if (!over || over.id === PIN_DROP_ID) return
 
     const slug = String(active.id)
     const target = statusOf(over) ?? (over.id as Status)
@@ -923,7 +1123,7 @@ export default function App() {
     return (
               <DndContext
                 sensors={sensors}
-                collisionDetection={closestCorners}
+                collisionDetection={collisionDetection}
                 onDragStart={({ active }: DragStartEvent) => {
                   setDragSlug(String(active.id))
                   moveFocus(String(active.id))
@@ -932,27 +1132,85 @@ export default function App() {
                 onDragEnd={(e) => void handleDragEnd(e)}
                 onDragCancel={clearDrag}
               >
-                <div className="board">
-                  {statuses.map((status) => (
-                    <ColumnView
-                      key={status}
-                      status={status}
-                      items={byStatus.get(status) ?? []}
-                      sessionsByReq={sessionsByReq}
-                      childStats={childStats}
-                      childrenByParent={childrenByParent}
-                      onJumpChild={jumpToChild}
-                      flashSlug={flashSlug}
-                      kidsOpen={kidsOpen}
-                      onToggleKids={toggleKids}
-                      onFocusCard={handleCardFocus}
-                      onOpen={openCard}
-                      onTag={filterByTag}
-                      isOver={overStatus === status}
-                      collapsed={status === DONE_STATUS && !doneOpen}
-                      onToggleCollapsed={toggleDone}
-                    />
-                  ))}
+                <div className="board-wrap">
+                  {pinnedItems.length > 0 && (
+                    <PinnedSection className={`pinned${pinsOpen ? '' : ' collapsed'}`}>
+                      <button
+                        type="button"
+                        className="pinned-head"
+                        aria-expanded={pinsOpen}
+                        onClick={() => setPinsOpen((open) => !open)}
+                        title={pinsOpen ? '收起置顶区' : '展开置顶区'}
+                      >
+                        <PinIcon />
+                        <span>置顶</span>
+                        <span className="n">{pinnedItems.length}</span>
+                        {pinsOpen && <span className="pinned-hint">长期需求</span>}
+                        <svg
+                          className="pinned-fold"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <polyline points="6 15 12 9 18 15" />
+                        </svg>
+                      </button>
+                      {pinsOpen && (
+                        <div className="pinned-body">
+                          {pinnedItems.map((r) => (
+                            <Card
+                              key={r.slug}
+                              req={r}
+                              sessions={sessionsByReq.get(r.id) ?? EMPTY_SESSIONS}
+                              childStat={childStats.get(r.id)}
+                              kids={childrenByParent.get(r.id)}
+                              onJumpChild={jumpToChild}
+                              flash={flashSlug === r.slug}
+                              kidsOpen={kidsOpen.has(r.slug)}
+                              onToggleKids={toggleKids}
+                              onFocusCard={handleCardFocus}
+                              onOpen={openCard}
+                              onTag={filterByTag}
+                              focusSession={
+                                petFocus?.project === r.project && petFocus.slug === r.slug
+                                  ? petFocus.session
+                                  : undefined
+                              }
+                              onTogglePin={toggleRequirementPin}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </PinnedSection>
+                  )}
+                  <div className="board">
+                    {statuses.map((status) => (
+                      <ColumnView
+                        key={status}
+                        status={status}
+                        items={byStatus.get(status) ?? []}
+                        sessionsByReq={sessionsByReq}
+                        childStats={childStats}
+                        childrenByParent={childrenByParent}
+                        onJumpChild={jumpToChild}
+                        flashSlug={flashSlug}
+                        kidsOpen={kidsOpen}
+                        onToggleKids={toggleKids}
+                        onFocusCard={handleCardFocus}
+                        onOpen={openCard}
+                        onTag={filterByTag}
+                        onTogglePin={toggleRequirementPin}
+                        isOver={overStatus === status}
+                        collapsed={status === DONE_STATUS && !doneOpen}
+                        onToggleCollapsed={toggleDone}
+                      />
+                    ))}
+                  </div>
                 </div>
                 <DragOverlay>
                   {dragItem ? (
@@ -963,7 +1221,8 @@ export default function App() {
     )
   }, [inMain, reqView, sensors, moveFocus, handleDragEnd, clearDrag, statuses, byStatus,
     sessionsByReq, childStats, childrenByParent, jumpToChild, flashSlug, kidsOpen,
-    toggleKids, handleCardFocus, openCard, filterByTag, overStatus, doneOpen, toggleDone, dragItem])
+    toggleKids, handleCardFocus, openCard, filterByTag, overStatus, doneOpen, toggleDone, dragItem,
+    pinnedItems, pinsOpen, toggleRequirementPin, petFocus])
 
   if (loading) return <div className="loading">加载中…</div>
 

@@ -753,6 +753,76 @@ body {
   overflow-x: auto;
 }
 
+.board-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 16px;
+}
+
+.board-wrap .board {
+  min-height: 0;
+  padding: 0;
+}
+
+.pinned {
+  flex: none;
+  background: var(--column);
+  border-radius: 10px;
+}
+
+.pinned-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pinned-head:hover {
+  color: var(--text);
+}
+
+.pinned-head .n {
+  color: var(--text-faint);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.pinned-hint {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.pinned-fold {
+  margin-left: auto;
+  flex: none;
+  color: var(--text-faint);
+  transition: transform 0.12s;
+}
+
+.pinned.collapsed .pinned-fold {
+  transform: rotate(180deg);
+}
+
+.pinned-body {
+  display: flex;
+  gap: 8px;
+  padding: 0 8px 10px;
+  overflow-x: auto;
+}
+
 .column {
   flex: 1 1 0;
   min-width: 240px;
@@ -1090,6 +1160,68 @@ body {
 
 .card.unread {
   box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.pin-card {
+  flex: 0 0 300px;
+}
+
+.pin-card .card-top {
+  margin-bottom: 8px;
+}
+
+.pin-card .pets {
+  margin-top: 0;
+}
+
+.pin-card .card-summary {
+  margin-top: 10px;
+  -webkit-line-clamp: 1;
+}
+
+.card-top.has-pin .card-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.pin-btn {
+  flex: none;
+  align-self: flex-start;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: -3px -4px 0 0;
+  border-radius: 5px;
+  color: var(--text-faint);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.12s,
+    color 0.12s,
+    background 0.12s;
+}
+
+.card:hover .pin-btn,
+.card:focus-within .pin-btn,
+.pin-btn.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pin-btn:hover {
+  color: var(--text);
+  background: var(--chip);
+}
+
+.pin-btn.active {
+  color: var(--accent);
+}
+
+.pin-btn.active svg {
+  fill: currentColor;
+  fill-opacity: 0.22;
 }
 
 /* 子需求清单的展开键：跟完成度一起靠右，收的是清单那一块 */
@@ -1625,6 +1757,18 @@ body {
   align-items: flex-end;
   gap: 6px;
   margin-top: 8px;
+}
+
+.pet-more {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--pet-bg);
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 每只 pet 一格：气泡在上、pet 在下，尾巴指着自己那只。气泡不在时格子只有 pet 那么宽，

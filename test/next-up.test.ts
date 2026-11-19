@@ -37,6 +37,7 @@ function req(p: Partial<Requirement> & { slug: string }): Requirement {
     parentId: '',
     title: p.slug,
     status: '澄清',
+    pinned: false,
     sessionAnalysisStatus: 'pending',
     priority: '',
     summary: '',

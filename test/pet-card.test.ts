@@ -62,6 +62,7 @@ function req(patch: Partial<Requirement> = {}): Requirement {
     parentId: '',
     title: '标题',
     status: '执行中',
+    pinned: false,
     sessionAnalysisStatus: 'pending',
     priority: 'p2',
     summary: '',
@@ -179,6 +180,33 @@ describe('PetRow 渲染', () => {
     assert.match(html, /class="pets compact"/)
     assert.equal(html.match(/class="pet compact /g)?.length ?? 0, pool.length)
     assert.doesNotMatch(html, /pet-more/)
+  })
+
+  test('limit 之外收成 +N：置顶卡最多摆 4 只', () => {
+    const idle = Array.from({ length: 6 }, (_, i) => sess('claude', 'idle', '', 0, `闲${i}`))
+    const html = render(createElement(PetRow, { sessions: idle, limit: 4 }))
+    assert.equal(petCount(html), 4)
+    assert.match(html, /class="pet-more"[^>]*>\+2</)
+  })
+
+  test('limit 是硬上限：事件会话更多时也只摆 4 只，其余收成 +N', () => {
+    const sessions = [
+      sess('claude', 'idle', '', 0, '闲'),
+      ...Array.from({ length: 5 }, (_, i) => sess('codex', 'blocked', '', 0, `等你${i}`)),
+    ]
+    const html = render(createElement(PetRow, { sessions, limit: 4 }))
+    assert.equal(petCount(html), 4)
+    assert.match(html, /class="pet-more"[^>]*>\+2</)
+  })
+
+  test('focusSession 把被截断的目标换进可视区，仍然只摆 4 只', () => {
+    const idle = Array.from({ length: 6 }, (_, i) => sess('claude', 'idle', '', 0, `闲${i}`))
+    const html = render(
+      createElement(PetRow, { sessions: idle, limit: 4, focusSession: idle[5].session }),
+    )
+    assert.equal(petCount(html), 4)
+    assert.match(html, new RegExp(`data-session="${idle[5].session}"`))
+    assert.match(html, /class="pet-more"[^>]*>\+2</)
   })
 })
 
@@ -308,6 +336,27 @@ describe('Card 挂 pet', () => {
     const html = render(createElement(Card, { req: req(), sessions: [sess('claude', 'blocked')], overlay: true }))
     // 少画一排，浮层就比真卡矮，原位那张半透明的卡会从底下露出来
     assert.match(html, /class="pets" inert=""/)
+  })
+
+  test('置顶卡带紧凑排版与常驻图钉，页脚只留标签和日期', () => {
+    const html = render(
+      createElement(Card, {
+        req: req({
+          pinned: true,
+          status: 'Review',
+          tags: ['选座'],
+          updated: '2026-11-19',
+        }),
+        onTogglePin: () => {},
+      }),
+    )
+    assert.match(html, /class="card pin-card"/)
+    assert.match(html, /class="pin-btn active"/)
+    const footStart = html.indexOf('<div class="card-foot">')
+    const footHtml = html.slice(footStart)
+    const footText = footHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    assert.equal(footText, '选座 11-19')
+    assert.doesNotMatch(footHtml, /pin-status|Review/)
   })
 })
 

@@ -4,6 +4,7 @@ import { shortcutLabel } from '../lib/keys'
 import type { ChildStat, Requirement, Session } from '../lib/types'
 import { relTime } from '../lib/time'
 import { PetRow } from './Pet'
+import { PinIcon } from './icons'
 
 interface Props {
   req: Requirement
@@ -23,6 +24,10 @@ interface Props {
   onOpen?: (slug: string) => void
   // 点标签：由看板把它换成 ⌘K 的筛选词，卡片自己不管筛选
   onTag?: (tag: string) => void
+  // 看板跳过来的那只会话：被 4 只上限挡住时换进可视区
+  focusSession?: string
+  // 点图钉：由看板决定置顶还是取消
+  onTogglePin?: (req: Requirement, next: boolean) => void
   overlay?: boolean
 }
 
@@ -46,7 +51,7 @@ function Card(props: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: req.slug,
     data: { type: 'card', slug: req.slug, status: req.status },
-    disabled: overlay,
+    disabled: overlay || req.pinned,
   })
 
   const style = transform
@@ -81,7 +86,7 @@ function Card(props: Props) {
       ref={setNodeRef}
       style={style}
       data-slug={req.slug}
-      className={`card${isDragging ? ' dragging' : ''}${flash ? ' flash' : ''}`}
+      className={`card${req.pinned ? ' pin-card' : ''}${isDragging ? ' dragging' : ''}${flash ? ' flash' : ''}`}
       {...listeners}
       {...attributes}
       tabIndex={overlay ? undefined : 0}
@@ -102,11 +107,11 @@ function Card(props: Props) {
 
 const CardContent = memo(function CardContent({
   req, sessions, childStat, kids, onJumpChild, kidsOpen = false,
-  onToggleKids, onTag, overlay = false,
+  onToggleKids, onTag, focusSession, onTogglePin, overlay = false,
 }: Props) {
   return (
     <>
-      <div className="card-top">
+      <div className={`card-top${onTogglePin ? ' has-pin' : ''}`}>
         <span className="card-title">{req.title}</span>
         {/* 完成度与展开键挨着，一起靠右：它们说的都是子需求那一块，不是整张卡 */}
         {childStat && (
@@ -135,9 +140,26 @@ const CardContent = memo(function CardContent({
             <polyline points={kidsOpen ? '6 9 12 15 18 9' : '9 6 15 12 9 18'} />
           </svg>
         )}
+        {!overlay && onTogglePin && (
+          <span
+            className={`pin-btn${req.pinned ? ' active' : ''}`}
+            title={req.pinned ? '取消置顶' : '置顶（长期跟进）'}
+            onClick={(e) => {
+              e.stopPropagation()
+              onTogglePin(req, !req.pinned)
+            }}
+          >
+            <PinIcon />
+          </span>
+        )}
       </div>
       {/* 每个会话一只 pet：姿势看出谁在等你、谁跑完了。浮层也照画一排，少一排就比真卡矮 */}
-      <PetRow sessions={sessions ?? []} inert={overlay} />
+      <PetRow
+        sessions={sessions ?? []}
+        inert={overlay}
+        limit={req.pinned ? 4 : undefined}
+        focusSession={req.pinned ? focusSession : undefined}
+      />
       {req.summary && <div className="card-summary">{req.summary}</div>}
       {/* 子需求清单：卡片上那行 1/3 只说还剩几块，这里说它们分别是什么、在哪一列 */}
       {kidsOpen && kids && kids.length > 0 && (

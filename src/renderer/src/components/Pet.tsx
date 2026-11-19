@@ -388,19 +388,38 @@ export function PetRow({
   sessions,
   compact = false,
   inert = false,
+  limit,
+  focusSession,
 }: {
   sessions: Session[]
   compact?: boolean
   inert?: boolean
+  limit?: number
+  focusSession?: string
 }) {
   const { items } = planPetRow(sessions)
   if (items.length === 0) return null
 
+  let shown = items
+  if (limit !== undefined) {
+    shown = items.slice(0, limit)
+    const focusAt = focusSession
+      ? items.findIndex((p) => p.session.session === focusSession)
+      : -1
+    if (focusAt >= limit && limit > 0) shown = [...items.slice(0, limit - 1), items[focusAt]]
+  }
+  const rest = items.length - shown.length
+
   return (
     <div className={`pets${compact ? ' compact' : ''}`} {...(inert ? { inert: '' } : {})}>
-      {items.map((p) => (
+      {shown.map((p) => (
         <PetSlot key={`${p.session.agent}:${p.session.session}`} item={p} compact={compact} />
       ))}
+      {rest > 0 && (
+        <span className="pet-more" title={`还有 ${rest} 个会话`}>
+          +{rest}
+        </span>
+      )}
     </div>
   )
 }

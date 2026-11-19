@@ -80,7 +80,7 @@ export const api = {
 
   update: (
     slug: string,
-    patch: { status?: string; priority?: string; title?: string },
+    patch: { status?: string; priority?: string; title?: string; pinned?: boolean },
     project?: string,
   ): Promise<Requirement> =>
     request('/api/update', {
