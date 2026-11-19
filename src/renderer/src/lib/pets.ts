@@ -8,6 +8,7 @@
  * 排布规则才有回归保护。
  */
 import { badgesOf } from './threads'
+import { parseStamp } from './time'
 import type { Session, ThreadState } from './types'
 
 // 会画出来的那些状态：`unknown` 是「读不到」，不给 pet——与角标口径一致
@@ -88,12 +89,18 @@ export interface PetRowPlan {
  *
  * pet 是**回到会话的入口**，只要读得到状态（unknown 之外）就长期留着；姿势就是状态本身。
  * 点过 pet 会被写成 `idle`（静止），事件边框与抢注意力也跟着消失。
+ * 次序按登记先后固定：状态只管姿势，不参与重排。
  */
 export function planPetRow(sessions: Session[]): PetRowPlan {
   const pets = sessions
     .map((session) => ({ session, state: session.status.state }))
     .filter((p): p is { session: Session; state: Pose } => p.state !== 'unknown')
-    .sort((a, b) => PET_RANK[a.state] - PET_RANK[b.state])
+    // 登记时间只到分钟，同分钟的按 agent 与会话 id 定序，免得跟着 updated 来回跳
+    .sort((a, b) =>
+      parseStamp(a.session.created) - parseStamp(b.session.created) ||
+      a.session.agent.localeCompare(b.session.agent) ||
+      a.session.session.localeCompare(b.session.session),
+    )
 
   // 抢动效仍按 badgesOf 挑（事件 + 在干活），再映射回整排的坐标——
   // 消费掉的 pet 留着，但不抢注意力。badgesOf 已按急缓排序，focusIndex 只认 attention 三档。

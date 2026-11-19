@@ -4580,15 +4580,23 @@ describe('pet：一行 pet 的排布', () => {
     }
   })
 
-  test('全部按急缓排序，最急的排在最前', () => {
-    // 登记顺序把最急的放在最后（会话来自 updated DESC，卡住不动的往往最早登记）
-    const late: Session[] = [
-      sess('claude', 'working'),
-      sess('codex', 'thinking'),
-      sess('claude', 'idle'),
-      sess('codex', 'blocked'),
+  test('按登记顺序排列，状态不参与重排', () => {
+    const listed: Session[] = [
+      { ...sess('claude', 'blocked'), created: '2026-11-19 09:03' },
+      { ...sess('codex', 'thinking'), created: '2026-11-19 09:01' },
+      { ...sess('claude', 'idle'), created: '2026-11-19 09:02' },
     ]
-    assert.deepEqual(planPetRow(late).items.map((p) => p.state), ['blocked', 'working', 'thinking', 'idle'])
+    assert.deepEqual(planPetRow(listed).items.map((p) => p.state), ['thinking', 'idle', 'blocked'])
+  })
+
+  test('同一分钟登记按 agent 与会话 id 定序，不随传入次序跳', () => {
+    const same: Session[] = [
+      { ...sess('codex', 'blocked'), created: '2026-11-19 09:01' },
+      { ...sess('claude', 'working'), created: '2026-11-19 09:01' },
+    ]
+    const order = (list: Session[]) => planPetRow(list).items.map((p) => p.session.agent)
+    assert.deepEqual(order(same), ['claude', 'codex'])
+    assert.deepEqual(order([...same].reverse()), ['claude', 'codex'])
   })
 
   test('最多一只抢注意力，且只落在 attention 三档上', () => {
@@ -4599,7 +4607,7 @@ describe('pet：一行 pet 的排布', () => {
 
   test('都只在干活时谁也不抢注意力', () => {
     const { items } = planPetRow([sess('claude', 'thinking'), sess('codex', 'working')])
-    assert.deepEqual(items.map((p) => p.state), ['working', 'thinking'])
+    assert.equal(items.length, 2)
     assert.equal(items.some((p) => p.focus), false)
   })
 
