@@ -45,13 +45,13 @@ description: >-
 | 澄清 | 澄清 | 讲清做什么、为什么、边界与验收，定下涉及仓库。**写得出验收清单就算过** | `easy-flow req new "<标题>" --project <项目> --slug <目录名> --summary "<一句话>"` | requirement.md、context.md、`docs/<短名>/` |
 | 实现 | 执行中 | 开工作区、登记会话、按方案实现，设计有变随手更新 | `easy-flow wt new <req-…> --repo <仓库> --branch <分支> --short <短名>`；`easy-flow req session add <req-…> --agent cursor --title "在做什么"`；`easy-flow req set <req-…> --status 执行中` | 代码在工作区；设计变更 → `docs/<短名>/` |
 | Review | Review | 自动评审、修复与复查后交给用户；后续登记提交或 MR 链接，按评审意见改 | `easy-flow req set <req-…> --status Review`；`easy-flow req link <req-…> "<标题>=https://…"` | 需求目录评审文档、看板链接 |
-| 合入 | 已完成 | 代码进了主分支后尝试收尾；CLI 检查会话分析状态，未分析则提醒用户另开 session 复盘。要不要合、要不要推送，仍按判据三问人 | `easy-flow req set <req-…> --status 已完成` | 分析结论留在需求文档 |
+| 合入 | 已完成 | 代码进了主分支后尝试收尾；CLI 检查会话分析状态，未分析则提醒用户另开 session 复盘。要不要合、要不要推送，仍按判据三问人 | `easy-flow req set <req-…> --status 已完成` | 分析结论 → `docs/retro/` |
 
 父需求不跟着子需求自动收尾。最后一个子需求执行 `easy-flow req set <子需求 req-…> --status 已完成` 时，命令会提示父需求。要收父需求再执行 `easy-flow req set <父需求 req-…> --status 已完成`。父需求可能还有整体验收，收不收自己判。
 
 ## Coding 评审闭环
 
-代码实现与验证完成后，原 coding 会话自动运行 `easy-flow review <wt-id> --json`，等待结果、读取报告，核实并修复已确认需求内的问题，再用 `--recheck <首轮报告路径>` 在同一 Codex session 中复查一次，最后交给用户 review。全部评审结论保存在需求目录 `docs/review/`，逐条处理结果追加到对应报告。
+代码实现与验证完成后，原 coding 会话自动运行 `easy-flow review <wt-id> --json`，等待结果、读取报告，核实并修复已确认需求内的问题，再用 `--recheck <上一轮报告路径>` 在同一 Codex session 中复查，直到没有 blocker/high，最后交给用户 review。全部评审结论保存在需求目录 `docs/review/`，逐条处理结果追加到对应报告。
 
 同一需求、同一工作区固定一个 reviewer session，由工具持久绑定。普通 review、变更基线、变更模型、失败重试和复核都恢复这个会话；只有没有绑定且没有历史 reviewer 时才创建。恢复失败立即停止。
 
@@ -66,7 +66,7 @@ description: >-
 - 分析 session 通过 `easy-flow req session ls <req-…>` 取得会话清单，完成分析后将结论保留在需求文档中，再执行 `easy-flow req set <req-…> --session-analysis completed` 登记。结论可以是「无值得沉淀内容」。
 - 已登记分析完成后，再执行 `easy-flow req set <req-…> --status 已完成`。
 - UI 直接完成需求，尚未分析时默认记为 `skipped`，已有分析结果保留。
-- 解析不同客户端、历史改绑或缺失源时，按需读 [会话复盘来源](references/session-retrospective.md)。
+- 复盘前先读 [会话复盘来源](references/session-retrospective.md)。Claude 的 `local_*` 是桌面会话 id，正文按它的 `cliSessionId` 到 `~/.claude/projects/.../<cliSessionId>.jsonl` 找；不同客户端、历史改绑或缺失源同样按该文档核对。
 
 ## 最重要的一条：一切挂需求
 
@@ -145,6 +145,7 @@ description: >-
 | context.md | 背景（为什么做）、约束（边界）、决策 | 进度（会过期） |
 | docs/<短名>/ | 设计、调研、踩坑；工作区里用 `design/` 打开同一处 | — |
 | docs/review/ | 每轮评审、复查结论及逐条修复处理与验证证据 | — |
+| docs/retro/ | 收尾会话分析、复盘与 skill/事实审计结论 | 进度流水账 |
 | `_todos/<id>.md` | 一条待办：一级标题、摘要段是交接、进度段往下续 | 状态 |
 | 状态 / 优先级 | 只在看板上改 | 任何 md 文件 |
 
@@ -193,3 +194,9 @@ description: >-
 - 新建需求时，标题逐字等于目录名会被拒绝。子需求标题要带父锚点：父需求是「需求看板启动 Agent 会话并带入上下文」时，子需求写「会话启动：Claude Code 深链接适配」。看板不分组，标题是唯一还能看出归属的地方
 - 脚本用 `--json` 的输出与退出码见 [REFERENCE.md](REFERENCE.md)「全局」
 - 参数别猜：上表没覆盖的用法跑 `easy-flow <命令> --help` 现查
+
+## 已知坑
+
+- 偶发 `error: database is locked`：等 2–4 秒用原命令重试即可，不要重建或清理数据
+- 没有 `easy-flow req show` 子命令；查需求/工作区上下文用 `easy-flow context <req-…|wt-…>`
+- easy-flow 建的工作区不能用桌面 app 的 `sync_with_base_branch`（会报 “doesn't run in a worktree the app made for it”）；用 `git fetch` + `git merge origin/<base>`
