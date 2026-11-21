@@ -27,7 +27,7 @@ describe('Claude Code 启动链接', () => {
   })
 
   test('非绝对工作区路径时报错', () => {
-    assert.throws(() => claudeLaunchUrl('prompt', 'relative/worktree'), /absolute/i)
+    assert.throws(() => claudeLaunchUrl('prompt', 'relative/worktree'), /(?:absolute|绝对路径)/i)
   })
 
   test('没有工作区时不带 folder——应用自己的「New Claude Code Session」也是这么开的', () => {

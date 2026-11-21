@@ -1,3 +1,4 @@
+import { Language, setLanguage } from '../src/shared/i18n.ts'
 /**
  * 「下一步该动哪个」的排名回归。
  *
@@ -36,7 +37,7 @@ function req(p: Partial<Requirement> & { slug: string }): Requirement {
     id: `req-${p.slug}`,
     parentId: '',
     title: p.slug,
-    status: '澄清',
+    status: 'clarification',
     pinned: false,
     sessionAnalysisStatus: 'pending',
     priority: '',
@@ -81,7 +82,7 @@ function sess(
 describe('下一步 · 排名', () => {
   test('agent 卡住 → 第 1 档、现在就得动，理由带 agent 名与要人回答的原文', () => {
     const items = rankNextUp(
-      [req({ slug: 'a', status: '执行中' })],
+      [req({ slug: 'a', status: 'in_progress' })],
       [sess('req-a', 'claude', 'blocked', { needsAction: '要我把 mock 清掉吗？' })],
       NOW,
     )
@@ -95,14 +96,14 @@ describe('下一步 · 排名', () => {
   })
 
   test('卡住的会话一直停在榜上——要人推正是它停着的理由', () => {
-    const items = rankNextUp([req({ slug: 'a', status: '执行中' })], [sess('req-a', 'codex', 'blocked')], NOW)
+    const items = rankNextUp([req({ slug: 'a', status: 'in_progress' })], [sess('req-a', 'codex', 'blocked')], NOW)
     assert.equal(items.length, 1)
     assert.equal(items[0].tier, 1)
   })
 
   test('agent 跑完 → 第 2 档、有空再看', () => {
     const items = rankNextUp(
-      [req({ slug: 'a', status: 'Review', updated: '2026-10-14' })],
+      [req({ slug: 'a', status: 'review', updated: '2026-10-14' })],
       [sess('req-a', 'codex', 'done')],
       NOW,
     )
@@ -115,18 +116,18 @@ describe('下一步 · 排名', () => {
 
   test('点过的（idle）与正在跑的不进榜', () => {
     assert.deepEqual(
-      rankNextUp([req({ slug: 'a', status: '执行中' })], [sess('req-a', 'codex', 'idle')], NOW),
+      rankNextUp([req({ slug: 'a', status: 'in_progress' })], [sess('req-a', 'codex', 'idle')], NOW),
       [],
     )
     assert.deepEqual(
-      rankNextUp([req({ slug: 'a', status: '执行中' })], [sess('req-a', 'codex', 'working')], NOW),
+      rankNextUp([req({ slug: 'a', status: 'in_progress' })], [sess('req-a', 'codex', 'working')], NOW),
       [],
     )
   })
 
   test('agent 跑失败 → 与「跑完」同档，理由说的是「跑失败了」', () => {
     const items = rankNextUp(
-      [req({ slug: 'a', status: '执行中' })],
+      [req({ slug: 'a', status: 'in_progress' })],
       [sess('req-a', 'codex', 'failed')],
       NOW,
     )
@@ -136,33 +137,33 @@ describe('下一步 · 排名', () => {
   })
 
   test('Review 停太久 → 第 3 档，理由给出天数', () => {
-    const items = rankNextUp([req({ slug: 'a', status: 'Review', updated: '2026-10-09' })], [], NOW)
+    const items = rankNextUp([req({ slug: 'a', status: 'review', updated: '2026-10-09' })], [], NOW)
     assert.equal(items.length, 1)
     assert.equal(items[0].tier, 3)
     assert.equal(items[0].level, 'soon')
-    assert.equal(items[0].reason, 'Review 停了 5 天')
+    assert.equal(items[0].reason, '评审停了 5 天')
     assert.equal(items[0].session, null)
   })
 
   test('Review 刚动过（没到阈值）→ 不推', () => {
-    assert.deepEqual(rankNextUp([req({ slug: 'a', status: 'Review', updated: '2026-10-13' })], [], NOW), [])
+    assert.deepEqual(rankNextUp([req({ slug: 'a', status: 'review', updated: '2026-10-13' })], [], NOW), [])
   })
 
   test('没有 agent 的澄清需求停了 5 天照样进榜——这一档兜住没有会话的需求', () => {
-    const items = rankNextUp([req({ slug: 'a', status: '澄清', updated: '2026-10-09' })], [], NOW)
+    const items = rankNextUp([req({ slug: 'a', status: 'clarification', updated: '2026-10-09' })], [], NOW)
     assert.equal(items.length, 1)
     assert.equal(items[0].tier, 4)
-    assert.equal(items[0].reason, '澄清停了 5 天')
+    assert.equal(items[0].reason, '准备停了 5 天')
     assert.equal(items[0].session, null)
   })
 
   test('档位优先：卡住 > 跑完没看 > Review > 澄清，跨档不看优先级', () => {
     const items = rankNextUp(
       [
-        req({ slug: 'd', status: '澄清', priority: 'p0', updated: '2026-10-05' }),
-        req({ slug: 'c', status: 'Review', priority: 'p0', updated: '2026-10-05' }),
-        req({ slug: 'b', status: '执行中' }),
-        req({ slug: 'a', status: '执行中' }),
+        req({ slug: 'd', status: 'clarification', priority: 'p0', updated: '2026-10-05' }),
+        req({ slug: 'c', status: 'review', priority: 'p0', updated: '2026-10-05' }),
+        req({ slug: 'b', status: 'in_progress' }),
+        req({ slug: 'a', status: 'in_progress' }),
       ],
       [sess('req-a', 'claude', 'blocked'), sess('req-b', 'codex', 'done')],
       NOW,
@@ -174,8 +175,8 @@ describe('下一步 · 排名', () => {
   test('优先级只在同档内调先后：档位低的 p3 也排在档位高的 p0 前面', () => {
     const items = rankNextUp(
       [
-        req({ slug: 'review-p3', status: 'Review', priority: 'p3', updated: '2026-10-05' }),
-        req({ slug: 'clarify-p0', status: '澄清', priority: 'p0', updated: '2026-10-05' }),
+        req({ slug: 'review-p3', status: 'review', priority: 'p3', updated: '2026-10-05' }),
+        req({ slug: 'clarify-p0', status: 'clarification', priority: 'p0', updated: '2026-10-05' }),
       ],
       [],
       NOW,
@@ -186,8 +187,8 @@ describe('下一步 · 排名', () => {
   test('同档内 p0 排在 p3 前', () => {
     const items = rankNextUp(
       [
-        req({ slug: 'x', status: '澄清', priority: 'p3', updated: '2026-10-05' }),
-        req({ slug: 'y', status: '澄清', priority: 'p0', updated: '2026-10-05' }),
+        req({ slug: 'x', status: 'clarification', priority: 'p3', updated: '2026-10-05' }),
+        req({ slug: 'y', status: 'clarification', priority: 'p0', updated: '2026-10-05' }),
       ],
       [],
       NOW,
@@ -198,9 +199,9 @@ describe('下一步 · 排名', () => {
   test('同档同优先级：谁等得久谁在前，等得一样久按 slug 兜底', () => {
     const items = rankNextUp(
       [
-        req({ slug: 'x', status: '澄清', priority: 'p2', updated: '2026-10-07' }),
-        req({ slug: 'y', status: '澄清', priority: 'p2', updated: '2026-10-05' }),
-        req({ slug: 'z', status: '澄清', priority: 'p2', updated: '2026-10-05' }),
+        req({ slug: 'x', status: 'clarification', priority: 'p2', updated: '2026-10-07' }),
+        req({ slug: 'y', status: 'clarification', priority: 'p2', updated: '2026-10-05' }),
+        req({ slug: 'z', status: 'clarification', priority: 'p2', updated: '2026-10-05' }),
       ],
       [],
       NOW,
@@ -209,35 +210,35 @@ describe('下一步 · 排名', () => {
   })
 
   test('failed 也进第 2 档', () => {
-    const items = rankNextUp([req({ slug: 'a', status: '执行中' })], [sess('req-a', 'codex', 'failed')], NOW)
+    const items = rankNextUp([req({ slug: 'a', status: 'in_progress' })], [sess('req-a', 'codex', 'failed')], NOW)
     assert.equal(items.length, 1)
     assert.equal(items[0].tier, 2)
     assert.equal(items[0].reason, 'Codex 跑失败了')
   })
 
   test('时间戳空或落在未来：天数算不出或为负，不推', () => {
-    assert.deepEqual(rankNextUp([req({ slug: 'a', status: 'Review', updated: '' })], [], NOW), [])
-    assert.deepEqual(rankNextUp([req({ slug: 'b', status: '澄清', updated: '2026-11-01' })], [], NOW), [])
+    assert.deepEqual(rankNextUp([req({ slug: 'a', status: 'review', updated: '' })], [], NOW), [])
+    assert.deepEqual(rankNextUp([req({ slug: 'b', status: 'clarification', updated: '2026-11-01' })], [], NOW), [])
   })
 
   test('阈值可配：把澄清阈值调高，同一条需求就不再推', () => {
     const config: NextUpConfig = { ...DEFAULT_NEXT_UP_CONFIG, staleDays: { review: 2, clarify: 30 } }
     assert.deepEqual(
-      rankNextUp([req({ slug: 'a', status: '澄清', updated: '2026-10-09' })], [], NOW, config),
+      rankNextUp([req({ slug: 'a', status: 'clarification', updated: '2026-10-09' })], [], NOW, config),
       [],
     )
   })
 
   test('已完成的需求不推，哪怕名下有卡住的会话', () => {
     assert.deepEqual(
-      rankNextUp([req({ slug: 'a', status: '已完成', updated: '2026-09-01' })], [sess('req-a', 'codex', 'blocked')], NOW),
+      rankNextUp([req({ slug: 'a', status: 'completed', updated: '2026-09-01' })], [sess('req-a', 'codex', 'blocked')], NOW),
       [],
     )
   })
 
   test('一条需求挂多条会话时取最硬的那条', () => {
     const items = rankNextUp(
-      [req({ slug: 'a', status: '执行中' })],
+      [req({ slug: 'a', status: 'in_progress' })],
       [
         sess('req-a', 'codex', 'done'),
         sess('req-a', 'claude', 'blocked', { needsAction: '回答我' }),
@@ -250,7 +251,7 @@ describe('下一步 · 排名', () => {
   })
 
   test('会话按需求归属对号入座，不串台', () => {
-    assert.deepEqual(rankNextUp([req({ slug: 'a', status: '执行中' })], [sess('req-b', 'codex', 'blocked')], NOW), [])
+    assert.deepEqual(rankNextUp([req({ slug: 'a', status: 'in_progress' })], [sess('req-b', 'codex', 'blocked')], NOW), [])
   })
 })
 
@@ -270,8 +271,9 @@ describe('下一步 · HTTP', () => {
     }
 
     const app = createBoardApp({ dataDir: TMP })
-    app.db.setStatus('alpha', 'Review', 'onex')
-    app.db.setStatus('beta', 'Review', 'other')
+    setLanguage(Language.Chinese)
+    app.db.setStatus('alpha', 'review', 'onex')
+    app.db.setStatus('beta', 'review', 'other')
     // setStatus 会把 updated 写成今天，所以直接改库里的日期，才构得出「停太久」
     const raw = new DatabaseSync(app.db.file)
     raw.prepare('UPDATE requirement SET updated = ? WHERE project = ?').run('2026-09-01', 'onex')
@@ -290,7 +292,7 @@ describe('下一步 · HTTP', () => {
       }
       assert.deepEqual(r.items.map((i) => i.slug), ['alpha'])
       assert.equal(r.items[0].level, 'soon')
-      assert.match(r.items[0].reason, /^Review 停了 \d+ 天$/)
+      assert.match(r.items[0].reason, /^评审停了 \d+ 天$/)
     } finally {
       await new Promise<void>((r) => server.close(() => r()))
       app.close()

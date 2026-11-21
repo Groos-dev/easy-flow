@@ -1,3 +1,6 @@
+import { agentLabel } from '../lib/labels'
+import { useLanguage } from '../lib/language'
+import { t as tr } from "../../../shared/i18n.ts"
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { CopyButton } from './InfoBits'
 import { AgentIcon } from './icons'
@@ -44,6 +47,7 @@ export default function LaunchSessionForm({
   onAgentChange: (id: LaunchAgent) => void
   onLaunch: () => void
 }) {
+  useLanguage()
   // 提示词平时折着：它只在「deeplink 没把提示词带过去」时才需要人看
   const [promptOpen, setPromptOpen] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
@@ -55,7 +59,7 @@ export default function LaunchSessionForm({
   const needsWorktree = launchNeedsWorktree(available, picked?.requiresWorktree)
   const ready = !!agent && (!needsWorktree || !!worktreeId)
   const feedback = result ? launchResultFeedback(requirementId, result) : null
-  const agentName = picked?.label ?? result?.agent ?? 'Agent'
+  const agentName = picked ? agentLabel(picked.id, picked.label) : result ? agentLabel(result.agent) : tr('Agent')
 
   function stepAgent(dir: 1 | -1) {
     if (providers.length < 2) return
@@ -113,16 +117,16 @@ export default function LaunchSessionForm({
     if (ready) onLaunch()
   }
 
-  if (loading) return <p className="launch-hint">正在读取可用 Agent…</p>
+  if (loading) return <p className="launch-hint">{tr("Loading available agents…")}</p>
   if (providerError) {
     return (
       <p className="launch-result bad" role="alert">
-        读取 Agent 失败：{providerError}
+        {tr("Could not load agents:")}{providerError}
       </p>
     )
   }
   if (!providers.length) {
-    return <p className="launch-hint">当前没有可用的 Agent 启动方式；已有会话仍可从上面的列表回到原会话。</p>
+    return <p className="launch-hint">{tr("No agent launch providers are available. Existing sessions can still be opened from the list above.")}</p>
   }
 
   return (
@@ -132,7 +136,7 @@ export default function LaunchSessionForm({
           className="agent-chips"
           ref={chipsRef}
           role="radiogroup"
-          aria-label="用哪个 Agent 开始"
+          aria-label={tr("Choose an agent")}
           data-info-row=""
           tabIndex={0}
         >
@@ -143,8 +147,8 @@ export default function LaunchSessionForm({
               className={`agent-chip${p.id === agent ? ' on' : ''}`}
               role="radio"
               aria-checked={p.id === agent}
-              aria-label={p.label}
-              title={p.label}
+              aria-label={agentLabel(p.id, p.label)}
+              title={agentLabel(p.id, p.label)}
               tabIndex={-1}
               onClick={() => {
                 onAgentChange(p.id)
@@ -158,15 +162,15 @@ export default function LaunchSessionForm({
 
         {available.length === 1 && (
           <div className="wt-line">
-            <span className="wt-label">目录</span>
+            <span className="wt-label">{tr("Directory")}</span>
             <span className="repo line mono">{available[0].repo}</span>
             <span className="branch line">· {available[0].branch}</span>
           </div>
         )}
 
         {available.length > 1 && (
-          <div className="wt-pick" role="radiogroup" aria-label="在哪个工作区开始">
-            <div className="wt-prompt">在哪个工作区开始</div>
+          <div className="wt-pick" role="radiogroup" aria-label={tr("Choose a workspace")}>
+            <div className="wt-prompt">{tr("Choose a workspace")}</div>
             {available.map((w) => (
               <div
                 key={w.id}
@@ -198,23 +202,23 @@ export default function LaunchSessionForm({
           disabled={!ready}
           aria-busy={busy || undefined}
         >
-          {busy ? '正在打开…' : `用 ${agentName} 打开新会话`}
+          {busy ? tr("Opening…") : tr("Start a new session in {0}", [agentName])}
         </button>
 
         {picked?.requiresWorktree && !available.length && (
-          <p className="launch-hint">{picked.label} 需要先有一个工作区。</p>
+          <p className="launch-hint">{agentLabel(picked.id, picked.label)} {tr("Create a workspace first.")}</p>
         )}
       </form>
 
       {requestError && (
         <p className="launch-result bad" role="alert">
           <span className="mark">!</span>
-          启动请求失败：{requestError}
+          {tr("Session launch request failed:")}{requestError}
         </p>
       )}
 
       {feedback?.opened && result?.agent === 'cursor' && (
-        <p className="launch-hint">已在 Cursor 打开工作区；在弹窗里点 Create Chat，提示词已填好。</p>
+        <p className="launch-hint">{tr("Workspace opened in Cursor. Click Create Chat in the dialog; the prompt is already filled in.")}</p>
       )}
 
       {/* 打开成功不说话：agent 应用已经弹出来了，那就是回执。
@@ -223,9 +227,9 @@ export default function LaunchSessionForm({
         <>
           <p className="launch-result bad" role="alert">
             <span className="mark">!</span>
-            没能自动打开 {agentName}：{feedback.error || '未知错误'}
+            {tr("Could not open automatically")} {agentName}：{feedback.error || tr("Unknown error")}
           </p>
-          {feedback.promptCopied && <p className="launch-hint">提示词已复制到剪贴板，到新会话里粘贴即可。</p>}
+          {feedback.promptCopied && <p className="launch-hint">{tr("The prompt was copied to the clipboard. Paste it into a new session.")}</p>}
           <div className="launch-actions">
             <button
               className="launch-retry"
@@ -234,11 +238,10 @@ export default function LaunchSessionForm({
               onClick={onLaunch}
               disabled={!ready}
             >
-              重试打开
-            </button>
-            <CopyButton text={feedback.prompt} label="提示词" showLabel />
+              {tr("Try opening again")}</button>
+            <CopyButton text={feedback.prompt} label={tr("Prompt")} showLabel />
           </div>
-          <p className="launch-hint">手动兜底：在 {agentName} 里新建会话、把提示词贴过去；或自己跑一次登记。</p>
+          <p className="launch-hint">{tr("Manual steps: create a session in")} {agentName} {tr("and paste the prompt, or register the session yourself.")}</p>
           <code className="launch-manual">{feedback.manualCommand}</code>
           {/* 能复制也得能看：剪贴板失败时眼里得有东西可抄 */}
           <div className="launch-fold">
@@ -247,8 +250,7 @@ export default function LaunchSessionForm({
               data-info-row=""
               onClick={() => setPromptOpen((v) => !v)}
             >
-              {promptOpen ? '▾' : '▸'} 看提示词原文
-            </button>
+              {promptOpen ? '▾' : '▸'} {tr("View the full prompt")}</button>
           </div>
           {promptOpen && <pre className="launch-prompt">{feedback.prompt}</pre>}
         </>

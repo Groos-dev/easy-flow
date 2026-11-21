@@ -12,22 +12,22 @@ import {
 } from '../src/renderer/src/lib/board-focus.ts'
 
 const COLUMNS: BoardColumn[] = [
-  { status: '澄清', slugs: ['a', 'b'] },
-  { status: '执行中', slugs: [] },
-  { status: 'Review', slugs: ['c'] },
-  { status: '已完成', slugs: ['d', 'e'] },
+  { status: 'clarification', slugs: ['a', 'b'] },
+  { status: 'in_progress', slugs: [] },
+  { status: 'review', slugs: ['c'] },
+  { status: 'completed', slugs: ['d', 'e'] },
 ]
 
 describe('看板位置反查', () => {
   test('按 slug 找位置，找不到返回 null', () => {
-    assert.deepEqual(posOf(COLUMNS, 'c'), { status: 'Review', index: 0 })
+    assert.deepEqual(posOf(COLUMNS, 'c'), { status: 'review', index: 0 })
     assert.equal(posOf(COLUMNS, 'nope'), null)
     assert.equal(posOf(COLUMNS, ''), null)
   })
 
   test('位置换回 slug', () => {
-    assert.equal(slugAt(COLUMNS, { status: '已完成', index: 1 }), 'e')
-    assert.equal(slugAt(COLUMNS, { status: '已完成', index: 9 }), '')
+    assert.equal(slugAt(COLUMNS, { status: 'completed', index: 1 }), 'e')
+    assert.equal(slugAt(COLUMNS, { status: 'completed', index: 9 }), '')
     assert.equal(slugAt(COLUMNS, null), '')
   })
 })
@@ -48,49 +48,49 @@ describe('跳到下一只 pet 落点', () => {
   })
 
   test('停在卡上时先落这张卡的第一只', () => {
-    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: '已完成', index: 1 }, session: '' }), {
+    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: 'completed', index: 1 }, session: '' }), {
       slug: 'e',
       session: 's4',
     })
   })
 
   test('同一张卡里接着走下一只', () => {
-    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: '澄清', index: 0 }, session: 's1' }), {
+    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: 'clarification', index: 0 }, session: 's1' }), {
       slug: 'a',
       session: 's2',
     })
   })
 
   test('卡里走完再去后面第一张有 pet 的卡', () => {
-    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: '澄清', index: 0 }, session: 's2' }), {
+    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: 'clarification', index: 0 }, session: 's2' }), {
       slug: 'c',
       session: 's3',
     })
   })
 
   test('当前卡没有 pet 就跳过去', () => {
-    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: '澄清', index: 1 }, session: '' }), {
+    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: 'clarification', index: 1 }, session: '' }), {
       slug: 'c',
       session: 's3',
     })
   })
 
   test('当前那只已不在候选里时落本卡第一只', () => {
-    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: '已完成', index: 1 }, session: 'gone' }), {
+    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: 'completed', index: 1 }, session: 'gone' }), {
       slug: 'e',
       session: 's4',
     })
   })
 
   test('到末尾绕回开头', () => {
-    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: '已完成', index: 1 }, session: 's5' }), {
+    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: 'completed', index: 1 }, session: 's5' }), {
       slug: 'a',
       session: 's1',
     })
   })
 
   test('当前卡已不在版面上时从头找', () => {
-    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: 'Review', index: 5 }, session: '' }), {
+    assert.deepEqual(nextPetStop(COLUMNS, petsOf, { pos: { status: 'review', index: 5 }, session: '' }), {
       slug: 'a',
       session: 's1',
     })

@@ -1,3 +1,5 @@
+import { messageDetail } from '../src/shared/i18n.ts'
+import { SessionState } from '../src/shared/domain.ts'
 /**
  * agent 的 hook 事件 → 会话状态（**推送源**）。
  *
@@ -61,54 +63,54 @@ export function normalizeHookEvent(payload: HookPayload, observedAt = Date.now()
     state,
     needsAction: '',
     observedAt,
-    detail: `hook 事件：${event}`,
+    ...messageDetail("Hook event: {0}", [event]),
     hookEvent: event,
   })
   switch (event) {
     case 'SessionStart':
       // 上线：会话活着但还没干活——姿势是静止，没活可看
-      return of('idle')
+      return of(SessionState.Idle)
     case 'UserPromptSubmit':
     case 'PostToolUse':
       // 收到人话 / 工具跑完：模型在想下一步
-      return of('thinking')
+      return of(SessionState.Thinking)
     case 'PreToolUse':
       // 要调工具了：这是「干活」
-      return of('working')
+      return of(SessionState.Working)
     case 'PreCompact':
-      return of('sweeping')
+      return of(SessionState.Compacting)
     case 'PostCompact':
       // 压上下文：活儿还在跑，只是不在调工具
-      return of('thinking')
+      return of(SessionState.Thinking)
     case 'PostToolUseFailure':
       // 工具报错：短暂出错。下一个事件（思考 / 干活 / 收尾）一到就翻过去
-      return of('failed')
+      return of(SessionState.Failed)
     case 'Interrupt':
       // 被打断（人按了停）：停下等人接手，不能停在「干活」上
-      return of('blocked')
+      return of(SessionState.Blocked)
     case 'PermissionRequest':
       // 卡住等人授权。事件里没有那句要人回答的话，原文留空
-      return of('blocked')
+      return of(SessionState.Blocked)
     case 'Stop':
-      return of('done')
+      return of(SessionState.Done)
     case 'StopFailure':
-      return of('failed')
+      return of(SessionState.Failed)
     case 'sessionStart':
-      return of('idle')
+      return of(SessionState.Idle)
     case 'beforeSubmitPrompt':
     case 'postToolUse':
-      return of('thinking')
+      return of(SessionState.Thinking)
     case 'preToolUse':
-      return of('working')
+      return of(SessionState.Working)
     case 'preCompact':
-      return of('sweeping')
+      return of(SessionState.Compacting)
     case 'postToolUseFailure':
-      return of('failed')
+      return of(SessionState.Failed)
     case 'stop': {
       const status = str(payload.status)
-      if (status === 'aborted') return of('blocked')
-      if (status === 'error') return of('failed')
-      return of('done')
+      if (status === 'aborted') return of(SessionState.Blocked)
+      if (status === 'error') return of(SessionState.Failed)
+      return of(SessionState.Done)
     }
     default:
       return null
@@ -156,17 +158,17 @@ export function recordHook(
   // 下线时保留 Claude 的静止状态，已读时间用于挡住旧的落盘结论。
   // Cursor 的 aborted / error 保留最终状态。
   if (event === 'SessionEnd' || event === 'sessionEnd') {
-    if (agent === 'claude' && store.get(agent, session)?.status.state === 'idle') return null
+    if (agent === 'claude' && store.get(agent, session)?.status.state === SessionState.Idle) return null
     if (agent === 'cursor') {
       const reason = str(payload.reason)
       if (reason === 'aborted' || reason === 'error') {
-        const state: ThreadState = reason === 'aborted' ? 'blocked' : 'failed'
+        const state: ThreadState = reason === 'aborted' ? SessionState.Blocked : SessionState.Failed
         const error = str(payload.error_message)
         const status: SessionStatus = {
           state,
           needsAction: '',
           observedAt: at,
-          detail: `hook 事件：sessionEnd（${reason}${error ? `: ${error}` : ''}）`,
+          ...messageDetail("Hook event: sessionEnd ({0}{1})", [reason, error ? `: ${error}` : '']),
           hookEvent: event,
         }
         store.put(agent, session, status)

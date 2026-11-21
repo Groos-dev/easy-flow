@@ -112,7 +112,7 @@ describe('动作带时刻', () => {
   const calledAt = 1_700_000_000_000
 
   test('认得出才造动作，认不出是 null', () => {
-    assert.deepEqual(actionOf('Edit', { file_path: '/a/hook.ts' }, calledAt), { text: '改 hook.ts', calledAt })
+    assert.deepEqual(actionOf('Edit', { file_path: '/a/hook.ts' }, calledAt), { text: '改 hook.ts', calledAt, message: { key: 'Edit {0}', values: ['hook.ts'] } })
     assert.equal(actionOf('Skill', { skill: 'x' }, calledAt), null)
   })
 
@@ -126,7 +126,7 @@ describe('动作与状态并排进状态层', () => {
   test('hook：PreToolUse 有动作，其余事件没有', () => {
     const payload = { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: '/a/hook.ts' } }
     assert.equal(normalizeHookEvent(payload, calledAt)?.state, 'working')
-    assert.deepEqual(hookActionOf(payload, calledAt), { text: '改 hook.ts', calledAt })
+    assert.deepEqual(hookActionOf(payload, calledAt), { text: '改 hook.ts', calledAt, message: { key: 'Edit {0}', values: ['hook.ts'] } })
 
     assert.equal(hookActionOf({ hook_event_name: 'PostToolUse', tool_name: 'Edit' }, calledAt), null, '跑完不换动作')
     assert.equal(hookActionOf({ hook_event_name: 'PreToolUse', tool_name: 'Skill' }, calledAt), null, '认不出工具就没有动作')
@@ -197,7 +197,7 @@ describe('rollout 也给动作', () => {
   test('function_call 的工具名与参数归一成动作，状态照旧是干活', () => {
     const line = call('exec_command', { cmd: 'cd /x && pnpm test' })
     assert.equal(rolloutStatusOf(line, calledAt)?.state, 'working')
-    assert.deepEqual(rolloutActionOf(line, calledAt), { text: '跑 pnpm test', calledAt })
+    assert.deepEqual(rolloutActionOf(line, calledAt), { text: '跑 pnpm test', calledAt, message: { key: 'Run {0}', values: ['pnpm test'] } })
   })
 
   test('参数解不开就没有动作', () => {

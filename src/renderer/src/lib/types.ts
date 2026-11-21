@@ -1,3 +1,10 @@
+import type { AgentId } from '../../../shared/domain.ts'
+import type { MessageDescriptor } from '../../../shared/i18n.ts'
+import type { CodeLinkState, PipelineState } from '../../../shared/domain.ts'
+import type { NextUpLevel } from '../../../shared/domain.ts'
+import type { RequirementStatus, SessionState} from '../../../shared/domain.ts';
+import { type TodoState } from '../../../shared/domain.ts'
+import { t as tr } from "../../../shared/i18n.ts"
 /**
  * 与服务端契约对应的类型。
  *
@@ -27,10 +34,10 @@ export interface LinkItem {
 }
 
 // 取不到时接口不返回该条，界面也就不挂状态
-export type CodeLinkState = 'open' | 'merged' | 'closed'
+export type { CodeLinkState } from '../../../shared/domain.ts'
 
 // 流水线只取汇总；没跑过或 PR 为 null
-export type PipelineState = 'success' | 'failed' | 'running' | 'skipped'
+export type { PipelineState } from '../../../shared/domain.ts'
 
 export interface CodeLinkStatus {
   state: CodeLinkState
@@ -56,7 +63,7 @@ export interface Worktree {
 }
 
 // 状态即看板列，两者是同一个东西
-export type Status = '澄清' | '执行中' | 'Review' | '已完成'
+export type Status = RequirementStatus
 
 export interface Requirement {
   slug: string
@@ -125,14 +132,14 @@ export interface BoardData {
 // ------------------------------------------------------------------ 待办
 
 // 待办状态的字面量，与库里的取值一致，不译成中文
-export type TodoStatus = 'todo' | 'in_progress' | 'done' | 'cancelled'
+export type TodoStatus = TodoState
 
 // 状态字面量是给 agent 用的，界面上给人看中文。看板列与详情页共用这一份
 export const TODO_STATUS_LABEL: Record<string, string> = {
-  todo: '待办',
-  in_progress: '进行中',
-  done: '已完成',
-  cancelled: '已取消',
+  get todo() { return tr("Todo") },
+  get in_progress() { return tr("Todo in progress") },
+  get done() { return tr("Completed") },
+  get cancelled() { return tr("Cancelled") },
 }
 
 // 与 server/db.ts 的 Todo 对应。内容（标题、摘要）从 md 同步，其余只归库
@@ -197,7 +204,7 @@ export interface Project {
 
 // ------------------------------------------------------------------ 载荷
 
-export type LaunchAgent = 'claude' | 'codex' | 'chengxiaobang' | 'cursor'
+export type LaunchAgent = AgentId
 
 export interface LaunchProviderInfo {
   id: LaunchAgent
@@ -238,7 +245,7 @@ export interface ContextPayload extends DetailPayload {
 }
 
 // 会话的实时状态。字面量与 server/session-state.ts 的 THREAD_STATES 一致
-export type ThreadState = 'idle' | 'thinking' | 'working' | 'sweeping' | 'done' | 'blocked' | 'failed' | 'unknown'
+export type ThreadState = SessionState
 
 // 与 server/session-state.ts 的 SessionStatus 对应。hook 驱动优先，落盘兜底
 export interface SessionStatus {
@@ -249,15 +256,12 @@ export interface SessionStatus {
   observedAt: number
   // 判据出处
   detail: string
+  detailMessage?: MessageDescriptor
 }
 
 // 与 server/action.ts 的 SessionAction 对应
-export interface SessionAction {
-  // 展示文案，形如「改 hook.ts」
-  text: string
-  // 这次工具调用发生的时刻（epoch ms）
-  calledAt: number
-}
+export type { SessionAction } from '../../../shared/session-text.ts'
+import type { SessionAction } from '../../../shared/session-text.ts'
 
 // 一条 agent 会话的登记（claude code / codex / cursor / chengxiaobang）
 export interface Session {
@@ -289,7 +293,7 @@ export interface NextUpItem {
   // 需求状态，界面上并排摆一枚小药丸
   status: string
   // 两级：现在就得动 / 有空再看
-  level: 'now' | 'soon'
+  level: NextUpLevel
   // 命中的档位，1 最硬、4 最软
   tier: number
   // 一句话理由，中文
@@ -330,7 +334,7 @@ export interface OpenWithPayload {
 }
 
 export interface AgentSkill {
-  id: 'claude' | 'cursor' | 'codex' | 'chengxiaobang'
+  id: AgentId
   label: string
   // That agent's skills dir; it may not exist when the agent is not installed
   dir: string
@@ -338,7 +342,7 @@ export interface AgentSkill {
   linked: boolean
 }
 
-export type HookAgentId = 'claude' | 'codex' | 'chengxiaobang' | 'cursor'
+export type HookAgentId = AgentId
 
 // 与 server/hook-install.ts 的 HookAgentStatus 对应。status 一律读真文件得出
 export interface HookAgentStatus {

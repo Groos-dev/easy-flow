@@ -1,3 +1,5 @@
+import type { Language } from '../../../shared/i18n.ts'
+import { t as tr } from "../../../shared/i18n.ts"
 import type {
   BoardData,
   BoardSnapshot,
@@ -46,7 +48,7 @@ async function request<T>(
   // 必须显式报错，否则 HTML 被当成数据，页面会以难排查的方式崩掉。
   if (!text.trimStart().startsWith('{')) {
     const head = text.trimStart().slice(0, 40).replace(/\s+/g, ' ')
-    throw new Error(`接口 ${path} 返回的不是 JSON（拿到 ${text.length} 字节：「${head}…」）`)
+    throw new Error(tr("API {0} did not return JSON ({1} bytes: “{2}…”)", [path, text.length, head]))
   }
 
   const data = JSON.parse(text) as T & { error?: string }
@@ -217,6 +219,10 @@ export const api = {
 
   setOpenWith: (id: string): Promise<OpenWithPayload> =>
     request('/api/settings/open-with', { method: 'POST', body: JSON.stringify({ id }) }),
+
+  language: (): Promise<{ language: Language }> => request('/api/settings/language'),
+  setLanguage: (language: Language): Promise<{ language: Language }> =>
+    request('/api/settings/language', { method: 'POST', body: JSON.stringify({ language }) }),
 
   theme: (): Promise<{ theme: Theme }> => request('/api/settings/theme'),
 

@@ -1,3 +1,5 @@
+import { t as tr } from '../src/shared/i18n.ts'
+import { RequirementStatus, SessionAnalysisState, normalizeRequirementStatus } from '../src/shared/domain.ts'
 /**
  * 建表与老库升级。跟 BoardDatabase 分开放，是为了让"表长什么样"独立成一份
  * 可以直接读的 DDL，而不是埋在 800 行查询代码的开头。
@@ -23,8 +25,8 @@ CREATE TABLE IF NOT EXISTS requirement (
   path     TEXT NOT NULL,
   status   TEXT NOT NULL,
   pinned   INTEGER NOT NULL DEFAULT 0,
-  session_analysis_status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (session_analysis_status IN ('pending', 'completed', 'skipped')),
+  session_analysis_status TEXT NOT NULL DEFAULT '${SessionAnalysisState.Pending}'
+    CHECK (session_analysis_status IN (${Object.values(SessionAnalysisState).map(value => `'${value}'`).join(', ')})),
   priority TEXT,
   summary  TEXT,
   repos    TEXT,
@@ -147,9 +149,11 @@ CREATE TABLE IF NOT EXISTS session_state (
   needs_action TEXT NOT NULL DEFAULT '',
   observed_at  INTEGER NOT NULL,
   detail       TEXT NOT NULL DEFAULT '',
+  detail_message TEXT,
   hook_event   TEXT NOT NULL DEFAULT '',
   action_text  TEXT NOT NULL DEFAULT '',
   action_called_at INTEGER NOT NULL DEFAULT 0,
+  action_message TEXT,
   PRIMARY KEY (agent, session)
 );
 
@@ -202,11 +206,26 @@ function migrate(db: DatabaseSync): void {
   const cols = db.prepare('PRAGMA table_info(requirement)').all() as Array<{ name: string }>
   if (cols.some((c) => c.name === 'stage') && !cols.some((c) => c.name === 'status')) {
     db.exec('ALTER TABLE requirement RENAME COLUMN stage TO status')
-    db.exec(`UPDATE requirement SET status = CASE
-      WHEN status IN ('方案', '开发') THEN '执行中'
-      WHEN status IN ('联调', '发布', '验证验收') THEN 'Review'
-      WHEN status = '关闭' THEN '已完成'
-      ELSE '澄清' END`)
+    db.prepare(`UPDATE requirement SET status = CASE
+      WHEN status IN ('方案', '开发') THEN ?
+      WHEN status IN ('联调', '发布', '验证验收') THEN ?
+      WHEN status = '关闭' THEN ?
+      ELSE ? END`).run(RequirementStatus.InProgress, RequirementStatus.Review, RequirementStatus.Completed, RequirementStatus.Clarification)
+  }
+
+  const statusRows = db.prepare('SELECT DISTINCT status FROM requirement').all() as Array<{ status: string }>
+  const updates = statusRows.map(row => {
+    const status = normalizeRequirementStatus(row.status)
+    if (!status) throw new Error(tr('Unknown stored requirement status: {0}', [row.status]))
+    return { before: row.status, after: status }
+  }).filter(row => row.before !== row.after)
+  if (updates.length) {
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const update = db.prepare('UPDATE requirement SET status = ? WHERE status = ?')
+      for (const row of updates) update.run(row.after, row.before)
+      db.exec('COMMIT')
+    } catch (error) { db.exec('ROLLBACK'); throw error }
   }
 
   // 与界面的「失联」对齐：记录在、文件/目录没了。老库的 orphan 列改名 missing
@@ -227,9 +246,9 @@ function migrate(db: DatabaseSync): void {
   db.exec('CREATE INDEX IF NOT EXISTS idx_req_parent ON requirement(parent_id)')
   addIfMissing('requirement', 'pinned', 'pinned INTEGER NOT NULL DEFAULT 0')
   if (!cols.some((c) => c.name === 'session_analysis_status')) {
-    db.exec(`ALTER TABLE requirement ADD COLUMN session_analysis_status TEXT NOT NULL DEFAULT 'pending'
-      CHECK (session_analysis_status IN ('pending', 'completed', 'skipped'))`)
-    db.exec("UPDATE requirement SET session_analysis_status = 'skipped' WHERE status = '已完成'")
+    db.exec(`ALTER TABLE requirement ADD COLUMN session_analysis_status TEXT NOT NULL DEFAULT '${SessionAnalysisState.Pending}'
+      CHECK (session_analysis_status IN (${Object.values(SessionAnalysisState).map(value => `'${value}'`).join(', ')}))`)
+    db.prepare('UPDATE requirement SET session_analysis_status = ? WHERE status = ?').run(SessionAnalysisState.Skipped, RequirementStatus.Completed)
   }
   // 链接：飞书任务 / 代码链接 / 扩展链接三列收成 link_items 一列 [{title,url}]。
   // 先补列再搬数据，最后删旧列——顺序反了就没有数据可搬
@@ -239,6 +258,8 @@ function migrate(db: DatabaseSync): void {
   dropIfExists('session', 'role')
   addIfMissing('session_state', 'action_text', `action_text TEXT NOT NULL DEFAULT ''`)
   addIfMissing('session_state', 'action_called_at', 'action_called_at INTEGER NOT NULL DEFAULT 0')
+  addIfMissing('session_state', 'detail_message', 'detail_message TEXT')
+  addIfMissing('session_state', 'action_message', 'action_message TEXT')
   // hook 事件名单独存一列：通知层判断 Interrupt 用结构化字段，
   // 不靠 detail 文案
   addIfMissing('session_state', 'hook_event', `hook_event TEXT NOT NULL DEFAULT ''`)

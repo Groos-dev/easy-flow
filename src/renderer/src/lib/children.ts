@@ -1,3 +1,4 @@
+import { RequirementStatus } from '../../../shared/domain.ts'
 /**
  * 父需求与子需求在版面上的连接。
  *
@@ -10,7 +11,7 @@
 import type { ChildStat, Requirement, Status } from './types'
 
 // 看板的终态。子需求完成度按它算
-export const DONE_STATUS: Status = '已完成'
+export const DONE_STATUS: Status = RequirementStatus.Completed
 
 // 父需求 id → 子需求完成度。没有子需求的需求不出现在表里
 export function childStatsOf(reqs: Requirement[]): Map<string, ChildStat> {

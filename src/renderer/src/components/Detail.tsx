@@ -1,3 +1,6 @@
+import { useLanguage } from '../lib/language'
+import { SessionState } from '../../../shared/domain.ts'
+import { t as tr } from "../../../shared/i18n.ts"
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { isComposing, isEditableTarget, shortcut, shortcutLabel } from '../lib/keys'
@@ -45,6 +48,7 @@ export default function Detail({
   onOpenRequirement,
   projectRoot,
 }: Props) {
+  useLanguage()
   const req = target.req
   const todo = target.todo
   const isProject = target.kind === 'project'
@@ -56,7 +60,7 @@ export default function Detail({
   const [draft, setDraft] = useState('')
   // 上次成功保存的内容，用来判断是否真有改动
   const savedRef = useRef('')
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'error'>('idle')
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'error'>(SessionState.Idle)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   // 需求上下文（含工作区列表）。项目页用不到，保持 null
@@ -151,7 +155,7 @@ export default function Detail({
     const seq = ++docSeq.current
     setLoading(true)
     setError('')
-    setSaveState('idle')
+    setSaveState(SessionState.Idle)
     try {
       const res = isProject
         ? { content: await projectContent() }
@@ -187,10 +191,10 @@ export default function Detail({
       else if (isTodo) await api.saveTodoDoc(todo!.id, content)
       else await api.saveDoc(target.slug!, activeDoc, content, target.project)
       savedRef.current = content
-      setSaveState('idle')
+      setSaveState(SessionState.Idle)
     } catch (e) {
       setSaveState('error')
-      setError(`自动保存失败：${(e as Error).message}`)
+      setError(tr("Autosave failed: {0}", [(e as Error).message]))
     }
   }, [target.project, target.slug, activeDoc, isProject, isTodo, todo?.id])
 
@@ -277,7 +281,7 @@ export default function Detail({
     if (!path) return
     void navigator.clipboard
       ?.writeText(path)
-      .then(() => setHint(`已复制：${path}`))
+      .then(() => setHint(tr("Copied: {0}", [path])))
       .catch(() => {})
   }
 
@@ -371,7 +375,7 @@ export default function Detail({
         <button
           className="icon-btn"
           onClick={onBack}
-          title={`返回（${shortcutLabel('detail.close')} / ${shortcutLabel('detail.back')}）`}
+          title={tr("Back ({0} / {1})", [shortcutLabel('detail.close'), shortcutLabel('detail.back')])}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="19" y1="12" x2="5" y2="12" />
@@ -386,11 +390,10 @@ export default function Detail({
         {isProject && (
           <button
             className="btn"
-            title={`在访达打开项目目录（${shortcutLabel('detail.open-dir')}）`}
+            title={tr("Open project directory in Finder ({0})", [shortcutLabel('detail.open-dir')])}
             onClick={() => void api.openProject(target.project).catch(() => {})}
           >
-            打开目录
-          </button>
+            {tr("Open directory")}</button>
         )}
         {!isProject && (req || todo) && (
           <div className="info-menu" ref={infoRef}>
@@ -398,7 +401,7 @@ export default function Detail({
               className={`icon-btn${infoOpen ? ' on' : ''}`}
               ref={infoBtnRef}
               onClick={() => setInfoOpen((v) => !v)}
-              title={`${req ? '需求信息与链接' : '待办信息'}（${shortcutLabel('detail.info')}）`}
+              title={`${req ? tr("Requirement details and links") : tr("Todo details")}（${shortcutLabel('detail.info')}）`}
               aria-haspopup="dialog"
               aria-expanded={infoOpen}
             >
@@ -438,15 +441,15 @@ export default function Detail({
             </div>
             {/* 只在「正在存」和「存不下」时出现；存好了不必报，版面也别被推来推去 */}
             <span className="save-state">
-              {saveState === 'saving' && <span className="saving">保存中…</span>}
-              {saveState === 'error' && <span className="failed">保存失败</span>}
+              {saveState === 'saving' && <span className="saving">{tr("Saving…")}</span>}
+              {saveState === 'error' && <span className={SessionState.Failed}>{tr("Save failed")}</span>}
             </span>
           </div>
 
           {error && <div className="notice">{error}</div>}
 
           {loading ? (
-            <div className="loading">读取中…</div>
+            <div className="loading">{tr("Reading…")}</div>
           ) : (
             <MarkdownEditor value={draft} onChange={onDraftChange} />
           )}

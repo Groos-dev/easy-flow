@@ -1,3 +1,5 @@
+import { useLanguage } from '../lib/language'
+import { t as tr } from "../../../shared/i18n.ts"
 import { useMemo, useState } from 'react'
 import {
   DndContext,
@@ -20,10 +22,10 @@ function label(status: string): string {
 
 // 空列的一句话：一个「—」说不出这一列是干什么的。认不出的状态回落到通用文案
 const EMPTY_HINT: Record<string, string> = {
-  todo: '没有待办的事',
-  in_progress: '没有正在做的',
-  done: '还没有完成的',
-  cancelled: '没有取消的',
+  get todo() { return tr("No pending todos") },
+  get in_progress() { return tr("Nothing in progress") },
+  get done() { return tr("Nothing completed yet") },
+  get cancelled() { return tr("No cancelled todos") },
 }
 
 interface CardProps {
@@ -33,6 +35,7 @@ interface CardProps {
 }
 
 function TodoCard({ todo, onOpen, overlay = false }: CardProps) {
+  useLanguage()
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: todo.id,
     data: { type: 'todo', status: todo.status },
@@ -60,7 +63,7 @@ function TodoCard({ todo, onOpen, overlay = false }: CardProps) {
       <div className="card-foot">
         {todo.source && <span className="chip">{todo.source}</span>}
         {who && <span className="chip">{who}</span>}
-        {todo.missing && <span className="chip warn">md 已失联</span>}
+        {todo.missing && <span className="chip warn">{tr("Markdown file is missing")}</span>}
         <span className="stage">{todo.updated.slice(5)}</span>
       </div>
     </div>
@@ -75,6 +78,7 @@ interface ColumnProps {
 }
 
 function ColumnView({ status, items, onOpen, isOver }: ColumnProps) {
+  useLanguage()
   const { setNodeRef } = useDroppable({ id: status, data: { status } })
   return (
     <div ref={setNodeRef} className={`column${isOver ? ' over' : ''}`}>
@@ -84,7 +88,7 @@ function ColumnView({ status, items, onOpen, isOver }: ColumnProps) {
       </div>
       <div className="column-body">
         {items.length === 0 ? (
-          <div className="empty">{EMPTY_HINT[status] ?? '没有待办'}</div>
+          <div className="empty">{EMPTY_HINT[status] ?? tr("No todos")}</div>
         ) : (
           items.map((t) => <TodoCard key={t.id} todo={t} onOpen={onOpen} />)
         )}
@@ -108,6 +112,7 @@ interface Props {
 }
 
 export default function TodoBoard({ todos, statuses, onOpen, onMove }: Props) {
+  useLanguage()
   const [dragId, setDragId] = useState<string | null>(null)
   const [overStatus, setOverStatus] = useState<string | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))

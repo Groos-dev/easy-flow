@@ -1,3 +1,7 @@
+import { NextUpLevel } from '../../../shared/domain.ts'
+import { useLanguage } from '../lib/language'
+import { requirementStatusLabel } from '../../../shared/i18n.ts'
+import { t as tr } from "../../../shared/i18n.ts"
 import { useEffect, useRef, useState } from 'react'
 import { AGENT_LABELS, NEXT_UP_LEVEL_LABEL, STATUS_CLASS } from '../lib/labels'
 import {
@@ -23,6 +27,7 @@ interface Props {
  * 这里只负责把两级摆开、给每条一句理由，并把「回到会话 / 打开需求」接到手上。
  */
 export default function NextUp({ items, error, onOpenRequirement }: Props) {
+  useLanguage()
   // -1 表示未选；第一次按键落到第一条
   const [cursor, setCursor] = useState(-1)
   const rowRefs = useRef(new Map<string, HTMLElement>())
@@ -80,8 +85,8 @@ export default function NextUp({ items, error, onOpenRequirement }: Props) {
     return (
       <div className={`next-empty${error ? ' bad' : ''}`}>
         {error
-          ? `没能算出「下一步」：${error}`
-          : '眼下没有要你推的需求。没有 agent 卡住或跑完没看，Review 与澄清也都还没停到该催的天数。'}
+          ? tr("Could not calculate next steps: {0}", [error])
+          : tr("No requirements need attention right now. No agents are blocked or awaiting review, and no requirement has been idle long enough to need a reminder.")}
       </div>
     )
   }
@@ -95,7 +100,7 @@ export default function NextUp({ items, error, onOpenRequirement }: Props) {
   return (
     <div className="next">
       {/* 有列表也不能把失败吞了：照旧渲染上一次的名次，但顶上要说清这是旧的 */}
-      {error && <div className="next-error">没能刷新「下一步」，下面是上一次算出的排名：{error}</div>}
+      {error && <div className="next-error">{tr("Could not refresh next steps. Showing the previous ranking:")}{error}</div>}
       {groups.map((g) => (
         <div className="next-group" key={g.level}>
           <div className="next-group-head">{NEXT_UP_LEVEL_LABEL[g.level] ?? g.level}</div>
@@ -122,22 +127,22 @@ export default function NextUp({ items, error, onOpenRequirement }: Props) {
                   {item.reason}
                   <span className="next-chip">
                     <span className={`next-dot ${STATUS_CLASS[item.status] ?? ''}`.trim()} />
-                    {item.status}
+                    {requirementStatusLabel(item.status)}
                   </span>
                 </div>
                 <div className="next-title">{item.title}</div>
                 {item.detail && (
-                  <div className={`next-detail${item.level === 'now' ? ' hot' : ''}`}>{item.detail}</div>
+                  <div className={`next-detail${item.level === NextUpLevel.Now ? ' hot' : ''}`}>{item.detail}</div>
                 )}
               </div>
               <div className="next-action">
                 {/* 有会话级链接才回会话；终端 claude / cursor 没有链接，就退回打开需求 */}
                 <button
                   className="btn-go"
-                  title={`${item.session?.link ? '回到会话' : '打开需求'}（${shortcutLabel('next.primary')}；${shortcutLabel('next.open')} 打开需求）`}
+                  title={tr("{0} ({1}; {2} to open the requirement)", [item.session?.link ? tr("Return to session") : tr("Open requirement"), shortcutLabel('next.primary'), shortcutLabel('next.open')])}
                   onClick={() => activate(item)}
                 >
-                  {item.session?.link ? '回到会话' : '打开需求'}
+                  {item.session?.link ? tr("Return to session") : tr("Open requirement")}
                 </button>
               </div>
             </div>

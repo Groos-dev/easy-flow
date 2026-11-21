@@ -1,3 +1,5 @@
+import { SessionState } from '../shared/domain.ts'
+import { t as tr } from "../shared/i18n.ts"
 /**
  * 主进程的通知层：把纯逻辑（server/attention.ts、attention-runtime.ts）的结论
  * 落到 dock 红点与系统通知上。
@@ -128,7 +130,7 @@ export function createAttentionService({
   function applyBadge(count: number): void {
     const win = usableWindow()
     if (platform === 'win32') {
-      win?.setOverlayIcon(count ? redDotIcon() : null, count ? `${count} 个会话需要处理` : '')
+      win?.setOverlayIcon(count ? redDotIcon() : null, count ? tr("{0} sessions need attention", [count]) : '')
       return
     }
 
@@ -163,7 +165,7 @@ export function createAttentionService({
 
   function present(notification: AttentionNotification): void {
     if (!Notification.isSupported()) {
-      fail('当前系统不支持通知', 'notification skipped')
+      fail(tr("System notifications are not supported"), 'notification skipped')
       return
     }
 
@@ -177,13 +179,13 @@ export function createAttentionService({
         body: notification.body,
         silent: notification.silent,
         ...(notificationIcon ? { icon: notificationIcon } : {}),
-        ...(single?.link ? { actions: [{ type: 'button' as const, text: '打开会话' }] } : {}),
+        ...(single?.link ? { actions: [{ type: 'button' as const, get text() { return tr("Open session") } }] } : {}),
       })
       native.on('click', () => openRequirement(notification.requirement))
       native.on('action', () => {
         if (single?.link) openExternal(single.link)
       })
-      native.on('failed', (_event, error) => {
+      native.on(SessionState.Failed, (_event, error) => {
         fail(error, `notification failed requirement=${notification.requirement.id}`)
       })
       retain(notification.requirement.id, native)
@@ -197,7 +199,7 @@ export function createAttentionService({
   function test(): Promise<AttentionTestResult> {
     const supported = Notification.isSupported()
     if (!supported) {
-      lastFailure = '当前系统不支持通知'
+      lastFailure = tr("System notifications are not supported")
       return Promise.resolve({ supported, lastFailure, delivered: false, timedOut: false })
     }
 
@@ -214,11 +216,11 @@ export function createAttentionService({
 
       try {
         const native = new Notification({
-          title: '测试通知',
+          get title() { return tr("Test notification") },
           ...(notificationIcon ? { icon: notificationIcon } : {}),
         })
         native.on('show', () => finish(true, false))
-        native.on('failed', (_event, error) => {
+        native.on(SessionState.Failed, (_event, error) => {
           fail(error, 'test notification failed')
           finish(false, false)
         })

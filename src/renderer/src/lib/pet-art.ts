@@ -1,3 +1,4 @@
+import { SessionState } from '../../../shared/domain.ts'
 /**
  * 卡上 pet 的素材：一个 agent 一套开源像素形象。
  *
@@ -218,7 +219,7 @@ function themeFor(agent: string): Theme {
 }
 
 function fileFor(theme: Theme, state: Pose, mood: IdleMood, compact: boolean): string {
-  if (state !== 'idle') return (compact ? theme.minis : theme.files)[state]
+  if (state !== SessionState.Idle) return (compact ? theme.minis : theme.files)[state]
   if (!compact) return theme.idle[mood]
   return mood === 'sleeping' ? theme.miniSleep : theme.minis.idle
 }
@@ -237,9 +238,9 @@ export function isWaking(
 ): boolean {
   return (
     !!themeFor(agent).wake &&
-    prev.state === 'idle' &&
+    prev.state === SessionState.Idle &&
     (prev.mood === 'sleeping' || prev.mood === 'collapsing') &&
-    nextState !== 'idle'
+    nextState !== SessionState.Idle
   )
 }
 

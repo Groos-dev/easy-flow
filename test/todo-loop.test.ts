@@ -117,7 +117,7 @@ describe('待办闭环 · 归属三档', () => {
     db.syncTodos()
     db.syncProjects()
     db.setTodoFields('T-20260101-001', { requirementId: reqId })
-    db.setStatus('alpha', '已完成', 'p')
+    db.setStatus('alpha', 'completed', 'p')
 
     assert.deepEqual(db.finishedRequirementTodos().map((t) => t.id), ['T-20260101-001'])
     db.setTodoStatus('T-20260101-001', 'done')
@@ -167,7 +167,7 @@ describe('待办闭环 · context 与批量收尾', () => {
     db.setTodoFields('T-20260101-002', { requirementId: 'req-gone' })
     db.close()
 
-    const res = runCli(['req', 'set', reqId, '--status', 'Review'])
+    const res = runCli(['req', 'set', reqId, '--status', 'review'])
     assert.equal(res.status, 0, String(res.stderr))
     assert.match(String(res.stdout), /还有 1 条未完成待办/)
     assert.doesNotMatch(String(res.stdout), /T-20260101-002/, '悬空的不属于这条需求')
@@ -184,7 +184,7 @@ describe('待办闭环 · context 与批量收尾', () => {
     db.syncProjects()
     db.setTodoFields('T-20260101-001', { requirementId: reqId })
     db.setTodoFields('T-20260101-002', { requirementId: 'req-gone' })
-    db.setStatus('alpha', '已完成', 'p')
+    db.setStatus('alpha', 'completed', 'p')
     db.close()
 
     const res = runCli(['context', reqId])
@@ -283,6 +283,6 @@ describe('待办闭环 · 立项一次做完', () => {
     // 第二次调用：报错并指出已有的那条需求，不再新建
     const second = run(['todo', 'promote', 'T-20260101-001', '--project', 'p', '--slug', 'again', '--json'])
     assert.notEqual(second.status, 0)
-    assert.match(second.stdout, /already belongs to/)
+    assert.match(second.stdout, /(?:already belongs to|已归属需求)/)
   })
 })

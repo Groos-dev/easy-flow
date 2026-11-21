@@ -1,3 +1,8 @@
+import { agentLabel, openTargetLabel } from '../lib/labels'
+import { LogSeverity } from '../../../shared/domain.ts'
+import { LANGUAGES, Language } from '../../../shared/i18n.ts'
+import { useLanguage, changeLanguage } from '../lib/language'
+import { t as tr } from "../../../shared/i18n.ts"
 import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import {
   NOTIFICATION_MODES,
@@ -30,27 +35,29 @@ interface Props {
 type SectionId = 'appearance' | 'data' | 'open' | 'shortcut' | 'notify' | 'skill' | 'hook' | 'log'
 
 const SECTIONS: Array<{ id: SectionId; label: string }> = [
-  { id: 'appearance', label: '外观' },
-  { id: 'data', label: '数据目录' },
-  { id: 'open', label: '打开方式' },
-  { id: 'shortcut', label: '快捷键' },
-  { id: 'notify', label: '通知' },
-  { id: 'skill', label: 'CLI 与 Skill' },
-  { id: 'hook', label: '钩子' },
-  { id: 'log', label: '日志' },
+  { id: 'appearance', get label() { return tr("Appearance") } },
+  { id: 'data', get label() { return tr("Data directory") } },
+  { id: 'open', get label() { return tr("Open with") } },
+  { id: 'shortcut', get label() { return tr("Keyboard shortcuts") } },
+  { id: 'notify', get label() { return tr("Notifications") } },
+  { id: 'skill', get label() { return tr("CLI and Skill") } },
+  { id: 'hook', get label() { return tr("Hooks") } },
+  { id: 'log', get label() { return tr("Logs") } },
 ]
 
 function describeSync(sync: SyncResult | null): string {
-  if (!sync) return '无需同步'
+  if (!sync) return tr("No synchronization needed")
   const parts: string[] = []
-  if (sync.added.length) parts.push(`新增 ${sync.added.length}`)
-  if (sync.missing.length) parts.push(`失联 ${sync.missing.length}`)
-  if (sync.restored.length) parts.push(`恢复 ${sync.restored.length}`)
-  if (sync.updated.length) parts.push(`更新 ${sync.updated.length}`)
-  return parts.length ? parts.join(' · ') : '无变化'
+  if (sync.added.length) parts.push(tr("Added {0}", [sync.added.length]))
+  if (sync.missing.length) parts.push(tr("Missing {0}", [sync.missing.length]))
+  if (sync.restored.length) parts.push(tr("Restored {0}", [sync.restored.length]))
+  if (sync.updated.length) parts.push(tr("Updated {0}", [sync.updated.length]))
+  return parts.length ? parts.join(' · ') : tr("No changes")
 }
 
 export default function Settings({ onBack, onApplied, theme, onThemeChange }: Props) {
+  const language = useLanguage()
+  const [languageError, setLanguageError] = useState('')
   const [section, setSection] = useState<SectionId>('appearance')
   const [settings, setSettings] = useState<SettingsPayload | null>(null)
   const [draft, setDraft] = useState('')
@@ -58,7 +65,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [themeError, setThemeError] = useState('')
-  const [logLevel, setLogLevel] = useState<LogLevel>('info')
+  const [logLevel, setLogLevel] = useState<LogLevel>(LogSeverity.Info)
   const [logError, setLogError] = useState('')
 
   // CLI / skill install state: only read from the filesystem when that section is opened
@@ -127,7 +134,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
     void api
       .skill()
       .then(setSkill)
-      .catch((e: Error) => setSkillError(`读取安装状态失败：${e.message}`))
+      .catch((e: Error) => setSkillError(tr("Could not read installation status: {0}", [e.message])))
   }, [section])
 
   useEffect(() => {
@@ -135,13 +142,13 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
     void api
       .hooks()
       .then(setHook)
-      .catch((e: Error) => setHookError(`读取安装状态失败：${e.message}`))
+      .catch((e: Error) => setHookError(tr("Could not read installation status: {0}", [e.message])))
   }, [section])
 
   useEffect(() => {
     if (section !== 'log') return
     void api.logLevel().then((result) => setLogLevel(result.logLevel))
-      .catch((e: Error) => setLogError(`读取日志级别失败：${e.message}`))
+      .catch((e: Error) => setLogError(tr("Could not read log level: {0}", [e.message])))
   }, [section])
 
   useEffect(() => {
@@ -149,7 +156,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
     void window.easyFlow
       ?.getShortcut?.()
       .then(setHotkey)
-      .catch((e: Error) => setHotkeyError(`读取快捷键失败：${e.message}`))
+      .catch((e: Error) => setHotkeyError(tr("Could not read shortcut: {0}", [e.message])))
   }, [section])
 
   useEffect(() => {
@@ -157,7 +164,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
     void api
       .openWith()
       .then(setOpenWith)
-      .catch((e: Error) => setOpenError(`读取打开方式失败：${e.message}`))
+      .catch((e: Error) => setOpenError(tr("Could not read default application: {0}", [e.message])))
   }, [section])
 
   useEffect(() => {
@@ -165,7 +172,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
     void window.easyFlow
       ?.notificationInfo?.()
       .then(setNotify)
-      .catch((e: Error) => setNotifyError(`读取通知状态失败：${e.message}`))
+      .catch((e: Error) => setNotifyError(tr("Could not read notification status: {0}", [e.message])))
   }, [section])
 
   useEffect(() => {
@@ -173,7 +180,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
     void window.easyFlow
       ?.notificationMode?.()
       .then(setNotifyMode)
-      .catch((e: Error) => setNotifyError(`读取通知时机失败：${e.message}`))
+      .catch((e: Error) => setNotifyError(tr("Could not read notification mode: {0}", [e.message])))
   }, [section])
 
   // 失败是异步事件：页面一直开着时也要能收到，
@@ -208,11 +215,11 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
       setRecording(false)
       if (res.ok && res.shortcut) {
         setHotkey((prev) => ({ shortcut: res.shortcut!, fallback: prev?.fallback ?? '' }))
-        setHotkeyNotice(`已改为 ${formatAccelerator(res.shortcut, platform)}`)
+        setHotkeyNotice(tr("Changed to {0}", [formatAccelerator(res.shortcut, platform)]))
         // 注册成功但没写进配置：也报出来，否则下次启动悄悄回到旧值
         if (res.error) setHotkeyError(res.error)
       } else {
-        setHotkeyError(res.error ?? '改绑失败')
+        setHotkeyError(res.error ?? tr("Could not change shortcut"))
       }
     },
     [platform],
@@ -223,7 +230,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
     try {
       setOpenWith(await api.setOpenWith(id))
     } catch (e) {
-      setOpenError(`保存失败：${(e as Error).message}`)
+      setOpenError(tr("Could not save: {0}", [(e as Error).message]))
     }
   }, [])
 
@@ -307,7 +314,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
       }
       const accel = acceleratorFromEvent(e, platform)
       if (!accel) {
-        setHotkeyError('这个组合不行：要带 ⌘ / ⌃ / ⌥，键用字母、数字或功能键')
+        setHotkeyError(tr("Use ⌘ / ⌃ / ⌥ with a letter, number, or function key."))
         return
       }
       void applyShortcut(accel)
@@ -334,7 +341,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
     setMessage('')
     try {
       const res = await api.switchDataDir(draft.trim())
-      setMessage(res.unchanged ? '目录未变化' : `已切换 · ${describeSync(res.sync)}`)
+      setMessage(res.unchanged ? tr("Directory unchanged") : tr("Directory switched · {0}", [describeSync(res.sync)]))
       await loadSettings()
       onApplied()
     } catch (e) {
@@ -349,7 +356,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
     setError('')
     try {
       const res = await api.resync()
-      setMessage(`已重新扫描 · ${describeSync(res.sync)}`)
+      setMessage(tr("Rescanned · {0}", [describeSync(res.sync)]))
       await loadSettings()
       onApplied()
     } catch (e) {
@@ -369,7 +376,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
       setSkillNotice(res.summary)
       setSkillError(res.failed.join('\n'))
     } catch (e) {
-      setSkillError(`安装失败：${(e as Error).message}`)
+      setSkillError(tr("Installation failed: {0}", [(e as Error).message]))
     } finally {
       setBusy(false)
     }
@@ -385,7 +392,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
       setHookNotice(res.summary)
       setHookError(res.failed.join('\n'))
     } catch (e) {
-      setHookError(`安装失败：${(e as Error).message}`)
+      setHookError(tr("Installation failed: {0}", [(e as Error).message]))
     } finally {
       setBusy(false)
     }
@@ -401,7 +408,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
       setHookNotice(res.summary)
       setHookError(res.failed.join('\n'))
     } catch (e) {
-      setHookError(`卸载失败：${(e as Error).message}`)
+      setHookError(tr("Uninstallation failed: {0}", [(e as Error).message]))
     } finally {
       setBusy(false)
     }
@@ -414,12 +421,12 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
       const res = await window.easyFlow?.testNotification?.()
       if (!res) return
       setNotify({ supported: res.supported, lastFailure: res.lastFailure })
-      if (!res.supported) setNotifyError('当前系统不支持通知')
+      if (!res.supported) setNotifyError(tr("System notifications are not supported"))
       else if (res.lastFailure) setNotifyNotice('')
-      else if (res.timedOut) setNotifyNotice('通知已提交，但没等到系统回执；没看到就去系统设置里确认')
-      else if (!res.delivered) setNotifyError('通知没有发出')
+      else if (res.timedOut) setNotifyNotice(tr("Notification submitted without a system receipt. Check system settings if it did not appear."))
+      else if (!res.delivered) setNotifyError(tr("Notification was not sent"))
     } catch (e) {
-      setNotifyError(`发送测试通知失败：${(e as Error).message}`)
+      setNotifyError(tr("Could not send test notification: {0}", [(e as Error).message]))
     }
   }
 
@@ -436,13 +443,13 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
       }
       if (!res.ok) {
         setNotifyMode(previous)
-        setNotifyError(res.error ?? '保存通知时机失败')
+        setNotifyError(res.error ?? tr("Could not save notification mode"))
         return
       }
-      setNotifyNotice(`已改为「${NOTIFICATION_MODE_LABELS[next]}」`)
+      setNotifyNotice(tr("Changed to “{0}”", [NOTIFICATION_MODE_LABELS[next]]))
     } catch (e) {
       setNotifyMode(previous)
-      setNotifyError(`保存通知时机失败：${(e as Error).message}`)
+      setNotifyError(tr("Could not save notification mode: {0}", [(e as Error).message]))
     }
   }
 
@@ -454,7 +461,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
       await api.setTheme(next)
     } catch (e) {
       onThemeChange(previous)
-      setThemeError(`保存外观失败：${(e as Error).message}`)
+      setThemeError(tr("Could not save appearance: {0}", [(e as Error).message]))
     }
   }
 
@@ -464,7 +471,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
       await api.setLogLevel(next)
       setLogLevel(next)
     } catch (e) {
-      setLogError(`保存日志级别失败：${(e as Error).message}`)
+      setLogError(tr("Could not save log level: {0}", [(e as Error).message]))
     }
   }
 
@@ -472,9 +479,9 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
     setNotifyError('')
     try {
       const res = await window.easyFlow?.openNotificationSettings?.()
-      if (res && !res.ok) setNotifyError('这个平台没有可打开的通知设置页')
+      if (res && !res.ok) setNotifyError(tr("Notification settings are unavailable on this platform"))
     } catch (e) {
-      setNotifyError(`打开系统设置失败：${(e as Error).message}`)
+      setNotifyError(tr("Could not open system settings: {0}", [(e as Error).message]))
     }
   }
 
@@ -483,7 +490,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
       <aside className="settings-nav">
         {/* 顶部占位：让开 macOS 红绿灯，兼作窗口拖拽区 */}
         <div className="settings-nav-head" />
-        <div className="settings-nav-title">设置</div>
+        <div className="settings-nav-title">{tr("Settings")}</div>
         {sections.map((s, i) => (
           <button
             key={s.id}
@@ -496,37 +503,52 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
         ))}
         <span className="spacer" />
         <button className="settings-nav-item back" onClick={onBack}>
-          ← 返回
-        </button>
+          {tr("← Back")}</button>
       </aside>
 
       <main className="settings-main">
         {section === 'log' && (
           <>
-            <h1>日志</h1>
+            <h1>{tr("Logs")}</h1>
             {logError && <div className="notice">{logError}</div>}
             <div className="settings-row">
               <div className="settings-row-text">
-                <div className="settings-row-title">日志级别</div>
-                <div className="settings-row-desc">日志保留最近 24 小时</div>
+                <div className="settings-row-title">{tr("Log level")}</div>
+                <div className="settings-row-desc">{tr("Logs are retained for 24 hours")}</div>
               </div>
               <select className="settings-select" value={logLevel}
                 onChange={(e) => void changeLogLevel(e.target.value as LogLevel)}>
-                {LOG_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}
+                {LOG_LEVELS.map((level) => <option key={level} value={level}>{tr(({ debug: 'Debug', info: 'Information', warn: 'Warning', error: 'Error', silent: 'Silent' } as const)[level])}</option>)}
               </select>
             </div>
           </>
         )}
         {section === 'appearance' && (
           <>
-            <h1>外观</h1>
+            <h1>{tr("Appearance")}</h1>
+            {languageError && <div className="notice">{languageError}</div>}
+            <div className="settings-row">
+              <div className="settings-row-text">
+                <div className="settings-row-title">{tr('Language')}</div>
+                <div className="settings-row-desc">{tr('Language changes apply immediately to both windows and are saved.')}</div>
+              </div>
+              <select className="settings-select" aria-label={tr('Language')} value={language}
+                onChange={(event) => {
+                  setLanguageError('')
+                  void changeLanguage(event.target.value as Language).catch((error: Error) =>
+                    setLanguageError(tr('Could not save language: {0}', [error.message])))
+                }}>
+                {LANGUAGES.map(value => <option key={value} value={value}>{value === Language.English ? tr('English') : tr('Chinese')}</option>)}
+              </select>
+            </div>
+
 
             {themeError && <div className="notice">{themeError}</div>}
 
             <div className="settings-row">
               <div className="settings-row-text">
-                <div className="settings-row-title">主题</div>
-                <div className="settings-row-desc">跟随系统时，系统外观一变界面跟着变</div>
+                <div className="settings-row-title">{tr("Theme")}</div>
+                <div className="settings-row-desc">{tr("System mode follows changes to the system appearance")}</div>
               </div>
               <select
                 className="settings-select"
@@ -545,12 +567,12 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
 
         {section === 'data' && (
           <>
-            <h1>数据目录</h1>
+            <h1>{tr("Data directory")}</h1>
 
             {error && <div className="notice">{error}</div>}
             {message && <div className="notice ok">{message}</div>}
 
-            <div className="section-label">路径</div>
+            <div className="section-label">{tr("Path")}</div>
             <div className="row">
               <input
                 className="search wide"
@@ -560,40 +582,37 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
               />
               {canPick && (
                 <button className="btn" onClick={() => void pick()}>
-                  选择…
-                </button>
+                  {tr("Choose…")}</button>
               )}
             </div>
             <div className="row">
               <button className="btn primary" disabled={busy} onClick={() => void switchDir()}>
-                应用并初始化
-              </button>
+                {tr("Apply and initialize")}</button>
               <button className="btn" disabled={busy} onClick={() => void resync()}>
-                重新扫描
-              </button>
+                {tr("Rescan")}</button>
             </div>
 
-            <div className="section-label">当前状态</div>
+            <div className="section-label">{tr("Current state")}</div>
             <div className="settings-status">
               {settings
-                ? `需求 ${settings.counts.requirements} · 项目 ${settings.counts.projects}`
-                : '读取中…'}
+                ? tr("Requirements {0} · Projects {1}", [settings.counts.requirements, settings.counts.projects])
+                : tr("Reading…")}
             </div>
           </>
         )}
 
         {section === 'open' && (
           <>
-            <h1>打开方式</h1>
+            <h1>{tr("Open with")}</h1>
 
             {openError && <div className="notice">{openError}</div>}
             {openWith?.missing && (
-              <div className="notice">原来选的默认应用已不在本机，打开时会退回访达。</div>
+              <div className="notice">{tr("The selected application is no longer installed. Directories will open in Finder.")}</div>
             )}
 
             <div className="settings-row open-setting">
               <div className="settings-row-text">
-                <div className="settings-row-title">默认打开方式</div>
+                <div className="settings-row-title">{tr("Default application")}</div>
               </div>
               <div className={`open-picker${menuOpen ? ' open' : ''}`} ref={pickerRef}>
                 <button
@@ -612,7 +631,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
                 >
                   {selected?.icon ? <img src={selected.icon} alt="" /> : <span className="open-icon-slot" />}
                   <span className="open-picker-name">
-                    {selected ? selected.label : '扫描中…'}
+                    {selected ? openTargetLabel(selected) : tr("Scanning…")}
                   </span>
                   <span className="open-picker-chevron">
                     <ChevronIcon dir="down" size={12} />
@@ -620,7 +639,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
                 </button>
 
                 {menuOpen && openWith && (
-                  <div className="open-menu" role="listbox" aria-label="默认打开方式" onKeyDown={onMenuKeyDown}>
+                  <div className="open-menu" role="listbox" aria-label={tr("Default application")} onKeyDown={onMenuKeyDown}>
                     {openWith.options.map((o, i) => (
                       <Fragment key={o.id || 'finder'}>
                         {i > 0 && openWith.options[i - 1].kind !== o.kind && <div className="open-menu-sep" />}
@@ -635,7 +654,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
                           onClick={() => void choose(o.id)}
                         >
                           {o.icon ? <img src={o.icon} alt="" /> : <span className="open-icon-slot" />}
-                          <span className="open-menu-label">{o.label}</span>
+                          <span className="open-menu-label">{openTargetLabel(o)}</span>
                           {o.id === selected?.id && <CheckIcon />}
                         </button>
                       </Fragment>
@@ -649,7 +668,7 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
 
         {section === 'shortcut' && (
           <>
-            <h1>快捷键</h1>
+            <h1>{tr("Keyboard shortcuts")}</h1>
 
             {hotkeyError && <div className="notice">{hotkeyError}</div>}
             {hotkeyNotice && <div className="notice ok">{hotkeyNotice}</div>}
@@ -657,29 +676,29 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
             {canSetShortcut ? (
               <div className="settings-row">
                 <div className="settings-row-text">
-                  <div className="settings-row-title">呼出面板</div>
-                  <div className="settings-row-desc">在任意应用里呼出 / 收起面板</div>
+                  <div className="settings-row-title">{tr("Toggle panel")}</div>
+                  <div className="settings-row-desc">{tr("Show or hide the panel from any application")}</div>
                 </div>
                 <button
                   className={`shortcut-key${recording ? ' recording' : ''}`}
                   onClick={toggleRecording}
                 >
                   {recording
-                    ? '按下组合键…（Esc 取消）'
+                    ? tr("Press a shortcut… (Esc to cancel)")
                     : hotkey
                       ? acceleratorKeys(hotkey.shortcut, platform).map((k, i) => (
                           <span className="keycap" key={`${k}-${i}`}>
                             <KeyGlyph mark={k} />
                           </span>
                         ))
-                      : '读取中…'}
+                      : tr("Reading…")}
                 </button>
-                <button className="icon-btn" title="改绑" onClick={toggleRecording}>
+                <button className="icon-btn" title={tr("Change shortcut")} onClick={toggleRecording}>
                   <PencilIcon />
                 </button>
                 <button
                   className="icon-btn"
-                  title="恢复默认"
+                  title={tr("Restore default")}
                   disabled={!hotkey || hotkey.shortcut === hotkey.fallback}
                   onClick={() => hotkey && void applyShortcut(hotkey.fallback)}
                 >
@@ -687,10 +706,10 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
                 </button>
               </div>
             ) : (
-              <p className="hint">浏览器预览没有全局快捷键；下面是应用内键位。</p>
+              <p className="hint">{tr("Browser preview has no global shortcuts. Application shortcuts are listed below.")}</p>
             )}
 
-            <div className="section-label">应用内快捷键</div>
+            <div className="section-label">{tr("Application shortcuts")}</div>
             <div className="shortcut-list">
               {CONTEXT_ORDER.map((ctx) => {
                 const items = SHORTCUTS.filter((s) => s.context === ctx && !s.hidden)
@@ -716,15 +735,15 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
 
         {section === 'notify' && (
           <>
-            <h1>通知</h1>
+            <h1>{tr("Notifications")}</h1>
 
             {notifyError && <div className="notice">{notifyError}</div>}
             {notifyNotice && <div className="notice ok">{notifyNotice}</div>}
 
-            <div className="section-label">通知时机</div>
+            <div className="section-label">{tr("Notification mode")}</div>
             <div className="settings-row">
               <div className="settings-row-text">
-                <div className="settings-row-title">显示系统通知</div>
+                <div className="settings-row-title">{tr("Show system notifications")}</div>
               </div>
               <select
                 className="settings-select"
@@ -740,77 +759,74 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
               </select>
             </div>
 
-            {notify && !notify.supported && <div className="notice">当前系统不支持通知</div>}
+            {notify && !notify.supported && <div className="notice">{tr("System notifications are not supported")}</div>}
             {notify?.lastFailure && (
-              <div className="notice">最近一次投递失败：{notify.lastFailure}</div>
+              <div className="notice">{tr("Most recent delivery failure:")}{notify.lastFailure}</div>
             )}
             <div className="row notify-actions">
               <button className="btn primary" onClick={() => void testNotification()}>
-                发一条测试通知
-              </button>
+                {tr("Send test notification")}</button>
               <button className="btn" onClick={() => void openNotificationSettings()}>
-                打开系统设置
-              </button>
+                {tr("Open system settings")}</button>
             </div>
           </>
         )}
 
         {section === 'hook' && (
           <>
-            <h1>钩子</h1>
+            <h1>{tr("Hooks")}</h1>
 
             {hookError && <div className="notice">{hookError}</div>}
             {hookNotice && <div className="notice ok">{hookNotice}</div>}
 
-            <div className="section-label">安装状态</div>
+            <div className="section-label">{tr("Installation status")}</div>
             {hook ? (
               hook.agents.map((a) => (
-                <div className="settings-status" key={a.id} title={a.label}>
+                <div className="settings-status" key={a.id} title={agentLabel(a.id, a.label)}>
                   <AgentIcon agent={a.id} size={13} />
                   <span>
-                    {a.problem ? `读不了：${a.problem}` : a.installed ? '已安装' : '未安装'}
+                    {a.problem ? tr("Cannot read: {0}", [a.problem]) : a.installed ? tr("Installed") : tr("Not installed")}
                   </span>
                 </div>
               ))
             ) : (
-              <div className="settings-status">读取中…</div>
+              <div className="settings-status">{tr("Reading…")}</div>
             )}
 
             <div className="row">
               <button className="btn primary" disabled={busy || !hook} onClick={() => void installHooks()}>
-                {hook?.agents.some((a) => a.installed) ? '重新安装' : '一键安装'}
+                {hook?.agents.some((a) => a.installed) ? tr("Reinstall") : tr("Install all")}
               </button>
               <button className="btn" disabled={busy || !hook} onClick={() => void uninstallHooks()}>
-                一键卸载
-              </button>
+                {tr("Uninstall all")}</button>
             </div>
           </>
         )}
 
         {section === 'skill' && (
           <>
-            <h1>CLI 与 Skill</h1>
+            <h1>{tr("CLI and Skill")}</h1>
 
             {skillError && <div className="notice">{skillError}</div>}
             {skillNotice && <div className="notice ok">{skillNotice}</div>}
             {skill?.problem && <div className="notice">{skill.problem}</div>}
 
-            <div className="section-label">安装状态</div>
+            <div className="section-label">{tr("Installation status")}</div>
             {skill ? (
               <>
-                <div className="settings-status" title="easy-flow 命令">
+                <div className="settings-status" title={tr("easy-flow command")}>
                   <TerminalIcon />
-                  <span>{skill.shim.installed ? '已安装' : '未安装'}</span>
+                  <span>{skill.shim.installed ? tr("Installed") : tr("Not installed")}</span>
                 </div>
                 {skill.agents.map((a) => (
-                  <div className="settings-status" key={a.id} title={a.label}>
+                  <div className="settings-status" key={a.id} title={agentLabel(a.id, a.label)}>
                     <AgentIcon agent={a.id} size={13} />
-                    <span>{!a.available ? '未装这个 agent' : a.linked ? '已安装' : '未安装'}</span>
+                    <span>{!a.available ? tr("This agent is not installed") : a.linked ? tr("Installed") : tr("Not installed")}</span>
                   </div>
                 ))}
               </>
             ) : (
-              <div className="settings-status">读取中…</div>
+              <div className="settings-status">{tr("Reading…")}</div>
             )}
 
             <div className="row">
@@ -819,20 +835,19 @@ export default function Settings({ onBack, onApplied, theme, onThemeChange }: Pr
                 disabled={busy || !skill?.source}
                 onClick={() => void install()}
               >
-                {skill?.shim.installed ? '重新安装' : '安装'}
+                {skill?.shim.installed ? tr("Reinstall") : tr("Install")}
               </button>
             </div>
 
             {!!skill?.legacyMcp.some((m) => m.registered) && (
               <>
-                <div className="section-label">旧的 MCP 注册</div>
+                <div className="section-label">{tr("Legacy MCP registrations")}</div>
                 <p className="hint">
                   {skill.legacyMcp
                     .filter((m) => m.registered)
                     .map((m) => m.label)
                     .join('、')}
-                  还挂着 easy-flow 的 MCP 注册，安装时会自动摘掉。
-                </p>
+                  {tr("Legacy easy-flow MCP registrations remain. Installation will remove them.")}</p>
               </>
             )}
           </>

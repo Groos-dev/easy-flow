@@ -1,3 +1,4 @@
+import { Language, setLanguage } from '../src/shared/i18n.ts'
 /**
  * 设置页「一键配置 hook」的回归：最要紧的一条是**只增不改**——
  * 装的时候只往事件数组里追加自己那条，卸的时候只摘自己那条，
@@ -367,6 +368,7 @@ describe('/api/hooks 路由', () => {
     process.env.HOME = home
 
     app = createBoardApp({ dataDir: dir, port: 4321 })
+    setLanguage(Language.Chinese)
     server = createServer((rq, rs) => void app.handle(rq, rs))
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
     const addr = server.address()

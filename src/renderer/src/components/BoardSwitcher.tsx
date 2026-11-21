@@ -1,11 +1,13 @@
+import { useLanguage } from '../lib/language'
+import { t as tr } from "../../../shared/i18n.ts"
 import { useEffect, useRef, useState } from 'react'
 
 // 窗口里的两个看板：需求与待办是平级的，只是看的东西不同
 export type BoardView = 'req' | 'todo'
 
 const BOARDS: Array<{ value: BoardView; label: string; hint: string }> = [
-  { value: 'req', label: '需求', hint: '按项目组织的需求看板' },
-  { value: 'todo', label: 'Todo', hint: '跨项目的全局待办' },
+  { value: 'req', get label() { return tr("Requirements") }, get hint() { return tr("Requirements organized by project") } },
+  { value: 'todo', get label() { return tr("Todo") }, get hint() { return tr("Global todos across projects") } },
 ]
 
 /**
@@ -19,6 +21,7 @@ export default function BoardSwitcher({
   value: BoardView
   onChange: (v: BoardView) => void
 }) {
+  useLanguage()
   const [open, setOpen] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
 
@@ -46,7 +49,7 @@ export default function BoardSwitcher({
         className="board-switch-trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
-        title="切换看板"
+        title={tr("Switch board")}
         onClick={() => setOpen((v) => !v)}
       >
         <span className="board-switch-label">{current.label}</span>

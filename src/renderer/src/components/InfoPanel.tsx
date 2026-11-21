@@ -1,3 +1,7 @@
+import { TodoState } from '../../../shared/domain.ts'
+import { codeLinkStateLabel } from '../../../shared/i18n.ts'
+import { useLanguage } from '../lib/language'
+import { t as tr } from "../../../shared/i18n.ts"
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { api } from '../lib/api'
 import { isComposing, isEditableTarget, shortcut } from '../lib/keys'
@@ -35,6 +39,7 @@ export default function InfoPanel({
   onOpenTodo: (id: string) => void
   launchSignal?: number
 }) {
+  useLanguage()
   const [live, setLive] = useState<ContextLive | null>(null)
   const liveError = useRef('')
   const slug = req.slug
@@ -58,7 +63,7 @@ export default function InfoPanel({
         const message = (err as Error).message
         if (liveError.current !== message) {
           liveError.current = message
-          console.warn(`[info-panel] 浮窗刷新失败（${project}/${slug}）：${message}`)
+          console.warn(tr("[info-panel] Could not refresh ({0}/{1}): {2}", [project, slug, message]))
         }
       } finally {
         inFlight = false
@@ -78,7 +83,7 @@ export default function InfoPanel({
   const worktrees = data?.worktrees ?? []
   const sessions = data?.sessions ?? []
   // 只列未完成的：已完成 / 已取消的不占版面
-  const stillOpen = (t: Todo) => t.status === 'todo' || t.status === 'in_progress'
+  const stillOpen = (t: Todo) => t.status === TodoState.Todo || t.status === TodoState.InProgress
   const openTodos = (data?.todos ?? []).filter(stillOpen)
   // 由来源会话推出来的归属：没写进库，所以标出来，别让人误以为已经挂上了
   const candidateTodos = (data?.candidateTodos ?? []).filter(stillOpen)
@@ -139,12 +144,12 @@ export default function InfoPanel({
     <div
       className="info-panel"
       role="dialog"
-      aria-label="需求信息与链接"
+      aria-label={tr("Requirement details and links")}
       ref={panelRef}
     >
       {/* 数据未到时不能把空列表误当成需求没有会话 */}
       {data && (
-        <InfoBlock label="会话" count={sessions.length}>
+        <InfoBlock label={tr("Sessions")} count={sessions.length}>
           {sessions.map((s) => (
             <SessionRow key={`${s.agent}:${s.session}`} session={s} />
           ))}
@@ -163,7 +168,7 @@ export default function InfoPanel({
               data-info-row={w.missing ? undefined : ''}
               role={w.missing ? undefined : 'button'}
               tabIndex={w.missing ? undefined : 0}
-              title={w.missing ? `目录已失联：${w.path}` : `在目录里打开：${w.path}（右键或 ⌥ 选打开方式）`}
+              title={w.missing ? tr("Directory is missing: {0}", [w.path]) : tr("Open directory: {0} (right-click or ⌥ to choose an application)", [w.path])}
               onClick={
                 w.missing
                   ? undefined
@@ -185,7 +190,7 @@ export default function InfoPanel({
                 <span className="repo line mono">{w.repo}</span>
                 <span className="branch line">· {w.branch}</span>
               </span>
-              {w.missing ? <span className="wt-missing">目录已失联</span> : <span className="go">↗</span>}
+              {w.missing ? <span className="wt-missing">{tr("Directory is missing")}</span> : <span className="go">↗</span>}
             </div>
           ))}
         </InfoBlock>
@@ -193,7 +198,7 @@ export default function InfoPanel({
 
       {/* 关联待办：todo 侧登记了指针的那些。只列未完成的，颜色区分状态 */}
       {openTodos.length > 0 && (
-        <InfoBlock label="关联待办" count={openTodos.length}>
+        <InfoBlock label={tr("Related todos")} count={openTodos.length}>
           {openTodos.map((t) => (
             <TodoRow key={t.id} todo={t} onOpenTodo={onOpenTodo} />
           ))}
@@ -206,7 +211,7 @@ export default function InfoPanel({
        * 人会把推断当成事实，指针也就再没人回填了。
        */}
       {candidateTodos.length > 0 && (
-        <InfoBlock label="待确认归属" count={candidateTodos.length}>
+        <InfoBlock label={tr("Ownership to confirm")} count={candidateTodos.length}>
           {candidateTodos.map((t) => (
             <TodoRow key={t.id} todo={t} onOpenTodo={onOpenTodo} candidate />
           ))}
@@ -214,7 +219,7 @@ export default function InfoPanel({
       )}
 
       {links.length > 0 && (
-        <InfoBlock label="链接" count={links.length}>
+        <InfoBlock label={tr("Links")} count={links.length}>
           {links.map((it) => (
             <div className="link-line" key={it.url}>
               <a
@@ -240,7 +245,7 @@ export default function InfoPanel({
           data-info-row=""
           role="button"
           tabIndex={0}
-          title={`${req.path}（右键或 ⌥ 选打开方式）`}
+          title={tr("{0} (right-click or ⌥ to choose an application)", [req.path])}
           onClick={(e) => openDirWith(e, req.path, openDir)}
           onContextMenu={(e) => {
             e.preventDefault()
@@ -252,7 +257,7 @@ export default function InfoPanel({
         >
           {req.path}
         </span>
-        <CopyButton text={req.path} label="路径" />
+        <CopyButton text={req.path} label={tr("Path")} />
       </div>
     </div>
   )
@@ -260,20 +265,21 @@ export default function InfoPanel({
 
 // 链接行末尾的状态：流水线图标（只在 open 时）+ 定宽状态列
 export function CodeLinkStatusCell({ status }: { status: CodeLinkStatus }) {
+  useLanguage()
   return (
     <>
       {showsPipeline(status) && status.pipeline && (
         <span
           className="link-pipe"
           data-pipeline={status.pipeline}
-          title={`流水线：${PIPELINE_LABEL[status.pipeline]}`}
+          title={tr("Pipeline: {0}", [PIPELINE_LABEL[status.pipeline]])}
         >
           {PIPELINE_ICON[status.pipeline]}
         </span>
       )}
-      <span className="link-state" data-state={status.state} title={`状态：${status.state}`}>
+      <span className="link-state" data-state={status.state} title={tr("Status: {0}", [codeLinkStateLabel(status.state)])}>
         <span className="dot" />
-        {status.state}
+        {codeLinkStateLabel(status.state)}
       </span>
     </>
   )
@@ -292,6 +298,7 @@ function TodoRow({
   onOpenTodo: (id: string) => void
   candidate?: boolean
 }) {
+  useLanguage()
   const label = TODO_STATUS_LABEL[todo.status] ?? todo.status
   return (
     <div
@@ -301,8 +308,8 @@ function TodoRow({
       tabIndex={0}
       title={
         candidate
-          ? `来源会话在这条需求上，但待办没写归属。确认后补上：easy-flow todo set ${todo.id} --req <req-…>`
-          : '在详情页打开这条待办'
+          ? tr("The source session belongs to this requirement, but the todo has no owner. After confirming, run: easy-flow todo set {0} --req <req-…>", [todo.id])
+          : tr("Open this todo's details")
       }
       onClick={() => onOpenTodo(todo.id)}
       onKeyDown={(e) => {
@@ -316,7 +323,7 @@ function TodoRow({
       <span className="sess-title line" title={todo.title}>
         {todo.title}
       </span>
-      {candidate && <span className="todo-candidate">未确认</span>}
+      {candidate && <span className="todo-candidate">{tr("Unconfirmed")}</span>}
       <span className="sess-go">↗</span>
     </div>
   )
@@ -345,6 +352,7 @@ function sessionTitle(s: Session): string {
 }
 
 function SessionRow({ session }: { session: Session }) {
+  useLanguage()
   const agent = AGENT_LABELS[session.agent] ?? session.agent
   const title = sessionTitle(session)
   const canFocusWorkspace = session.agent === 'cursor' && !!session.cwd
@@ -356,7 +364,7 @@ function SessionRow({ session }: { session: Session }) {
     setFocusError('')
     void api
       .openSessionWorkspace(session.agent, session.session)
-      .catch((error: Error) => setFocusError(error.message || '打开失败'))
+      .catch((error: Error) => setFocusError(error.message || tr("Could not open")))
       .finally(() => setOpening(false))
   }
   const body = (
@@ -386,8 +394,8 @@ function SessionRow({ session }: { session: Session }) {
         }}
         title={
           canFocusWorkspace
-            ? `在 Cursor 里打开这条会话所在的工作区（不直达会话）：${session.session}`
-            : `这条会话没有会话级链接，去 ${agent} 里找：${session.session}`
+            ? tr("Open this session's workspace in Cursor (does not navigate to the session): {0}", [session.session])
+            : tr("No session link is available. Find it in {0}: {1}", [agent, session.session])
         }
       >
         {body}
@@ -402,7 +410,7 @@ function SessionRow({ session }: { session: Session }) {
       href={session.link}
       target="_blank"
       rel="noreferrer"
-      title={`在 ${agent} 里打开`}
+      title={tr("Open in {0}", [agent])}
     >
       {body}
     </a>

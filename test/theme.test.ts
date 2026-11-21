@@ -76,7 +76,7 @@ describe('主题接口', () => {
 
   test('未知取值拒绝且不改配置', async () => {
     const r = await post({ theme: 'sepia' })
-    assert.match(r.error, /Unknown theme/)
+    assert.match(r.error, /(?:Unknown theme|未知主题)/)
     assert.equal(readConfig().theme, 'light')
   })
 })

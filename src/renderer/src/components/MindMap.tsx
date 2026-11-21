@@ -1,3 +1,5 @@
+import { useLanguage } from '../lib/language'
+import { t as tr } from "../../../shared/i18n.ts"
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { isComposing, isEditableTarget, shortcut } from '../lib/keys'
 import type { Requirement } from '../lib/types'
@@ -28,6 +30,7 @@ interface NodeProps {
 }
 
 function MapNodeBox({ node, onOpen, onToggle }: NodeProps) {
+  useLanguage()
   const { req, hidden, collapsible } = node
   return (
     <div
@@ -50,7 +53,7 @@ function MapNodeBox({ node, onOpen, onToggle }: NodeProps) {
       {collapsible && (
         <button
           className={`map-node-toggle${hidden > 0 ? ' more' : ''}`}
-          title={hidden > 0 ? `展开 ${hidden} 个子需求` : '收起子需求'}
+          title={hidden > 0 ? tr("Expand {0} child requirements", [hidden]) : tr("Collapse child requirements")}
           onClick={(e) => {
             e.stopPropagation()
             onToggle(req.slug)
@@ -73,6 +76,7 @@ function MapNodeBox({ node, onOpen, onToggle }: NodeProps) {
 }
 
 export default function MindMap({ requirements, projectName, hits, onOpen, onBack }: Props) {
+  useLanguage()
   const wrapRef = useRef<HTMLDivElement>(null)
   const panRef = useRef<{ px: number; py: number; vx: number; vy: number } | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -233,9 +237,9 @@ export default function MindMap({ requirements, projectName, hits, onOpen, onBac
   // 没需求、或搜了但什么都没命中，都只是一句话的事，不必铺画布
   const blank =
     requirements.length === 0
-      ? '这个项目下还没有需求。让 agent 建一个，或从顶栏换个项目。'
+      ? tr("This project has no requirements yet. Ask an agent to create one or choose another project.")
       : hits && layout.nodes.length === 0
-        ? '没有命中的需求。'
+        ? tr("No matching requirements.")
         : ''
 
   if (blank) {
@@ -276,6 +280,7 @@ const MapContent = memo(function MapContent({ layout, projectName, onOpen, onTog
   onOpen: (slug: string) => void
   onToggle: (slug: string) => void
 }) {
+  useLanguage()
   return (
     <>
         <svg className="mindmap-links" width={layout.width} height={layout.height}>

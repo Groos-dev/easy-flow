@@ -1,3 +1,5 @@
+import { messageDetail, message } from '../src/shared/i18n.ts'
+import { SessionState } from '../src/shared/domain.ts'
 // Cursor 的落盘读取：transcript 补状态，composerHeaders / chat 库读标题。
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -10,7 +12,8 @@ import { str } from './util.ts'
 const TAIL_BYTES = 256 * 1024
 const MISS_RETRY_MS = 30_000
 
-const PLACEHOLDER_TITLES = new Set(['new agent', 'new chat', 'untitled', '新会话'])
+// External input aliases are protocol data, independent of the display language.
+const PLACEHOLDER_TITLES = new Set(['new agent', 'new chat', 'new session', 'untitled', '新会话', '新建会话'])
 
 interface CachedPath {
   path: string | null
@@ -168,29 +171,29 @@ function observationOf(entries: TranscriptEntry[], observedAt: number): SessionO
   if (last.type === 'turn_ended') {
     const status = str(last.status)
     if (status === 'aborted') {
-      return { status: { state: 'blocked', needsAction: '', observedAt, detail: 'Cursor 会话日志：这一轮被停下' }, action: null }
+      return { status: { state: SessionState.Blocked, needsAction: '', observedAt, ...messageDetail("Cursor session log: this turn was stopped") }, action: null }
     }
     if (status === 'error') {
-      return { status: { state: 'failed', needsAction: '', observedAt, detail: 'Cursor 会话日志：这一轮失败' }, action: null }
+      return { status: { state: SessionState.Failed, needsAction: '', observedAt, ...messageDetail("Cursor session log: this turn failed") }, action: null }
     }
     if (status === 'success' || status === 'completed') {
-      return { status: { state: 'done', needsAction: '', observedAt, detail: 'Cursor 会话日志：这一轮跑完' }, action: null }
+      return { status: { state: SessionState.Done, needsAction: '', observedAt, ...messageDetail("Cursor session log: this turn finished") }, action: null }
     }
-    return { status: unknownStatus(`Cursor 会话日志：认不出的结束状态 ${status || '(空)'}`), action: null }
+    return { status: unknownStatus(status ? message("Cursor session log: unrecognized completion state {0}", [status]) : message("Cursor session log: completion state is empty")), action: null }
   }
 
   if (last.role === 'user') {
-    return { status: { state: 'thinking', needsAction: '', observedAt, detail: 'Cursor 会话日志：等模型响应' }, action: null }
+    return { status: { state: SessionState.Thinking, needsAction: '', observedAt, ...messageDetail("Cursor session log: waiting for a model response") }, action: null }
   }
   if (last.role === 'assistant') {
     const tool = lastToolUse(last)
     if (tool) {
       return {
-        status: { state: 'working', needsAction: '', observedAt, detail: `Cursor 会话日志：在调 ${tool.name}` },
+        status: { state: SessionState.Working, needsAction: '', observedAt, ...messageDetail("Cursor session log: calling {0}", [tool.name]) },
         action: transcriptAction(tool.name, tool.input, observedAt),
       }
     }
-    return { status: { state: 'thinking', needsAction: '', observedAt, detail: 'Cursor 会话日志：模型在想下一步' }, action: null }
+    return { status: { state: SessionState.Thinking, needsAction: '', observedAt, ...messageDetail("Cursor session log: the model is thinking about its next step") }, action: null }
   }
   return null
 }

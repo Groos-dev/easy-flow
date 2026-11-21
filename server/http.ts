@@ -1,3 +1,4 @@
+import { t as tr } from '../src/shared/i18n.ts'
 /**
  * HTTP 层的零件：CORS、JSON 响应、请求体解析、需求文档读写。
  *
@@ -39,19 +40,21 @@ export function json(req: IncomingMessage, res: ServerResponse, code: number, pa
 export async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = []
   for await (const c of req) chunks.push(c as Buffer)
-  return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}
+  try {
+    return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}
+  } catch { throw new Error(tr('Invalid JSON request body')) }
 }
 
 // 只允许读写需求目录内的文本/markdown，且禁止越界（..、绝对路径）
 const READABLE = /\.(md|markdown|txt|json|ya?ml)$/i
 
 function resolveDocPath(reqDir: string, name: string): string {
-  if (isAbsolute(name)) throw new Error('Absolute paths are not allowed')
-  if (!READABLE.test(name)) throw new Error(`Unsupported file type: ${name}`)
+  if (isAbsolute(name)) throw new Error(tr("Absolute paths are not allowed"))
+  if (!READABLE.test(name)) throw new Error(tr("Unsupported file type: {0}", [name]))
   const base = resolve(reqDir)
   const target = resolve(base, name)
   const rel = relative(base, target)
-  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error('Path escapes the root')
+  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error(tr("Path escapes the root"))
   return target
 }
 
@@ -60,7 +63,7 @@ export function readRequirementDoc(reqDir: string, name: string): string {
   try {
     return readFileSync(target, 'utf8')
   } catch {
-    throw new Error(`Cannot read file: ${name}`)
+    throw new Error(tr("Cannot read file: {0}", [name]))
   }
 }
 

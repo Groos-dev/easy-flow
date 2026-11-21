@@ -1,3 +1,4 @@
+import { t as tr } from "../src/shared/i18n.ts"
 /**
  * worktree 的 git 交互层。
  *
@@ -72,7 +73,7 @@ async function gitBinary(): Promise<string> {
     if (!found) throw new Error('empty')
     gitPath = found
   } catch {
-    throw new Error(`Cannot find the git command (SHELL=${shell}); make sure it is installed and on the login shell's PATH`)
+    throw new Error(tr("Cannot find the git command (SHELL={0}); make sure it is installed and on the login shell's PATH", [shell]))
   }
   return gitPath
 }
@@ -81,7 +82,7 @@ async function git(args: string[], cwd?: string): Promise<string> {
   try {
     return (await exec(await gitBinary(), args, cwd)).trim()
   } catch (err) {
-    throw new Error(`git ${args[0]} failed: ${(err as Error).message}`, { cause: err })
+    throw new Error(tr("git {0} failed: {1}", [args[0], (err as Error).message]), { cause: err })
   }
 }
 
@@ -107,7 +108,7 @@ async function describeCheckout(path: string): Promise<RepoCheckout> {
   const here = await git(['rev-parse', '--show-toplevel'], path)
   const head = (await git(['worktree', 'list', '--porcelain'], here)).split('\n\n')[0] ?? ''
   const main = /^worktree (.+)$/m.exec(head)?.[1]?.trim()
-  if (!main || !existsSync(main)) throw new Error(`Cannot identify the main checkout for ${path}`)
+  if (!main || !existsSync(main)) throw new Error(tr("Cannot identify the main checkout for {0}", [path]))
   return { repo: basename(main), main }
 }
 
@@ -118,7 +119,7 @@ async function describeCheckout(path: string): Promise<RepoCheckout> {
 export async function resolveCheckout(repo: string): Promise<RepoCheckout> {
   const asPath = repo.startsWith('~') ? join(homedir(), repo.slice(1)) : repo
   if (asPath.startsWith('/')) {
-    if (!existsSync(asPath)) throw new Error(`Path does not exist: ${asPath}`)
+    if (!existsSync(asPath)) throw new Error(tr("Path does not exist: {0}", [asPath]))
     return describeCheckout(asPath)
   }
 
@@ -127,10 +128,10 @@ export async function resolveCheckout(repo: string): Promise<RepoCheckout> {
   if (hits.length === 1) return describeCheckout(hits[0])
   if (!hits.length) {
     throw new Error(
-      `Repo "${repo}" not found: looked up by dir name (up to two levels) under ${roots.join(', ')}; you can also pass the main checkout's absolute path`,
+      tr("Repo \"{0}\" not found: looked up by dir name (up to two levels) under {1}; you can also pass the main checkout's absolute path", [repo, roots.join(', ')]),
     )
   }
-  throw new Error(`Multiple candidates for repo "${repo}"; pass an absolute path:\n${hits.slice(0, 5).join('\n')}`)
+  throw new Error(tr("Multiple candidates for repo \"{0}\"; pass an absolute path:\n{1}", [repo, hits.slice(0, 5).join('\n')]))
 }
 
 // 在 root 下按目录名找 git 仓库。深度受限，跳过点开头与 node_modules
@@ -198,13 +199,13 @@ export async function provisionWorktree(input: ProvisionInput): Promise<Provisio
   const registered = await registeredWorktrees(target.main)
   const mine = registered.find((w) => w.path === path)
   if (mine && mine.branch && mine.branch !== branch) {
-    throw new Error(`${path} is already registered for branch ${mine.branch}; pick another path or branch`)
+    throw new Error(tr("{0} is already registered for branch {1}; pick another path or branch", [path, mine.branch]))
   }
   if (existsSync(path) && !mine) {
-    throw new Error(`${path} is occupied (not a registered worktree); move it away first`)
+    throw new Error(tr("{0} is occupied (not a registered worktree); move it away first", [path]))
   }
   const elsewhere = registered.find((w) => w.branch === branch && w.path !== path)
-  if (elsewhere) throw new Error(`Branch ${branch} is already checked out at ${elsewhere.path}; a branch can live in only one worktree`)
+  if (elsewhere) throw new Error(tr("Branch {0} is already checked out at {1}; a branch can live in only one worktree", [branch, elsewhere.path]))
 
   let created = false
   let branchCreated = false
@@ -303,7 +304,7 @@ export async function deprovisionWorktree(input: {
       .filter((l) => l && !OURS.includes(l.slice(3).trim()))
     if (discarded.length && !force) {
       const shown = discarded.slice(0, 5).join('\n')
-      throw new Error(`The worktree has uncommitted changes; pass force to discard them:\n${shown}`)
+      throw new Error(tr("The worktree has uncommitted changes; pass force to discard them:\n{0}", [shown]))
     }
     await git(['worktree', 'remove', '--force', path], main)
     await git(['worktree', 'prune'], main)
@@ -315,10 +316,10 @@ export async function deprovisionWorktree(input: {
   // 另外再看一眼它停在哪，对不上就不动——那说明它已经不是记录里那个 worktree 了。
   const here = await branchOf(path)
   if (here && here !== input.branch) {
-    throw new Error(`${path} is on branch ${here}, not the recorded ${input.branch}; refusing to delete`)
+    throw new Error(tr("{0} is on branch {1}, not the recorded {2}; refusing to delete", [path, here, input.branch]))
   }
   if (!force) {
-    throw new Error(`${path} is no longer registered with git under ${main}, so its cleanliness cannot be judged; pass force to discard`)
+    throw new Error(tr("{0} is no longer registered with git under {1}, so its cleanliness cannot be judged; pass force to discard", [path, main]))
   }
   rmSync(path, { recursive: true, force: true })
   return { missing: false, discarded: [] }
@@ -392,9 +393,9 @@ function ensureSymlink(link: string, target: string): void {
     symlinkSync(target, link)
     return
   }
-  if (!st.isSymbolicLink()) throw new Error(`${link} exists and is not a symlink; not overwriting`)
+  if (!st.isSymbolicLink()) throw new Error(tr("{0} exists and is not a symlink; not overwriting", [link]))
   const current = readlinkSync(link)
-  if (current !== target) throw new Error(`${link} already points at ${current}; not overwriting`)
+  if (current !== target) throw new Error(tr("{0} already points at {1}; not overwriting", [link, current]))
 }
 
 /**
@@ -419,8 +420,8 @@ async function ensureExclude(main: string): Promise<string> {
     const tmp = `${file}.easy-flow-${process.pid}`
     writeFileSync(tmp, `${text}${gap}${block.join('\n')}\n`, 'utf8')
     renameSync(tmp, file)
-    return `已补 ${file}（让 AGENTS.md 与软链不进 git status）`
+    return tr("Updated {0} (exclude AGENTS.md and symlinks from git status)", [file])
   } catch (err) {
-    return `没能补 info/exclude：${(err as Error).message}；不影响使用，只是 git status 会多出 AGENTS.md 与软链`
+    return tr("Could not update info/exclude: {0}; usage is unaffected, but git status will show AGENTS.md and symlinks", [(err as Error).message])
   }
 }

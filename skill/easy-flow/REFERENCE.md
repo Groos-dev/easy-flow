@@ -4,6 +4,15 @@ Use [SKILL.md](SKILL.md) for ownership and workflow. Read this reference for com
 parameters and operational details. If documentation and implementation differ,
 `easy-flow <command> --help` is authoritative.
 
+## Language selection
+
+English is the default. Select English or Chinese in Settings; the preference is
+saved and applies to the main window, mini panel, native menus, and CLI. For one CLI
+invocation use `--lang en` or `--lang zh` anywhere in the arguments, or set
+`EASY_FLOW_LANG`. Precedence is command flag, environment, saved preference, English.
+JSON field names and machine values are language-independent. User-authored content
+is preserved. New document templates follow the selected language.
+
 ## Global behavior
 
 - `--json` returns structured output. Failures include `{"error": …}` and a nonzero
@@ -87,20 +96,20 @@ deliverable description.
 ```sh
 easy-flow project new travel --name "Travel"
 easy-flow req new "Migrate meal bookings to the new service" --project travel --slug meal-migration --summary "Move meal bookings while preserving existing booking behavior."
-easy-flow req set req-236d2ccb70 --status Review
+easy-flow req set req-236d2ccb70 --status review
 ```
 
 ### Status values and completion
 
-English names below describe the phases. The values in the right column are the
-current CLI's exact enum literals, not text to translate or English aliases.
+The values below are stable machine identifiers in both languages. Legacy Chinese
+status labels and `Review` remain accepted as input aliases; output uses canonical values.
 
 | Phase | `--status` value |
 | --- | --- |
-| Clarification | `澄清` |
-| Implementation | `执行中` |
-| User review | `Review` |
-| Complete | `已完成` |
+| Prepare | `clarification` |
+| Implementation | `in_progress` |
+| User review | `review` |
+| Complete | `completed` |
 
 `req set` changes only supplied fields and rejects an empty update. `--priority ""`
 clears priority. Store status and priority only on the board.

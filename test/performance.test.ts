@@ -79,7 +79,7 @@ test('增量同步跟随正文编辑、同目录增删文档和需求恢复，�
   try {
     db.syncProjects()
     db.pickProject()
-    db.setStatus('r', 'Review')
+    db.setStatus('r', 'review')
     writeFileSync(join(req, 'docs', 'a.md'), '修改后的长正文')
     writeFileSync(join(req, 'docs', 'b.md'), '新增正文')
     db.syncProjects()
@@ -87,7 +87,7 @@ test('增量同步跟随正文编辑、同目录增删文档和需求恢复，�
     rmSync(join(req, 'docs', 'b.md'))
     db.syncProjects()
     assert.ok(!db.get('r')?.docs.some(d => d.name === 'docs/b.md'))
-    assert.equal(db.get('r')?.status, 'Review')
+    assert.equal(db.get('r')?.status, 'review')
     assert.ok(db.search('修改后的长正文').has('r'))
     assert.equal(db.syncProjects().updated.length, 0)
     const hidden = join(dir, 'p', '.r-hidden')
@@ -95,7 +95,7 @@ test('增量同步跟随正文编辑、同目录增删文档和需求恢复，�
     assert.deepEqual(db.syncProjects().missing, ['p/r'])
     renameSync(hidden, req)
     assert.deepEqual(db.syncProjects().restored, ['p/r'])
-    assert.equal(db.get('r')?.status, 'Review')
+    assert.equal(db.get('r')?.status, 'review')
   } finally {
     db.close()
     rmSync(dir, { recursive: true, force: true })

@@ -1,3 +1,5 @@
+import { useLanguage } from '../lib/language'
+import { t as tr } from "../../../shared/i18n.ts"
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Project } from '../lib/types'
 import { projectColor, projectInitial } from '../lib/projectIcon'
@@ -23,6 +25,7 @@ export default function ProjectSwitcher({
   onTogglePin,
   onClose,
 }: Props) {
+  useLanguage()
   const [query, setQuery] = useState('')
   const [cursor, setCursor] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -84,13 +87,13 @@ export default function ProjectSwitcher({
       <div
         className="palette"
         role="dialog"
-        aria-label="切换项目"
+        aria-label={tr("Switch project")}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <input
           ref={inputRef}
           className="palette-input"
-          placeholder="切换项目：名称或目录名"
+          placeholder={tr("Switch project: name or directory")}
           value={query}
           spellCheck={false}
           onChange={(e) => setQuery(e.target.value)}
@@ -98,7 +101,7 @@ export default function ProjectSwitcher({
         />
         <div className="palette-list">
           {list.length === 0 ? (
-            <div className="palette-hint">没有匹配的项目</div>
+            <div className="palette-hint">{tr("No matching projects")}</div>
           ) : (
             list.map((p, i) => {
               const name = p.name || p.slug
@@ -115,10 +118,10 @@ export default function ProjectSwitcher({
                   </span>
                   <span className="palette-title">
                     {name}
-                    {p.slug === active && <span className="palette-active">当前</span>}
+                    {p.slug === active && <span className="palette-active">{tr("Current")}</span>}
                   </span>
                   {isPinned && (
-                    <span className="palette-pin" title="已置顶">
+                    <span className="palette-pin" title={tr("Pinned")}>
                       <PinIcon />
                     </span>
                   )}
@@ -129,11 +132,11 @@ export default function ProjectSwitcher({
           )}
         </div>
         <div className="palette-foot">
-          <span>↑↓ 选择</span>
-          <span>↵ 切换</span>
-          <span>⌘↵ 项目详情</span>
-          <span>⌥↵ 置顶</span>
-          <span>esc 关掉</span>
+          <span>{tr("↑↓ Select")}</span>
+          <span>{tr("↵ Switch")}</span>
+          <span>{tr("⌘↵ Project details")}</span>
+          <span>{tr("⌥↵ Pin")}</span>
+          <span>{tr("esc Close")}</span>
         </div>
       </div>
     </div>

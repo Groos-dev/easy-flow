@@ -1,3 +1,4 @@
+import { Language, setLanguage } from '../src/shared/i18n.ts'
 /**
  * easy-flow 核心回归测试。
  *
@@ -180,13 +181,13 @@ describe('数据层 · 项目与需求同步', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha\n\n## 需求\n\n内容'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    db.setStatus('alpha', 'Review')
+    db.setStatus('alpha', 'review')
     db.setPinned('alpha', true)
 
     // 再同步多次，状态必须保持
     db.syncProjects()
     db.syncProjects()
-    assert.equal(db.get('alpha')?.status, 'Review')
+    assert.equal(db.get('alpha')?.status, 'review')
     assert.equal(db.get('alpha')?.pinned, true)
     db.close()
   })
@@ -211,12 +212,12 @@ describe('数据层 · 项目与需求同步', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    db.setStatus('alpha', '已完成')
+    db.setStatus('alpha', 'completed')
 
     makeReq(dir, 'onex', 'beta', '# beta')
     db.syncProjects()
 
-    assert.equal(db.get('alpha')?.status, '已完成')
+    assert.equal(db.get('alpha')?.status, 'completed')
     assert.ok(db.get('beta'))
     db.close()
   })
@@ -225,12 +226,12 @@ describe('数据层 · 项目与需求同步', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    db.setStatus('alpha', 'Review')
+    db.setStatus('alpha', 'review')
 
     rmSync(join(dir, 'onex', 'alpha'), { recursive: true, force: true })
     const sync = db.syncProjects()
     assert.ok(sync.missing.includes('onex/alpha'))
-    assert.equal(db.get('alpha')?.status, 'Review', '失联仍需可查且状态不丢')
+    assert.equal(db.get('alpha')?.status, 'review', '失联仍需可查且状态不丢')
     db.close()
   })
 
@@ -265,7 +266,7 @@ describe('数据层 · 项目与需求同步', () => {
     const dir = fresh((d) => makeReq(d, 'onex', 'alpha', '# alpha'))
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    assert.equal(db.get('alpha')?.status, '澄清')
+    assert.equal(db.get('alpha')?.status, 'clarification')
     db.close()
   })
 
@@ -282,7 +283,7 @@ describe('数据层 · 项目与需求同步', () => {
     old
       .prepare(
         `INSERT INTO requirement (slug, project, id, title, path, status, mtime)
-         VALUES ('alpha', 'onex', 'req-alpha', '标题', '/x', '已完成', 0)`,
+         VALUES ('alpha', 'onex', 'req-alpha', '标题', '/x', 'completed', 0)`,
       )
       .run()
     old.close()
@@ -290,7 +291,7 @@ describe('数据层 · 项目与需求同步', () => {
     const db = new BoardDatabase(dir)
     db.syncProjects()
     const r = db.get('alpha', 'onex')!
-    assert.equal(r.status, '已完成', '老库的状态是权威，同步不能动它')
+    assert.equal(r.status, 'completed', '老库的状态是权威，同步不能动它')
     assert.equal(r.parentId, '')
     assert.equal(r.pinned, false, '老库补列后默认不置顶')
     db.close()
@@ -391,9 +392,9 @@ describe('数据层 · 待办同步', () => {
     assert.equal(db.todoByRef('om_x1')!.id, 'T-20260101-001')
     assert.equal(db.todoByRef('om_x2'), undefined)
 
-    assert.throws(() => db.setTodoStatus('T-20260101-001', 'doing' as never), /Unknown status/)
-    assert.throws(() => db.setTodoFields('T-20260101-001', { source: 'mail' }), /Unknown source/)
-    assert.throws(() => db.setTodoStatus('T-不存在', 'done'), /Todo not found/)
+    assert.throws(() => db.setTodoStatus('T-20260101-001', 'doing' as never), /(?:Unknown status|未知状态|未知的 status)/)
+    assert.throws(() => db.setTodoFields('T-20260101-001', { source: 'mail' }), /(?:Unknown source|未知来源|未知的 source)/)
+    assert.throws(() => db.setTodoStatus('T-不存在', 'done'), /(?:Todo not found|找不到待办)/)
     db.close()
   })
 
@@ -456,21 +457,21 @@ describe('数据层 · 状态读写', () => {
   after(() => db.close())
 
   test('setStatus 接受四个看板状态', () => {
-    for (const s of ['澄清', '执行中', 'Review', '已完成'] as const) {
+    for (const s of ['clarification', 'in_progress', 'review', 'completed'] as const) {
       db.setStatus('alpha', s)
       assert.equal(db.get('alpha')?.status, s)
     }
   })
 
   test('未知状态/优先级被拒绝', () => {
-    assert.throws(() => db.setStatus('alpha', 'Done' as never), /Unknown status/)
-    assert.throws(() => db.setStatus('alpha', '开发中' as never), /Unknown status/)
-    assert.throws(() => db.setPriority('alpha', 'high' as never), /Unknown priority/)
+    assert.throws(() => db.setStatus('alpha', 'Done' as never), /(?:Unknown status|未知状态|未知的 status)/)
+    assert.throws(() => db.setStatus('alpha', '开发中' as never), /(?:Unknown status|未知状态|未知的 status)/)
+    assert.throws(() => db.setPriority('alpha', 'high' as never), /(?:Unknown priority|未知优先级)/)
   })
 
   test('setStatus/setPriority 会更新 updated 字段', () => {
     const before = db.get('alpha')?.updated
-    db.setStatus('alpha', '执行中')
+    db.setStatus('alpha', 'in_progress')
     assert.match(db.get('alpha')?.updated ?? '', /^\d{4}-\d{2}-\d{2}$/)
     assert.ok(before !== undefined)
   })
@@ -486,20 +487,20 @@ describe('数据层 · 状态读写', () => {
   })
 
   test('操作不存在的需求会报错', () => {
-    assert.throws(() => db.setStatus('nope', '澄清'), /Requirement not found/)
-    assert.throws(() => db.setPriority('nope', 'p0'), /Requirement not found/)
-    assert.throws(() => db.setPinned('nope', true), /Requirement not found/)
-    assert.throws(() => db.rename('nope', 'x'), /Requirement not found/)
+    assert.throws(() => db.setStatus('nope', 'clarification'), /(?:Requirement not found|找不到需求)/)
+    assert.throws(() => db.setPriority('nope', 'p0'), /(?:Requirement not found|找不到需求)/)
+    assert.throws(() => db.setPinned('nope', true), /(?:Requirement not found|找不到需求)/)
+    assert.throws(() => db.rename('nope', 'x'), /(?:Requirement not found|找不到需求)/)
   })
 
   test('项目隔离：同名需求互不干扰', () => {
     makeReq(dir, 'personal', 'alpha', '# personal alpha\n\n## 需求\n\n另一个 alpha')
     db.syncProjects()
-    db.setStatus('alpha', 'Review', 'onex')
+    db.setStatus('alpha', 'review', 'onex')
     const inOnex = db.get('alpha', 'onex')
     const inPersonal = db.get('alpha', 'personal')
-    assert.equal(inOnex?.status, 'Review')
-    assert.notEqual(inPersonal?.status, 'Review')
+    assert.equal(inOnex?.status, 'review')
+    assert.notEqual(inPersonal?.status, 'review')
     db.setProject('onex')
   })
 
@@ -546,7 +547,7 @@ describe('数据层 · 单个需求同步', () => {
     })
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    db.setStatus('alpha', 'Review')
+    db.setStatus('alpha', 'review')
 
     writeFileSync(join(dir, 'onex', 'alpha', 'NEW.md'), '# 新文档\n', 'utf8')
     writeFileSync(join(dir, 'onex', 'alpha', 'requirement.md'), '# 新标题\n\n## 需求\n\n新描述', 'utf8')
@@ -556,7 +557,7 @@ describe('数据层 · 单个需求同步', () => {
     const alpha = db.get('alpha')
     assert.equal(alpha?.title, '新标题')
     assert.equal(alpha?.summary, '新描述')
-    assert.equal(alpha?.status, 'Review', '状态只归库，同步不能碰')
+    assert.equal(alpha?.status, 'review', '状态只归库，同步不能碰')
     assert.ok(db.context('alpha', 'onex')!.docs.some((d) => d.name === 'NEW.md'))
     assert.equal(db.get('beta')?.title, 'beta', '别的需求不在这次同步范围内')
     assert.equal(db.syncRequirement('nope', 'onex'), false)
@@ -584,8 +585,8 @@ describe('数据层 · 链接字段', () => {
       ],
     )
     assert.throws(() => normalizeLinkItems([{ title: 'x', url: 'ftp://a.com' }]), /http/)
-    assert.throws(() => normalizeLinkItems([{ title: '空地址', url: '' }]), /missing a url/)
-    assert.throws(() => normalizeLinkItems('str' as never), /array/)
+    assert.throws(() => normalizeLinkItems([{ title: '空地址', url: '' }]), /(?:missing a url|缺少地址)/)
+    assert.throws(() => normalizeLinkItems('str' as never), /(?:array|数组)/)
   })
 
   test('setLinks 整体替换', () => {
@@ -613,7 +614,7 @@ describe('数据层 · 链接字段', () => {
         `INSERT INTO requirement
            (slug, project, id, title, path, status, repos, links,
             feishu_task_links, code_links, ext_links, mtime, missing)
-         VALUES ('alpha', 'onex', 'req-alpha', '标题', '/x', '澄清', '[]', '',
+         VALUES ('alpha', 'onex', 'req-alpha', '标题', '/x', 'clarification', '[]', '',
             '["https://feishu.cn/1"]',
             '[{"label":"主流程","url":"https://gitlab.com/mr/1"},"https://gitlab.com/mr/9"]',
             '[{"detail":"设计稿","url":"https://example.com/design"}]', 0, 0)`,
@@ -655,7 +656,7 @@ describe('数据层 · 链接字段', () => {
         `INSERT INTO requirement
            (slug, project, id, title, path, status, repos, links, link_items,
             feishu_task_links, code_links, ext_links, mtime, missing)
-         VALUES ('alpha', 'onex', 'req-alpha', '标题', '/x', '澄清', '[]', '',
+         VALUES ('alpha', 'onex', 'req-alpha', '标题', '/x', 'clarification', '[]', '',
             '[{"title":"已有","url":"https://feishu.cn/old"},{"title":"保留这个标题","url":"https://feishu.cn/late"}]',
             '["https://feishu.cn/late"]', '["https://gitlab.com/mr/2"]', '[]', 0, 0)`,
       )
@@ -865,10 +866,10 @@ describe('渲染层 · 子需求完成度', () => {
 
   test('按父需求 id 归并，只数直接子需求', () => {
     const stats = childStatsOf([
-      req('parent', 'req-p', '', '执行中'),
-      req('parent/a', 'req-a', 'req-p', '已完成'),
-      req('parent/b', 'req-b', 'req-p', 'Review'),
-      req('parent/b/grand', 'req-g', 'req-b', '已完成'),
+      req('parent', 'req-p', '', 'in_progress'),
+      req('parent/a', 'req-a', 'req-p', 'completed'),
+      req('parent/b', 'req-b', 'req-p', 'review'),
+      req('parent/b/grand', 'req-g', 'req-b', 'completed'),
     ])
     // 孙需求算在中间那层头上，不越级加到 parent
     assert.deepEqual(stats.get('req-p'), { total: 2, done: 1 })
@@ -876,15 +877,15 @@ describe('渲染层 · 子需求完成度', () => {
   })
 
   test('没有子需求的需求不在表里，卡片据此决定收不收窄', () => {
-    const stats = childStatsOf([req('alpha', 'req-a', '', '执行中')])
+    const stats = childStatsOf([req('alpha', 'req-a', '', 'in_progress')])
     assert.equal(stats.has('req-a'), false)
     assert.equal(stats.size, 0)
   })
 
   test('终态只有「已完成」算完成', () => {
     const stats = childStatsOf([
-      req('parent', 'req-p', '', '执行中'),
-      req('parent/a', 'req-a', 'req-p', 'Review'),
+      req('parent', 'req-p', '', 'in_progress'),
+      req('parent/a', 'req-a', 'req-p', 'review'),
     ])
     assert.deepEqual(stats.get('req-p'), { total: 1, done: 0 })
   })
@@ -896,10 +897,10 @@ describe('渲染层 · 子需求清单', () => {
 
   test('按父需求 id 归并出直接子需求，孙需求不越级', () => {
     const map = childrenOf([
-      req('parent', 'req-p', '', '执行中'),
-      req('parent/a', 'req-a', 'req-p', '已完成'),
-      req('parent/b', 'req-b', 'req-p', 'Review'),
-      req('parent/b/grand', 'req-g', 'req-b', '已完成'),
+      req('parent', 'req-p', '', 'in_progress'),
+      req('parent/a', 'req-a', 'req-p', 'completed'),
+      req('parent/b', 'req-b', 'req-p', 'review'),
+      req('parent/b/grand', 'req-g', 'req-b', 'completed'),
     ])
     assert.deepEqual(
       map.get('req-p')?.map((r) => r.slug),
@@ -913,10 +914,10 @@ describe('渲染层 · 子需求清单', () => {
 
   test('未完成的排前面，同档保持原顺序', () => {
     const map = childrenOf([
-      req('parent/a', 'req-a', 'req-p', '已完成'),
-      req('parent/b', 'req-b', 'req-p', '澄清'),
-      req('parent/c', 'req-c', 'req-p', '已完成'),
-      req('parent/d', 'req-d', 'req-p', '执行中'),
+      req('parent/a', 'req-a', 'req-p', 'completed'),
+      req('parent/b', 'req-b', 'req-p', 'clarification'),
+      req('parent/c', 'req-c', 'req-p', 'completed'),
+      req('parent/d', 'req-d', 'req-p', 'in_progress'),
     ])
     assert.deepEqual(
       map.get('req-p')?.map((r) => r.slug),
@@ -925,7 +926,7 @@ describe('渲染层 · 子需求清单', () => {
   })
 
   test('没有子需求的需求不在表里', () => {
-    const map = childrenOf([req('alpha', 'req-a', '', '执行中')])
+    const map = childrenOf([req('alpha', 'req-a', '', 'in_progress')])
     assert.equal(map.size, 0)
   })
 })
@@ -1093,7 +1094,7 @@ describe('数据层 · 项目与规范', () => {
 
     const r = db.list().find((x) => x.slug === 'from-template')!
     assert.equal(r.title, '抄模板建的需求')
-    assert.equal(r.status, '澄清')
+    assert.equal(r.status, 'clarification')
     assert.ok(r.summary.length > 0, '「需求」段应能被取成摘要')
     assert.deepEqual(r.repos, [], '空表格不该产生假仓库')
     assert.deepEqual(db.listProjects().find((p) => p.slug === 'onex')!.issues, [])
@@ -1184,9 +1185,9 @@ describe('创建 · 目录与模板', () => {
 
   test('createProjectDir 拒绝非法标识与已存在的目录', () => {
     const dir = fresh(() => {})
-    assert.throws(() => createProjectDir(dir, 'Bad_Slug'), /lowercase letters/)
+    assert.throws(() => createProjectDir(dir, 'Bad_Slug'), /(?:lowercase letters|英文小写字母)/)
     createProjectDir(dir, 'demo')
-    assert.throws(() => createProjectDir(dir, 'demo'), /already exists/)
+    assert.throws(() => createProjectDir(dir, 'demo'), /(?:already exists|已存在)/)
   })
 
   test('createRequirementDir 写 requirement.md 与 context.md，编号落在 requirement.md', () => {
@@ -1208,7 +1209,7 @@ describe('创建 · 目录与模板', () => {
     assert.equal(r.id, created.id)
     assert.equal(r.title, '币种改 CNY')
     assert.equal(r.summary, '上游只认 CNY')
-    assert.equal(r.status, '澄清')
+    assert.equal(r.status, 'clarification')
     assert.equal(db.byId(created.id)?.slug, 'cny-not-rmb')
     db.close()
   })
@@ -1218,9 +1219,9 @@ describe('创建 · 目录与模板', () => {
       createProjectDir(TMP, 'onex')
     })
     const root = join(dir, 'onex')
-    assert.throws(() => createRequirementDir(root, '中文名', 'x'), /lowercase letters/)
+    assert.throws(() => createRequirementDir(root, '中文名', 'x'), /(?:lowercase letters|英文小写字母)/)
     createRequirementDir(root, 'alpha', 'x')
-    assert.throws(() => createRequirementDir(root, 'alpha', 'x'), /already exists/)
+    assert.throws(() => createRequirementDir(root, 'alpha', 'x'), /(?:already exists|已存在)/)
   })
 
   test('setRequirementId 只动 frontmatter，正文原样保留', () => {
@@ -1259,7 +1260,7 @@ describe('创建 · 目录与模板', () => {
     const c = db.get('parent/child', 'onex')!
     assert.equal(c.parentId, parent.id)
     assert.equal(c.path, child.dir)
-    assert.equal(c.status, '澄清')
+    assert.equal(c.status, 'clarification')
     // 任意深度：孙需求的父是中间那层
     assert.equal(db.get('parent/child/grand', 'onex')!.parentId, child.id)
     // 按 id 反查对子需求同样成立
@@ -1284,14 +1285,14 @@ describe('创建 · 目录与模板', () => {
 
     const db = new BoardDatabase(dir)
     db.syncProjects()
-    db.setStatus('parent/child', '执行中', 'onex')
+    db.setStatus('parent/child', 'in_progress', 'onex')
     db.setPriority('parent/child', 'p1', 'onex')
-    assert.equal(db.get('parent/child', 'onex')!.status, '执行中')
+    assert.equal(db.get('parent/child', 'onex')!.status, 'in_progress')
     assert.equal(db.get('parent/child', 'onex')!.priority, 'p1')
-    assert.equal(db.get('parent', 'onex')!.status, '澄清')
+    assert.equal(db.get('parent', 'onex')!.status, 'clarification')
     // 同步是幂等的，也不会把子需求的状态刷掉
     db.syncProjects()
-    assert.equal(db.get('parent/child', 'onex')!.status, '执行中')
+    assert.equal(db.get('parent/child', 'onex')!.status, 'in_progress')
     db.close()
   })
 
@@ -1569,9 +1570,9 @@ describe('数据层 · 会话', () => {
     db.syncProjects()
     assert.throws(
       () => db.addSession({ requirementId: 'req-alpha', agent: 'gemini' as never, session: 'x' }),
-      /Unknown agent/,
+      /(?:Unknown agent|未知 Agent|未知的 agent)/,
     )
-    assert.throws(() => db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: '  ' }), /cannot be empty/)
+    assert.throws(() => db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: '  ' }), /(?:cannot be empty|不能为空)/)
     db.close()
   })
 
@@ -1659,7 +1660,7 @@ describe('CLI 层', () => {
     // --project is required (or --parent); missing both is caught as a usage error
     const missing = cli(configFile, ['req', 'new', '没有项目上下文'])
     assert.equal(missing.code, 2)
-    assert.match(missing.stderr, /Pass one of --project \/ --parent/)
+    assert.match(missing.stderr, /(?:Pass one of --project \/ --parent|请指定 --project 或 --parent)/)
     // root help lists the command groups; group help lists each subcommand
     const help = cliOk(configFile, ['--help'])
     for (const c of ['context', 'dir', 'project new', 'req new|set|link', 'wt new|rm', 'todo new|set|list']) {
@@ -1678,7 +1679,7 @@ describe('CLI 层', () => {
     const db = new BoardDatabase(dataDir)
     const r = db.get('seat-retry', 'demo')!
     assert.equal(r.title, '支持 1A 重试')
-    assert.equal(r.status, '澄清')
+    assert.equal(r.status, 'clarification')
     assert.match(r.id, /^req-/)
     assert.equal(db.listProjects().find((p) => p.slug === 'demo')?.name, '示例项目')
     db.close()
@@ -1708,7 +1709,7 @@ describe('CLI 层', () => {
 
     const both = cli(configFile, ['req', 'new', '两个都给', '--project', 'demo', '--parent', parent.id])
     assert.equal(both.code, 2)
-    assert.match(both.stderr, /not both/)
+    assert.match(both.stderr, /(?:not both|只能指定一个)/)
   })
 
   test('req new 拦掉等于目录名的标题：那是把目录名当标题写，等于没说做什么', () => {
@@ -1717,7 +1718,7 @@ describe('CLI 层', () => {
 
     const bad = cli(configFile, ['req', 'new', 'tf-meal-migration', '--project', 'demo'])
     assert.equal(bad.code, 2)
-    assert.match(bad.stderr, /repeats the directory name/)
+    assert.match(bad.stderr, /(?:repeats the directory name|标题与目录名重复)/)
     // 拒绝发生在落盘之前：项目目录里还是只有它自己的 AGENTS.md
     assert.deepEqual(readdirSync(join(dataDir, 'demo')), ['AGENTS.md'])
 
@@ -1730,7 +1731,7 @@ describe('CLI 层', () => {
     // 子需求走同一套校验
     const sub = cli(configFile, ['req', 'new', 'tf-meal-migration', '--parent', ok.id])
     assert.equal(sub.code, 2)
-    assert.match(sub.stderr, /repeats the directory name/)
+    assert.match(sub.stderr, /(?:repeats the directory name|标题与目录名重复)/)
   })
 
   test('--json：成功打数据可串联，失败也是 JSON 且退出码语义分明', () => {
@@ -1741,18 +1742,18 @@ describe('CLI 层', () => {
     )
     assert.match(made.id, /^req-/)
 
-    const moved = JSON.parse(cliOk(configFile, ['req', 'set', made.id, '--status', '执行中', '--json']))
-    assert.equal(moved.status, '执行中')
+    const moved = JSON.parse(cliOk(configFile, ['req', 'set', made.id, '--status', 'in_progress', '--json']))
+    assert.equal(moved.status, 'in_progress')
 
     // runtime error: JSON on stdout, exit code 1
     const failed = cli(configFile, ['context', 'req-nope', '--json'])
     assert.equal(failed.code, 1)
-    assert.match(JSON.parse(failed.stdout).error, /Requirement not found/)
+    assert.match(JSON.parse(failed.stdout).error, /(?:Requirement not found|找不到需求)/)
 
     // usage error: JSON too, exit code 2
     const usage = cli(configFile, ['context', '--json'])
     assert.equal(usage.code, 2)
-    assert.match(JSON.parse(usage.stdout).error, /Missing id/)
+    assert.match(JSON.parse(usage.stdout).error, /(?:Missing id|缺少编号)/)
   })
 
   test('context 只按 id 反查：必须显式传，缺 id 报错', () => {
@@ -1773,15 +1774,15 @@ describe('CLI 层', () => {
     assert.match(byArg, new RegExp(`需求 id：${created.id}`))
     assert.match(byArg, /项目：demo（示例项目）/)
     assert.match(byArg, /需求：CSD 接 TF 标准价（csd-price）/)
-    assert.match(byArg, /状态：澄清/)
+    assert.match(byArg, /状态：准备/)
     assert.match(byArg, /先查 CK 再改代码/)
     assert.match(byArg, /跟 supply 对了/)
 
     const noId = cli(configFile, ['context'])
     assert.equal(noId.code, 2)
-    assert.match(noId.stderr, /Missing id/)
+    assert.match(noId.stderr, /(?:Missing id|缺少编号)/)
 
-    assert.match(cliFail(configFile, ['context', 'req-nope']), /Requirement not found: req-nope/)
+    assert.match(cliFail(configFile, ['context', 'req-nope']), /(?:Requirement not found: |找不到需求：)req-nope/)
   })
 
   test('wt new：目录、身份文件、软链、exclude、落库一次做完', () => {
@@ -1803,7 +1804,7 @@ describe('CLI 层', () => {
     const child = db.byId(sub.id)!
     assert.equal(child.slug, 'seatmap/gateway')
     assert.equal(child.parentId, parent.id)
-    assert.equal(child.status, '澄清')
+    assert.equal(child.status, 'clarification')
     db.close()
 
     // 子需求：带出上层需求与父需求描述
@@ -1816,18 +1817,18 @@ describe('CLI 层', () => {
     // 父需求：列出名下子需求，每行带状态——接手父需求时先看「这串活还剩几块」
     const parentCtx = cliOk(configFile, ['context', parent.id])
     assert.match(parentCtx, /## 子需求（1）/)
-    assert.match(parentCtx, /seatmap\/gateway {2}网关改造 {2}澄清/)
+    assert.match(parentCtx, /seatmap\/gateway {2}网关改造 {2}准备/)
     assert.doesNotMatch(parentCtx, /已全部完成/)
 
     // 子需求全完成就点一句收尾；父需求自己已是终态时不再点
-    cliOk(configFile, ['req', 'set', sub.id, '--session-analysis', 'completed', '--status', '已完成'])
+    cliOk(configFile, ['req', 'set', sub.id, '--session-analysis', 'completed', '--status', 'completed'])
     const doneCtx = cliOk(configFile, ['context', parent.id])
     assert.match(doneCtx, /seatmap\/gateway {2}网关改造 {2}已完成/)
     assert.match(
       doneCtx,
-      new RegExp(`子需求已全部完成——这条需求自己没有别的活就一并收尾：easy-flow req set ${parent.id} --status 已完成`),
+      new RegExp(`子需求已全部完成——这条需求自己没有别的活就一并收尾：easy-flow req set ${parent.id} --status completed`),
     )
-    cliOk(configFile, ['req', 'set', parent.id, '--session-analysis', 'completed', '--status', '已完成'])
+    cliOk(configFile, ['req', 'set', parent.id, '--session-analysis', 'completed', '--status', 'completed'])
     assert.doesNotMatch(cliOk(configFile, ['context', parent.id]), /已全部完成/)
   })
 
@@ -1900,13 +1901,13 @@ describe('CLI 层', () => {
     execFileSync('git', ['-C', repo, ...who, 'worktree', 'add', '-q', join(workspace, 'manual'), '-b', 'feature-taken'])
     const taken = call('feature-taken')
     assert.notEqual(taken.code, 0)
-    assert.match(taken.stderr, /already checked out at .*manual/)
+    assert.match(taken.stderr, /(?:already checked out at .*manual|已在 .*manual 检出)/)
 
     // 目标路径被普通目录占着
     mkdirSync(join(workspace, `${repoName}.feature-blocked`), { recursive: true })
     const blocked = call('feature-blocked')
     assert.notEqual(blocked.code, 0)
-    assert.match(blocked.stderr, /is occupied/)
+    assert.match(blocked.stderr, /(?:is occupied|已被占用)/)
 
     // 非法分支名在预检就挡下，不留任何东西
     const bad = call('feature bad')
@@ -1943,7 +1944,7 @@ describe('CLI 层', () => {
 
     const second = cliFail(configFile, ['wt', 'new', beta.id, '--repo', repoName, '--branch', 'feature-shared'], env)
     // 兜底的是「软链不覆盖」，不是归属预检——正常不会走到这里，走到了也不能动别人的目录
-    assert.match(second, /already points at/)
+    assert.match(second, /(?:already points at|已指向)/)
 
     // 甲的目录、分支与未提交改动一样不少
     assert.equal(existsSync(wtPath), true)
@@ -1975,7 +1976,7 @@ describe('CLI 层', () => {
     rmSync(join(wtPath, 'requirement.md'))
     symlinkSync(join(wtPath, 'README.md'), join(wtPath, 'requirement.md'))
 
-    assert.match(cliFail(configFile, args, env), /already points at/)
+    assert.match(cliFail(configFile, args, env), /(?:already points at|已指向)/)
 
     // 认领失败不回滚，更不该丢未提交改动
     assert.equal(existsSync(wtPath), true)
@@ -2036,7 +2037,7 @@ describe('CLI 层', () => {
     rmSync(join(repo, '.git', 'worktrees', basename(wtPath)), { recursive: true, force: true })
 
     // 这种目录问不出 git status，所以必须显式 force
-    assert.match(cliFail(configFile, ['wt', 'rm', id]), /cleanliness cannot be judged/)
+    assert.match(cliFail(configFile, ['wt', 'rm', id]), /(?:cleanliness cannot be judged|无法判断是否干净)/)
 
     cliOk(configFile, ['wt', 'rm', id, '--force'])
     assert.equal(existsSync(wtPath), false)
@@ -2060,7 +2061,7 @@ describe('CLI 层', () => {
     const wtPath = join(workspace, `${repoName}.feature-x`)
 
     writeFileSync(join(wtPath, 'README.md'), 'changed\n')
-    assert.match(cliFail(configFile, ['wt', 'rm', id]), /uncommitted changes/)
+    assert.match(cliFail(configFile, ['wt', 'rm', id]), /(?:uncommitted changes|未提交改动)/)
 
     const forced = cliOk(configFile, ['wt', 'rm', id, '--force'])
     assert.match(forced, /丢弃了 1 处未提交改动/)
@@ -2118,7 +2119,7 @@ describe('CLI 层', () => {
     assert.match(byProject, /项目：示例项目（demo）/)
     assert.match(byProject, new RegExp(`${created.id}.*1 个 worktree`))
 
-    assert.match(cliFail(configFile, ['context', 'nope'], env), /Known projects/)
+    assert.match(cliFail(configFile, ['context', 'nope'], env), /(?:Known projects|现有项目)/)
   })
 
   test('req set 与 req link：按 id 改，链接一条命令登记、只增不删', () => {
@@ -2129,7 +2130,7 @@ describe('CLI 层', () => {
     seed.syncProjects()
     seed.close()
 
-    const moved = cliOk(configFile, ['req', 'set', created.id, '--status', '执行中', '--priority', 'p1'])
+    const moved = cliOk(configFile, ['req', 'set', created.id, '--status', 'in_progress', '--priority', 'p1'])
     assert.match(moved, /状态：执行中 · 优先级：p1/)
 
     const links = cliOk(configFile, [
@@ -2143,7 +2144,7 @@ describe('CLI 层', () => {
     assert.match(links, /- MR {2}https:\/\/gitlab\.example\.com\/mr\/1/)
     assert.match(links, /- 设计稿 {2}https:\/\/example\.com\/design/)
 
-    assert.match(cliFail(configFile, ['req', 'link', created.id, 'X=ftp://x']), /http\(s\)/)
+    assert.match(cliFail(configFile, ['req', 'link', created.id, 'X=ftp://x']), /(?:http\(s\)|http(s))/)
 
     // 只增不删：再追加一条，前面两条都还在
     const more = cliOk(configFile, [
@@ -2170,13 +2171,13 @@ describe('CLI 层', () => {
       cliOk(configFile, ['req', 'link', created.id, 'https://gitlab.example.com/mr/3?tab=notes']),
       /链接（4）：/,
     )
-    assert.match(cliFail(configFile, ['req', 'link', created.id]), /at least one link/)
+    assert.match(cliFail(configFile, ['req', 'link', created.id]), /(?:at least one link|至少指定一条链接)/)
 
-    assert.match(cliFail(configFile, ['req', 'set', created.id]), /Pass at least one of --status/)
+    assert.match(cliFail(configFile, ['req', 'set', created.id]), /(?:Pass at least one of --status|请至少指定 --status)/)
 
     const db = new BoardDatabase(dataDir)
     const r = db.byId(created.id)!
-    assert.equal(r.status, '执行中')
+    assert.equal(r.status, 'in_progress')
     assert.equal(r.priority, 'p1')
     assert.deepEqual(r.linkItems, [
       { title: '主流程', url: 'https://gitlab.example.com/mr/1' },
@@ -2201,7 +2202,7 @@ describe('CLI 层', () => {
     assert.doesNotMatch(fresh, /easy-flow req link/)
 
     // 已经有工作区、状态仍是执行中：context 和只改优先级的 req set 都要点名
-    cliOk(configFile, ['req', 'set', created.id, '--status', '执行中'])
+    cliOk(configFile, ['req', 'set', created.id, '--status', 'in_progress'])
     const board = new BoardDatabase(dataDir)
     board.addWorktree({
       id: 'wt-demo',
@@ -2215,7 +2216,7 @@ describe('CLI 层', () => {
     assert.match(cliOk(configFile, ['context', created.id]), /已经开工，却还没有一条链接/)
     assert.match(cliOk(configFile, ['req', 'set', created.id, '--priority', 'p2']), /还没有登记任何链接/)
 
-    assert.match(cliOk(configFile, ['req', 'set', created.id, '--status', 'Review']), /还没有登记任何链接/)
+    assert.match(cliOk(configFile, ['req', 'set', created.id, '--status', 'review']), /还没有登记任何链接/)
 
     const ctx = cliOk(configFile, ['context', created.id])
     assert.match(ctx, /## 链接（0）/)
@@ -2236,17 +2237,17 @@ describe('CLI 层', () => {
     seed.close()
 
     // 还剩一个没完成：不提示
-    assert.doesNotMatch(cliOk(configFile, ['req', 'set', a.id, '--session-analysis', 'completed', '--status', '已完成']), /已全部完成/)
-    assert.match(cliOk(configFile, ['req', 'set', b.id, '--status', 'Review']), /状态：Review/)
+    assert.doesNotMatch(cliOk(configFile, ['req', 'set', a.id, '--session-analysis', 'completed', '--status', 'completed']), /已全部完成/)
+    assert.match(cliOk(configFile, ['req', 'set', b.id, '--status', 'review']), /状态：评审/)
 
     // 最后一个也完成：提示指向父需求，并给出收尾命令
-    const last = cliOk(configFile, ['req', 'set', b.id, '--session-analysis', 'completed', '--status', '已完成'])
+    const last = cliOk(configFile, ['req', 'set', b.id, '--session-analysis', 'completed', '--status', 'completed'])
     assert.match(last, /父需求「父需求」的 2 个子需求已全部完成/)
-    assert.match(last, new RegExp(`easy-flow req set ${parent.id} --status 已完成`))
+    assert.match(last, new RegExp(`easy-flow req set ${parent.id} --status completed`))
 
     // 提示只是提示：父需求的状态一个字没动
     const db = new BoardDatabase(dataDir)
-    assert.equal(db.byId(parent.id)!.status, '澄清')
+    assert.equal(db.byId(parent.id)!.status, 'clarification')
     db.close()
   })
 
@@ -2319,12 +2320,12 @@ describe('CLI 层', () => {
 
     assert.match(
       cliFail(configFile, ['req', 'session', 'add', created.id, '--agent', 'gemini', '--id', 'x']),
-      /Unknown agent/,
+      /(?:Unknown agent|未知 Agent|未知的 agent)/,
     )
 
     const gone = cli(configFile, ['req', 'session', 'review', created.id])
     assert.equal(gone.code, 2)
-    assert.match(gone.stderr, /Unknown subcommand: req session review/)
+    assert.match(gone.stderr, /(?:Unknown subcommand: req session review|未知子命令：req session review)/)
 
     cliOk(configFile, ['req', 'session', 'add', created.id, '--agent', 'codex', '--id', 'th-1', '--title', '第一版'])
     cliOk(configFile, ['req', 'session', 'add', created.id, '--agent', 'codex', '--id', 'th-1', '--title', '第二版'])
@@ -2357,7 +2358,7 @@ describe('CLI 层', () => {
 
     assert.match(
       cliFail(configFile, ['req', 'session', 'rm', created.id, '--agent', 'codex', '--id', 'th-9']),
-      /Session not found/,
+      /(?:Session not found|找不到会话)/,
     )
     assert.match(cliOk(configFile, ['req', 'session', 'rm', created.id, '--agent', 'codex', '--id', 'th-1']), /已从需求/)
     assert.equal(JSON.parse(cliOk(configFile, ['context', created.id, '--json'])).sessions.length, 0)
@@ -2421,19 +2422,19 @@ describe('CLI 层', () => {
     cliOk(configFile, ['todo', 'new', '第一条', '--source', 'manual', '--ref', 'dup-1'])
     const dup = cli(configFile, ['todo', 'new', '重复的', '--source', 'manual', '--ref', 'dup-1'])
     assert.equal(dup.code, 1)
-    assert.match(dup.stderr, /Ref already used by T-\d{8}-001/)
+    assert.match(dup.stderr, /(?:Ref already used by|去重键已被) T-\d{8}-001/)
 
     const badSource = cli(configFile, ['todo', 'new', 'x', '--source', 'mail'])
     assert.equal(badSource.code, 1)
-    assert.match(badSource.stderr, /Unknown source: mail/)
+    assert.match(badSource.stderr, /(?:Unknown source: |未知的 source：)mail/)
 
     const badStatus = cli(configFile, ['todo', 'new', 'x', '--status', 'doing'])
     assert.equal(badStatus.code, 1)
-    assert.match(badStatus.stderr, /Unknown status: doing/)
+    assert.match(badStatus.stderr, /(?:Unknown status: doing|未知的 status：doing)/)
 
     const badLink = cli(configFile, ['todo', 'new', 'x', '--link', 'ftp://x'])
     assert.equal(badLink.code, 1)
-    assert.match(badLink.stderr, /must start with http/)
+    assert.match(badLink.stderr, /(?:must start with http|必须以 http)/)
   })
 
   test('todo set：状态只改库，标题与摘要改 md', () => {
@@ -2464,11 +2465,11 @@ describe('CLI 层', () => {
 
     const none = cli(configFile, ['todo', 'set', id])
     assert.equal(none.code, 2, '一个字段都不传是用法错误')
-    assert.match(none.stderr, /Pass at least one field/)
+    assert.match(none.stderr, /(?:Pass at least one field|请至少指定一个要修改的字段)/)
 
     const missing = cli(configFile, ['todo', 'set', 'T-不存在', '--status', 'done'])
     assert.equal(missing.code, 1)
-    assert.match(missing.stderr, /Todo not found/)
+    assert.match(missing.stderr, /(?:Todo not found|找不到待办)/)
   })
 
   test('todo list 默认只列未完成的，--all 连已完成一起列', () => {
@@ -2493,7 +2494,7 @@ describe('CLI 层', () => {
 
     const bad = cli(configFile, ['todo', 'list', '--status', 'doing'])
     assert.equal(bad.code, 1)
-    assert.match(bad.stderr, /Unknown status/)
+    assert.match(bad.stderr, /(?:Unknown status|未知状态|未知的 status)/)
   })
 
   test('todo set --req 挂需求，todo list --req 反查', () => {
@@ -2519,8 +2520,8 @@ describe('CLI 层', () => {
     // 需求 id 写错当场报错，不留一个永远查不到东西的指针
     const badReq = cli(configFile, ['todo', 'set', id, '--req', 'req-nope'])
     assert.equal(badReq.code, 1)
-    assert.match(badReq.stderr, /Requirement not found: req-nope/)
-    assert.match(cli(configFile, ['todo', 'list', '--req', 'req-nope']).stderr, /Requirement not found/)
+    assert.match(badReq.stderr, /(?:Requirement not found: |找不到需求：)req-nope/)
+    assert.match(cli(configFile, ['todo', 'list', '--req', 'req-nope']).stderr, /(?:Requirement not found|找不到需求)/)
 
     // 空串摘掉指针
     cliOk(configFile, ['todo', 'set', id, '--req', ''])
@@ -2539,7 +2540,7 @@ describe('CLI 层', () => {
 
     const missing = cli(configFile, ['todo', 'show', 'T-不存在'])
     assert.equal(missing.code, 1)
-    assert.match(missing.stderr, /Todo not found/)
+    assert.match(missing.stderr, /(?:Todo not found|找不到待办)/)
   })
 
   test('todo import：只搬未完成的，保留原 id 与时间线，重复跑安全', () => {
@@ -2618,6 +2619,7 @@ describe('HTTP 层', () => {
       makeReq(d, 'onex', 'beta', '# beta\n\n## 需求\n\n乙需求内容')
     })
     app = createBoardApp({ dataDir: dir })
+    setLanguage(Language.Chinese)
     server = createServer((req, res) => void app.handle(req, res))
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
     const addr = server.address()
@@ -2646,7 +2648,7 @@ describe('HTTP 层', () => {
   test('GET /api/requirements 返回完整契约', async () => {
     const r = await get('/api/requirements')
     assert.ok(Array.isArray(r.requirements))
-    assert.deepEqual(r.statuses, ['澄清', '执行中', 'Review', '已完成'])
+    assert.deepEqual(r.statuses, ['clarification', 'in_progress', 'review', 'completed'])
     assert.deepEqual(r.priorities, ['p0', 'p1', 'p2', 'p3'])
     assert.equal(r.project, 'onex')
   })
@@ -2657,6 +2659,7 @@ describe('HTTP 层', () => {
     rmSync(dir2, { recursive: true, force: true })
     makeReq(dir2, 'onex', 'alpha', '# alpha\n\n## 需求\n\n甲需求内容')
     const app2 = createBoardApp({ dataDir: dir2 })
+    setLanguage(Language.Chinese)
     const server2 = createServer((rq, rs) => void app2.handle(rq, rs))
     await new Promise<void>((r) => server2.listen(0, '127.0.0.1', r))
     const addr = server2.address()
@@ -2696,6 +2699,7 @@ describe('HTTP 层', () => {
     rmSync(dir2, { recursive: true, force: true })
     makeReq(dir2, 'onex', 'alpha', '# alpha\n\n## 需求\n\n甲需求内容')
     const app2 = createBoardApp({ dataDir: dir2 })
+    setLanguage(Language.Chinese)
     const server2 = createServer((rq, rs) => void app2.handle(rq, rs))
     await new Promise<void>((r) => server2.listen(0, '127.0.0.1', r))
     const addr = server2.address()
@@ -2740,8 +2744,8 @@ describe('HTTP 层', () => {
     const list = await get('/api/todos')
     assert.equal(list.todos.find((x: any) => x.id === 'T-20260101-001').status, 'in_progress')
 
-    assert.match((await post('/api/todos/update', { id: 'T-20260101-001', status: 'doing' })).error, /Unknown status/)
-    assert.match((await post('/api/todos/update', { id: 'T-不存在', status: 'done' })).error, /Todo not found/)
+    assert.match((await post('/api/todos/update', { id: 'T-20260101-001', status: 'doing' })).error, /(?:Unknown status|未知状态|未知的 status)/)
+    assert.match((await post('/api/todos/update', { id: 'T-不存在', status: 'done' })).error, /(?:Todo not found|找不到待办)/)
   })
 
   test('待办文档读写往返', async () => {
@@ -2760,24 +2764,24 @@ describe('HTTP 层', () => {
     assert.equal(t.title, '改过的标题')
     assert.equal(t.summary, '改过的摘要')
 
-    assert.match((await get('/api/todos/doc?id=T-不存在')).error, /Todo not found/)
+    assert.match((await get('/api/todos/doc?id=T-不存在')).error, /(?:Todo not found|找不到待办)/)
   })
 
   test('POST /api/move 改状态并落库', async () => {
-    const r = await post('/api/move', { slug: 'alpha', status: 'Review' })
-    assert.equal(r.status, 'Review')
+    const r = await post('/api/move', { slug: 'alpha', status: 'review' })
+    assert.equal(r.status, 'review')
     const list = await get('/api/requirements')
-    assert.equal(list.requirements.find((x: any) => x.slug === 'alpha').status, 'Review')
+    assert.equal(list.requirements.find((x: any) => x.slug === 'alpha').status, 'review')
   })
 
   test('POST /api/move 拒绝未知列', async () => {
     const r = await post('/api/move', { slug: 'alpha', status: 'Done' })
-    assert.match(r.error, /Unknown status/)
+    assert.match(r.error, /(?:Unknown status|未知状态|未知的 status)/)
   })
 
   test('POST /api/update 支持改状态与优先级', async () => {
-    const r = await post('/api/update', { slug: 'alpha', status: 'Review', priority: 'p1' })
-    assert.equal(r.status, 'Review')
+    const r = await post('/api/update', { slug: 'alpha', status: 'review', priority: 'p1' })
+    assert.equal(r.status, 'review')
     assert.equal(r.priority, 'p1')
   })
 
@@ -2791,12 +2795,12 @@ describe('HTTP 层', () => {
   })
 
   test('POST /api/update 拒绝非法枚举', async () => {
-    assert.match((await post('/api/update', { slug: 'alpha', status: '开发中' })).error, /Unknown status/)
-    assert.match((await post('/api/update', { slug: 'alpha', priority: 'high' })).error, /Unknown priority/)
+    assert.match((await post('/api/update', { slug: 'alpha', status: '开发中' })).error, /(?:Unknown status|未知状态|未知的 status)/)
+    assert.match((await post('/api/update', { slug: 'alpha', priority: 'high' })).error, /(?:Unknown priority|未知优先级)/)
   })
 
   test('POST /api/update 的 pinned 只接布尔值', async () => {
-    assert.match((await post('/api/update', { slug: 'alpha', pinned: 'false' })).error, /pinned must be a boolean/)
+    assert.match((await post('/api/update', { slug: 'alpha', pinned: 'false' })).error, /(?:pinned must be a boolean|pinned 必须是布尔值)/)
     const list = await get('/api/requirements')
     assert.equal(list.requirements.find((x: any) => x.slug === 'alpha').pinned, false)
   })
@@ -2881,14 +2885,14 @@ describe('HTTP 层', () => {
 
   test('POST /api/sessions/open-workspace 只认 Cursor 且目录必须还在', async () => {
     const missing = await post('/api/sessions/open-workspace', { agent: 'cursor', session: 'nope' })
-    assert.match(missing.error, /Session not found/)
+    assert.match(missing.error, /(?:Session not found|找不到会话)/)
 
     app.db.addSession({ requirementId: 'req-alpha', agent: 'cursor', session: 'cur-focus', cwd: '/definitely/not/here' })
     const gone = await post('/api/sessions/open-workspace', { agent: 'cursor', session: 'cur-focus' })
-    assert.match(gone.error, /Directory no longer exists/)
+    assert.match(gone.error, /(?:Directory no longer exists|目录已不存在)/)
 
     const wrong = await post('/api/sessions/open-workspace', { agent: 'codex', session: 'th-ctx' })
-    assert.match(wrong.error, /Only Cursor/)
+    assert.match(wrong.error, /(?:Only Cursor|只有 Cursor)/)
   })
 
   test('POST /api/sessions/clicked 把这条会话写成静止，下一个 hook 事件直接覆盖', async () => {
@@ -2926,7 +2930,7 @@ describe('HTTP 层', () => {
     assert.deepEqual(r.todos.map((t: any) => t.id), ['T-20260201-001'])
     // 归属只存在库里：挂在 alpha 名下的，beta 看不到
     assert.deepEqual((await get('/api/context/live?slug=beta')).sessions, [])
-    assert.match((await get('/api/context/live?slug=nope')).error, /Requirement not found/)
+    assert.match((await get('/api/context/live?slug=nope')).error, /(?:Requirement not found|找不到需求)/)
   })
 
   test('/api/context/live 跟着库走，但不扫需求目录', async () => {
@@ -2956,15 +2960,15 @@ describe('HTTP 层', () => {
   test('GET /api/requirement 按 id 取单条', async () => {
     const r = await get('/api/requirement?id=req-alpha')
     assert.equal(r.slug, 'alpha')
-    assert.match((await get('/api/requirement?id=req-nope')).error, /Requirement not found/)
+    assert.match((await get('/api/requirement?id=req-nope')).error, /(?:Requirement not found|找不到需求)/)
   })
 
   test('POST /api/worktree/open 只认库里的记录，目录不在就报错', async () => {
     const unknown = await post('/api/worktree/open', { id: 'wt-nope' })
-    assert.match(unknown.error, /Worktree not found/)
+    assert.match(unknown.error, /(?:Worktree not found|找不到工作区)/)
     // 上一条用例登记的路径本来就不存在：不该真去 open，而是报出来
     const gone = await post('/api/worktree/open', { id: 'wt-ctx' })
-    assert.match(gone.error, /Directory no longer exists/)
+    assert.match(gone.error, /(?:Directory no longer exists|目录已不存在)/)
   })
 
   test('文档读写往返', async () => {
@@ -2980,18 +2984,18 @@ describe('HTTP 层', () => {
 
   test('★ 文档接口拒绝路径越界', async () => {
     const up = await get('/api/doc?slug=alpha&name=' + encodeURIComponent('../../etc/hosts'))
-    assert.match(up.error, /escapes the root|Unsupported/)
+    assert.match(up.error, /(?:escapes the root|超出了根目录|Unsupported|不支持)/)
     const abs = await get('/api/doc?slug=alpha&name=' + encodeURIComponent('/etc/hosts'))
-    assert.match(abs.error, /Absolute paths|Unsupported/)
+    assert.match(abs.error, /(?:Absolute paths|绝对路径|Unsupported|不支持)/)
     const traverse = await get(
       '/api/doc?slug=alpha&name=' + encodeURIComponent('../../../package.json'),
     )
-    assert.match(traverse.error, /escapes the root|Unsupported/)
+    assert.match(traverse.error, /(?:escapes the root|超出了根目录|Unsupported|不支持)/)
   })
 
   test('文档接口拒绝非文本类型', async () => {
     const r = await get('/api/doc?slug=alpha&name=shell.sh')
-    assert.match(r.error, /Unsupported file type/)
+    assert.match(r.error, /(?:Unsupported file type|不支持的文件类型)/)
   })
 
   test('项目接口：列表 / 切 / 删', async () => {
@@ -3018,7 +3022,7 @@ describe('HTTP 层', () => {
 
   test('创建接口已移除', async () => {
     const r = await post('/api/projects', { slug: 'x', name: 'y' })
-    assert.equal(r.error, 'not found')
+    assert.equal(r.error, '未找到')
   })
 
   test('/api/requirements 带上项目显示名', async () => {
@@ -3029,7 +3033,7 @@ describe('HTTP 层', () => {
 
   test('不能删除当前项目', async () => {
     const r = await post('/api/projects/delete', { slug: 'onex', removeFiles: false })
-    assert.match(r.error, /currently in use/)
+    assert.match(r.error, /(?:currently in use|当前使用)/)
   })
 
   test('项目总规范读写', async () => {
@@ -3045,7 +3049,7 @@ describe('HTTP 层', () => {
 
   test('不存在的 slug 返回可读错误', async () => {
     const r = await get('/api/context?slug=nope')
-    assert.match(r.error, /Requirement not found/)
+    assert.match(r.error, /(?:Requirement not found|找不到需求)/)
   })
 
   // ---------------------------------------------------------- hook 入口
@@ -3108,7 +3112,7 @@ describe('HTTP 层', () => {
 // ------------------------------------------------------------------ 导图
 
 describe('导图：建树', () => {
-  const req = (slug: string, title = slug, status = '澄清'): Requirement => ({
+  const req = (slug: string, title = slug, status = 'clarification'): Requirement => ({
     slug,
     project: 'p',
     id: `req-${slug}`,
@@ -3186,7 +3190,7 @@ describe('导图：布局', () => {
     id: `req-${slug}`,
     parentId: '',
     title,
-    status: '澄清',
+    status: 'clarification',
     pinned: false,
     sessionAnalysisStatus: 'pending',
     priority: '',
@@ -4066,7 +4070,7 @@ describe('hook 状态接进会话：优先 hook，读不到才落盘', () => {
   test('hook 说在干活就顶掉落盘那份结论——同一 turn 内能看出切换', () => {
     const { store } = newState()
     claudeRecord('local_working', {
-      lastActivityAt: Date.now(),
+      lastActivityAt: Date.now() - 1_000,
       postTurnSummaryFor: 't1',
       lastAssistantUuid: 't1',
       postTurnSummary: { status_category: 'blocked', needs_action: '接着做吗？' },

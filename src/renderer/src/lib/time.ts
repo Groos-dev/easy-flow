@@ -1,10 +1,11 @@
+import { t as tr } from "../../../shared/i18n.ts"
 // 相对时间。看板卡片与 mini 面板共用一份，免得两处口径漂移
 export function relTime(ms: number): string {
   const days = Math.floor((Date.now() - ms) / 86400000)
-  if (days <= 0) return '今天'
-  if (days === 1) return '昨天'
-  if (days < 30) return `${days} 天前`
-  return `${Math.floor(days / 30)} 个月前`
+  if (days <= 0) return tr("Today")
+  if (days === 1) return tr("Yesterday")
+  if (days < 30) return tr("{0} days ago", [days])
+  return tr("{0} months ago", [Math.floor(days / 30)])
 }
 
 /**

@@ -1,3 +1,5 @@
+import { AgentId } from '../src/shared/domain.ts'
+import { t as tr } from '../src/shared/i18n.ts'
 import { isAbsolute } from 'node:path'
 import { registerLaunchProvider, type LaunchProvider } from './launch.ts'
 
@@ -11,14 +13,14 @@ export function claudeLaunchUrl(prompt: string, folder: string): string {
   const query = `q=${encodeURIComponent(prompt)}`
   if (!folder) return `claude://code/new?${query}`
   if (!isAbsolute(folder)) {
-    throw new Error('Claude Code folder must be an absolute path')
+    throw new Error(tr("Claude Code folder must be an absolute path"))
   }
 
   return `claude://code/new?${query}&folder=${encodeURIComponent(folder)}`
 }
 
 export const claudeProvider: LaunchProvider = {
-  id: 'claude',
+  id: AgentId.Claude,
   label: 'Claude Code',
   build: (input, prompt) => claudeLaunchUrl(prompt, input.worktreePath),
 }
