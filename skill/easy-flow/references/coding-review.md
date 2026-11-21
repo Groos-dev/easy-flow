@@ -1,33 +1,82 @@
-# Coding 评审闭环
+# Coding review workflow
 
-适用于原会话完成代码实现、准备交给用户 review 的阶段。Claude Desktop、程小帮、Codex 等 coding 客户端共用同一入口。
+Use after code implementation and verification, before handing changes to the user.
+The original coding session owns fixes and workflow progression; the independent
+Codex reviewer produces findings only. All coding clients use the same CLI entrypoint.
 
-## 原会话推进
+## Run, fix, and recheck
 
-1. 将本轮已确认的关键决策写进需求的 context.md，验证命令与结果保存在需求文档；需求、验收与设计保持一致。
-2. 从工作区 AGENTS.md 读取显式 wt-id，运行 `easy-flow review <wt-id> --json`。工具默认恢复该需求和工作区固定绑定的 reviewer。需要特定基线时传 `--base <ref>`，需要特定模型时传 `--model <模型>`。
-3. 等待命令结束。耗时超过工具单次等待窗口时，用当前客户端已有的后台任务等待或结果取回工具继续等待；原会话在此期间暂停修改代码。
-4. 读取返回的 reportPath 正文。退出 0 / ok=true 仅表示取得报告，是否有缺陷以正文为准。失败时读取 error、报告与 logPath，修正模型等执行条件后用原命令重试，仍使用绑定会话；缺有效报告时交付需标明未验证。
-5. 逐条核实发现，按已确认需求内的最小改法修复并运行必要验证。在本轮报告的「处理结果」段按问题编号追加：修复位置、验证命令与输出；未采纳的给出证据；需要行为、契约或范围取舍的交给用户。高/中危问题要附可执行反例（测试、脚本或 preview 步骤）；只做代码路径核对的标未验证，复查先跑同一反例。
-6. 修复后运行 `easy-flow review <wt-id> --recheck <上一轮报告绝对路径> --json`，等待并读取复查报告。复查继承报告基线，同时读取上一轮发现与处理记录。普通 review 和复核都使用工作区绑定的同一 session。
-7. 复查到没有 blocker/high 为止；默认一轮评审、一次修复、一次复查是起点，不是上限。同一问题连续两轮未关闭时，要求补可执行反例或交人决定。用户追加新的评审重点时开新一轮 review，不用 `--recheck`。将复查发现的剩余问题及未验证项写入复查报告的「处理结果」，交付时给出报告路径、验证结果与待决定事项，再把需求置为 Review。
+1. Update requirement decisions, acceptance criteria, and design as needed. Save
+   verification commands and results in the requirement's documents.
+2. Read the explicit `wt-id` from the workspace's `AGENTS.md`. Run
+   `easy-flow review <wt-id> --json`. Use `--base <ref>` for a specific comparison
+   baseline or `--model <model>` for a specific model when needed.
+3. Wait for completion without editing the reviewed workspace. For long-running
+   execution, keep the task ID and use the current client's background-result tools
+   to follow the same invocation through to its final result.
+4. Read the file returned as `reportPath`. Exit code 0 and `ok=true` mean a report
+   was obtained, not that no defects exist. On failure, inspect `error`, the report,
+   and `logPath`. Correct execution conditions before retrying in the same bound
+   reviewer session. If no valid report is available, label the review unverified.
+5. Verify each finding against the agreed scope. Make the smallest appropriate fix
+   and run relevant checks. Append a disposition for each finding to the report's
+   processing-results section: finding ID, change location, commands, and results.
+   Preserve original findings. Explain rejected findings with evidence; ask the user
+   about unresolved behavior, contract, or scope decisions.
+6. For high- or medium-severity findings, provide an executable reproducer: a test,
+   script, or preview procedure. Code-path inspection alone is unverified. Run the
+   same reproducer first during recheck.
+7. Run `easy-flow review <wt-id> --recheck <absolute-previous-report-path> --json`.
+   Wait and read the new report. It inherits the original baseline and reads earlier
+   findings and dispositions while resuming the workspace's bound reviewer session.
+8. Continue until no blocker/high findings remain. One review, one fix pass, and one
+   recheck are a starting point, not a guaranteed limit. If the same issue remains
+   open for two consecutive rounds, add an executable reproducer or seek a user
+   decision before repeating unchanged work. Start a fresh review round without
+   `--recheck` when the user adds a new review focus.
+9. Record remaining findings and unverified items in the latest report's
+   processing-results section. Hand over report paths, verification results, and
+   decisions needed from the user. Then set the requirement to `Review`.
 
-同一需求涉及多个代码工作区时，逐个工作区执行以上步骤；每份报告记录对应 wt-id，共享需求目录中的递增轮次。每个有改动的工作区都取得对应报告后再交付。
+Keep the requirement in Implementation during automated review and fixes. For
+multiple changed code workspaces, obtain a report for each; record each `wt-id`.
+Their reports share the requirement's incrementing round sequence.
 
-评审角色使用 self-codereview 的发现口径，只产出结论；原 coding 会话负责修复与流程推进。评审命令创建的独立会话会自动登记到同一需求上。
+## Reviewer identity
 
-同一需求和 worktree 固定一个 reviewer，由数据库持久绑定。已有历史的工作区首次运行时认领最近报告中的 reviewer；新工作区首次 review 创建持久会话后立即建立绑定。此后所有评审、换基线、换模型、失败重试和复核都恢复这一 session。会话命名为「评审／复查：需求标题」，在 Codex Desktop 历史中查看，也能从 easy-flow 的会话入口打开。会话 cwd 与 workspace roots 都是被评审的 worktree。
+Each requirement/workspace pair has one reviewer session persisted in the database.
+All ordinary reviews, model changes, baseline changes, retries, and rechecks resume
+it. For an older workspace without a binding, the CLI adopts the reviewer from the
+latest matching report. It creates a new session only when neither a binding nor
+reviewer history exists. Stop if history cannot identify the reviewer or the bound
+session cannot be resumed; do not silently create a replacement.
 
-每轮报告继续记录 session 标识；报告选择用于本轮内容和基线，固定绑定决定会话身份。历史 reviewer 无法确定或绑定会话恢复失败时终止，由原 coding 会话处理原因。
+The CLI registers the reviewer under the same requirement. Its working directory
+and workspace roots point to the reviewed worktree. The reviewer is accessible in
+Codex Desktop history and through easy-flow's session links. Reports record the
+session ID; the binding determines identity, while the chosen report determines
+round content and baseline.
 
-程小帮可用 `Shell` 的 `run_in_background=true` 启动命令，保留返回的任务 ID，再用 `TaskOutput` 等待并取回最终结果。Claude Desktop 按当前会话工具定义选择后台执行与结果取回参数，持续跟进同一个任务，直到取得最终报告路径。
+Use the reviewer's configured findings criteria. A separate `self-codereview` skill,
+if available to the reviewer, can supply those criteria; the caller needs only the
+easy-flow review CLI and the resulting report.
 
-## 报告
+## Reports and execution details
 
-报告与诊断日志位于所属需求目录 `docs/review/`：首次通常为 `01-review.md`，复查为 `02-recheck.md`，后续执行继续递增。每轮生成新文档，历史结论保留。评审执行失败同样保留报告及非零退出码。
+Reports and diagnostic logs live in the requirement's `docs/review/`, typically
+`01-review.md`, `02-recheck.md`, and subsequent incrementing rounds. Every attempt
+preserves a new report, including failures, which return a nonzero exit code.
+Use report findings as the repair handoff; tool output in logs is diagnostic evidence.
 
-原始评审发现保留在正文中，原会话将处理记录追加到末尾「处理结果」段。每条记录必须能对应到问题编号；没有发现问题时记录验证情况即可。复查结论也保存在需求目录，而不只留在会话输出里。
+The default baseline is the merge base of the main checkout's HEAD and workspace
+HEAD. Review includes commits since that baseline, staged and unstaged changes,
+and untracked files. `--base` selects an explicit baseline and cannot be combined
+with `--recheck`.
 
-首次评审默认取主 checkout 的 HEAD 与工作区 HEAD 的共同祖先作为基线，范围包含基线之后的提交、暂存、未暂存及未跟踪文件。`--base` 可显式选择比较起点；与 `--recheck` 互斥。
+Only one review invocation may run per workspace. A lock records its PID; verify
+process state before addressing a stale lock. Do not launch duplicate invocations
+merely because the first exceeds a tool's wait window.
 
-命令只运行只读评审与保存结论，返回报告路径。执行日志里的 tool 输出用于诊断，评审正文才是修复交接依据。
+For Chengxiaobang, where supported, start `Shell` with `run_in_background=true`,
+retain the task ID, and use `TaskOutput`. In Claude Desktop or other clients, follow
+the available tool definitions for background execution and result retrieval.

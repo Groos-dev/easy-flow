@@ -1,243 +1,296 @@
-# easy-flow 命令参考
+# easy-flow command reference
 
-SKILL.md 只放主流程，每个命令的参数、场景与坑在这里。本文跟不上实现时以
-`easy-flow <命令> --help` 为准。
+Use [SKILL.md](SKILL.md) for ownership and workflow. Read this reference for command
+parameters and operational details. If documentation and implementation differ,
+`easy-flow <command> --help` is authoritative.
 
-## 全局
+## Global behavior
 
-- `--json`：成功打数据，失败打 `{"error": …}`；退出码非 0（用法错误 2，其余 1）
-- `--help`：每个命令都能跟，如 `easy-flow req new --help`
-- 数据目录：`<dataDir>/<项目>/<需求>/`。换数据目录等于换一套看板
+- `--json` returns structured output. Failures include `{"error": …}` and a nonzero
+  exit code: 2 for usage errors, otherwise 1.
+- Every command supports `--help`.
+- Data lives under `<dataDir>/<project>/<requirement>/`. Changing the configured
+  data directory selects a different board and database; do not hardcode a path.
+- Angle-bracket arguments are placeholders. Use actual IDs and values when running
+  commands. Ellipses indicate repeated arguments.
 
-## dir
+## English document headings
 
-- 干什么：打印数据目录与配置文件位置
-- 用法：`easy-flow dir [--json]`
-- 示例：`easy-flow dir`
-- 场景：不知道需求都在哪、要给脚本定位库文件时
-- 坑：路径由应用配置决定，别写死 `~/requirements`
+For new requirement documents, use `Summary` (or `Requirement summary`) for the
+deliverable and `Repos` (or `Repos and symlinks`) for the repository table. Use
+`Summary` for todo handoffs. These aliases are supported by the current parser.
+Other prose sections can use headings such as `Acceptance criteria`, `Background`,
+`Constraints`, `Decisions`, and `Progress`. Preserve existing IDs and any headings
+whose parser compatibility has not been checked. Links remain board metadata.
 
-## context
+## Location and context
 
-- 干什么：一次取齐某个 id 的上下文——项目规范、需求描述、context.md、上层 / 子需求、工作区、会话、待办
-- 用法：`easy-flow context <req-… | wt-… | 项目标识> [--json]`
-- 示例：`easy-flow context req-236d2ccb70`
-- 场景：进需求目录或工作区接活，动手前的第一件事
-- 坑：
-  - id 只能显式传；工作区的 id 在它自己 AGENTS.md 的 frontmatter 里
-  - 待办段里标「未确认」的，是由来源会话推出来的归属；确认后用 `todo set <id> --req <req-…>` 补上
-  - 状态到 Review / 已完成时，末尾会点名名下未完成的待办
+```sh
+easy-flow dir [--json]
+easy-flow context <req-id|wt-id|project-slug> [--json]
+```
 
-## review
+`dir` prints the data-directory and configuration paths. `context` returns project
+conventions, requirement content, `context.md`, parents and children, workspaces,
+sessions, and todos. Use it when taking over a requirement or workspace.
 
-`easy-flow review <wt-id> [--base <ref>] [--recheck <报告路径>] [--model <模型>] [--json]`
+Pass an explicit ID. Read workspace identity from `AGENTS.md` frontmatter. Inferred
+todo ownership is unconfirmed until persisted with `todo set --req`. Context and
+status changes may flag open todos at Review or Complete. There is no `req show`.
 
-- 只接受显式工作区 ID，所属需求和文档目录从看板解析。
-- 默认比较主 checkout HEAD 与工作区 HEAD 的共同祖先到当前工作区，含已提交、暂存、未暂存和未跟踪文件。
-- 同一需求和工作区的 reviewer 固定绑定在数据库中。所有调用默认恢复绑定会话，`--base`、`--model` 和评审阶段只影响本轮执行。
-- 旧工作区首次运行时认领最近一份匹配报告的 reviewer 并固定绑定；已有历史却无法确定会话时停止。
-- `--recheck` 接受同一工作区且含 session 标识的成功或失败报告，读取处理记录并继承原基线，与 `--base` 互斥。会话身份始终由工作区绑定决定。
-- 同一工作区同时只允许一个评审调用，重复调用返回占用错误。锁文件记录执行 PID，处理残留占用前先核实进程状态。
-- 独立 Codex 以只读模式执行，调用方等待结果；命令返回 `ok`、`reportPath`、`logPath`、`sessionId`。
-- `ok=true` 表示评审执行完成，缺陷与验收结论见报告正文。失败返回 `error` 和非零退出码，失败报告仍保存在需求目录。
-- 每轮文档及运行日志保存在 `docs/review/`，报告按轮次递增。原会话追加处理结果，修复后复查一次再交给用户。
+## Independent coding review
 
-完整流程见 [Coding 评审闭环](references/coding-review.md)。
+```sh
+easy-flow review <wt-id> [--base <ref>] [--recheck <report-path>] [--model <model>] [--json]
+```
 
-## project new
+- Accepts an explicit workspace ID; resolves the owning requirement and report
+  directory through the board.
+- Returns `ok`, `reportPath`, `logPath`, and `sessionId`. Read the report even when
+  `ok=true`; success means execution completed, not that the code is defect-free.
+  Failure returns `error` and a nonzero exit code while preserving its report.
+- Defaults to the merge base of main-checkout HEAD and workspace HEAD, including
+  committed, staged, unstaged, and untracked changes after that point.
+- `--recheck` accepts a successful or failed report from the same workspace with a
+  session ID. It reads dispositions and inherits the baseline. It is mutually
+  exclusive with `--base`.
+- The database binds one reviewer to each requirement/workspace pair. Every call
+  resumes that session. An older workspace adopts the latest matching historical
+  reviewer; unresolved history or resume failure stops execution.
+- Only one invocation may run per workspace. Check the PID in its lock before
+  addressing a stale lock.
+- The independent Codex reviewer runs read-only apart from saving review artifacts.
+  The caller waits, reads the report, makes fixes, and rechecks. Each round creates
+  a new numbered report and diagnostic log in `docs/review/`.
 
-- 干什么：建项目（需求的容器），同时建目录与项目 AGENTS.md
-- 用法：`easy-flow project new <slug> [--name <显示名>] [--json]`
-- 示例：`easy-flow project new onex --name "机票辅营"`
-- 场景：新业务线 / 新仓库第一次挂需求
-- 坑：目录名规则见 SKILL.md「约定」。显示名写在项目 AGENTS.md 的 frontmatter，改完下次刷新生效
+Read [the complete review workflow](references/coding-review.md) before execution.
 
-## req new
+## Projects and requirements
 
-- 干什么：建需求目录（requirement.md / context.md）并上板
-- 用法：`easy-flow req new <标题> (--project <项目> | --parent <req-…>) [--slug <目录名>] [--summary <一句话>] [--json]`
-- 示例：`easy-flow req new "TF 餐食迁移到新链路" --project onex --slug tf-meal-migration`
-- 场景：确认了归属但还没有需求；拆子需求用 `--parent`
-- 坑：
-  - 标题规范见 SKILL.md「约定」。逐字等于目录名会被拒绝
-  - 中文标题推不出目录名，必须显式 `--slug`。字符集见 SKILL.md「约定」
-  - 子需求的 slug 是相对项目根的 `parent/child`，层级不限
-  - `--summary` 只影响卡片摘要，写清楚「做什么」的一句话
+```sh
+easy-flow project new <slug> [--name <display-name>] [--json]
+easy-flow req new <title> (--project <project> | --parent <req-id>) [--slug <slug>] [--summary <sentence>] [--json]
+easy-flow req set <req-id> [--status <value>] [--priority <p0|p1|p2|p3|"">] [--session-analysis <pending|completed|skipped>] [--json]
+```
 
-## req set
+`project new` creates the directory and project `AGENTS.md`. Its frontmatter `name`
+controls the display name on the next refresh.
 
-- 干什么：改看板状态与优先级
-- 用法：`easy-flow req set <req-…> [--status 澄清|执行中|Review|已完成] [--priority p0|p1|p2|p3|""] [--session-analysis pending|completed|skipped] [--json]`
-- 示例：`easy-flow req set req-236d2ccb70 --status Review`
-- 场景：开工置执行中、交付置 Review、合入置已完成；优先级随事态调整
-- 坑：
-  - 传了哪个改哪个，都没传会报错；`--priority ""` 清空优先级
-  - 会话分析状态只存 SQLite：`pending` 待分析、`completed` 已分析、`skipped` 已跳过分析
-  - CLI 设置「已完成」要求分析为 `completed`；拦截时状态与优先级保持原值，提醒用户另开 session 复盘全部关联会话
-  - 分析 session 完成后将结论保留在需求文档中，再用 `--session-analysis completed` 登记；无值得沉淀内容也可登记
-  - UI 直接完成，尚未分析时记为 `skipped`，已有分析结果保留；历史已完成需求升级为 `skipped`
-  - 状态只在看板上改，不要写进任何 md
-  - 父需求不跟着子需求自动收尾
+`req new` creates `requirement.md` and `context.md` and registers the requirement.
+Choose a title describing an action and outcome; it cannot equal its slug. Slugs use
+lowercase English letters, digits, and hyphens. Specify a slug when automatic
+conversion is unsuitable. A child created with `--parent` has a project-relative
+slug such as `parent/child`; nesting is not limited to one level. Include a
+recognizable parent scope in child titles. `--summary` supplies the card's concise
+deliverable description.
 
-## req link
+```sh
+easy-flow project new travel --name "Travel"
+easy-flow req new "Migrate meal bookings to the new service" --project travel --slug meal-migration --summary "Move meal bookings while preserving existing booking behavior."
+easy-flow req set req-236d2ccb70 --status Review
+```
 
-- 干什么：把任何与需求相关的链接挂到需求上——一条链接就是一对「标题 + URL」，不分类
-- 用法：`easy-flow req link <req-…> "<标题>=<url>" ["<标题>=<url>" …] [--json]`
-- 示例：
-  - `easy-flow req link req-236d2ccb70 "设计稿=https://example.com/design"`
-  - `easy-flow req link req-236d2ccb70 "https://gitlab.example.com/group/repo/-/merge_requests/12?tab=notes"`
-- 场景：拿到飞书 Story、开出 / 换了 MR、有设计文档 / Wiki / 监控 / 截图要挂
-- 坑：
-  - 可一次传多条，只增不删；同一 URL 再传只更新标题，这次没给标题就保留旧的
-  - 标题尽量短，同时还能看出这条链接是什么。可省：直接写 URL 也行。看板按 URL 推短名：GitLab 合并请求是「仓库 !编号」，GitHub 拉取请求是「仓库 #编号」，飞书或 Lark 的地址用去掉域名、再去掉 `/detail` 的路径，其余取路径末段
-  - 查询串里的 `=` 不会被拆成标题：等号左边已经带 `://` 时，整段都是地址
-  - 只收http(s)；以看板登记为准，`--json`回读 `links[].url` 核对目标URL；requirement.md不手工维护第二份链接列表
-  - 看板按 URL 反查 GitLab / GitHub 状态，所以链接要贴 MR / PR 的页面地址，不是仓库首页
-  - 一条链接都没有、却已经有工作区或状态到了 Review 时，`context` 与 `req set` 会点名提示
+### Status values and completion
 
-## req tag add / rm / set / ls
+English names below describe the phases. The values in the right column are the
+current CLI's exact enum literals, not text to translate or English aliases.
 
-- 干什么：给需求打标签 / 摘标签 / 换标签 / 看标签。只存库，不写 requirement.md；卡片左下角展示
-- 用法：
-  - `easy-flow req tag add <req-…> <tag>… [--json]`
-  - `easy-flow req tag rm <req-…> <tag>… [--json]`
-  - `easy-flow req tag set <req-…> <tag>… [--json]`（整体替换；不带标签即清空）
-  - `easy-flow req tag ls <req-…> [--json]`
-- 示例：`easy-flow req tag add req-236d2ccb70 看板 卡片`
-- 场景：接手时给需求归类，让同列卡片能按类别扫
-- 坑：
-  - 词表开放：加之前先 `easy-flow taglist`，能复用就复用，别造同义词
-  - 一个需求最多 3 个标签——卡片 footer 的展示上限。已经满了还要加，必须先 `rm` 摘掉一个，或用 `set` 整体替换；`add` 会拒绝并给出这两条命令
-  - 一个标签最多 24 个字符，不能带空白、不能以 `#` 开头——看板点标签与 ⌘K 都用 `#标签` 筛选
-  - 同名按 trim 后忽略大小写算一个，沿用词表里已有的写法
-  - 重复添加幂等；`rm` 不存在的标签不报错
-
-## taglist
-
-- 干什么：列出数据目录里所有需求的标签与引用次数，按次数降序、同次数按名称排
-- 用法：`easy-flow taglist [--project <项目>] [--json]`
-- 场景：agent 打标前对齐词表；人看一眼现在都分了哪些类
-- 坑：统计包括已完成的需求；`--project` 只看一个项目；没有任何需求引用的标签会退出词表
-
-## req session add
-
-- 干什么：把 agent 会话登记到需求上（不写进需求目录），看板据此一键回到那个会话
-- 用法：
-  `easy-flow req session add <req-…> --agent <claude|codex|cursor|chengxiaobang> [--id <会话 id>] [--title <标题>] [--cwd <目录>] [--link <url>] [--json]`
-- 示例：`easy-flow req session add req-236d2ccb70 --agent cursor --title "评审链接收口"`
-- 场景：开工时、换 agent 接手时
-- 坑：
-  - `--cwd` 缺省是当前目录
-  - `--id` 省略时按 `--agent` 读环境变量：claude → `CLAUDE_CODE_HOST_SESSION_ID` / `CLAUDE_CODE_SESSION_ID`，
-    codex → `CODEX_THREAD_ID`，cursor → `CURSOR_CONVERSATION_ID`，chengxiaobang → `CHENGXIAOBANG_SESSION_ID`；
-    一个都没设会报错——说明 `--agent` 传错或不在会话里
-  - `--title` 写一句「在做什么」：应用里的会话标题读不到，看板只认这句
-  - `--link` 缺省按 agent 推导：codex → `codex://threads/<id>`、claude 的 `local_` 会话 →
-    `claude://claude.ai/epitaxy/<id>`、chengxiaobang → `chengxiaobang://session/<id>`；cursor 与终端里的
-    claude 没有会话级链接，只存 id
-  - 同一会话重复 add 是幂等的，只刷新字段；换需求做时在新需求上再登记一次
-
-## req session ls / rm
-
-- 干什么：列出 / 摘除需求上登记的会话
-- 用法：`easy-flow req session ls [<req-…>] [--json]`、`easy-flow req session rm <req-…> --agent <…> --id <会话 id> [--json]`
-- 示例：`easy-flow req session ls req-236d2ccb70`
-- 场景：会话换了、废了，摘掉旧指路牌；接手前看有谁做过
-- 坑：登记只是回到现场的指路牌，不代表会话还在运行；运行状态看板自己显示
-
-## wt new
-
-- 干什么：在主 checkout 旁建 `<仓库>.<分支>` 工作区，并登记到需求上
-- 用法：`easy-flow wt new <req-…> --repo <仓库名或主 checkout 路径> --branch <分支> [--base <起点>] [--short <短名>] [--json]`
-- 示例：`easy-flow wt new req-236d2ccb70 --repo easy-flow --branch feature-unified-links --short easy-flow`
-- 场景：需求进入实现，准备改代码
-- 坑：
-  - `--base` 缺省用主 checkout 的 HEAD；分支名按仓库习惯（easy-flow 自己是 `feature-<需求 slug>`）
-  - `--short` 是需求「涉及仓库」表里的短名，决定 `docs/<短名>/` 目录名
-  - 同路径重复调用幂等；工作区里带身份 AGENTS.md、requirement.md、`design/`
-  - 产物写进仓库的 `info/exclude`，不污染 `git status`
-
-## wt rm
-
-- 干什么：删工作区目录、git 登记与 easy-flow 记录
-- 用法：`easy-flow wt rm <wt-…> [--force] [--json]`
-- 示例：`easy-flow wt rm wt-d5b560d217`
-- 场景：需求收尾、工作区废了
-- 坑：有未提交改动会拒绝，确认丢弃才 `--force`；分支永远保留
-
-## todo new / set / list / show
-
-- 干什么：全局待办的记账与流转（不属于任何项目，只通过 `req_id` 挂需求）
-- 用法：
-  - `easy-flow todo new <标题> [--source feishu|chat|agent|manual] [--req <req-…>] [--link <url>] [--summary <上下文>] [--session …] [--ref …] [--json]`
-  - `easy-flow todo set <id>… [--status todo|in_progress|done|cancelled] [--req <req-…>] [--title …] [--summary …] [--json]`
-  - `easy-flow todo list [--status …] [--req <req-…>] [--session …] [--orphan] [--all] [--limit <n>] [--json]`
-  - `easy-flow todo show <id> [--json]`
-- 示例：
-  - `easy-flow todo new "补链接短名" --req req-236d2ccb70 --source agent`
-  - `easy-flow todo set T-20261028-001 --status done`
-  - `easy-flow todo list --req req-236d2ccb70`
-  - `easy-flow todo show T-20261028-001`
-- 场景：接到还没立项的活先记一条；收尾时成批了结；接手时看名下还有什么没做
-- 坑：
-  - id 按首次入库日编号（`T-YYYYMMDD-NNN`），不用自己起
-  - `--summary` 要写成「下一个 agent 只看这一条就能接手」：进度、下一步、完成标准、关键 ID、证据入口
-  - `--ref` 是去重键，重复时只报出已有条目，不新建
-  - 其余捕获字段（`--channel` / `--from` / `--chat` / `--at` / `--session`）见 `--help`
-  - `--title` / `--summary` 改的是待办正文，其余只改看板；`--req` 是归属需求
-  - 传空串表示清空该字段。一次给多个 id 时，不能同时改标题或摘要
-  - 归属三档、粒度和摘要要求见 SKILL.md「待办」
-
-## todo promote / import
-
-- 干什么：`promote` 把待办立项成需求并回填指针；`import` 把旧按天 todo 文件搬进看板
-- 用法：
-  - `easy-flow todo promote <id> --project <项目> [--slug <目录名>] [--title <标题>] [--json]`
-  - `easy-flow todo import <目录> [--dry-run] [--json]`
-- 示例：
-  - `easy-flow todo promote T-20261028-001 --project onex --slug link-label`
-  - `easy-flow todo import ~/old-todos --dry-run`
-- 场景：`promote` 是「这条要动手了，正式立项」；`import` 只用于一次性迁移旧数据
-- 坑：
-  - `promote` 沿用待办的标题与摘要（摘要即交接文），已挂需求的会报错并指出那条需求
-  - `import` 只搬未完成的，已完成的留在原处；重复跑安全
-
-## 待办
-
-归属、粒度和摘要的硬规则在 SKILL.md「待办」。这里是字段和入库时怎么做。
-
-| 字段 | 说明 |
+| Phase | `--status` value |
 | --- | --- |
-| `id` | `T-YYYYMMDD-NNN`，按首次入库日编号，命令自动分配 |
-| `status` | `todo` / `in_progress` / `done` / `cancelled` |
-| `source` | `feishu`（飞书消息）、`chat`（当前对话）、`agent`（执行中识别）、`manual`（用户要求记一条） |
-| `session` | 来源会话。`agent` / `chat` 必填，后人靠它回到原会话 |
-| `channel` | 仅飞书：`at_me` / `p2p` |
-| `from` / `chat` | 来源人、会话或群名 |
-| `ref` | 去重键。飞书用 message id。重复时 `todo new` 报出已有条目，改用 `todo set` |
-| `req` | 归属需求 `req-…`。没立项也能挂到一条已有需求上 |
-| `link` | 可跳转的地址（飞书话题、合并请求、页面） |
-| `at` | 源事件时间 `yyyy-mm-dd HH:mm` |
-| `summary` | 交接说明。进度、下一步、完成标准、关键编号、证据入口。已知结论写上，并写明不要再跑哪一步 |
+| Clarification | `澄清` |
+| Implementation | `执行中` |
+| User review | `Review` |
+| Complete | `已完成` |
 
-入库：
+`req set` changes only supplied fields and rejects an empty update. `--priority ""`
+clears priority. Store status and priority only on the board.
 
-1. 先看是不是已有主任务。同一来源、同一件事就 `todo set <id> --summary` 补关注点，不新建
-2. 来源是 `agent` 或 `chat` 时先拿到会话标识。拿不到写「未知」，不编造
-3. `easy-flow todo new "<动词开头的标题>" --source agent --session "<会话>" --summary "<交接>"`
-4. 飞书来源再补 `--ref`、`--channel`、`--link`、`--from`、`--chat`
-5. 把新编号和一行标题回报给用户或调用方
+Session analysis is also database state: `pending`, `completed`, or `skipped`.
+CLI completion requires `completed`; a rejected closure preserves the previous
+status and priority. Ask the user to arrange a separate retrospective session for
+all linked sessions, save its conclusions in requirement documents, then register
+`--session-analysis completed`. A conclusion of no reusable lessons is sufficient
+when backed by actual analysis.
 
-看待办时回复要短：编号、状态、来源、标题、来源人、链接。开始做就置 `in_progress`，做完置 `done`，并在进度段补一行结果。不删除条目。
+The UI can complete an unanalyzed requirement by recording `skipped`; existing
+analysis results are retained. Legacy completed requirements migrate to `skipped`.
+Parent requirements do not automatically close with their children.
 
-已经有明确下一步、只是还在等授权或确认的，也要入库。标题写成「取得授权并…」或「确认后…」。授权之后改同一条，不另建。没有具体动作和完成标准的想法不入库。
+## Links
 
-不这样做：
+```sh
+easy-flow req link <req-id> "<label>=<url>" ["<label>=<url>" …] [--json]
+```
 
-- 不把大段日志写进待办文件，只写结论和证据链接
-- 不把没有行动的闲聊入库
-- 不写缺少会话标识的 `agent` / `chat` 条目
-- 不为同一件事的每个小问题各建一条
-- 不入库只有标题、摘要里没有动作的空壳
-- 结论已经定了，就写上结论，不要让后来的人把排查再跑一遍
-- 不手改待办文件里的状态
+Register related tasks, PRs/MRs, designs, documents, monitoring, and screenshots.
+Labels are optional; a plain URL is accepted. Only HTTP(S) URLs are supported.
+
+```sh
+easy-flow req link req-236d2ccb70 "Design=https://example.com/design" --json
+easy-flow req link req-236d2ccb70 "https://gitlab.example.com/group/repo/-/merge_requests/12?tab=notes" --json
+```
+
+Calls add links without deleting existing ones. Repeating a URL updates its label,
+or preserves the existing label when none is supplied. An equals sign in a query
+string is not treated as a label separator when its left side already contains
+`://`.
+
+Keep labels short. Without a label, the board derives a name: `repository !number`
+for GitLab MRs, `repository #number` for GitHub PRs, a path without the domain and
+`/detail` for Feishu/Lark, otherwise the last path segment. Register the actual
+MR/PR page, rather than a repository homepage, for status lookup.
+
+Verify the target in returned `links[].url`. The board is authoritative; do not
+maintain a duplicate list in `requirement.md`. Context and status updates warn when
+links are absent but a workspace exists or the requirement has reached Review.
+
+## Tags
+
+```sh
+easy-flow taglist [--project <project>] [--json]
+easy-flow req tag add <req-id> <tag>… [--json]
+easy-flow req tag rm <req-id> <tag>… [--json]
+easy-flow req tag set <req-id> [<tag>…] [--json]
+easy-flow req tag ls <req-id> [--json]
+```
+
+Check the vocabulary with `taglist` before adding tags. Reuse existing terms.
+Tags live only in the database and appear on cards.
+
+- At most three tags per requirement. Remove one or replace the set before adding
+  to a full set; `add` rejects overflow.
+- At most 24 characters per tag; no whitespace or leading `#`. The board and
+  Command-K search use `#tag` filters.
+- Matching trims whitespace and ignores case while preserving established spelling.
+  Repeated adds are idempotent; removing a missing tag is harmless.
+- `set` replaces all tags; no tags clears the set.
+- `taglist` includes completed requirements, sorts by descending usage then name,
+  and omits unused terms. `--project` limits its scope.
+
+Example: `easy-flow req tag add req-236d2ccb70 board cards`.
+
+## Sessions
+
+```sh
+easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang> [--id <session-id>] [--title <title>] [--cwd <directory>] [--link <url>] [--json]
+easy-flow req session ls [<req-id>] [--json]
+easy-flow req session rm <req-id> --agent <agent> --id <session-id> [--json]
+```
+
+Register when starting work or handing off to another agent. Registration is a
+navigation record, not proof that the session is running; the board reads runtime
+state separately. It is stored in the database, not the requirement directory.
+
+`--cwd` defaults to the current directory. Use a title describing the current work;
+the board cannot rely on retrieving the client's session title. Repeating `add`
+for the same session refreshes its fields and timestamps. When changing ownership,
+register it under the new requirement.
+
+If `--id` is omitted, the command reads the current agent's environment:
+
+| Agent | Session ID source | Default session link |
+| --- | --- | --- |
+| `claude` | `CLAUDE_CODE_HOST_SESSION_ID` / `CLAUDE_CODE_SESSION_ID` | `claude://claude.ai/epitaxy/<id>` for desktop `local_` IDs; no session link for terminal sessions |
+| `codex` | `CODEX_THREAD_ID` | `codex://threads/<id>` |
+| `cursor` | `CURSOR_CONVERSATION_ID` | No session-level deep link |
+| `chengxiaobang` | `CHENGXIAOBANG_SESSION_ID` | `chengxiaobang://session/<id>` |
+
+Missing environment IDs cause an error; check the agent or pass the actual ID.
+Do not invent one. Example:
+`easy-flow req session add req-236d2ccb70 --agent codex --title "Consolidate review links"`.
+
+## Workspaces
+
+```sh
+easy-flow wt new <req-id> --repo <repository-name-or-main-checkout-path> --branch <branch> [--base <ref>] [--short <short-name>] [--json]
+easy-flow wt rm <wt-id> [--force] [--json]
+```
+
+`wt new` creates `<repository>.<branch>` beside the main checkout and registers it
+under the requirement. The default base is the main checkout's HEAD. Follow the
+repository's branch conventions; easy-flow itself uses `feature-<requirement-slug>`.
+`--short` matches the repository short name in `requirement.md` and selects
+`docs/<short-name>/`.
+
+The workspace contains identity `AGENTS.md`, a `requirement.md` link, and a `design/`
+link. Generated entries go in Git's `info/exclude`. Repeating creation at the same
+path is idempotent; interrupted creation leaves the site intact for diagnosis and
+retry rather than deleting potentially unrelated work.
+
+Example:
+`easy-flow wt new req-236d2ccb70 --repo easy-flow --branch feature-unified-links --short easy-flow`.
+
+`wt rm` removes the directory, Git worktree registration, and easy-flow record. It
+retains the branch and rejects uncommitted changes unless `--force` is supplied.
+Use force only with authorization to discard those changes.
+
+## Todo commands
+
+```sh
+easy-flow todo new <title> [--source feishu|chat|agent|manual] [--req <req-id>] [--link <url>] [--summary <handoff>] [--session <session-id>] [--ref <dedup-key>] [--json]
+easy-flow todo set <todo-id>… [--status todo|in_progress|done|cancelled] [--req <req-id>] [--title <title>] [--summary <handoff>] [--json]
+easy-flow todo list [--status <value>] [--req <req-id>] [--session <session-id>] [--orphan] [--all] [--limit <n>] [--json]
+easy-flow todo show <todo-id> [--json]
+easy-flow todo promote <todo-id> --project <project> [--slug <slug>] [--title <title>] [--json]
+easy-flow todo import <directory> [--dry-run] [--json]
+```
+
+Todos are global, linked to requirements through a pointer rather than owned by
+projects. See [SKILL.md](SKILL.md) for explicit, inferred, and unassigned ownership.
+IDs are assigned by first import/capture date as `T-YYYYMMDD-NNN`.
+
+`todo set` updates titles and summaries in the document; workflow metadata stays
+on the board. Empty strings clear supported fields. Batch updates cannot change
+titles or summaries. See `--help` for additional capture fields such as `--channel`,
+`--from`, `--chat`, and `--at`.
+
+`promote` creates a requirement from the todo's title and handoff summary and fills
+in its requirement pointer in one operation. It rejects an already-linked todo and
+reports the owning requirement. `import` is a one-time migration of legacy daily
+todo files; it imports only unfinished work, leaves completed items in place, and
+is safe to repeat. Preview imports with `--dry-run`.
+
+### Capture fields
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Automatically assigned `T-YYYYMMDD-NNN` |
+| `status` | `todo`, `in_progress`, `done`, or `cancelled` |
+| `source` | `feishu` for Feishu messages; `chat` for conversation capture; `agent` for discovered follow-up work; `manual` for a user-requested entry |
+| `session` | Actual source session ID; required for `agent` and `chat` |
+| `channel` | Feishu only: `at_me` or `p2p` |
+| `from` / `chat` | Source person and conversation/group name |
+| `ref` | Deduplication key; use a Feishu message ID for Feishu sources |
+| `req` | Owning requirement ID; an existing requirement can own an unpromoted todo |
+| `link` | Navigable source, merge-request, or page URL |
+| `at` | Source event time, `yyyy-mm-dd HH:mm` |
+| `summary` | Known results, next action, completion criteria, key IDs, and evidence; include steps already resolved so successors do not repeat them |
+
+### Capture and maintain
+
+1. Look for an existing main todo for the same source and work. Update its summary
+   rather than opening a duplicate. `--ref` reports an existing entry on duplicates;
+   use `todo set` to update it.
+2. Obtain the actual session ID for `agent`/`chat` sources. If unavailable, report
+   the limitation and obtain a valid ID before capture; never fabricate a session.
+3. Create an actionable entry with enough handoff context:
+
+   ```sh
+   easy-flow todo new "Add descriptive review-link labels" --req req-236d2ccb70 --source agent --session "<actual-session-id>" --summary "Review URLs are registered. Next: add short labels and verify them with context. Complete when every registered review link has a descriptive label."
+   ```
+
+4. For Feishu capture, also include `--ref`, `--channel`, `--link`, `--from`, and
+   `--chat` as appropriate. Report the resulting ID and a one-line title.
+5. On starting work, set `in_progress`; on satisfying completion criteria, set
+   `done` and append a result to the todo document's progress section. Retain the
+   entry rather than deleting it.
+
+Keep todo listings brief: ID, status, source, title, source person, and link. Capture
+concrete next steps that await authorization or a decision too; title them as
+obtaining authorization or confirming the decision. Update that same entry after
+resolution. Do not capture vague ideas without an action and completion criteria.
+
+Avoid raw logs, idle conversation, duplicate subtasks for one piece of work,
+missing source-session IDs, empty handoff summaries, and manually edited status
+fields. Keep evidence links and conclusions instead of making the next agent
+repeat completed investigation.
