@@ -61,7 +61,7 @@ function req(patch: Partial<Requirement> = {}): Requirement {
     id: 'req-1',
     parentId: '',
     title: '标题',
-    status: '执行中',
+    status: 'in_progress',
     pinned: false,
     sessionAnalysisStatus: 'pending',
     priority: 'p2',
@@ -323,7 +323,7 @@ describe('Card 挂 pet', () => {
         req: req({ summary: '一句话摘要' }),
         sessions: [sess('claude', 'idle')],
         childStat: { total: 1, done: 0 },
-        kids: [req({ slug: 'kid', title: '子需求', status: '澄清' })],
+        kids: [req({ slug: 'kid', title: '子需求', status: 'clarification' })],
       }),
     )
     assert.match(html, /class="card-summary"/)
@@ -343,7 +343,7 @@ describe('Card 挂 pet', () => {
       createElement(Card, {
         req: req({
           pinned: true,
-          status: 'Review',
+          status: 'review',
           tags: ['选座'],
           updated: '2026-11-19',
         }),

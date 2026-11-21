@@ -25,7 +25,7 @@ function mkReq(): Requirement {
     id: 'req-1',
     parentId: '',
     title: '标题',
-    status: '执行中',
+    status: 'in_progress',
     pinned: false,
     sessionAnalysisStatus: 'pending',
     priority: '',

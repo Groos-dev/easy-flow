@@ -1,3 +1,11 @@
+import { TodoState } from '../src/shared/domain.ts'
+import { SessionAnalysisState } from '../src/shared/domain.ts'
+import { readMessage, messageText } from '../src/shared/i18n.ts'
+import { formatActionText } from '../src/shared/session-text.ts'
+import { t as tr } from '../src/shared/i18n.ts'
+import { AgentId, TodoOrigin } from '../src/shared/domain.ts'
+import { REQUIREMENT_STATUSES, PRIORITY_LEVELS, TODO_STATES, normalizeRequirementStatus } from '../src/shared/domain.ts'
+import { RequirementStatus } from '../src/shared/domain.ts'
 /**
  * SQLite 数据层：状态（看板列、优先级）的唯一权威 + 文档全文索引。
  *
@@ -33,27 +41,27 @@ import type { SessionAnalysisStatus } from '../src/shared/session-analysis.ts'
 /**
  * 状态 = 看板的列。两者是同一个东西，所以只有这一套取值，顺序即列顺序。
  */
-export const STATUSES = ['澄清', '执行中', 'Review', '已完成'] as const
-export type Status = (typeof STATUSES)[number]
+export const STATUSES = REQUIREMENT_STATUSES
+export type Status = RequirementStatus
 
 /**
  * 优先级四档 = 艾森豪威尔四象限：
  *   p0 重要且紧急（马上做） · p1 重要不紧急（计划做）
  *   p2 紧急不重要（授权做） · p3 都不（有空再做）
  */
-export const PRIORITIES = ['p0', 'p1', 'p2', 'p3'] as const
-export type Priority = (typeof PRIORITIES)[number]
+export const PRIORITIES = PRIORITY_LEVELS
+export type Priority = `${(typeof PRIORITIES)[number]}`
 
 /**
  * 待办的状态 = 待办在库里的取值（英文原样，不译成中文）：
  * 它要能被 agent 直接贴进命令与文件，也免得历史条目的状态在迁移时改写。
  */
-export const TODO_STATUSES = ['todo', 'in_progress', 'done', 'cancelled'] as const
-export type TodoStatus = (typeof TODO_STATUSES)[number]
+export const TODO_STATUSES = TODO_STATES
+export type TodoStatus = TodoState
 
 // 待办来源。feishu 由 feishu-task 识别后委托入库，manual 是用户口头要求记一条
-export const TODO_SOURCES = ['feishu', 'chat', 'agent', 'manual'] as const
-export type TodoSource = (typeof TODO_SOURCES)[number]
+export const TODO_SOURCES = Object.values(TodoOrigin)
+export type TodoSource = TodoOrigin
 
 // 飞书来源的来路：@我 还是小窗私聊
 export const TODO_CHANNELS = ['at_me', 'p2p'] as const
@@ -62,8 +70,8 @@ export const TODO_CHANNELS = ['at_me', 'p2p'] as const
  * 会话的 agent 清单。取值与 skill 安装的 agent 目录同一套（claude / cursor / codex），
  * 外加程小帮；免得同一个东西在两处叫两个名字。
  */
-export const SESSION_AGENTS = ['claude', 'codex', 'cursor', 'chengxiaobang'] as const
-export type SessionAgent = (typeof SESSION_AGENTS)[number]
+export const SESSION_AGENTS = Object.values(AgentId)
+export type SessionAgent = AgentId
 
 export const DEFAULT_PROJECT_SLUG = 'default'
 
@@ -183,6 +191,8 @@ interface SessionStateRow {
   hook_event: string
   action_text: string
   action_called_at: number
+  detail_message: string | null
+  action_message: string | null
 }
 
 interface SourceFileRow {
@@ -197,15 +207,19 @@ function toSourceRow(row: SourceFileRow): SourceRow {
 }
 
 function toObservation(row: SessionStateRow): SessionObservation {
+  const detailMessage = readMessage(row.detail_message)
+  const actionMessage = readMessage(row.action_message)
+  const action = row.action_text || actionMessage ? { text: row.action_text, calledAt: row.action_called_at, ...(actionMessage ? { message: actionMessage } : {}) } : null
   return {
     status: {
       state: row.state as ThreadState,
       needsAction: row.needs_action,
       observedAt: row.observed_at,
-      detail: row.detail,
+      detail: detailMessage ? messageText(detailMessage) : row.detail,
+      ...(detailMessage ? { detailMessage } : {}),
       ...(row.hook_event ? { hookEvent: row.hook_event } : {}),
     },
-    action: row.action_text ? { text: row.action_text, calledAt: row.action_called_at } : null,
+    action: action ? { ...action, text: formatActionText(action) } : null,
   }
 }
 
@@ -322,12 +336,12 @@ function asTodoSource(value: string | null | undefined): TodoSource | null {
  * 没有地址直接报错，不静默丢掉。
  */
 export function normalizeLinkItems(input: unknown): LinkItem[] {
-  if (!Array.isArray(input)) throw new Error('Links must be an array')
+  if (!Array.isArray(input)) throw new Error(tr("Links must be an array"))
   const out: LinkItem[] = []
   for (const item of input) {
     const link = toLinkItem(item)
-    if (!link.url) throw new Error(`Link is missing a url${link.title ? `: ${link.title}` : ''}`)
-    if (!/^https?:\/\//i.test(link.url)) throw new Error(`Link must start with http(s)://: ${link.url}`)
+    if (!link.url) throw new Error(tr("Link is missing a url{0}", [link.title ? `: ${link.title}` : '']))
+    if (!/^https?:\/\//i.test(link.url)) throw new Error(tr("Link must start with http(s)://: {0}", [link.url]))
     if (!out.some((l) => l.url === link.url)) out.push(link)
   }
   return out
@@ -374,18 +388,18 @@ export function tagKey(tag: string): string {
  * 同名按 trim 后忽略大小写去重，保留先出现的写法。
  */
 export function normalizeTags(input: unknown): string[] {
-  if (!Array.isArray(input)) throw new Error('Tags must be an array')
+  if (!Array.isArray(input)) throw new Error(tr("Tags must be an array"))
   const out: string[] = []
   for (const item of input) {
-    if (typeof item !== 'string') throw new Error('Tag must be a string')
+    if (typeof item !== 'string') throw new Error(tr("Tag must be a string"))
     const tag = item.trim()
-    if (!tag) throw new Error('Tag must not be empty')
+    if (!tag) throw new Error(tr("Tag must not be empty"))
     if (tag.length > TAG_MAX_LENGTH) {
-      throw new Error(`Tag is longer than ${TAG_MAX_LENGTH} characters: ${tag}`)
+      throw new Error(tr("Tag is longer than {0} characters: {1}", [TAG_MAX_LENGTH, tag]))
     }
     // 搜索里 `#标签` 按空白切词：标签带空白或以 # 开头就筛不出来
-    if (/\s/.test(tag)) throw new Error(`Tag must not contain whitespace: ${tag}`)
-    if (tag.startsWith('#')) throw new Error(`Tag must not start with #: ${tag}`)
+    if (/\s/.test(tag)) throw new Error(tr("Tag must not contain whitespace: {0}", [tag]))
+    if (tag.startsWith('#')) throw new Error(tr("Tag must not start with #: {0}", [tag]))
     if (!out.some((t) => tagKey(t) === tagKey(tag))) out.push(tag)
   }
   return out
@@ -440,7 +454,7 @@ export function todoAgeDays(created: string, now = localDay()): number {
 
 // 「还没完成」的唯一口径：列表过滤、超期判定、收尾计数都走这里，别各写一份
 export function isOpenTodo(todo: Todo): boolean {
-  return todo.status === 'todo' || todo.status === 'in_progress'
+  return todo.status === TodoState.Todo || todo.status === TodoState.InProgress
 }
 
 // JSON 列解析。列可能存着 'null'，所以结果要允许 undefined，调用方用 ?? 兜底。
@@ -486,7 +500,7 @@ function toTodo(row: TodoRow): Todo {
     id: row.id,
     title: row.title,
     // 非法值回落 todo：宁可让它回到未开始，也不要因为一个脏值让看板少一列
-    status: asTodoStatus(row.status) ?? 'todo',
+    status: asTodoStatus(row.status) ?? TodoState.Todo,
     source: asTodoSource(row.source) ?? '',
     session: row.session ?? '',
     channel: row.channel ?? '',
@@ -573,7 +587,7 @@ export class BoardDatabase {
 
   // 切到另一个项目；不存在则报错，避免静默落到空看板
   setProject(slug: string): void {
-    if (!this.hasProject(slug)) throw new Error(`Project not found: ${slug}`)
+    if (!this.hasProject(slug)) throw new Error(tr("Project not found: {0}", [slug]))
     this.activeProject = slug
   }
 
@@ -631,7 +645,7 @@ export class BoardDatabase {
     const row = this.db.prepare('SELECT root FROM project WHERE slug = ?').get(slug) as
       | { root: string }
       | undefined
-    if (!row) throw new Error(`Project not found: ${slug}`)
+    if (!row) throw new Error(tr("Project not found: {0}", [slug]))
     const file = join(row.root, 'AGENTS.md')
     writeFileSync(file, content, 'utf8')
     const bytes = Buffer.byteLength(content, 'utf8')
@@ -644,7 +658,7 @@ export class BoardDatabase {
   // 删除项目记录。落盘文件由调用方决定是否一并删除。
   deleteProject(slug: string): void {
     const exists = this.db.prepare('SELECT slug FROM project WHERE slug = ?').get(slug)
-    if (!exists) throw new Error(`Project not found: ${slug}`)
+    if (!exists) throw new Error(tr("Project not found: {0}", [slug]))
     this.db
       .prepare(
         `DELETE FROM worktree WHERE req_id IN (
@@ -855,7 +869,7 @@ export class BoardDatabase {
               parentId,
               parsed.title,
               dir,
-              '澄清',
+              RequirementStatus.Clarification,
               null,
               parsed.summary,
               JSON.stringify(parsed.repos),
@@ -936,7 +950,7 @@ export class BoardDatabase {
   // ------------------------------------------------------------- 读取
 
   private toRequirement(row: Row, cachedDocs?: Requirement['docs'], cachedTags?: string[]): Requirement {
-    const status = asStatus(row.status) ?? '澄清'
+    const status = asStatus(row.status) ?? RequirementStatus.Clarification
     const docs = cachedDocs ?? this.db
       .prepare(
         'SELECT name, length(content) AS size FROM doc WHERE slug = ? AND project = ? ORDER BY name',
@@ -1136,18 +1150,17 @@ export class BoardDatabase {
 
   // ------------------------------------------------------------- 写入
 
-  setStatus(slug: string, status: Status, project = this.activeProject): Requirement {
-    if (!(STATUSES as readonly string[]).includes(status)) {
-      throw new Error(`Unknown status ${status}. Valid: ${STATUSES.join(' / ')}`)
-    }
+  setStatus(slug: string, input: Status | string, project = this.activeProject): Requirement {
+    const status = normalizeRequirementStatus(input)
+    if (!status) throw new Error(tr("Unknown status {0}. Valid: {1}", [input, STATUSES.join(' / ')]))
     const info = this.db
       .prepare(`UPDATE requirement SET status = ?, updated = ?,
         session_analysis_status = CASE
-          WHEN ? = '已完成' AND session_analysis_status = 'pending' THEN 'skipped'
+          WHEN ? = ? AND session_analysis_status = ? THEN ?
           ELSE session_analysis_status END
         WHERE slug = ? AND project = ?`)
-      .run(status, today(), status, slug, project)
-    if (info.changes === 0) throw new Error(`Requirement not found: ${project}/${slug}`)
+      .run(status, today(), status, RequirementStatus.Completed, SessionAnalysisState.Pending, SessionAnalysisState.Skipped, slug, project)
+    if (info.changes === 0) throw new Error(tr("Requirement not found: {0}/{1}", [project, slug]))
     return this.get(slug, project)!
   }
 
@@ -1159,7 +1172,7 @@ export class BoardDatabase {
     const info = this.db
       .prepare('UPDATE requirement SET session_analysis_status = ?, updated = ? WHERE slug = ? AND project = ?')
       .run(status, today(), slug, project)
-    if (info.changes === 0) throw new Error(`Requirement not found: ${project}/${slug}`)
+    if (info.changes === 0) throw new Error(tr("Requirement not found: {0}/{1}", [project, slug]))
     return this.get(slug, project)!
   }
 
@@ -1167,18 +1180,18 @@ export class BoardDatabase {
     const info = this.db
       .prepare('UPDATE requirement SET pinned = ? WHERE slug = ? AND project = ?')
       .run(pinned ? 1 : 0, slug, project)
-    if (info.changes === 0) throw new Error(`Requirement not found: ${project}/${slug}`)
+    if (info.changes === 0) throw new Error(tr("Requirement not found: {0}/{1}", [project, slug]))
     return this.get(slug, project)!
   }
 
   setPriority(slug: string, priority: Priority | '', project = this.activeProject): Requirement {
     if (priority && !(PRIORITIES as readonly string[]).includes(priority)) {
-      throw new Error(`Unknown priority ${priority}. Valid: ${PRIORITIES.join(' / ')}`)
+      throw new Error(tr("Unknown priority {0}. Valid: {1}", [priority, PRIORITIES.join(' / ')]))
     }
     const info = this.db
       .prepare('UPDATE requirement SET priority = ?, updated = ? WHERE slug = ? AND project = ?')
       .run(priority || null, today(), slug, project)
-    if (info.changes === 0) throw new Error(`Requirement not found: ${project}/${slug}`)
+    if (info.changes === 0) throw new Error(tr("Requirement not found: {0}/{1}", [project, slug]))
     return this.get(slug, project)!
   }
 
@@ -1186,7 +1199,7 @@ export class BoardDatabase {
     const info = this.db
       .prepare('UPDATE requirement SET title = ? WHERE slug = ? AND project = ?')
       .run(title, slug, project)
-    if (info.changes === 0) throw new Error(`Requirement not found: ${project}/${slug}`)
+    if (info.changes === 0) throw new Error(tr("Requirement not found: {0}/{1}", [project, slug]))
     return this.get(slug, project)!
   }
 
@@ -1196,7 +1209,7 @@ export class BoardDatabase {
    * 合并去重由调用方做完，这里只校验并落库。
    */
   setLinks(slug: string, links: unknown, project = this.activeProject): Requirement {
-    if (!this.get(slug, project)) throw new Error(`Requirement not found: ${project}/${slug}`)
+    if (!this.get(slug, project)) throw new Error(tr("Requirement not found: {0}/{1}", [project, slug]))
 
     this.db
       .prepare('UPDATE requirement SET link_items = ?, updated = ? WHERE slug = ? AND project = ?')
@@ -1213,10 +1226,10 @@ export class BoardDatabase {
    */
   setTags(slug: string, tags: unknown, project = this.activeProject): Requirement {
     const req = this.get(slug, project)
-    if (!req) throw new Error(`Requirement not found: ${project}/${slug}`)
-    if (!req.id) throw new Error(`Requirement has no id yet: ${project}/${slug}`)
+    if (!req) throw new Error(tr("Requirement not found: {0}/{1}", [project, slug]))
+    if (!req.id) throw new Error(tr("Requirement has no id yet: {0}/{1}", [project, slug]))
     const list = normalizeTags(tags)
-    if (list.length > TAG_LIMIT) throw new Error(`At most ${TAG_LIMIT} tags per requirement`)
+    if (list.length > TAG_LIMIT) throw new Error(tr("At most {0} tags per requirement", [TAG_LIMIT]))
 
     const insertTag = this.db.prepare(
       'INSERT INTO tag (name, created) VALUES (?, ?) ON CONFLICT(name) DO NOTHING',
@@ -1354,7 +1367,7 @@ export class BoardDatabase {
     this.db.prepare(`INSERT INTO review_binding (req_id, worktree_id, session) VALUES (?, ?, ?)
       ON CONFLICT(req_id, worktree_id) DO NOTHING`).run(requirementId, worktreeId, session)
     if (this.reviewSession(requirementId, worktreeId) !== session) {
-      throw new Error(`Reviewer is already bound for worktree ${worktreeId}`)
+      throw new Error(tr("Reviewer is already bound for worktree {0}", [worktreeId]))
     }
   }
 
@@ -1388,9 +1401,9 @@ export class BoardDatabase {
     link?: string
   }): Session {
     if (!(SESSION_AGENTS as readonly string[]).includes(input.agent)) {
-      throw new Error(`Unknown agent: ${input.agent}. Valid: ${SESSION_AGENTS.join(', ')}`)
+      throw new Error(tr("Unknown agent: {0}. Valid: {1}", [input.agent, SESSION_AGENTS.join(', ')]))
     }
-    if (!input.session.trim()) throw new Error('Session id cannot be empty')
+    if (!input.session.trim()) throw new Error(tr("Session id cannot be empty"))
     const now = stamp()
     this.db
       .prepare(
@@ -1424,13 +1437,14 @@ export class BoardDatabase {
     const { status, action } = observation
     this.db
       .prepare(
-        `INSERT INTO session_state (agent, session, state, needs_action, observed_at, detail, hook_event, action_text, action_called_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO session_state (agent, session, state, needs_action, observed_at, detail, hook_event, action_text, action_called_at, detail_message, action_message)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(agent, session) DO UPDATE SET
            state = excluded.state, needs_action = excluded.needs_action,
            observed_at = excluded.observed_at, detail = excluded.detail,
            hook_event = excluded.hook_event,
-           action_text = excluded.action_text, action_called_at = excluded.action_called_at`,
+           action_text = excluded.action_text, action_called_at = excluded.action_called_at,
+           detail_message = excluded.detail_message, action_message = excluded.action_message`,
       )
       .run(
         agent,
@@ -1442,6 +1456,8 @@ export class BoardDatabase {
         status.hookEvent ?? '',
         action?.text ?? '',
         action?.calledAt ?? 0,
+        status.detailMessage ? JSON.stringify(status.detailMessage) : null,
+        action?.message ? JSON.stringify(action.message) : null,
       )
   }
 
@@ -1554,7 +1570,7 @@ export class BoardDatabase {
     const select = this.db.prepare('SELECT id, mtime, missing FROM todo WHERE id = ?')
     const insert = this.db.prepare(
       `INSERT INTO todo (id, title, status, source, summary, path, mtime, created, updated, missing)
-       VALUES (?, ?, 'todo', '', ?, ?, ?, ?, ?, 0)`,
+       VALUES (?, ?, '${TodoState.Todo}', '', ?, ?, ?, ?, ?, 0)`,
     )
     const update = this.db.prepare(
       'UPDATE todo SET title = ?, summary = ?, path = ?, mtime = ?, missing = 0 WHERE id = ?',
@@ -1672,7 +1688,7 @@ export class BoardDatabase {
   finishedRequirementTodos(): Todo[] {
     const finished = new Set(
       this.allRequirements()
-        .filter((r) => r.status === '已完成')
+        .filter((r) => r.status === RequirementStatus.Completed)
         .map((r) => r.id),
     )
     return this.listTodos().filter((t) => finished.has(t.requirementId))
@@ -1737,12 +1753,12 @@ export class BoardDatabase {
     created?: string
     updated?: string
   }): Todo {
-    const status = input.status ?? 'todo'
+    const status = input.status ?? TodoState.Todo
     if (!(TODO_STATUSES as readonly string[]).includes(status)) {
-      throw new Error(`Unknown status ${status}. Valid: ${TODO_STATUSES.join(' / ')}`)
+      throw new Error(tr("Unknown status {0}. Valid: {1}", [status, TODO_STATUSES.join(' / ')]))
     }
     if (input.source && !asTodoSource(input.source)) {
-      throw new Error(`Unknown source ${input.source}. Valid: ${TODO_SOURCES.join(' / ')}`)
+      throw new Error(tr("Unknown source {0}. Valid: {1}", [input.source, TODO_SOURCES.join(' / ')]))
     }
     const at = stamp()
     this.db
@@ -1776,12 +1792,12 @@ export class BoardDatabase {
 
   setTodoStatus(id: string, status: TodoStatus): Todo {
     if (!(TODO_STATUSES as readonly string[]).includes(status)) {
-      throw new Error(`Unknown status ${status}. Valid: ${TODO_STATUSES.join(' / ')}`)
+      throw new Error(tr("Unknown status {0}. Valid: {1}", [status, TODO_STATUSES.join(' / ')]))
     }
     const info = this.db
       .prepare('UPDATE todo SET status = ?, updated = ? WHERE id = ?')
       .run(status, stamp(), id)
-    if (info.changes === 0) throw new Error(`Todo not found: ${id}`)
+    if (info.changes === 0) throw new Error(tr("Todo not found: {0}", [id]))
     return this.todoById(id)!
   }
 
@@ -1804,7 +1820,7 @@ export class BoardDatabase {
     },
   ): Todo {
     if (patch.source && !asTodoSource(patch.source)) {
-      throw new Error(`Unknown source ${patch.source}. Valid: ${TODO_SOURCES.join(' / ')}`)
+      throw new Error(tr("Unknown source {0}. Valid: {1}", [patch.source, TODO_SOURCES.join(' / ')]))
     }
     const columns: Record<string, string | undefined> = {
       source: patch.source,
@@ -1824,28 +1840,28 @@ export class BoardDatabase {
       sets.push(`${col} = ?`)
       params.push(value || null)
     }
-    if (!sets.length) throw new Error('No fields to update')
+    if (!sets.length) throw new Error(tr("No fields to update"))
     sets.push('updated = ?')
     params.push(stamp())
 
     const info = this.db.prepare(`UPDATE todo SET ${sets.join(', ')} WHERE id = ?`).run(...params, id)
-    if (info.changes === 0) throw new Error(`Todo not found: ${id}`)
+    if (info.changes === 0) throw new Error(tr("Todo not found: {0}", [id]))
     return this.todoById(id)!
   }
 
   // 读待办 md 原文。路径从库里取，不接受调用方给的路径
   readTodoDoc(id: string): { path: string; content: string } {
     const todo = this.todoById(id)
-    if (!todo) throw new Error(`Todo not found: ${id}`)
+    if (!todo) throw new Error(tr("Todo not found: {0}", [id]))
     const content = readTextOrNull(todo.path)
-    if (content === null) throw new Error(`Cannot read todo file: ${todo.path}`)
+    if (content === null) throw new Error(tr("Cannot read todo file: {0}", [todo.path]))
     return { path: todo.path, content }
   }
 
   // 写回 md，不留备份（版本历史交给 git）。写完顺手同步一次，标题与摘要跟着更新
   writeTodoDoc(id: string, content: string): { path: string; bytes: number } {
     const todo = this.todoById(id)
-    if (!todo) throw new Error(`Todo not found: ${id}`)
+    if (!todo) throw new Error(tr("Todo not found: {0}", [id]))
     writeFileSync(todo.path, content, 'utf8')
     this.syncTodos()
     return { path: todo.path, bytes: Buffer.byteLength(content, 'utf8') }

@@ -1,3 +1,5 @@
+import type { AgentId } from '../src/shared/domain.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 /**
  * Install easy-flow's skills and CLI into the user's environment (the settings-page entry).
  *
@@ -48,7 +50,7 @@ async function runAgent(bin: string, args: string[]): Promise<void> {
   } catch (err) {
     const { code, stderr } = err as { code?: number; stderr?: string }
     // a login shell exits 127 when the command is missing — more reliable than matching stderr wording
-    if (code === 127) throw new Error(`Cannot find the ${bin} command; make sure it is installed and on PATH`, { cause: err })
+    if (code === 127) throw new Error(tr("Cannot find the {0} command; make sure it is installed and on PATH", [bin]), { cause: err })
     const detail = (stderr ?? '').trim() || (err as Error).message
     throw new Error(detail.split('\n').find((line) => line.trim())?.trim() ?? detail, { cause: err })
   }
@@ -68,7 +70,7 @@ function upfind(...rel: string[]): string {
     if (parent === dir) break
     dir = parent
   }
-  throw new Error(`Cannot find ${rel.join('/')}; a packaged build must emit it separately`)
+  throw new Error(tr("Cannot find {0}; a packaged build must emit it separately", [rel.join('/')]))
 }
 
 /**
@@ -97,7 +99,7 @@ function cliEntry(): string {
 }
 
 export interface AgentSkill {
-  id: 'claude' | 'cursor' | 'codex' | 'chengxiaobang'
+  id: AgentId
   label: string
   // That agent's skills dir; it may not exist when the agent is not installed
   dir: string
@@ -138,7 +140,7 @@ function agentDirs(): Array<{ id: AgentSkill['id']; label: string; dir: string; 
     { id: 'codex', label: 'Codex', dir: join(homedir(), '.codex', 'skills') },
     // 程小帮直接读 ~/.agents/skills（CHENGXIAOBANG_AGENTS_DIR 的默认值），
     // 共享目录本身就是 home 链接，不用再套一层
-    { id: 'chengxiaobang', label: '程小帮', dir: join(homedir(), '.agents', 'skills'), shared: true },
+    { id: 'chengxiaobang', get label() { return tr("Chengxiaobang") }, dir: join(homedir(), '.agents', 'skills'), shared: true },
   ]
 }
 
@@ -183,7 +185,7 @@ function ensureLink(link: string, target: string): void {
   if (linkedTo(link, target)) return
   const st = lstatOrNull(link)
   if (st) {
-    if (!st.isSymbolicLink()) throw new Error(`A file or directory already exists at ${link}; move it away before installing`)
+    if (!st.isSymbolicLink()) throw new Error(tr("A file or directory already exists at {0}; move it away before installing", [link]))
     rmSync(link)
   }
   mkdirSync(dirname(link), { recursive: true })
@@ -347,9 +349,9 @@ export async function installSkill(): Promise<InstallOutcome> {
   let nodePath = ''
   if (!resources) {
     const node = await nodeInfo()
-    if (!node) throw new Error('Cannot find node from a login shell; make sure it is installed and on PATH')
+    if (!node) throw new Error(tr("Cannot find node from a login shell; make sure it is installed and on PATH"))
     if (nodeTooOld(node.version)) {
-      throw new Error(`node ${node.version} is too old: running .ts directly needs Node >= 22.18`)
+      throw new Error(tr("node {0} is too old: running .ts directly needs Node >= 22.18", [node.version]))
     }
     nodePath = node.path
   }
@@ -365,7 +367,7 @@ export async function installSkill(): Promise<InstallOutcome> {
     try {
       ensureLink(target, into)
     } catch (err) {
-      failed.push(`${what} 没装上（${(err as Error).message}）`)
+      failed.push(tr("{0} was not installed ({1})", [what, (err as Error).message]))
     }
   }
 
@@ -381,5 +383,5 @@ export async function installSkill(): Promise<InstallOutcome> {
   }
 
   failed.push(...(await removeLegacyMcp()))
-  return { summary: '已安装', failed }
+  return { get summary() { return tr("Installed") }, failed }
 }

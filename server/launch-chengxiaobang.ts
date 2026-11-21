@@ -1,3 +1,5 @@
+import { AgentId } from '../src/shared/domain.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 import { registerLaunchProvider, type LaunchProvider } from './launch.ts'
 
 /**
@@ -13,8 +15,8 @@ export function chengxiaobangLaunchUrl(prompt: string): string {
 }
 
 export const chengxiaobangProvider: LaunchProvider = {
-  id: 'chengxiaobang',
-  label: '程小帮',
+  id: AgentId.Chengxiaobang,
+  get label() { return tr("Chengxiaobang") },
   build: (_input, prompt) => chengxiaobangLaunchUrl(prompt),
 }
 

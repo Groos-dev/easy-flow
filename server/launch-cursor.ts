@@ -1,3 +1,5 @@
+import { AgentId } from '../src/shared/domain.ts'
+import { t as tr } from '../src/shared/i18n.ts'
 /**
  * Cursor 启动：先打开目标工作区，再发带 workspace 的 prompt deeplink。
  * deeplink 只按工作区名路由；没有同名窗口会退回当前窗口。
@@ -77,7 +79,7 @@ export async function openCursorWorkspace(
     if (existsSync(ready)) return
     await sleep(300)
   }
-  throw new Error(`Cursor did not open workspace ${path} in time; open it once and retry`)
+  throw new Error(tr("Cursor did not open workspace {0} in time; open it once and retry", [path]))
 }
 
 function assertUniqueWorkspace(input: { worktreePath: string; requirementWorktreePaths: string[] }): void {
@@ -86,12 +88,12 @@ function assertUniqueWorkspace(input: { worktreePath: string; requirementWorktre
     input.requirementWorktreePaths.filter((path) => cursorWorkspaceName(path) === workspace),
   )
   if (sameName.size > 1) {
-    throw new Error(`Cursor cannot tell apart worktrees named ${workspace}; open it manually`)
+    throw new Error(tr("Cursor cannot tell apart worktrees named {0}; open it manually", [workspace]))
   }
 }
 
 export const cursorProvider: LaunchProvider = {
-  id: 'cursor',
+  id: AgentId.Cursor,
   label: 'Cursor',
   requiresWorktree: true,
   prepare: (input) => {

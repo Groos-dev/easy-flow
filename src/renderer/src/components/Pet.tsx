@@ -1,3 +1,6 @@
+import { useLanguage } from '../lib/language'
+import { SessionState } from '../../../shared/domain.ts'
+import { t as tr } from "../../../shared/i18n.ts"
 import { memo, useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import { api } from '../lib/api'
 import { AGENT_LABELS } from '../lib/labels'
@@ -97,6 +100,7 @@ ${script}
  * 同屏多只的 id 撞车在 scopeCloudling 里按实例改写掉。
  */
 function Cloudling({ svg, active }: { svg: string; active: boolean }) {
+  useLanguage()
   const playing = useRef(active)
   playing.current = active
   const host = useRef<HTMLSpanElement>(null)
@@ -198,6 +202,7 @@ const Pet = memo(function Pet({
   focus?: boolean
   compact?: boolean
 }) {
+  useLanguage()
   const host = useRef<HTMLSpanElement>(null)
   const visible = usePetVisible(host)
   const name = `${AGENT_LABELS[agent] ?? agent} · ${PET_LABEL[state]}`
@@ -219,6 +224,7 @@ const Pet = memo(function Pet({
 export default Pet
 
 function Bubble({ text, state }: { text: string; state: Pose }) {
+  useLanguage()
   const tone = bubbleToneOf(state)
   return (
     <div className={`bubble${tone === 'act' ? '' : ` t-${tone}`}`} title={text}>
@@ -257,14 +263,15 @@ function useBubbleShown(pinned: boolean, active: boolean): boolean {
  * 没气泡时收成 pet 的宽度挤在一起，有气泡时撑开（过渡在 styles.css 里）。
  */
 function PetSlot({ item, compact }: { item: PetItem; compact: boolean }) {
+  useLanguage()
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
   const [openError, setOpenError] = useState('')
   const { session, state } = item
   const hasBubble = item.bubble !== ''
   // 焦点与悬停共用一条气泡规则：移开焦点和移开鼠标一样，气泡再留 1 分钟
-  const shown = useBubbleShown(hasBubble && state !== 'idle', hovered || focused)
-  const mood = useIdleMood(state === 'idle' ? session.status.observedAt : 0)
+  const shown = useBubbleShown(hasBubble && state !== SessionState.Idle, hovered || focused)
+  const mood = useIdleMood(state === SessionState.Idle ? session.status.observedAt : 0)
   const canFocusWorkspace = session.agent === 'cursor' && !!session.cwd
   const focusable = !!session.link || canFocusWorkspace
   const openFromSlot = () => {
@@ -274,14 +281,14 @@ function PetSlot({ item, compact }: { item: PetItem; compact: boolean }) {
       api.markSessionClicked(session.agent, session.session).catch(() => {})
       if (window.easyFlow?.openExternal) {
         void window.easyFlow.openExternal(session.link)
-          .catch((error: Error) => setOpenError(error.message || '打开失败'))
+          .catch((error: Error) => setOpenError(error.message || tr("Could not open")))
       } else window.open(session.link, '_blank')
       return
     }
     void api
       .openSessionWorkspace(session.agent, session.session)
       .then(() => api.markSessionClicked(session.agent, session.session))
-      .catch((error: Error) => setOpenError(error.message || '打开失败'))
+      .catch((error: Error) => setOpenError(error.message || tr("Could not open")))
   }
 
   // 焦点停在这一格：回车走和鼠标点击同一条路，Esc 交回卡片，hjkl / 方向键在同一排头像里走；
@@ -318,17 +325,17 @@ function PetSlot({ item, compact }: { item: PetItem; compact: boolean }) {
       aria-label={
         focusable
           ? session.link
-            ? `回到 ${AGENT_LABELS[session.agent] ?? session.agent} 的会话`
-            : `打开 ${AGENT_LABELS[session.agent] ?? session.agent} 的工作区`
+            ? tr("Return to the {0} session", [AGENT_LABELS[session.agent] ?? session.agent])
+            : tr("Open the {0} workspace", [AGENT_LABELS[session.agent] ?? session.agent])
           : undefined
       }
       title={
         openError
-          ? `打开失败：${openError}`
+          ? tr("Could not open: {0}", [openError])
           : focusable
             ? session.link
               ? session.title || session.session
-              : `打开工作区；会话 ${session.session}`
+              : tr("Open workspace; session {0}", [session.session])
             : undefined
       }
       onMouseEnter={() => setHovered(true)}
@@ -367,7 +374,7 @@ function PetSlot({ item, compact }: { item: PetItem; compact: boolean }) {
       <Pet
         agent={session.agent}
         state={state}
-        mood={state === 'idle' ? mood : undefined}
+        mood={state === SessionState.Idle ? mood : undefined}
         event={isEventState(state)}
         focus={item.focus}
         compact={compact}
@@ -397,6 +404,7 @@ export function PetRow({
   limit?: number
   focusSession?: string
 }) {
+  useLanguage()
   const { items } = planPetRow(sessions)
   if (items.length === 0) return null
 
@@ -416,7 +424,7 @@ export function PetRow({
         <PetSlot key={`${p.session.agent}:${p.session.session}`} item={p} compact={compact} />
       ))}
       {rest > 0 && (
-        <span className="pet-more" title={`还有 ${rest} 个会话`}>
+        <span className="pet-more" title={tr("{0} more sessions", [rest])}>
           +{rest}
         </span>
       )}

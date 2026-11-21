@@ -1,3 +1,4 @@
+import { t as tr } from "../../../shared/i18n.ts"
 import type { LaunchResult, Worktree } from './types'
 
 /**
@@ -75,6 +76,6 @@ export function launchResultFeedback(requirementId: string, result: LaunchResult
     url: result.url,
     prompt: result.prompt,
     promptCopied: !!result.promptCopied,
-    manualCommand: `easy-flow req session add ${requirementId} --agent ${result.agent} --title "<一句话说明在做什么>"`,
+    get manualCommand() { return tr("easy-flow req session add {0} --agent {1} --title \"<brief description of the work>\"", [requirementId, result.agent]) },
   }
 }

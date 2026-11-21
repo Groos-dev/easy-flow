@@ -1,3 +1,5 @@
+import { AgentId } from '../src/shared/domain.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 /**
  * 设置页的「一键配置 hook」：把 easy-flow 的 hook 写进各 agent 的用户级配置。
  *
@@ -14,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import type { InstallOutcome } from './skill-install.ts'
 
-export type HookAgentId = 'claude' | 'codex' | 'chengxiaobang' | 'cursor'
+export type HookAgentId = AgentId
 
 // 设置页每个 agent 一行的状态
 export interface HookAgentStatus {
@@ -40,7 +42,7 @@ export interface HookPlan {
 const MARKER = '/api/hook'
 
 function endpoint(port: number, agent: HookAgentId): string {
-  return `http://127.0.0.1:${port}/api/hook${agent === 'claude' ? '' : `?agent=${agent}`}`
+  return `http://127.0.0.1:${port}/api/hook${agent === AgentId.Claude ? '' : `?agent=${agent}`}`
 }
 
 /**
@@ -99,7 +101,7 @@ function claudeBlock(event: string, port: number): Record<string, unknown> {
       {
         type: 'command',
         timeout: 3,
-        command: `curl -s -m 2 -X POST -H 'content-type: application/json' --data-binary @- '${endpoint(port, 'claude')}' >/dev/null 2>&1 || true`,
+        command: `curl -s -m 2 -X POST -H 'content-type: application/json' --data-binary @- '${endpoint(port, AgentId.Claude)}' >/dev/null 2>&1 || true`,
       },
     ],
   }
@@ -110,7 +112,7 @@ function chengxiaobangBlock(event: string, port: number): Record<string, unknown
   return {
     id: `easy-flow-${event}`,
     event,
-    command: `curl -s -m 2 -X POST -H 'content-type: application/json' --data-binary @- '${endpoint(port, 'chengxiaobang')}' >/dev/null 2>&1 || true`,
+    command: `curl -s -m 2 -X POST -H 'content-type: application/json' --data-binary @- '${endpoint(port, AgentId.Chengxiaobang)}' >/dev/null 2>&1 || true`,
     timeoutSeconds: 3,
     enabled: true,
   }
@@ -123,7 +125,7 @@ function codexBlock(_event: string, port: number): Record<string, unknown> {
       {
         type: 'command',
         timeout: 3,
-        command: `curl -s -m 3 -X POST -H 'content-type: application/json' --data-binary @- '${endpoint(port, 'codex')}' >/dev/null 2>&1; echo '{}'`,
+        command: `curl -s -m 3 -X POST -H 'content-type: application/json' --data-binary @- '${endpoint(port, AgentId.Codex)}' >/dev/null 2>&1; echo '{}'`,
       },
     ],
   }
@@ -136,7 +138,7 @@ function codexBlock(_event: string, port: number): Record<string, unknown> {
 function cursorBlock(event: string, port: number): Record<string, unknown> {
   const response = event === 'beforeSubmitPrompt' ? `printf '{"continue":true}'` : `printf '{}'`
   return {
-    command: `curl -s -m 1 -X POST -H 'content-type: application/json' --data-binary @- '${endpoint(port, 'cursor')}' >/dev/null 2>&1; ${response}`,
+    command: `curl -s -m 1 -X POST -H 'content-type: application/json' --data-binary @- '${endpoint(port, AgentId.Cursor)}' >/dev/null 2>&1; ${response}`,
     timeout: 3,
   }
 }
@@ -157,37 +159,37 @@ interface HookSpec {
 function specs(home: string): HookSpec[] {
   return [
     {
-      id: 'claude',
+      id: AgentId.Claude,
       label: 'Claude Code',
       file: join(home, '.claude', 'settings.json'),
       events: CLAUDE_EVENTS,
       block: claudeBlock,
-      endpoint: (port) => endpoint(port, 'claude'),
+      endpoint: (port) => endpoint(port, AgentId.Claude),
     },
     {
-      id: 'cursor',
+      id: AgentId.Cursor,
       label: 'Cursor',
       file: join(home, '.cursor', 'hooks.json'),
       events: CURSOR_EVENTS,
       block: cursorBlock,
-      endpoint: (port) => endpoint(port, 'cursor'),
+      endpoint: (port) => endpoint(port, AgentId.Cursor),
       version: 1,
     },
     {
-      id: 'codex',
+      id: AgentId.Codex,
       label: 'Codex',
       file: join(home, '.codex', 'hooks.json'),
       events: CODEX_EVENTS,
       block: codexBlock,
-      endpoint: (port) => endpoint(port, 'codex'),
+      endpoint: (port) => endpoint(port, AgentId.Codex),
     },
     {
-      id: 'chengxiaobang',
-      label: '程小帮',
+      id: AgentId.Chengxiaobang,
+      get label() { return tr("Chengxiaobang") },
       file: join(home, '.chengxiaobang', 'hooks.json'),
       events: CHENGXIAOBANG_EVENTS,
       block: chengxiaobangBlock,
-      endpoint: (port) => endpoint(port, 'chengxiaobang'),
+      endpoint: (port) => endpoint(port, AgentId.Chengxiaobang),
       flat: true,
     },
   ]
@@ -226,10 +228,10 @@ function load(file: string): Loaded {
   try {
     parsed = JSON.parse(raw)
   } catch (err) {
-    return { kind: 'error', message: `${file} 不是合法 JSON（${(err as Error).message}）` }
+    return { kind: 'error', get message() { return tr("{0} is not valid JSON ({1})", [file, (err as Error).message]) } }
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return { kind: 'error', message: `${file} 顶层不是 JSON 对象` }
+    return { kind: 'error', get message() { return tr("{0} must contain a JSON object", [file]) } }
   }
   return { kind: 'ok', obj: parsed as Record<string, unknown>, trailingNewline: raw.endsWith('\n') }
 }
@@ -266,11 +268,11 @@ function applyFlat(
   mode: 'install' | 'uninstall',
 ): boolean {
   if (obj.enabled !== undefined && typeof obj.enabled !== 'boolean') {
-    throw new Error(`${spec.file} 的 enabled 字段不是布尔值，没敢改`)
+    throw new Error(tr("{0} has a non-boolean enabled field; no changes made", [spec.file]))
   }
   const current = obj.hooks
   if (current !== undefined && !Array.isArray(current)) {
-    throw new Error(`${spec.file} 的 hooks 字段不是数组，没敢改`)
+    throw new Error(tr("{0} has a non-array hooks field; no changes made", [spec.file]))
   }
   const before = Array.isArray(current) ? current : []
   const kept = before.filter((entry) => !isOurFlat(entry))
@@ -371,11 +373,11 @@ export function installHooks({ port, home = homedir() }: { port: number; home?: 
   let cursorWritten = false
   for (const spec of specs(home)) {
     const loaded = load(spec.file)
-    if (loaded.kind === 'error') throw new Error(`没敢改 ${spec.file}：${loaded.message}`)
+    if (loaded.kind === 'error') throw new Error(tr("Could not safely update {0}: {1}", [spec.file, loaded.message]))
     const obj = loaded.kind === 'ok' ? clone(loaded.obj) : {}
     const trailingNewline = loaded.kind === 'ok' ? loaded.trailingNewline : true
     if (!spec.flat && obj.hooks !== undefined && !(typeof obj.hooks === 'object' && obj.hooks && !Array.isArray(obj.hooks))) {
-      throw new Error(`${spec.file} 的 hooks 字段不是对象，没敢改`)
+      throw new Error(tr("{0} has a non-object hooks field; no changes made", [spec.file]))
     }
     const before = loaded.kind === 'ok' ? render(loaded.obj, trailingNewline) : null
     apply(obj, spec, port, 'install')
@@ -390,16 +392,16 @@ export function installHooks({ port, home = homedir() }: { port: number; home?: 
     const verify = load(spec.file)
     const events = verify.kind === 'ok' ? countOurs(verify.obj, spec) : 0
     if (events !== spec.events.length) {
-      throw new Error(`${spec.label} 写入后核对不一致：只认出 ${events}/${spec.events.length} 个事件`)
+      throw new Error(tr("Verification after writing {0} recognized only {1}/{2} events", [spec.label, events, spec.events.length]))
     }
-    if (spec.id === 'cursor') cursorWritten = true
+    if (spec.id === AgentId.Cursor) cursorWritten = true
     changed = true
   }
   const summary = !changed
-    ? '已是最新，没有改动'
+    ? tr("Already up to date; no changes")
     : cursorWritten
-      ? '已安装；Cursor 若没反应，重启 Cursor'
-      : '已安装'
+      ? tr("Installed. Restart Cursor if hooks do not respond.")
+      : tr("Installed")
   return { summary, failed: [] }
 }
 
@@ -419,5 +421,5 @@ export function uninstallHooks({ home = homedir() }: { home?: string } = {}): In
     writeFileSync(spec.file, render(obj, loaded.trailingNewline), 'utf8')
     removed = true
   }
-  return { summary: removed ? '已卸载' : '没有需要卸载的条目', failed: [] }
+  return { summary: removed ? tr("Uninstalled") : tr("Nothing to uninstall"), failed: [] }
 }

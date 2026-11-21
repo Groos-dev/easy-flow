@@ -1,3 +1,5 @@
+import { SessionState } from '../src/shared/domain.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 /**
  * 会话事件 → dock 红点与系统通知：只做判断与文案，不碰 Electron。
  *
@@ -13,7 +15,7 @@ import type { EventState, SessionStatus } from './session-state.ts'
 export type AttentionState = EventState
 
 // 角标与通知的急缓顺序，与「哪些状态算事件」是两件事
-const SEVERITY: readonly AttentionState[] = ['blocked', 'failed', 'done']
+const SEVERITY: readonly AttentionState[] = [SessionState.Blocked, SessionState.Failed, SessionState.Done]
 
 // 通知要跳回哪条需求。字段与服务端的 Requirement 对齐，只带用得上的
 export interface AttentionRequirement {
@@ -162,7 +164,7 @@ export class AttentionTracker {
       }
 
       // 读不到：保留上一条事件。读失败不等于事情解决了
-      if (state === 'unknown') {
+      if (state === SessionState.Unknown) {
         const old = this.current.get(id)
         if (!old) continue
         const staleSince = old.staleSince ?? now
@@ -202,7 +204,7 @@ const AGENT_LABELS: Record<string, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   cursor: 'Cursor',
-  chengxiaobang: '程小帮',
+  get chengxiaobang() { return tr("Chengxiaobang") },
 }
 
 function agentLabel(agent: string): string {
@@ -245,7 +247,7 @@ function agentTitles(group: readonly AttentionEvent[]): string {
 
 // 需要人回答的原话才进正文；多条时标上是谁在问
 function questionBody(group: readonly AttentionEvent[]): string {
-  const asked = group.filter((event) => event.state === 'blocked' && event.needsAction)
+  const asked = group.filter((event) => event.state === SessionState.Blocked && event.needsAction)
   return asked
     .map((event) =>
       group.length === 1 ? event.needsAction : `${agentLabel(event.agent)}：${event.needsAction}`,
@@ -271,7 +273,7 @@ export function groupAttentionNotifications(events: readonly AttentionEvent[]): 
       title: oneLineTitle(requirement.title),
       subtitle: agentTitles(group),
       body: questionBody(group),
-      silent: group.every((event) => event.state === 'done'),
+      silent: group.every((event) => event.state === SessionState.Done),
       requirement,
       events: group,
     }

@@ -18,8 +18,8 @@ workspaces, and follow-up work to the owning requirement as they arise.
 
 Write instructions, explanations, titles, summaries, and new prose in English
 unless the user requests another language. Preserve IDs, paths, command flags,
-required document headings, and machine values. The current CLI requires the
-Chinese status literals listed below; English labels are explanations, not aliases.
+required document headings, and machine values. Requirement statuses use stable English machine values, independent of the selected
+display language. Legacy Chinese values remain accepted as input aliases.
 Use supported English document headings for new content (see the command reference).
 Do not translate existing data or change the application's language as a side effect.
 
@@ -62,10 +62,10 @@ or contracts change.
 
 | Phase | CLI status value | Work and evidence |
 | --- | --- | --- |
-| Clarification | `澄清` | Define deliverable, acceptance criteria, boundaries, and repositories. |
-| Implementation | `执行中` | Create a workspace for code changes, implement, verify, and update context. |
-| User review | `Review` | Complete independent coding review and required fixes, then hand over evidence. |
-| Complete | `已完成` | After merge and acceptance, satisfy the session-analysis requirement and close. |
+| Clarification | `clarification` | Define deliverable, acceptance criteria, boundaries, and repositories. |
+| Implementation | `in_progress` | Create a workspace for code changes, implement, verify, and update context. |
+| User review | `review` | Complete independent coding review and required fixes, then hand over evidence. |
+| Complete | `completed` | After merge and acceptance, satisfy the session-analysis requirement and close. |
 
 Set status with `easy-flow req set <req-id> --status <value>`. Keep implementation,
 fixes, and automated review in Implementation; switch to Review when handing work

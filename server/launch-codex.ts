@@ -1,3 +1,6 @@
+import { AgentId } from '../src/shared/domain.ts'
+import { CommandNotFoundError } from './errors.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 import type { AppServer } from './codex.ts'
 import { registerLaunchProvider, type LaunchInput, type LaunchProvider } from './launch.ts'
 
@@ -17,14 +20,14 @@ export function codexLaunchUrl(projectId: string, prompt: string, worktreePath =
 
 export function codexAppServerStartError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error)
-  if (message.includes('找不到 codex 命令') || message.includes('ENOENT')) {
-    return new Error('Codex command not found. Install Codex or add it to PATH.')
+  if (error instanceof CommandNotFoundError || (error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+    return new Error(tr("Codex command not found. Install Codex or add it to PATH."))
   }
-  return new Error(`Codex app-server failed to start: ${message}`)
+  return new Error(tr("Codex app-server failed to start: {0}", [message]))
 }
 
 export const codexProvider: LaunchProvider = {
-  id: 'codex',
+  id: AgentId.Codex,
   label: 'Codex',
   async build(input, prompt) {
     // 需求还没有工作区：直接开新会话草稿，不建 project（也就不用起 app-server）

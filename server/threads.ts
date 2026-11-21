@@ -1,3 +1,5 @@
+import { message, messageDetail } from '../src/shared/i18n.ts'
+import { SessionState } from '../src/shared/domain.ts'
 /**
  * 会话状态的**拉取源**与读口。
  *
@@ -86,7 +88,7 @@ export function pullStatuses(
     ? chengxiaobangObservations(roots.chengxiaobangHome, chengxiaobang.map((s) => s.session))
     : null
   for (const s of chengxiaobang) {
-    const observation = cxb?.get(s.session) ?? { status: unknownStatus('程小帮库里没有这条会话的记录'), action: null }
+    const observation = cxb?.get(s.session) ?? { status: unknownStatus(message("No record of this session in the Chengxiaobang database")), action: null }
     // alive 一律 false：库里的 running 也可能是崩溃前残留，交给活跃超时兜底
     putSettled(states, 'chengxiaobang', s.session, observation, false)
   }
@@ -100,7 +102,7 @@ export function pullStatuses(
     )
     for (const s of cursor) {
       const observation = found.get(s.session) ?? {
-        status: unknownStatus('Cursor 没有这条会话的日志'),
+        status: unknownStatus(message("No Cursor log for this session")),
         action: null,
       }
       putSettled(states, 'cursor', s.session, observation, false)
@@ -113,7 +115,7 @@ export function pullStatuses(
     const rollouts = new RolloutStore(roots.codexHome, sources).refresh(codex.map((s) => s.session))
     const unread = codexUnread(roots.codexHome, sources)
     for (const s of codex) {
-      const observation = rollouts.get(s.session) ?? { status: unknownStatus('没有 codex 的 rollout 记录'), action: null }
+      const observation = rollouts.get(s.session) ?? { status: unknownStatus(message("No Codex rollout record")), action: null }
       putSettled(states, 'codex', s.session, codexSeen(s.session, observation, unread), false)
     }
   }
@@ -124,8 +126,8 @@ export function pullStatuses(
  */
 function codexSeen(id: string, observation: SessionObservation, unread: Set<string> | null): SessionObservation {
   const { status } = observation
-  if (status.state !== 'done' || !unread || unread.has(id)) return observation
-  return { ...observation, status: { ...status, state: 'idle' } }
+  if (status.state !== SessionState.Done || !unread || unread.has(id)) return observation
+  return { ...observation, status: { ...status, state: SessionState.Idle } }
 }
 
 // 标题往哪写。index.ts 传 db，测试传一个收集器
@@ -200,7 +202,7 @@ export function readObservations<T extends { agent: string; session: string }>(
   const observations = states.snapshot()
   return sessions.map((s) => {
     const stored = observations.get(`${s.agent}:${s.session}`)
-    const status = stored?.status ?? unknownStatus(`${s.agent} 没有可读的状态来源`)
+    const status = stored?.status ?? unknownStatus(message("No readable status source for {0}", [s.agent]))
     return { ...s, status, action: stored?.action ?? null }
   })
 }
@@ -251,12 +253,12 @@ function pullClaude(
   // 进程在跑是「此刻的事实」，不是一条带时刻的观察——所以时刻记现在，不是文件里的 statusUpdatedAt
   // （那个只在 busy/idle 切换时写，比记录里的 lastActivityAt 旧得多，拿它排序会被上一轮的结论顶掉）。
   // 表里已经在干活就让它说话：hook 分得出「思考 / 干活」，而进程文件只报 busy/idle，说不出是哪种。
-  if (alive && !isActive(states.get('claude', stateKey)?.status.state ?? 'unknown')) {
+  if (alive && !isActive(states.get('claude', stateKey)?.status.state ?? SessionState.Unknown)) {
     states.put('claude', stateKey, {
-      state: 'working',
+      state: SessionState.Working,
       needsAction: '',
       observedAt: Date.now(),
-      detail: 'CLI 进程在跑',
+      ...messageDetail("CLI process is running"),
     })
   }
 
@@ -293,30 +295,30 @@ function recordPathFor(session: string, roots: ThreadRoots): string | null {
  * 说不出时刻的观察不该盖掉有时刻的（比如一条刚到的 hook 事件）。
  */
 function claudeRecordStatus(rec: ClaudeRecord | undefined): SessionStatus {
-  if (!rec) return unknownStatus('没有桌面应用的会话记录（终端会话，或记录已被清掉）')
+  if (!rec) return unknownStatus(message("No desktop session record (terminal session or removed record)"))
 
   const summary = rec.postTurnSummary
   // 结论是为某一轮生成的；对不上最新一轮说明后面又跑过，那份结论已经过期
   const stale =
     !!rec.postTurnSummaryFor && !!rec.lastAssistantUuid && rec.postTurnSummaryFor !== rec.lastAssistantUuid
-  if (!summary || stale) return unknownStatus(stale ? '会话的结论落后于最新一轮' : '会话没有结论')
+  if (!summary || stale) return unknownStatus(stale ? message("Session conclusion predates the latest turn") : message("Session has no conclusion"))
 
   const observedAt = rec.lastActivityAt ?? 0
   switch (summary.status_category) {
-    case 'blocked':
-      return { state: 'blocked', needsAction: summary.needs_action ?? '', observedAt, detail: '桌面应用结论：blocked' }
+    case SessionState.Blocked:
+      return { state: SessionState.Blocked, needsAction: summary.needs_action ?? '', observedAt, ...messageDetail("Desktop session conclusion: blocked") }
     case 'review_ready':
     case 'completed':
       return {
-        state: seen(rec) ? 'idle' : 'done',
+        state: seen(rec) ? SessionState.Idle : SessionState.Done,
         needsAction: '',
         observedAt,
-        detail: `桌面应用结论：${summary.status_category}`,
+        ...messageDetail("Desktop session conclusion: {0}", [summary.status_category]),
       }
-    case 'failed':
-      return { state: 'failed', needsAction: '', observedAt, detail: '桌面应用结论：failed' }
+    case SessionState.Failed:
+      return { state: SessionState.Failed, needsAction: '', observedAt, ...messageDetail("Desktop session conclusion: failed") }
     default:
-      return unknownStatus(`认不出的桌面应用结论：${summary.status_category}`)
+      return unknownStatus(message("Unrecognized desktop session conclusion: {0}", [summary.status_category]))
   }
 }
 
@@ -334,7 +336,7 @@ function seen(rec: ClaudeRecord): boolean {
 function settleActive(status: SessionStatus, alive: boolean): SessionStatus {
   if (!isActive(status.state) || alive) return status
   if (Date.now() - status.observedAt <= RUNNING_TTL_MS) return status
-  return { state: 'unknown', needsAction: '', observedAt: Date.now(), detail: '最后一条状态停在半途，早已没有动静' }
+  return { state: SessionState.Unknown, needsAction: '', observedAt: Date.now(), ...messageDetail("The last recorded state was interrupted and has been inactive for a long time") }
 }
 
 // ------------------------------------------------------------------ Claude

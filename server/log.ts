@@ -1,3 +1,4 @@
+import { LogSeverity } from '../src/shared/domain.ts'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { format } from 'node:util'
@@ -9,7 +10,7 @@ const RANK: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3, s
 
 export function levelFromEnv(raw: string | undefined): LogLevel {
   const v = (raw ?? '').trim().toLowerCase()
-  return (LOG_LEVELS as readonly string[]).includes(v) ? (v as LogLevel) : 'info'
+  return (LOG_LEVELS as readonly string[]).includes(v) ? (v as LogLevel) : LogSeverity.Info
 }
 
 export let logLevel = levelFromEnv(process.env.EASY_FLOW_LOG)

@@ -25,7 +25,7 @@ function mkReq(patch: Partial<Requirement> = {}): Requirement {
     id: 'req-1',
     parentId: '',
     title: '标题',
-    status: '执行中',
+    status: 'in_progress',
     pinned: false,
     sessionAnalysisStatus: 'pending',
     priority: '',
@@ -245,7 +245,7 @@ describe('详情页浮窗 · 代码链接状态', () => {
     const html = cell({ state: 'merged', pipeline: 'success' })
     assert.doesNotMatch(html, /link-pipe/)
     assert.match(html, /data-state="merged"/)
-    assert.match(html, />merged</)
+    assert.match(html, />已合入</)
   })
 
   test('没跑过流水线时只留状态', () => {

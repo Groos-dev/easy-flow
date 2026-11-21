@@ -60,7 +60,7 @@ describe('Cursor 启动', () => {
       worktreePath: '/a/same',
       requirementWorktreePaths: ['/a/same', '/b/same'],
     }
-    assert.throws(() => cursorProvider.build(dup, 'prompt'), /cannot tell apart/)
-    assert.throws(() => cursorProvider.prepare?.(dup), /cannot tell apart/)
+    assert.throws(() => cursorProvider.build(dup, 'prompt'), /(?:cannot tell apart|无法区分)/)
+    assert.throws(() => cursorProvider.prepare?.(dup), /(?:cannot tell apart|无法区分)/)
   })
 })

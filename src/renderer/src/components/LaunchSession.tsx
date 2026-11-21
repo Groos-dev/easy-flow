@@ -1,3 +1,5 @@
+import { useLanguage } from '../lib/language'
+import { t as tr } from "../../../shared/i18n.ts"
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { shortcut } from '../lib/keys'
@@ -15,6 +17,7 @@ export default function LaunchSession({
   // 每加一次展开表单；0 不展开
   openSignal?: number
 }) {
+  useLanguage()
   const [open, setOpen] = useState(false)
   const [providers, setProviders] = useState<LaunchProviderInfo[]>([])
   const [providersLoaded, setProvidersLoaded] = useState(false)
@@ -158,11 +161,9 @@ export default function LaunchSession({
           }}
         >
           <div className="new-sess-head">
-            新建会话
-            <span className="spacer" />
-            <button className="new-sess-x" title="收起（Esc）" onClick={collapse}>
-              收起
-            </button>
+            {tr("New session")}<span className="spacer" />
+            <button className="new-sess-x" title={tr("Collapse (Esc)")} onClick={collapse}>
+              {tr("Collapse")}</button>
           </div>
           <LaunchSessionForm
             requirementId={req.id}
@@ -189,8 +190,7 @@ export default function LaunchSession({
           onClick={() => setOpen(true)}
           aria-expanded={false}
         >
-          ＋ 新建会话
-        </button>
+          {tr("＋ New session")}</button>
       )}
     </div>
   )

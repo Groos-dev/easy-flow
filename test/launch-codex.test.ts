@@ -1,3 +1,4 @@
+import { CommandNotFoundError } from '../server/errors.ts'
 import assert from 'node:assert/strict'
 import { test, describe } from 'node:test'
 import { AppServer, ensureRequirementProject } from '../server/codex.ts'
@@ -132,32 +133,32 @@ describe('Codex 开发会话启动', () => {
     }
   })
 
-  test('app-server 启动失败时 provider 抛明确英文错误供调用方降级', async () => {
+  test('app-server startup failures preserve a clear localized cause', async () => {
     const start = AppServer.start
     try {
       AppServer.start = async () => {
-        throw new Error('找不到 codex 命令：装好 Codex，或让它在 PATH 里再重跑')
+        throw new CommandNotFoundError('codex')
       }
-      await assert.rejects(async () => codexProvider.build(input, 'prompt'), /Codex command not found/)
+      await assert.rejects(async () => codexProvider.build(input, 'prompt'), /(?:Codex command not found|找不到 Codex 命令)/)
 
       AppServer.start = async () => {
         throw new Error('initialize timed out after 60s')
       }
       await assert.rejects(
         async () => codexProvider.build(input, 'prompt'),
-        /Codex app-server failed to start: initialize timed out after 60s/,
+        /(?:Codex app-server failed to start: |Codex app-server 启动失败：)initialize timed out after 60s/,
       )
     } finally {
       AppServer.start = start
     }
 
     assert.equal(
-      codexAppServerStartError(new Error('找不到 codex 命令：装好 Codex，或让它在 PATH 里再重跑')).message,
-      'Codex command not found. Install Codex or add it to PATH.',
+      codexAppServerStartError(new CommandNotFoundError('codex')).message,
+      '找不到 Codex 命令。请安装 Codex 或将其加入 PATH。',
     )
     assert.equal(
       codexAppServerStartError(new Error('initialize timed out after 60s')).message,
-      'Codex app-server failed to start: initialize timed out after 60s',
+      'Codex app-server 启动失败：initialize timed out after 60s',
     )
   })
 })

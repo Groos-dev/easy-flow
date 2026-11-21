@@ -1,3 +1,6 @@
+import { useLanguage } from '../lib/language'
+import { requirementStatusLabel } from '../../../shared/i18n.ts'
+import { t as tr } from "../../../shared/i18n.ts"
 import { useDraggable } from '@dnd-kit/core'
 import { memo, useRef, type KeyboardEvent } from 'react'
 import { shortcutLabel } from '../lib/keys'
@@ -47,6 +50,7 @@ function sameProps(a: Props, b: Props): boolean {
 }
 
 function Card(props: Props) {
+  useLanguage()
   const { req, flash, onOpen, onFocusCard, overlay = false } = props
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: req.slug,
@@ -109,13 +113,14 @@ const CardContent = memo(function CardContent({
   req, sessions, childStat, kids, onJumpChild, kidsOpen = false,
   onToggleKids, onTag, focusSession, onTogglePin, overlay = false,
 }: Props) {
+  useLanguage()
   return (
     <>
       <div className={`card-top${onTogglePin ? ' has-pin' : ''}`}>
         <span className="card-title">{req.title}</span>
         {/* 完成度与展开键挨着，一起靠右：它们说的都是子需求那一块，不是整张卡 */}
         {childStat && (
-          <span className="card-kids" title={`${childStat.total} 个子需求，已完成 ${childStat.done}`}>
+          <span className="card-kids" title={tr("{0} child requirements, {1} completed", [childStat.total, childStat.done])}>
             {childStat.done}/{childStat.total}
           </span>
         )}
@@ -136,14 +141,14 @@ const CardContent = memo(function CardContent({
               onToggleKids?.(req.slug)
             }}
           >
-            <title>{`${kidsOpen ? '收起' : '展开'}子需求（${shortcutLabel('board.kids')}）`}</title>
+            <title>{tr("{0} child requirements ({1})", [kidsOpen ? tr("Collapse") : tr("Expand"), shortcutLabel('board.kids')])}</title>
             <polyline points={kidsOpen ? '6 9 12 15 18 9' : '9 6 15 12 9 18'} />
           </svg>
         )}
         {!overlay && onTogglePin && (
           <span
             className={`pin-btn${req.pinned ? ' active' : ''}`}
-            title={req.pinned ? '取消置顶' : '置顶（长期跟进）'}
+            title={req.pinned ? tr("Unpin") : tr("Pin for ongoing tracking")}
             onClick={(e) => {
               e.stopPropagation()
               onTogglePin(req, !req.pinned)
@@ -168,7 +173,7 @@ const CardContent = memo(function CardContent({
             <div
               key={k.slug}
               className="kid"
-              title={`跳到「${k.title}」`}
+              title={tr("Go to {0}", [k.title])}
               onClick={(e) => {
                 // 卡片自己的点击是开详情，子需求那一下不能被它吃掉
                 e.stopPropagation()
@@ -176,7 +181,7 @@ const CardContent = memo(function CardContent({
               }}
             >
               <span className="kid-title">{k.title}</span>
-              <span className="kid-status">{k.status}</span>
+              <span className="kid-status">{requirementStatusLabel(k.status)}</span>
             </div>
           ))}
         </div>
@@ -191,7 +196,7 @@ const CardContent = memo(function CardContent({
               <span
                 key={tag}
                 className="card-tag"
-                title={`按 #${tag} 筛选`}
+                title={tr("Filter by #{0}", [tag])}
                 onClick={(e) => {
                   // 卡片自己的点击是开详情，点标签那一下不能被它吃掉
                   e.stopPropagation()

@@ -1,3 +1,7 @@
+import { message } from '../src/shared/i18n.ts'
+import { AgentId } from '../src/shared/domain.ts'
+import { getLanguage, isLanguage, setLanguage, type Language } from '../src/shared/i18n.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 /**
  * easy-flow HTTP 层。状态归 sqlite，内容归 markdown。
  * 三种使用方式：
@@ -83,6 +87,7 @@ export interface BoardAppOptions {
    * 会话状态变化后的回调。hook 推送与点 pet 都走这儿，
    * 通知层不用另起定时器轮询。
    */
+  onLanguageChange?: (language: Language) => void
   onAttention?: () => void
   syncFiles?: (dataDir: string) => Promise<ReturnType<BoardDatabase['syncProjects']>>
 }
@@ -108,10 +113,10 @@ function resolveProject(db: BoardDatabase, raw: string | null): string {
   try {
     slug = decodeURIComponent(raw)
   } catch {
-    throw new Error(`Invalid project slug encoding: ${raw}`)
+    throw new Error(tr("Invalid project slug encoding: {0}", [raw]))
   }
   if (!db.hasProject(slug)) {
-    throw new Error(`Project not found: ${slug}`)
+    throw new Error(tr("Project not found: {0}", [slug]))
   }
   return slug
 }
@@ -153,7 +158,7 @@ const FINDER_APP = '/System/Library/CoreServices/Finder.app'
 
 function openOptions(): OpenWithOption[] {
   return [
-    { id: '', label: '访达', kind: 'finder', icon: appIconDataUrl(FINDER_APP) },
+    { id: '', get label() { return tr("Finder") }, kind: 'finder', icon: appIconDataUrl(FINDER_APP) },
     ...scanOpenTargets().map((t) => ({
       id: t.id,
       label: t.label,
@@ -172,7 +177,8 @@ function openWithPayload(options = openOptions()) {
   }
 }
 
-export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, syncFiles }: BoardAppOptions = {}): BoardApp {
+export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, onLanguageChange, syncFiles }: BoardAppOptions = {}): BoardApp {
+  setLanguage(readConfig().language)
   const initial = readConfig()
   let currentDir = dataDir ?? initial.dataDir
   let db = new BoardDatabase(currentDir, initial.activeProject)
@@ -374,7 +380,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
       if (url.pathname === '/api/projects/open' && req.method === 'POST') {
         const { slug } = await readBody(req)
         const found = db.listProjects().find((p) => p.slug === String(slug))
-        if (!found) throw new Error(`Project not found: ${slug}`)
+        if (!found) throw new Error(tr("Project not found: {0}", [slug]))
         execFile('open', [found.root], () => {})
         json(req, res, 200, { ok: true, root: found.root })
         return
@@ -383,7 +389,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
       if (url.pathname === '/api/projects/delete' && req.method === 'POST') {
         const { slug, removeFiles } = await readBody(req)
         const target = String(slug)
-        if (target === db.project) throw new Error('Cannot delete the project currently in use')
+        if (target === db.project) throw new Error(tr("Cannot delete the project currently in use"))
         if (removeFiles) removeProjectData(db, target)
         db.deleteProject(target)
         json(req, res, 200, { ok: true, removedFiles: !!removeFiles, projects: db.listProjects() })
@@ -407,10 +413,10 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
         const project = resolveProject(db, projectRaw ? String(projectRaw) : null)
         const id = String(slug)
         if (pinned !== undefined && typeof pinned !== 'boolean') {
-          throw new Error('pinned must be a boolean')
+          throw new Error(tr("pinned must be a boolean"))
         }
         let result = db.get(id, project)
-        if (!result) throw new Error(`Requirement not found: ${id}`)
+        if (!result) throw new Error(tr("Requirement not found: {0}", [id]))
         if (status !== undefined) result = db.setStatus(id, status as Status, project)
         if (priority !== undefined) result = db.setPriority(id, (priority as Priority) || '', project)
         if (title !== undefined) result = db.rename(id, String(title), project)
@@ -446,7 +452,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
         db.syncRequirement(slug, project)
         const full = url.pathname === '/api/context'
         const ctx = full ? db.context(slug, project) : { requirement: db.get(slug, project) }
-        if (!ctx?.requirement) throw new Error(`Requirement not found: ${slug}`)
+        if (!ctx?.requirement) throw new Error(tr("Requirement not found: {0}", [slug]))
         // 三档一次算好：详情页要显式与候选分开摆，不必再查两次
         const todos = db.todosForRequirement(ctx.requirement.id)
         json(req, res, 200, {
@@ -470,7 +476,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
         const slug = url.searchParams.get('slug') ?? ''
         const project = resolveProject(db, url.searchParams.get('project'))
         const target = db.get(slug, project)
-        if (!target) throw new Error(`Requirement not found: ${slug}`)
+        if (!target) throw new Error(tr("Requirement not found: {0}", [slug]))
         const todos = db.todosForRequirement(target.id)
         json(req, res, 200, {
           worktrees: db.listWorktrees(target.id),
@@ -509,10 +515,10 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
         const agent = String(body.agent) as SessionAgent
         const session = String(body.session)
         const found = db.sessionBy(agent, session)
-        if (!found) throw new Error(`Session not found: ${agent}:${session}`)
-        if (agent !== 'cursor') throw new Error('Only Cursor sessions can focus a workspace')
-        if (!found.cwd) throw new Error('Session has no cwd')
-        if (!existsSync(found.cwd)) throw new Error(`Directory no longer exists: ${found.cwd}`)
+        if (!found) throw new Error(tr("Session not found: {0}:{1}", [agent, session]))
+        if (agent !== AgentId.Cursor) throw new Error(tr("Only Cursor sessions can focus a workspace"))
+        if (!found.cwd) throw new Error(tr("Session has no cwd"))
+        if (!existsSync(found.cwd)) throw new Error(tr("Directory no longer exists: {0}", [found.cwd]))
         await new Promise<void>((resolve, reject) => {
           execFile('open', ['-a', 'Cursor', found.cwd], (error, _stdout, stderr) => {
             if (error) reject(new Error(stderr.trim() || error.message))
@@ -538,7 +544,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
       if (url.pathname === '/api/requirement' && req.method === 'GET') {
         const id = url.searchParams.get('id') ?? ''
         const target = db.byId(id)
-        if (!target) throw new Error(`Requirement not found: ${id}`)
+        if (!target) throw new Error(tr("Requirement not found: {0}", [id]))
         json(req, res, 200, target)
         return
       }
@@ -549,7 +555,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
         const name = url.searchParams.get('name') || 'requirement.md'
         const project = resolveProject(db, url.searchParams.get('project'))
         const target = db.get(slug, project)
-        if (!target) throw new Error(`Requirement not found: ${slug}`)
+        if (!target) throw new Error(tr("Requirement not found: {0}", [slug]))
         const content = readRequirementDoc(target.path, name)
         json(req, res, 200, { slug, project, name, content })
         return
@@ -560,7 +566,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
         const { slug, name, content, project: projectRaw } = await readBody(req)
         const project = resolveProject(db, projectRaw ? String(projectRaw) : null)
         const target = db.get(String(slug), project)
-        if (!target) throw new Error(`Requirement not found: ${slug}`)
+        if (!target) throw new Error(tr("Requirement not found: {0}", [slug]))
         const result = writeRequirementDoc(target.path, String(name), String(content ?? ''))
         json(req, res, 200, { slug, project, name, ...result })
         return
@@ -580,10 +586,10 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
         const { slug, project: projectRaw, worktreeId, agent: rawAgent } = await readBody(req)
         const project = resolveProject(db, projectRaw ? String(projectRaw) : null)
         const requirement = db.get(String(slug), project)
-        if (!requirement) throw new Error(`Requirement not found: ${slug}`)
+        if (!requirement) throw new Error(tr("Requirement not found: {0}", [slug]))
         // 能启动的 agent 就是注册表里有的：没注册的 agent 与拼错的 id 一样，都是不支持
         const provider = findLaunchProvider(String(rawAgent))
-        if (!provider) throw new Error(`Unknown launch agent: ${rawAgent}`)
+        if (!provider) throw new Error(tr("Unknown launch agent: {0}", [rawAgent]))
         const agent = provider.id
         const requirementWorktreePaths = db
           .listWorktrees(requirement.id)
@@ -593,16 +599,16 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
         // 一个都没有时不带目录起（需求刚建出来、还没决定开哪个仓库）
         let wt: ReturnType<typeof db.worktreeById>
         if (worktreeId || requirementWorktreePaths.length) {
-          if (!worktreeId) throw new Error('Launch needs a worktree: the deeplink carries a single folder')
+          if (!worktreeId) throw new Error(tr("Launch needs a worktree: the deeplink carries a single folder"))
           wt = db.worktreeById(String(worktreeId))
-          if (!wt) throw new Error(`Worktree not found: ${worktreeId}`)
+          if (!wt) throw new Error(tr("Worktree not found: {0}", [worktreeId]))
           if (wt.requirementId !== requirement.id) {
-            throw new Error(`Worktree does not belong to requirement: ${worktreeId}`)
+            throw new Error(tr("Worktree does not belong to requirement: {0}", [worktreeId]))
           }
-          if (!existsSync(wt.path)) throw new Error(`Directory no longer exists: ${wt.path}`)
+          if (!existsSync(wt.path)) throw new Error(tr("Directory no longer exists: {0}", [wt.path]))
         }
         if (provider.requiresWorktree && !wt) {
-          throw new Error(`Launch agent ${agent} needs a worktree`)
+          throw new Error(tr("Launch agent {0} needs a worktree", [agent]))
         }
 
         const input = {
@@ -628,7 +634,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
           json(req, res, 200, { agent, url: targetUrl, prompt, opened: true })
         } catch (error) {
           // Cursor 启动失败时把提示词放进剪贴板，用户不至于手抄
-          if (agent === 'cursor') promptCopied = await copyPrompt(prompt)
+          if (agent === AgentId.Cursor) promptCopied = await copyPrompt(prompt)
           json(req, res, 200, {
             agent,
             url: targetUrl,
@@ -645,8 +651,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
       if (url.pathname === '/api/worktree/open' && req.method === 'POST') {
         const { id } = await readBody(req)
         const wt = db.worktreeById(String(id))
-        if (!wt) throw new Error(`Worktree not found: ${id}`)
-        if (!existsSync(wt.path)) throw new Error(`Directory no longer exists: ${wt.path}`)
+        if (!wt) throw new Error(tr("Worktree not found: {0}", [id]))
+        if (!existsSync(wt.path)) throw new Error(tr("Directory no longer exists: {0}", [wt.path]))
         openDir(wt.path)
         json(req, res, 200, { ok: true, path: wt.path })
         return
@@ -672,7 +678,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
       if (url.pathname === '/api/todos/update' && req.method === 'POST') {
         const { id, status } = await readBody(req)
         const target = String(id)
-        if (!db.todoById(target)) throw new Error(`Todo not found: ${target}`)
+        if (!db.todoById(target)) throw new Error(tr("Todo not found: {0}", [target]))
         json(req, res, 200, db.setTodoStatus(target, status as TodoStatus))
         return
       }
@@ -699,7 +705,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
 
       if (url.pathname === '/api/settings/log-level' && req.method === 'POST') {
         const { logLevel } = await readBody(req)
-        if (!isLogLevel(logLevel)) throw new Error(`Unknown log level: ${String(logLevel)}`)
+        if (!isLogLevel(logLevel)) throw new Error(tr("Unknown log level: {0}", [String(logLevel)]))
         writeConfig({ logLevel })
         setLogLevel(logLevel)
         json(req, res, 200, { logLevel })
@@ -716,7 +722,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
         const next = String(id ?? '')
         const options = openOptions()
         if (!options.some((o) => o.id === next)) {
-          throw new Error(`Unknown open target: ${next}`)
+          throw new Error(tr("Unknown open target: {0}", [next]))
         }
         writeConfig({ openWith: next })
         json(req, res, 200, openWithPayload(options))
@@ -725,6 +731,20 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
 
       // 外观：浏览器预览与 Electron 共用这一份配置
       // 主进程启动时另读它设置原生外观
+      if (url.pathname === '/api/settings/language' && req.method === 'GET') {
+        json(req, res, 200, { language: readConfig().language })
+        return
+      }
+      if (url.pathname === '/api/settings/language' && req.method === 'POST') {
+        const { language } = await readBody(req)
+        if (!isLanguage(language)) throw new Error(tr("Unknown language: {0}. Use en or zh.", [String(language)]))
+        writeConfig({ language })
+        setLanguage(language)
+        onLanguageChange?.(getLanguage())
+        json(req, res, 200, { language })
+        return
+      }
+
       if (url.pathname === '/api/settings/theme' && req.method === 'GET') {
         json(req, res, 200, { theme: readConfig().theme })
         return
@@ -732,7 +752,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
 
       if (url.pathname === '/api/settings/theme' && req.method === 'POST') {
         const { theme } = await readBody(req)
-        if (!isTheme(theme)) throw new Error(`Unknown theme: ${String(theme)}`)
+        if (!isTheme(theme)) throw new Error(tr("Unknown theme: {0}", [String(theme)]))
         writeConfig({ theme })
         json(req, res, 200, { theme })
         return
@@ -754,7 +774,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
       if (url.pathname === '/api/settings' && req.method === 'POST') {
         const { dataDir: next } = await readBody(req)
         const dir = String(next ?? '').trim()
-        if (!dir) throw new Error('Data dir cannot be empty')
+        if (!dir) throw new Error(tr("Data dir cannot be empty"))
         if (dir === currentDir) {
           json(req, res, 200, { dataDir: currentDir, dbFile: db.file, unchanged: true, sync: null })
           return
@@ -774,7 +794,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
           db = new BoardDatabase(previous, readConfig().activeProject)
           currentDir = previous
           db.pickProject()
-          throw new Error(`Switch failed, rolled back: ${(err as Error).message}`, { cause: err })
+          throw new Error(tr("Switch failed, rolled back: {0}", [(err as Error).message]), { cause: err })
         }
         return
       }
@@ -817,7 +837,7 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, sync
         return
       }
 
-      json(req, res, 404, { error: 'not found' })
+      json(req, res, 404, { error: tr('Not found') })
     } catch (err) {
       json(req, res, 400, { error: (err as Error).message })
     }
@@ -846,6 +866,7 @@ export interface StartOptions {
   dataDir?: string
   host?: string
   // 会话状态变化后的回调（hook / 点 pet / 每次 pull）
+  onLanguageChange?: (language: Language) => void
   onAttention?: () => void
   syncFiles?: (dataDir: string) => Promise<ReturnType<BoardDatabase['syncProjects']>>
 }
@@ -867,9 +888,10 @@ export function startBoardServer({
   dataDir,
   host = '127.0.0.1',
   onAttention,
+  onLanguageChange,
   syncFiles,
 }: StartOptions = {}): Promise<RunningBoardServer> {
-  const app = createBoardApp({ dataDir, port, onAttention, syncFiles })
+  const app = createBoardApp({ dataDir, port, onAttention, onLanguageChange, syncFiles })
   const server = createServer((req, res) => void app.handle(req, res))
 
   /**
@@ -906,7 +928,7 @@ export function startBoardServer({
             slug: requirement.slug,
             project: requirement.project,
           },
-          status: stored?.status ?? unknownStatus(`${session.agent} 没有可读的状态来源`),
+          status: stored?.status ?? unknownStatus(message("No readable status source for {0}", [session.agent])),
         },
       ]
     })

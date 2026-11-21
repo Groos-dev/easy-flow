@@ -1,3 +1,5 @@
+import { CodeLinkState, PipelineState, SessionState } from '../src/shared/domain.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 // MR/PR 状态走本机已登录的 glab / gh：内网 CA 不被 Node 信任，也免去在本进程经手 token
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -8,8 +10,7 @@ import { parseJsonOrNull } from './util.ts'
 
 const log = createLogger('code-host')
 
-export type CodeLinkState = 'open' | 'merged' | 'closed'
-export type PipelineState = 'success' | 'failed' | 'running' | 'skipped'
+export type { CodeLinkState, PipelineState } from '../src/shared/domain.ts'
 
 export interface CodeLinkStatus {
   state: CodeLinkState
@@ -20,27 +21,27 @@ export interface CodeLinkStatus {
 export function stateOfGitlab(data: unknown): CodeLinkState | null {
   const state = (data as { state?: unknown } | null)?.state
   // locked 只是锁了讨论，MR 本身还开着（老版本 GitLab 会这么报）
-  if (state === 'opened' || state === 'locked') return 'open'
-  if (state === 'merged' || state === 'closed') return state
+  if (state === 'opened' || state === 'locked') return CodeLinkState.Open
+  if (state === CodeLinkState.Merged || state === CodeLinkState.Closed) return state
   return null
 }
 
 export function stateOfGithub(data: unknown): CodeLinkState | null {
   const d = data as { state?: unknown; merged?: unknown; merged_at?: unknown } | null
-  if (d?.state === 'open') return 'open'
-  if (d?.state !== 'closed') return null
-  return d.merged === true || d.merged_at ? 'merged' : 'closed'
+  if (d?.state === CodeLinkState.Open) return CodeLinkState.Open
+  if (d?.state !== CodeLinkState.Closed) return null
+  return d.merged === true || d.merged_at ? CodeLinkState.Merged : CodeLinkState.Closed
 }
 
 // 只取汇总：stage 明细留在 GitLab，面板里一个图标就够
 export function pipelineOfGitlab(data: unknown): PipelineState | null {
   const pipeline = (data as { head_pipeline?: { status?: unknown } | null } | null)?.head_pipeline
   const status = pipeline?.status
-  if (status === 'success') return 'success'
-  if (status === 'failed') return 'failed'
-  if (status === 'canceled' || status === 'skipped') return 'skipped'
+  if (status === PipelineState.Success) return PipelineState.Success
+  if (status === PipelineState.Failed) return PipelineState.Failed
+  if (status === 'canceled' || status === PipelineState.Skipped) return PipelineState.Skipped
   if (
-    status === 'running' ||
+    status === PipelineState.Running ||
     status === 'pending' ||
     status === 'created' ||
     status === 'preparing' ||
@@ -48,9 +49,9 @@ export function pipelineOfGitlab(data: unknown): PipelineState | null {
     status === 'scheduled' ||
     status === 'canceling' ||
     status === 'manual' ||
-    status === 'blocked'
+    status === SessionState.Blocked
   ) {
-    return 'running'
+    return PipelineState.Running
   }
   return null
 }
@@ -135,7 +136,7 @@ async function lookup(url: string): Promise<CodeLinkStatus | null> {
       /* 没装、没登录、断网都当取不到，同一链接只提醒一次 */
       if (!warned.has(url)) {
         warned.add(url)
-        log.warn(`取不到 ${url} 的状态：${(err as Error).message}`)
+        log.warn(tr("Could not read status for {0}: {1}", [url, (err as Error).message]))
       }
     }
   }

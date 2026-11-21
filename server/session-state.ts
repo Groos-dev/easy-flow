@@ -1,3 +1,6 @@
+import { messageDetail, type MessageDescriptor } from '../src/shared/i18n.ts'
+import { SESSION_STATES } from '../src/shared/domain.ts'
+import { SessionState } from '../src/shared/domain.ts'
 /**
  * 会话状态层：一条会话一条，所有来源都写它。
  *
@@ -18,7 +21,6 @@
  * （见 threads.ts 的 hookKeyOf），这样点击与 hook 事件才落在同一个格子里。
  */
 import { createLogger } from './log.ts'
-import { EVENT_STATES } from '../src/shared/thread-events.ts'
 import type { SessionAction } from './action.ts'
 
 const log = createLogger('state')
@@ -33,15 +35,8 @@ const log = createLogger('state')
  * 这边按看板自己的语义叫 done / blocked / failed，映射在 lib/pet-art.ts）。
  * `unknown` 是我们加的：它不是一种状态，是「读不到」。
  */
-export const THREAD_STATES = [
-  'idle',
-  'thinking',
-  'working',
-  'sweeping',
-  ...EVENT_STATES,
-  'unknown',
-] as const
-export type ThreadState = (typeof THREAD_STATES)[number]
+export const THREAD_STATES = SESSION_STATES
+export type ThreadState = SessionState
 
 export { EVENT_STATES, isEventState } from '../src/shared/thread-events.ts'
 export type { EventState } from '../src/shared/thread-events.ts'
@@ -55,6 +50,7 @@ export interface SessionStatus {
   observedAt: number
   // 判据出处，详情页 hover 用
   detail: string
+  detailMessage?: MessageDescriptor
   /**
    * hook 事件名（如 Interrupt）；拉取来源没有。
    * 通知层按它做结构化判断。
@@ -73,18 +69,18 @@ export interface SessionObservation {
 }
 
 // 读不到时的状态。调用方拿不到条目时也该拿到它，而不是自己拼一个
-export function unknownStatus(detail: string): SessionStatus {
-  return { state: 'unknown', needsAction: '', observedAt: 0, detail }
+export function unknownStatus(detail: string | MessageDescriptor): SessionStatus {
+  return { state: SessionState.Unknown, needsAction: '', observedAt: 0, ...(typeof detail === 'string' ? { detail } : messageDetail(detail.key, detail.values)) }
 }
 
 // 板侧写的那条：点一下 pet = 这条会话此刻「静止」，不用管了
 export function idleStatus(at = Date.now()): SessionStatus {
-  return { state: 'idle', needsAction: '', observedAt: at, detail: '板侧：点过 pet' }
+  return { state: SessionState.Idle, needsAction: '', observedAt: at, ...messageDetail("Board: pet clicked") }
 }
 
 // 在干活的那些档：会话真在动，跟「静止 / 等你」分开
 export function isActive(state: ThreadState): boolean {
-  return state === 'thinking' || state === 'working' || state === 'sweeping'
+  return state === SessionState.Thinking || state === SessionState.Working || state === SessionState.Compacting
 }
 
 export interface StateTable {
@@ -180,5 +176,5 @@ function newer(next: SessionStatus, old: SessionStatus): boolean {
     return next.observedAt > old.observedAt
   }
   // 一样新：unknown 不许盖掉一条真的观察；两条都真就是「后到覆盖先到」
-  return old.state === 'unknown' || next.state !== 'unknown'
+  return old.state === SessionState.Unknown || next.state !== SessionState.Unknown
 }

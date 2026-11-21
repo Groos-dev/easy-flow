@@ -1,3 +1,5 @@
+import { useLanguageSync, useLanguage } from '../lib/language'
+import { t as tr } from "../../../shared/i18n.ts"
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../lib/api'
@@ -24,6 +26,7 @@ const PRODUCT_ICONS: Record<string, string> = {
 }
 
 export default function MiniApp() {
+  useLanguageSync()
   const [rows, setRows] = useState<Array<{ req: Requirement; projectName: string }>>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [query, setQuery] = useState('')
@@ -235,8 +238,8 @@ export default function MiniApp() {
       const attention = isEventState(session.status.state)
       const parts = [AGENT_LABELS[session.agent] ?? session.agent, session.title || session.session]
       if (attention) parts.push(session.status.needsAction || PET_LABEL[session.status.state])
-      if (off) parts.push('没有可用的会话链接')
-      else if (session.agent === 'cursor' && !session.link) parts.push('打开工作区')
+      if (off) parts.push(tr("No session link is available"))
+      else if (session.agent === 'cursor' && !session.link) parts.push(tr("Open workspace"))
       title = parts.join(' · ')
       const image = PRODUCT_ICONS[session.agent]
       content = <>
@@ -257,7 +260,7 @@ export default function MiniApp() {
         <span className="mini-go"><GoIcon /></span>
       </>
     } else {
-      content = action.expanded ? '收起' : `更多 ${action.remaining} 条`
+      content = action.expanded ? tr("Collapse") : tr("{0} more", [action.remaining])
     }
     return (
       <button
@@ -293,24 +296,24 @@ export default function MiniApp() {
           <SearchIcon />
           <input
             ref={inputRef}
-            aria-label="搜索需求或项目"
+            aria-label={tr("Search requirements or projects")}
             aria-controls="mini-results"
-            placeholder="搜索需求、项目…"
+            placeholder={tr("Search requirements, projects…")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
           />
-          <button type="button" className="mini-esc" aria-label={query ? '清除搜索' : expanded ? '收起操作' : '收起面板'} onClick={close}>esc</button>
+          <button type="button" className="mini-esc" aria-label={query ? tr("Clear search") : expanded ? tr("Collapse actions") : tr("Hide panel")} onClick={close}>esc</button>
         </div>
         <div className="mini-scope">
-          <span>{words.length ? '搜索结果' : '最近任务'}</span>
-          {ready && <span aria-live="polite">{blocks.length} 项</span>}
+          <span>{words.length ? tr("Search results") : tr("Recent tasks")}</span>
+          {ready && <span aria-live="polite">{blocks.length} {blocks.length === 1 ? tr("item") : tr("items")}</span>}
         </div>
       </div>
       <div className="mini-list" id="mini-results">
         {error && <div className="notice" role="alert">{error}</div>}
         {!error && !ready && <MiniSkeleton />}
-        {!error && ready && blocks.length === 0 && <div className="mini-empty">没有匹配的需求</div>}
+        {!error && ready && blocks.length === 0 && <div className="mini-empty">{tr("No matching requirements")}</div>}
         {blocks.map((block) => {
           const open = expanded === block.key
           return (
@@ -325,7 +328,7 @@ export default function MiniApp() {
               <button
                 type="button"
                 className="mini-top"
-                title={`${block.req.title}${!open && block.needsHuman ? ' · 有会话需要介入' : ''}`}
+                title={`${block.req.title}${!open && block.needsHuman ? tr(" · A session needs attention") : ''}`}
                 aria-expanded={open}
                 aria-controls={`mini-actions-${block.req.id}`}
                 onFocus={() => setSelectedKey(block.key)}
@@ -352,14 +355,14 @@ export default function MiniApp() {
                   return (
                     <div className="mini-acts" key={group}>
                       <div className="mini-group">
-                        <span>{group === 'sessions' ? '会话' : '链接'}</span>
+                        <span>{group === 'sessions' ? tr("Sessions") : tr("Links")}</span>
                         {actions.filter((c) => c.kind === 'more').map(actionRow)}
                       </div>
                       {actions.filter((c) => c.kind !== 'more').map(actionRow)}
                     </div>
                   )
                 })}
-                {open && block.children.length === 0 && <div className="mini-empty">暂无会话或链接</div>}
+                {open && block.children.length === 0 && <div className="mini-empty">{tr("No sessions or links yet")}</div>}
               </div>
             </section>
           )
@@ -370,6 +373,7 @@ export default function MiniApp() {
 }
 
 function MiniSkeleton() {
+  useLanguage()
   return <>{[0, 1, 2].map((i) => (
     <div className="mini-card mini-skel" key={i}>
       <div className="mini-top"><span className="mini-skel-bar" /></div>

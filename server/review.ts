@@ -1,3 +1,5 @@
+import { SessionState } from '../src/shared/domain.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 import { execFile } from 'node:child_process'
 import {
   appendFileSync,
@@ -59,13 +61,13 @@ async function runReview(input: ReviewInput, reviewDir: string) {
   if (input.recheck) {
     previousPath = realpathSync(input.recheck)
     if (dirname(previousPath) !== realpathSync(reviewDir)) {
-      throw new Error('Recheck report must belong to this requirement')
+      throw new Error(tr("Recheck report must belong to this requirement"))
     }
     previous = readFileSync(previousPath, 'utf8')
     const { data } = parseFrontmatter(previous)
     if (data.requirement !== worktree.requirementId || data.worktree !== worktree.id ||
-      !['completed', 'failed'].includes(data.status) || !data.base || !data.session) {
-      throw new Error('Recheck requires a finished report with a session for the same worktree')
+      !['completed', SessionState.Failed].includes(data.status) || !data.base || !data.session) {
+      throw new Error(tr("Recheck requires a finished report with a session for the same worktree"))
     }
     baseRef = data.base
   }
@@ -75,15 +77,15 @@ async function runReview(input: ReviewInput, reviewDir: string) {
     for (const report of reports) {
       const path = join(reviewDir, report.name)
       const { data } = parseFrontmatter(readFileSync(path, 'utf8'))
-      if (!data.requirement || !data.worktree) throw new Error(`Review report is missing ownership: ${path}`)
+      if (!data.requirement || !data.worktree) throw new Error(tr("Review report is missing ownership: {0}", [path]))
       if (data.requirement !== worktree.requirementId || data.worktree !== worktree.id) continue
       if (data.session) {
         sessionId = data.session
         break
       }
-      if (data.status !== 'failed' || data.creation_requested !== 'false') hasUnresolvedHistory = true
+      if (data.status !== SessionState.Failed || data.creation_requested !== 'false') hasUnresolvedHistory = true
     }
-    if (!sessionId && hasUnresolvedHistory) throw new Error(`Cannot determine the existing reviewer for ${worktree.id}`)
+    if (!sessionId && hasUnresolvedHistory) throw new Error(tr("Cannot determine the existing reviewer for {0}", [worktree.id]))
   }
   const existingSessionId = sessionId
   if (sessionId) input.onSessionResolved(sessionId)
@@ -113,45 +115,45 @@ async function runReview(input: ReviewInput, reviewDir: string) {
     `creation_requested: ${creationRequested}`,
     '---',
     '',
-    `# ${input.recheck ? '复查' : '评审'} · ${paths.name}`,
+    `# ${input.recheck ? tr("Recheck") : tr("Review")} · ${paths.name}`,
     '',
-    `- 工作区：${worktree.path}`,
-    `- 日志：${paths.logPath}`,
-    ...(previousPath ? [`- 上一轮报告：${previousPath}`] : []),
-    '- 范围：基线到当前工作区，包含已提交、暂存、未暂存和未跟踪文件。',
+    tr("- Workspace: {0}", [worktree.path]),
+    tr("- Log: {0}", [paths.logPath]),
+    ...(previousPath ? [tr("- Previous report: {0}", [previousPath])] : []),
+    tr("- Scope: baseline to current workspace, including committed, staged, unstaged, and untracked files."),
     '',
     body,
     '',
   ].join('\n')
   const prompt = [
-    '你是独立代码 reviewer。本轮仅评审，原 coding 会话等待你的结果后负责修复。',
-    '本轮属于评审角色，只产出报告；不再调用 easy-flow review，不修改代码、需求文档或看板状态。',
-    '使用 self-codereview 的检查口径：简洁、架构正确性、冗余、死代码及正确性。',
-    '以需求、验收和已确认决策为依据，主动阅读下列文档正文、完整文件及相关调用链。',
-    '独立核对代码证据，区分确定缺陷和待确认项；改法限定在已确认需求内。',
-    '输出简体中文 Markdown，包含验收对照、按严重度排列的问题、待确认项和验证结果。',
-    '每个问题用 F-1、F-2 等编号，给出 file_path:line_number、证据、影响及最小改法。',
-    '没有问题也明确写出结论和验证范围；未运行的检查标为未验证。',
-    ...(previous ? ['这是修复后的复查。逐条核对上一轮问题及处理证据，并检查修复引入的回归。'] : []),
+    tr("You are the independent code reviewer. Review only; the original coding session will read your results and make fixes."),
+    tr("Produce the report only. Do not call easy-flow review or modify code, requirement documents, or board state."),
+    tr("Review simplicity, architecture, redundancy, dead code, and correctness."),
+    tr("Use the requirement, acceptance criteria, and confirmed decisions. Read the documents below, complete files, and relevant call chains."),
+    tr("Check code evidence independently, distinguish confirmed defects from uncertainties, and limit proposed fixes to the agreed scope."),
+    tr("Write the Markdown report in English, including acceptance coverage, findings ordered by severity, open questions, and verification results."),
+    tr("Number findings F-1, F-2, etc. Include file_path:line_number, evidence, impact, and the smallest appropriate fix."),
+    tr("If no defects are found, state that and the verified scope. Mark checks not run as unverified."),
+    ...(previous ? [tr("This is a recheck after fixes. Verify every previous finding and its disposition evidence, and check for regressions caused by fixes.")] : []),
     '',
     input.context,
     '',
-    `需求目录：${input.requirementPath}`,
-    `工作区：${worktree.id} ${worktree.path}`,
-    `固定基线：${base}`,
-    `评审 HEAD：${head}`,
-    `使用 git diff ${base} -- 查看已提交与未提交的整体改动，另外读取未跟踪文件。`,
+    tr("Requirement directory: {0}", [input.requirementPath]),
+    tr("Workspace: {0} {1}", [worktree.id, worktree.path]),
+    tr("Fixed baseline: {0}", [base]),
+    tr("Reviewed HEAD: {0}", [head]),
+    tr("Use git diff {0} -- to inspect committed and uncommitted changes, and read untracked files separately.", [base]),
     '',
-    '## 改动统计',
-    diff || '已跟踪文件没有改动。',
+    tr("## Change summary"),
+    diff || tr("No tracked-file changes."),
     '',
-    '## 未跟踪文件',
-    untracked || '无',
-    ...(previous ? ['', `## 上一轮报告与处理记录（${previousPath}）`, previous] : []),
+    tr("## Untracked files"),
+    untracked || tr("None"),
+    ...(previous ? ['', tr("## Previous report and dispositions ({0})", [previousPath]), previous] : []),
   ].join('\n')
   for (;;) {
     try {
-      writeFileSync(paths.reportPath, render('running', '评审正在执行，结论待生成。'), { flag: 'wx' })
+      writeFileSync(paths.reportPath, render('running', tr("Review is running; findings are pending.")), { flag: 'wx' })
       break
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
@@ -171,7 +173,7 @@ async function runReview(input: ReviewInput, reviewDir: string) {
     if (!existingSessionId) {
       // 请求前落盘，断连后保留“可能已创建”的事实。
       creationRequested = true
-      save('running', '评审正在执行，结论待生成。')
+      save('running', tr("Review is running; findings are pending."))
     }
     const started = await server.call(sessionId ? 'thread/resume' : 'thread/start', {
       cwd: worktree.path,
@@ -185,22 +187,22 @@ async function runReview(input: ReviewInput, reviewDir: string) {
       ...(input.model ? { model: input.model } : {}),
     }) as { thread: { id: string } }
     if (existingSessionId && started.thread.id !== existingSessionId) {
-      throw new Error('Codex resumed a different reviewer session')
+      throw new Error(tr("Codex resumed a different reviewer session"))
     }
     sessionId = started.thread.id
     if (!existingSessionId) {
       input.onSessionResolved(sessionId)
-      save('running', '评审正在执行，结论待生成。')
+      save('running', tr("Review is running; findings are pending."))
     }
     await server.call('thread/name/set', { threadId: sessionId, name: input.title })
     const result = (await server.runTurn(sessionId, prompt, (event) => {
       appendFileSync(logPath, `${JSON.stringify(event)}\n`)
     })).trim()
-    if (!result) throw new Error('Codex returned no review conclusion')
-    save('completed', `${result}\n\n## 处理结果\n\n由原 coding 会话逐条追加问题编号、处理结论和验证证据。`)
+    if (!result) throw new Error(tr("Codex returned no review conclusion"))
+    save('completed', tr("{0}\n\n## Dispositions\n\nThe original coding session appends finding IDs, dispositions, and verification evidence here.", [result]))
   } catch (err) {
     error = err instanceof Error ? err.message : String(err)
-    save('failed', `## 执行失败\n\n${error}\n\n本轮未取得有效评审结论。`)
+    save(SessionState.Failed, tr("## Execution failed\n\n{0}\n\nNo valid review conclusions were obtained in this round.", [error]))
   } finally {
     server?.close()
   }

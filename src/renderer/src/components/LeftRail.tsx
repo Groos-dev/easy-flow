@@ -1,3 +1,5 @@
+import { useLanguage } from '../lib/language'
+import { t as tr } from "../../../shared/i18n.ts"
 import { useEffect, useRef, useState } from 'react'
 import type { Project } from '../lib/types'
 import { shortcutLabel, projectShortcutLabel } from '../lib/keys'
@@ -37,6 +39,7 @@ export default function LeftRail({
   onSwitchView,
   onAgentFocus,
 }: LeftRailProps) {
+  useLanguage()
   const [open, setOpen] = useState(false)
   const openTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -90,7 +93,7 @@ export default function LeftRail({
         <span className="rail-row-acts">
           <button
             className={`rail-act${isPinned ? ' on' : ''}`}
-            title={isPinned ? '取消置顶' : '置顶到左侧栏'}
+            title={isPinned ? tr("Unpin") : tr("Pin to the sidebar")}
             onClick={(e) => {
               e.stopPropagation()
               onTogglePin(p.slug, !isPinned)
@@ -100,7 +103,7 @@ export default function LeftRail({
           </button>
           <button
             className="rail-act"
-            title="项目详情"
+            title={tr("Project details")}
             onClick={(e) => {
               e.stopPropagation()
               onOpenProject(p.slug)
@@ -125,8 +128,8 @@ export default function LeftRail({
           className="rail-btn cur"
           aria-label={
             current
-              ? `${nameOf(current)} · 悬停浏览全部项目（${shortcutLabel('global.project')} 键盘切换）`
-              : `浏览全部项目（${shortcutLabel('global.project')}）`
+              ? tr("{0} · Hover to browse all projects ({1} to switch with the keyboard)", [nameOf(current), shortcutLabel('global.project')])
+              : tr("Browse all projects ({0})", [shortcutLabel('global.project')])
           }
           onMouseEnter={openSoon}
           onMouseLeave={closeSoon}
@@ -168,10 +171,10 @@ export default function LeftRail({
           className="rail-btn"
           title={
             view === 'map'
-              ? `当前：导图 · 点击切到看板（${shortcutLabel('global.view-board')}）`
+              ? tr("Mind map · Click to switch to the board ({0})", [shortcutLabel('global.view-board')])
               : view === 'next'
-                ? `切回看板（${shortcutLabel('global.view-board')}）`
-                : `当前：看板 · 点击切到导图（${shortcutLabel('global.view-map')}）`
+                ? tr("Return to the board ({0})", [shortcutLabel('global.view-board')])
+                : tr("Board · Click to switch to the mind map ({0})", [shortcutLabel('global.view-map')])
           }
           onClick={() => onSwitchView(view === 'board' ? 'map' : 'board')}
         >
@@ -183,8 +186,8 @@ export default function LeftRail({
           className={`rail-btn${view === 'next' ? ' on' : ''}`}
           title={
             view === 'next'
-              ? `agent 焦点：需要你介入的需求（${shortcutLabel('global.view-next')}）`
-              : `切到 agent 焦点：需要你介入的需求（${shortcutLabel('global.view-next')}）`
+              ? tr("Agent focus: requirements needing your attention ({0})", [shortcutLabel('global.view-next')])
+              : tr("Switch to agent focus: requirements needing your attention ({0})", [shortcutLabel('global.view-next')])
           }
           onClick={onAgentFocus}
         >
@@ -195,15 +198,15 @@ export default function LeftRail({
       </div>
 
       <div className="rail-panel" onMouseEnter={holdOpen} onMouseLeave={closeSoon}>
-        <div className="rail-panel-head">全部项目</div>
+        <div className="rail-panel-head">{tr("All projects")}</div>
         <div className="rail-panel-scroll">
           {pinnedProjects.length > 0 && (
             <>
-              <div className="rail-group">置顶</div>
+              <div className="rail-group">{tr("Pinned")}</div>
               {pinnedProjects.map(row)}
             </>
           )}
-          <div className="rail-group">全部</div>
+          <div className="rail-group">{tr("All")}</div>
           {restProjects.map(row)}
         </div>
       </div>

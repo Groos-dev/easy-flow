@@ -1,3 +1,4 @@
+import { t as tr } from "../../../shared/i18n.ts"
 import type { Requirement, Session } from './types'
 import { isCodeLink, linkLabel } from './links'
 import { isEventState, sessionActive } from './threads'
@@ -20,7 +21,7 @@ export type MiniAction =
       project: string
       slug: string
       url: string
-      type: 'MR' | '链接'
+      type: 'MR' | 'link'
       value: string
     }
 
@@ -51,9 +52,9 @@ export interface MiniInput {
 export function miniTime(ms: number): string {
   if (!ms) return ''
   const ago = Date.now() - ms
-  if (ago < 60000) return '刚刚'
-  if (ago < 3600000) return `${Math.floor(ago / 60000)} 分钟前`
-  if (ago < 86400000) return `${Math.floor(ago / 3600000)} 小时前`
+  if (ago < 60000) return tr("Just now")
+  if (ago < 3600000) return tr("{0} minutes ago", [Math.floor(ago / 60000)])
+  if (ago < 86400000) return tr("{0} hours ago", [Math.floor(ago / 3600000)])
   return relTime(ms)
 }
 
@@ -137,7 +138,7 @@ function actionsOf(block: Omit<MiniBlock, 'children'>, expandedSessions: boolean
       project: req.project,
       slug: req.slug,
       url: l.url,
-      type: isCodeLink(l.url) ? ('MR' as const) : ('链接' as const),
+      type: isCodeLink(l.url) ? ('MR' as const) : ('link' as const),
       value: linkLabel(l),
     })),
   ]

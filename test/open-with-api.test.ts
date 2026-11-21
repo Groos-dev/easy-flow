@@ -1,3 +1,4 @@
+import { Language, setLanguage } from '../src/shared/i18n.ts'
 // /api/settings/open-with 契约；断言不依赖本机装了哪些 app
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
@@ -20,6 +21,7 @@ describe('打开方式接口', () => {
     prevConfig = process.env.EASY_FLOW_CONFIG
     process.env.EASY_FLOW_CONFIG = join(dir, 'config.json')
     app = createBoardApp({ dataDir: join(dir, 'data') })
+    setLanguage(Language.Chinese)
     server = createServer((req, res) => void app.handle(req, res))
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
     const addr = server.address()
@@ -58,7 +60,7 @@ describe('打开方式接口', () => {
 
   test('POST 未知 id 拒绝且不改配置', async () => {
     const r = await post('/api/settings/open-with', { id: 'ghost' })
-    assert.match(r.error, /Unknown open target/)
+    assert.match(r.error, /(?:Unknown open target|未知的打开方式)/)
     assert.equal(readConfig().openWith, '')
   })
 

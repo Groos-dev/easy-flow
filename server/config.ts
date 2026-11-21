@@ -1,3 +1,5 @@
+import { NotificationPreference, ThemeMode, LogSeverity } from '../src/shared/domain.ts'
+import { isLanguage, Language } from '../src/shared/i18n.ts'
 /**
  * 应用配置：记录"当前数据目录"。
  *
@@ -13,6 +15,7 @@ import { isTheme, type Theme } from '../src/shared/theme.ts'
 import { isLogLevel, type LogLevel } from '../src/shared/log-level.ts'
 
 export interface AppConfig {
+  language: Language
   dataDir: string
   // 当前看板的项目（用户切换后记住）
   activeProject: string
@@ -54,17 +57,19 @@ export function devFallbackDir(): string {
 export function readConfig(): AppConfig {
   const path = configPath()
   const defaults: AppConfig = {
+    language: Language.English,
     dataDir: devFallbackDir(),
     activeProject: '',
     panelShortcut: '',
     openWith: '',
-    notificationMode: 'unfocused',
-    theme: 'system',
-    logLevel: 'info',
+    notificationMode: NotificationPreference.Unfocused,
+    theme: ThemeMode.System,
+    logLevel: LogSeverity.Info,
   }
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<AppConfig>
     return {
+      language: isLanguage(raw?.language) ? raw.language : defaults.language,
       dataDir: typeof raw?.dataDir === 'string' && raw.dataDir ? raw.dataDir : defaults.dataDir,
       activeProject:
         typeof raw?.activeProject === 'string' ? raw.activeProject : defaults.activeProject,

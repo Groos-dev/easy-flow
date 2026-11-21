@@ -1,3 +1,4 @@
+import { SessionState } from '../../../shared/domain.ts'
 /**
  * 会话状态的口径：角标挂哪些、最近一次活跃在什么时候。
  *
@@ -16,7 +17,7 @@ import { parseStamp } from './time'
 import type { Session, ThreadState } from './types'
 
 // 从急到缓：卡住了 > 出错 > 跑完了 > 干活 > 思考。角标按这个顺序排
-const ORDER: ThreadState[] = ['blocked', 'failed', 'done', 'working', 'thinking']
+const ORDER: ThreadState[] = [SessionState.Blocked, SessionState.Failed, SessionState.Done, SessionState.Working, SessionState.Thinking]
 
 /**
  * 会话最后一次活跃的时刻。
@@ -40,7 +41,7 @@ export { isEventState }
  */
 export function needsBadge(session: Session): boolean {
   const { state } = session.status
-  return state !== 'unknown' && state !== 'idle'
+  return state !== SessionState.Unknown && state !== SessionState.Idle
 }
 
 // 一条需求名下该挂角标的会话，按急缓排序；没有就返回空数组（卡片不挂角标）

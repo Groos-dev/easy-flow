@@ -1,3 +1,4 @@
+import { Language, getLanguage, setLanguage } from '../src/shared/i18n.ts'
 /**
  * 标题同步：把 agent 应用里的标题写进登记记录（session 表的 title）。
  *
@@ -201,6 +202,23 @@ describe('标题同步：应用里那句覆盖登记那句', () => {
     writeCxbDb([['s_cxb3', 'AI 总结后的标题']])
     pullTitles(db.listSessions(), db, roots)
     assert.equal(titleOf(db, 'chengxiaobang', 's_cxb3'), 'AI 总结后的标题')
+  })
+
+  test('Cursor placeholder aliases never overwrite registered titles in either language', () => {
+    const previous = getLanguage()
+    try {
+      for (const language of [Language.English, Language.Chinese]) {
+        setLanguage(language)
+        for (const [index, placeholder] of ['新会话', '新建会话', 'NEW AGENT', 'New Chat', 'New Session', 'Untitled'].entries()) {
+          const session = `placeholder-${language}-${index}`
+          writeComposerHeader(session, placeholder)
+          const db = newBoard()
+          registered(db, 'cursor', session, 'Keep the registered title')
+          pullTitles(db.listSessions(), db, roots)
+          assert.equal(titleOf(db, 'cursor', session), 'Keep the registered title')
+        }
+      }
+    } finally { setLanguage(previous) }
   })
 
   test('cursor：chat 库 meta 里的 name', () => {

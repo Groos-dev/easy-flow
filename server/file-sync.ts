@@ -1,9 +1,11 @@
+import { getLanguage, type Language } from '../src/shared/i18n.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 import { Worker } from 'node:worker_threads'
 import { createRequire } from 'node:module'
 import type { BoardDatabase } from './db.ts'
 
 type SyncResult = ReturnType<BoardDatabase['syncProjects']>
-export interface FileSyncRequest { id: number; dataDir: string }
+export interface FileSyncRequest { id: number; dataDir: string; language: Language }
 export type FileSyncReply = { id: number } & ({ sync: SyncResult } | { error: string })
 
 export function createFileSync(file: string) {
@@ -19,7 +21,7 @@ export function createFileSync(file: string) {
     pending.clear()
   }
   worker.on('error', fail)
-  worker.on('exit', () => fail(new Error('文件同步 worker 已退出')))
+  worker.on('exit', () => fail(new Error(tr("File synchronization worker exited"))))
   worker.on('message', (reply: FileSyncReply) => {
     const request = pending.get(reply.id)
     if (!request) return
@@ -33,11 +35,11 @@ export function createFileSync(file: string) {
       const id = ++sequence
       return new Promise((resolve, reject) => {
         pending.set(id, { resolve, reject })
-        worker.postMessage({ id, dataDir } satisfies FileSyncRequest)
+        worker.postMessage({ id, dataDir, language: getLanguage() } satisfies FileSyncRequest)
       })
     },
     async close() {
-      fail(new Error('文件同步已关闭'))
+      fail(new Error(tr("File synchronization is closed")))
       await worker.terminate()
     },
   }
