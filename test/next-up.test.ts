@@ -153,7 +153,7 @@ describe('下一步 · 排名', () => {
     const items = rankNextUp([req({ slug: 'a', status: 'clarification', updated: '2026-10-09' })], [], NOW)
     assert.equal(items.length, 1)
     assert.equal(items[0].tier, 4)
-    assert.equal(items[0].reason, '澄清停了 5 天')
+    assert.equal(items[0].reason, '准备停了 5 天')
     assert.equal(items[0].session, null)
   })
 

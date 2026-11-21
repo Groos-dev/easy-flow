@@ -819,7 +819,8 @@ body {
 .pinned-body {
   display: flex;
   gap: 8px;
-  padding: 0 8px 10px;
+  /* Keep the focused card's 3px lift inside the scrollport, below the header. */
+  padding: 4px 8px 10px;
   overflow-x: auto;
 }
 

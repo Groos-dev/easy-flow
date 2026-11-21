@@ -62,7 +62,7 @@ or contracts change.
 
 | Phase | CLI status value | Work and evidence |
 | --- | --- | --- |
-| Clarification | `clarification` | Define deliverable, acceptance criteria, boundaries, and repositories. |
+| Prepare | `clarification` | Define deliverable, acceptance criteria, boundaries, and repositories. |
 | Implementation | `in_progress` | Create a workspace for code changes, implement, verify, and update context. |
 | User review | `review` | Complete independent coding review and required fixes, then hand over evidence. |
 | Complete | `completed` | After merge and acceptance, satisfy the session-analysis requirement and close. |

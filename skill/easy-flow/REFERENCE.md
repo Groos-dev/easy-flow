@@ -106,7 +106,7 @@ status labels and `Review` remain accepted as input aliases; output uses canonic
 
 | Phase | `--status` value |
 | --- | --- |
-| Clarification | `clarification` |
+| Prepare | `clarification` |
 | Implementation | `in_progress` |
 | User review | `review` |
 | Complete | `completed` |

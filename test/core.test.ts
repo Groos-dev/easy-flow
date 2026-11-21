@@ -1774,7 +1774,7 @@ describe('CLI 层', () => {
     assert.match(byArg, new RegExp(`需求 id：${created.id}`))
     assert.match(byArg, /项目：demo（示例项目）/)
     assert.match(byArg, /需求：CSD 接 TF 标准价（csd-price）/)
-    assert.match(byArg, /状态：澄清/)
+    assert.match(byArg, /状态：准备/)
     assert.match(byArg, /先查 CK 再改代码/)
     assert.match(byArg, /跟 supply 对了/)
 
@@ -1817,7 +1817,7 @@ describe('CLI 层', () => {
     // 父需求：列出名下子需求，每行带状态——接手父需求时先看「这串活还剩几块」
     const parentCtx = cliOk(configFile, ['context', parent.id])
     assert.match(parentCtx, /## 子需求（1）/)
-    assert.match(parentCtx, /seatmap\/gateway {2}网关改造 {2}澄清/)
+    assert.match(parentCtx, /seatmap\/gateway {2}网关改造 {2}准备/)
     assert.doesNotMatch(parentCtx, /已全部完成/)
 
     // 子需求全完成就点一句收尾；父需求自己已是终态时不再点

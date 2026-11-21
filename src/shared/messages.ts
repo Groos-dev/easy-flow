@@ -61,8 +61,8 @@ export const messages = {
     "zh": "窗口"
   },
   "No requirements awaiting clarification": {
-    "en": "No requirements awaiting clarification",
-    "zh": "没有待澄清的需求"
+    "en": "No requirements to prepare",
+    "zh": "没有待准备的需求"
   },
   "No requirements in progress": {
     "en": "No requirements in progress",
@@ -450,7 +450,7 @@ export const messages = {
   },
   "No requirements need attention right now. No agents are blocked or awaiting review, and no requirement has been idle long enough to need a reminder.": {
     "en": "No requirements need attention right now. No agents are blocked or awaiting review, and no requirement has been idle long enough to need a reminder.",
-    "zh": "眼下没有要你推的需求。没有 agent 卡住或跑完没看，Review 与澄清也都还没停到该催的天数。"
+    "zh": "眼下没有要你推的需求。没有 agent 卡住或跑完没看，评审与准备也都还没停到该催的天数。"
   },
   "Could not refresh next steps. Showing the previous ranking:": {
     "en": "Could not refresh next steps. Showing the previous ranking:",
@@ -1813,8 +1813,8 @@ export const messages = {
     "zh": "已在项目「{0}」下创建需求「{1}」"
   },
   "{0}\nRequirement ID: {1}\nDirectory: {2}\nInitial status: clarification.": {
-    "en": "{0}\nRequirement ID: {1}\nDirectory: {2}\nInitial status: clarification.",
-    "zh": "{0}\n需求 id：{1}\n目录：{2}\n看板状态默认「澄清」。"
+    "en": "{0}\nRequirement ID: {1}\nDirectory: {2}\nInitial status: Prepare.",
+    "zh": "{0}\n需求 id：{1}\n目录：{2}\n看板状态默认「准备」。"
   },
   "Requirement {0} has no completed session analysis. Ask the user to start a separate session to analyze all linked AI agent sessions,": {
     "en": "Requirement {0} has no completed session analysis. Ask the user to start a separate session to analyze all linked AI agent sessions,",
@@ -2137,8 +2137,8 @@ export const messages = {
     "zh": "目录：{0}"
   },
   "Initial status: clarification. The todo is now linked to this requirement.": {
-    "en": "Initial status: clarification. The todo is now linked to this requirement.",
-    "zh": "看板状态默认「澄清」。待办已挂到这条需求上。"
+    "en": "Initial status: Prepare. The todo is now linked to this requirement.",
+    "zh": "看板状态默认「准备」。待办已挂到这条需求上。"
   },
   "Next: easy-flow wt new {0} --repo <repository> --branch feature-{1}": {
     "en": "Next: easy-flow wt new {0} --repo <repository> --branch feature-{1}",
@@ -2393,8 +2393,8 @@ export const messages = {
     "zh": "代码在评审里没人动。"
   },
   "Clarification has been idle for {0} days": {
-    "en": "Clarification has been idle for {0} days",
-    "zh": "澄清停了 {0} 天"
+    "en": "Prepare has been idle for {0} days",
+    "zh": "准备停了 {0} 天"
   },
   "The requirement is not yet clear; subsequent work depends on it.": {
     "en": "The requirement is not yet clear; subsequent work depends on it.",
@@ -2569,8 +2569,8 @@ export const messages = {
     "zh": "没能补 info/exclude：{0}；不影响使用，只是 git status 会多出 AGENTS.md 与软链"
   },
   "Clarification": {
-    "en": "Clarification",
-    "zh": "澄清"
+    "en": "Prepare",
+    "zh": "准备"
   },
   "Completed": {
     "en": "Completed",
