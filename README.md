@@ -12,6 +12,32 @@
 两种视图：看板（默认，四列状态）与导图（当前项目的需求层级按左右分支铺开）。
 导图只读——新建、改名、改层级仍旧由 agent 在文件系统里做。
 
+## Language / 语言
+
+Choose **English** or **Chinese** in **Settings → Appearance → Language**. The saved
+preference updates the main window, mini panel, and native menus without reloading
+or changing user-authored content. English is the default.
+
+在 **设置 → 外观 → 语言** 中选择 **英语** 或 **中文**。语言偏好会保存，并立即应用到主窗口、
+mini 面板和原生菜单；无需重新加载，也不会翻译或改写用户文档。默认语言为英语。
+
+```sh
+easy-flow --lang en --help
+easy-flow context <req-id> --lang zh
+easy-flow req set <req-id> --status in_progress --lang en
+```
+
+CLI precedence: `--lang en|zh`, then `EASY_FLOW_LANG`, then the saved setting.
+JSON field names and machine values are identical in both languages. Requirement
+statuses are `clarification`, `in_progress`, `review`, and `completed`; legacy Chinese
+status values and `Review` remain accepted as input. Existing board status values
+are migrated when the updated application opens that database. New document
+templates follow the selected language; existing documents are preserved.
+
+命令行语言优先级：`--lang en|zh`、环境变量 `EASY_FLOW_LANG`、已保存的语言设置。
+两种语言使用相同的 JSON 字段和机器状态值；历史中文状态和 `Review` 仍可作为输入。
+升级后的应用首次打开数据库时会迁移需求状态值，新建文档模板使用所选语言，已有文档保持原样。
+
 ## 跑起来
 
 | 命令 | 做什么 |

@@ -1,3 +1,5 @@
+import { AgentId } from '../src/shared/domain.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 /**
  * 从需求详情页启动 agent 会话的交接层。
  *
@@ -9,7 +11,7 @@
  */
 
 // 支持新会话启动的 agent
-export type LaunchAgent = 'claude' | 'codex' | 'chengxiaobang' | 'cursor'
+export type LaunchAgent = AgentId
 
 // 一次启动请求：详情页上选中的 agent 与工作区
 export interface LaunchInput {
@@ -52,7 +54,7 @@ export function findLaunchProvider(id: string): LaunchProvider | undefined {
 
 // 新会话把自己登记回需求的那条命令；提示词里那句与失败降级给用户手动执行的是同一条
 export function sessionAddCommand(requirementId: string, agent: LaunchAgent): string {
-  return `easy-flow req session add ${requirementId} --agent ${agent} --title "<一句话说明在做什么>"`
+  return tr("easy-flow req session add {0} --agent {1} --title \"<brief description of the work>\"", [requirementId, agent])
 }
 
 // 预填提示词：只带身份与下一步动作，实时内容由新会话自己用 easy-flow context 拉
@@ -63,18 +65,18 @@ export function launchPrompt(input: LaunchInput): string {
   const byWorktree = !!input.worktreeId
   const lines = [
     byWorktree
-      ? `在 easy-flow 需求 ${input.requirementId} 的工作区 ${input.worktreeId} 上开始工作。`
-      : `在 easy-flow 需求 ${input.requirementId} 上开始工作。`,
+      ? tr("Start work on easy-flow requirement {0}, workspace {1}.", [input.requirementId, input.worktreeId])
+      : tr("Start work on easy-flow requirement {0}.", [input.requirementId]),
     '',
-    `先运行 easy-flow context ${byWorktree ? input.worktreeId : input.requirementId} 读项目规范、需求内容与状态，再动手。`,
+    tr("First run easy-flow context {0} to read project conventions, requirement content, and state.", [byWorktree ? input.worktreeId : input.requirementId]),
   ]
   if (!input.requirementWorktreePaths.length) {
-    lines.push('这条需求还没有工作区：要改代码先用 easy-flow wt new 开工作区，别直接改仓库主 checkout。')
+    lines.push(tr("This requirement has no workspace. Before changing code, create one with easy-flow wt new; do not edit the main checkout."))
   }
   // 程小帮的 open 深链只带文本，工作目录由 app 当前项目决定：不写死路径，新会话会在别处动手
-  if (input.agent === 'chengxiaobang' && input.worktreePath) {
-    lines.push(`程小帮的新会话不跟随链接切目录：先 cd ${input.worktreePath} 再动手。`)
+  if (input.agent === AgentId.Chengxiaobang && input.worktreePath) {
+    lines.push(tr("Chengxiaobang session links do not change directories. First cd {0} before starting work.", [input.worktreePath]))
   }
-  lines.push(`发送首条消息、当前会话 ID 已产生后${byWorktree ? '，在这个工作区' : ''}运行 ${register}`)
+  lines.push(tr("After sending the first message and obtaining a session ID, {0}run {1}", [byWorktree ? tr("in this workspace, ") : '', register]))
   return lines.join('\n')
 }

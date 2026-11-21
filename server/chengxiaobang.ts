@@ -1,3 +1,5 @@
+import { messageDetail, message } from '../src/shared/i18n.ts'
+import { SessionState } from '../src/shared/domain.ts'
 /**
  * 程小帮的落盘：读它自己的库 `~/.chengxiaobang/data/chengxiaobang.sqlite`。
  *
@@ -56,20 +58,20 @@ function statusOf(row: Row, observedAt: number): SessionStatus {
   const error = typeof row.error === 'string' ? row.error : ''
   switch (run) {
     case 'running':
-      return { state: 'working', needsAction: '', observedAt, detail: '程小帮库：这一轮还在跑' }
-    case 'failed':
-      return { state: 'failed', needsAction: '', observedAt, detail: error ? `程小帮库：失败（${error}）` : '程小帮库：失败' }
+      return { state: SessionState.Working, needsAction: '', observedAt, ...messageDetail("Chengxiaobang database: this turn is running") }
+    case SessionState.Failed:
+      return { state: SessionState.Failed, needsAction: '', observedAt, ...(error ? messageDetail("Chengxiaobang database: failed ({0})", [error]) : messageDetail("Chengxiaobang database: failed")) }
     case 'aborted':
-      return { state: 'blocked', needsAction: '', observedAt, detail: '程小帮库：这一轮被停下' }
+      return { state: SessionState.Blocked, needsAction: '', observedAt, ...messageDetail("Chengxiaobang database: this turn was stopped") }
     case 'completed': {
       // 最后一轮跑完之后有没有被看过：看过就是静止，没看过留着「跑完待看」
       const seen = at(row.last_viewed_at)
-      const state: ThreadState = seen && seen >= observedAt ? 'idle' : 'done'
-      return { state, needsAction: '', observedAt, detail: `程小帮库：${state === 'done' ? '跑完待看' : '已看过'}` }
+      const state: ThreadState = seen && seen >= observedAt ? SessionState.Idle : SessionState.Done
+      return { state, needsAction: '', observedAt, ...messageDetail(state === SessionState.Done ? "Chengxiaobang database: finished, awaiting review" : "Chengxiaobang database: viewed") }
     }
     default:
-      if (observedAt) return { state: 'idle', needsAction: '', observedAt, detail: '程小帮库：没有跑过' }
-      return unknownStatus('程小帮库里没有这条会话的记录')
+      if (observedAt) return { state: SessionState.Idle, needsAction: '', observedAt, ...messageDetail("Chengxiaobang database: no runs yet") }
+      return unknownStatus(message("No record of this session in the Chengxiaobang database"))
   }
 }
 

@@ -1,3 +1,8 @@
+import { NextUpLevel } from '../../shared/domain.ts'
+import { requirementStatusLabel } from '../../shared/i18n.ts'
+import { useLanguageSync, useLanguage } from './lib/language'
+import { RequirementStatus } from '../../shared/domain.ts'
+import { t as tr } from "../../shared/i18n.ts"
 import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   DndContext,
@@ -50,10 +55,10 @@ import LeftRail from './components/LeftRail'
 
 // 空列的一句话：一个「—」说不出这一列是干什么的。认不出的状态回落到通用文案
 const COLUMN_HINT: Record<string, string> = {
-  澄清: '没有待澄清的需求',
-  执行中: '没有正在执行的需求',
-  Review: '没有等待评审的需求',
-  已完成: '还没有完成的需求',
+  get [RequirementStatus.Clarification]() { return tr("No requirements awaiting clarification") },
+  get [RequirementStatus.InProgress]() { return tr("No requirements in progress") },
+  get [RequirementStatus.Review]() { return tr("No requirements awaiting review") },
+  get [RequirementStatus.Completed]() { return tr("No completed requirements yet") },
 }
 
 interface BoardColumnProps {
@@ -83,7 +88,7 @@ interface BoardColumnProps {
 
 const EMPTY_SESSIONS: Session[] = []
 const POINTER_OPTIONS = { activationConstraint: { distance: 4 } }
-const PIN_STATUS = '置顶'
+const PIN_STATUS = 'pinned'
 const PIN_DROP_ID = 'pinned-drop'
 
 function visibleInBoard(el: HTMLElement): boolean {
@@ -143,6 +148,7 @@ const ColumnView = memo(function ColumnView({
   collapsed,
   onToggleCollapsed,
 }: BoardColumnProps) {
+  useLanguage()
   const { setNodeRef } = useDroppable({ id: status, data: { status } })
 
   if (collapsed) {
@@ -152,9 +158,9 @@ const ColumnView = memo(function ColumnView({
         ref={setNodeRef}
         className={`column collapsed${isOver ? ' over' : ''}`}
         onClick={onToggleCollapsed}
-        title={`展开「${status}」（${items.length}）`}
+        title={tr("Expand {0} ({1})", [requirementStatusLabel(status), items.length])}
       >
-        <span className="column-fold-name">{status}</span>
+        <span className="column-fold-name">{requirementStatusLabel(status)}</span>
         <span className="n">{items.length}</span>
       </div>
     )
@@ -168,9 +174,9 @@ const ColumnView = memo(function ColumnView({
       <div
         className={`column-head${foldable ? ' foldable' : ''}`}
         onClick={foldable ? onToggleCollapsed : undefined}
-        title={foldable ? '收成窄条' : undefined}
+        title={foldable ? tr("Collapse to a narrow column") : undefined}
       >
-        <span>{status}</span>
+        <span>{requirementStatusLabel(status)}</span>
         <span className="n">{items.length}</span>
         {foldable && (
           <svg className="column-fold-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -180,7 +186,7 @@ const ColumnView = memo(function ColumnView({
       </div>
       <div className="column-body">
         {items.length === 0 ? (
-          <div className="empty">{COLUMN_HINT[status] ?? '没有需求'}</div>
+          <div className="empty">{COLUMN_HINT[status] ?? tr("No requirements")}</div>
         ) : (
           items.map((r) => (
             <Card
@@ -208,6 +214,7 @@ const ColumnView = memo(function ColumnView({
 ColumnView.displayName = 'ColumnView'
 
 function PinnedSection({ className, children }: { className: string; children: ReactNode }) {
+  useLanguage()
   const { setNodeRef } = useDroppable({ id: PIN_DROP_ID })
   return (
     <section ref={setNodeRef} className={className}>
@@ -238,6 +245,7 @@ function readPinned(): string[] {
 }
 
 export default function App() {
+  const language = useLanguageSync()
   const [statuses, setStatuses] = useState<Status[]>([])
   // 当前项目：看板数据按项目隔离
   const [project, setProject] = useState('')
@@ -603,7 +611,7 @@ export default function App() {
   }, [inMain, pinnedLive, switchProject])
 
   // 铃铛角标：agent 卡住等你、要人介入的需求数（档位 1 就是 level now）
-  const agentCount = useMemo(() => nextItems.filter((i) => i.level === 'now').length, [nextItems])
+  const agentCount = useMemo(() => nextItems.filter((i) => i.level === NextUpLevel.Now).length, [nextItems])
 
   // 需求 id → 名下的会话。需求没有 id 时不可能有会话，取不到正好
   const sessionsByReq = useMemo(() => {
@@ -646,7 +654,7 @@ export default function App() {
     )
     for (const r of shown) {
       if (r.pinned) continue
-      const st = (r.status ?? '澄清') as Status
+      const st = (r.status ?? RequirementStatus.Clarification) as Status
       if (!map.has(st)) map.set(st, [])
       map.get(st)!.push(r)
     }
@@ -866,7 +874,7 @@ export default function App() {
           r.project === req.project && r.slug === req.slug ? { ...r, pinned: req.pinned } : r,
         ),
       )
-      setError(`置顶失败：${(err as Error).message}`)
+      setError(tr("Could not pin: {0}", [(err as Error).message]))
     }
   }, [])
 
@@ -1005,7 +1013,7 @@ export default function App() {
         e.preventDefault()
         void navigator.clipboard
           ?.writeText(slug)
-          .then(() => setHint(`已复制 slug：${slug}`))
+          .then(() => setHint(tr("Copied slug: {0}", [slug])))
           .catch(() => {})
         return
       }
@@ -1110,7 +1118,7 @@ export default function App() {
       setItems((list) => list.map((r) => (r.slug === slug ? updated : r)))
     } catch (err) {
       setItems(previous)
-      setError(`移动失败：${(err as Error).message}`)
+      setError(tr("Could not move: {0}", [(err as Error).message]))
     }
   }, [clearDrag, items])
 
@@ -1140,12 +1148,12 @@ export default function App() {
                         className="pinned-head"
                         aria-expanded={pinsOpen}
                         onClick={() => setPinsOpen((open) => !open)}
-                        title={pinsOpen ? '收起置顶区' : '展开置顶区'}
+                        title={pinsOpen ? tr("Collapse pinned requirements", [], language) : tr("Expand pinned requirements", [], language)}
                       >
                         <PinIcon />
-                        <span>置顶</span>
+                        <span>{tr("Pinned")}</span>
                         <span className="n">{pinnedItems.length}</span>
-                        {pinsOpen && <span className="pinned-hint">长期需求</span>}
+                        {pinsOpen && <span className="pinned-hint">{tr("Ongoing requirements", [], language)}</span>}
                         <svg
                           className="pinned-fold"
                           width="12"
@@ -1219,12 +1227,12 @@ export default function App() {
                 </DragOverlay>
               </DndContext>
     )
-  }, [inMain, reqView, sensors, moveFocus, handleDragEnd, clearDrag, statuses, byStatus,
+  }, [language, inMain, reqView, sensors, moveFocus, handleDragEnd, clearDrag, statuses, byStatus,
     sessionsByReq, childStats, childrenByParent, jumpToChild, flashSlug, kidsOpen,
     toggleKids, handleCardFocus, openCard, filterByTag, overStatus, doneOpen, toggleDone, dragItem,
     pinnedItems, pinsOpen, toggleRequirementPin, petFocus])
 
-  if (loading) return <div className="loading">加载中…</div>
+  if (loading) return <div className="loading">{tr("Loading…")}</div>
 
   // 详情页挂载点：需求（带 slug）或项目（slug 为 null）
   const detailTarget = detail
@@ -1313,7 +1321,7 @@ export default function App() {
                 {reqView !== 'next' && query.trim() && (
                   <button
                     className="filter-chip"
-                    title={`点一下继续改筛选词（${shortcutLabel('global.clear-filter')} 清掉）`}
+                    title={tr("Click to edit the filter ({0} to clear)", [shortcutLabel('global.clear-filter')])}
                     onClick={() => setSearchOpen(true)}
                   >
                     <span className="filter-chip-q">{query.trim()}</span>
@@ -1332,7 +1340,7 @@ export default function App() {
                         setQuery('')
                       }}
                     >
-                      <title>清掉筛选</title>
+                      <title>{tr("Clear filter")}</title>
                       <line x1="6" y1="6" x2="18" y2="18" />
                       <line x1="18" y1="6" x2="6" y2="18" />
                     </svg>

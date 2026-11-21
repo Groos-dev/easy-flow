@@ -1,3 +1,7 @@
+import { PriorityLevel } from '../src/shared/domain.ts'
+import { NextUpLevel } from '../src/shared/domain.ts'
+import { RequirementStatus, SessionState } from '../src/shared/domain.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 /**
  * 「下一步该动哪个」的排名。
  *
@@ -21,7 +25,7 @@ import type { SessionStatus } from './session-state.ts'
 export type RankableSession = Session & { status: SessionStatus }
 
 // 两级：现在就得动 / 有空再看
-export type NextUpLevel = 'now' | 'soon'
+export type { NextUpLevel } from '../src/shared/domain.ts'
 
 export interface NextUpItem {
   // 需求 slug（没有会话信号时，点开需求用）
@@ -49,7 +53,7 @@ export interface NextUpConfig {
 }
 
 export const DEFAULT_NEXT_UP_CONFIG: NextUpConfig = {
-  priorityRank: { p0: 0, p1: 1, p2: 2, p3: 3 },
+  priorityRank: { [PriorityLevel.Critical]: 0, [PriorityLevel.High]: 1, [PriorityLevel.Medium]: 2, [PriorityLevel.Low]: 3 },
   staleDays: { review: 2, clarify: 2 },
 }
 
@@ -60,7 +64,7 @@ const AGENT_LABELS: Record<string, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   cursor: 'Cursor',
-  chengxiaobang: '程小帮',
+  get chengxiaobang() { return tr("Chengxiaobang") },
 }
 
 const DAY_MS = 86_400_000
@@ -109,7 +113,7 @@ function candidateOf(
   config: NextUpConfig,
 ): Candidate | null {
   // 已完成的不必再推
-  if (req.status === '已完成') return null
+  if (req.status === RequirementStatus.Completed) return null
 
   const priority = config.priorityRank[req.priority] ?? 9
   const signal = hardestSession(sessions)
@@ -117,25 +121,25 @@ function candidateOf(
   if (signal) {
     const { session } = signal
     const blocked = signal.tier === TIER.blocked
-    const failed = session.status.state === 'failed'
+    const failed = session.status.state === SessionState.Failed
     const label = AGENT_LABELS[session.agent] ?? session.agent
     return {
       priority,
       since: sinceOf(req, session),
       item: {
         ...identity(req),
-        level: blocked ? 'now' : 'soon',
+        level: blocked ? NextUpLevel.Now : NextUpLevel.Soon,
         tier: signal.tier,
         reason: blocked
-          ? `${label} 卡住了`
+          ? tr("{0} is blocked", [label])
           : failed
-            ? `${label} 跑失败了`
-            : `${label} 跑完了`,
+            ? tr("{0} failed", [label])
+            : tr("{0} finished", [label]),
         detail: blocked
           ? session.status.needsAction
           : failed
-            ? '上一轮跑失败了，等你看一眼。'
-            : '上一轮已经结束，等你看一眼。',
+            ? tr("The previous turn failed and needs your review.")
+            : tr("The previous turn finished and needs your review."),
         session: { agent: session.agent, link: session.link },
       },
     }
@@ -143,30 +147,30 @@ function candidateOf(
 
   // 没有会话信号的需求靠状态进榜——这一档才兜住「没有 agent 的需求」
   const days = daysSince(req.updated, now)
-  if (req.status === 'Review' && days >= config.staleDays.review) {
+  if (req.status === RequirementStatus.Review && days >= config.staleDays.review) {
     return {
       priority,
       since: sinceOf(req),
       item: {
         ...identity(req),
-        level: 'soon',
+        level: NextUpLevel.Soon,
         tier: TIER.reviewStale,
-        reason: `Review 停了 ${days} 天`,
-        detail: '代码在评审里没人动。',
+        get reason() { return tr("Review has been idle for {0} days", [days]) },
+        get detail() { return tr("The code is waiting for review.") },
         session: null,
       },
     }
   }
-  if (req.status === '澄清' && days >= config.staleDays.clarify) {
+  if (req.status === RequirementStatus.Clarification && days >= config.staleDays.clarify) {
     return {
       priority,
       since: sinceOf(req),
       item: {
         ...identity(req),
-        level: 'soon',
+        level: NextUpLevel.Soon,
         tier: TIER.clarifyStale,
-        reason: `澄清停了 ${days} 天`,
-        detail: '需求还没定清楚，后面的活都排在它后面。',
+        get reason() { return tr("Clarification has been idle for {0} days", [days]) },
+        get detail() { return tr("The requirement is not yet clear; subsequent work depends on it.") },
         session: null,
       },
     }
@@ -191,8 +195,8 @@ function hardestSession(
 }
 
 function sessionTier(s: RankableSession): number | null {
-  if (s.status.state === 'blocked') return TIER.blocked
-  if (s.status.state === 'done' || s.status.state === 'failed') return TIER.agentFinished
+  if (s.status.state === SessionState.Blocked) return TIER.blocked
+  if (s.status.state === SessionState.Done || s.status.state === SessionState.Failed) return TIER.agentFinished
   return null
 }
 

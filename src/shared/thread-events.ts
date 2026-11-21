@@ -1,3 +1,4 @@
+import { SessionState } from './domain.ts'
 /**
  * 会话的「事件型」状态：一轮结束时需要人消费的那几档。
  *
@@ -6,9 +7,9 @@
  *
  * 状态全集与展示语义仍在 server/session-state.ts 的 THREAD_STATES。
  */
-export const EVENT_STATES = ['done', 'blocked', 'failed'] as const
+export const EVENT_STATES = [SessionState.Done, SessionState.Blocked, SessionState.Failed] as const
 
-export type EventState = (typeof EVENT_STATES)[number]
+export type EventState = `${(typeof EVENT_STATES)[number]}`
 
 export function isEventState(state: string): state is EventState {
   return (EVENT_STATES as readonly string[]).includes(state)

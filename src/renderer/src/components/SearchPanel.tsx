@@ -1,3 +1,6 @@
+import { useLanguage } from '../lib/language'
+import { requirementStatusLabel } from '../../../shared/i18n.ts'
+import { t as tr } from "../../../shared/i18n.ts"
 import { useEffect, useRef, useState } from 'react'
 import { isComposing, shortcut } from '../lib/keys'
 import { STATUS_CLASS } from '../lib/labels'
@@ -21,6 +24,7 @@ interface Props {
  * 所以这里只负责选，不负责把结果画成列表给看——看板本身就是那个列表。
  */
 export default function SearchPanel({ query, onQuery, results, pending, onPick, onClose }: Props) {
+  useLanguage()
   const [cursor, setCursor] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -61,11 +65,11 @@ export default function SearchPanel({ query, onQuery, results, pending, onPick, 
   return (
     <div className="palette-backdrop" onMouseDown={onClose}>
       {/* 面板里的点击不该冒到遮罩上（那等于关掉自己） */}
-      <div className="palette" role="dialog" aria-label="搜索需求" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="palette" role="dialog" aria-label={tr("Search requirements")} onMouseDown={(e) => e.stopPropagation()}>
         <input
           ref={inputRef}
           className="palette-input"
-          placeholder="搜需求：标题 / 目录名 / 摘要 / 文档 / 标签，#标签 只按标签筛"
+          placeholder={tr("Search titles, directories, summaries, documents, or tags; use #tag to filter by tag")}
           value={query}
           spellCheck={false}
           onChange={(e) => onQuery(e.target.value)}
@@ -74,10 +78,9 @@ export default function SearchPanel({ query, onQuery, results, pending, onPick, 
         <div className="palette-list">
           {!query.trim() ? (
             <div className="palette-hint">
-              输入关键词，或 #标签 只按标签筛。命中的需求会同时筛掉看板上别的卡片
-            </div>
+              {tr("Enter keywords or #tag. Matching requirements also filter the board.")}</div>
           ) : results.length === 0 ? (
-            <div className="palette-hint">{pending ? '查找中…' : '没有命中的需求'}</div>
+            <div className="palette-hint">{pending ? tr("Searching…") : tr("No matching requirements")}</div>
           ) : (
             results.map((r, i) => (
               <div
@@ -86,7 +89,7 @@ export default function SearchPanel({ query, onQuery, results, pending, onPick, 
                 onMouseEnter={() => setCursor(i)}
                 onClick={() => onPick(r.slug)}
               >
-                <span className={`dot ${STATUS_CLASS[r.status] ?? ''}`} title={r.status} />
+                <span className={`dot ${STATUS_CLASS[r.status] ?? ''}`} title={requirementStatusLabel(r.status)} />
                 <span className="palette-title">{r.title}</span>
                 {r.tags.length > 0 && (
                   <span className="palette-tags">{r.tags.map((t) => `#${t}`).join(' ')}</span>
@@ -97,10 +100,10 @@ export default function SearchPanel({ query, onQuery, results, pending, onPick, 
           )}
         </div>
         <div className="palette-foot">
-          <span>↑↓ 选择</span>
-          <span>Enter 打开</span>
-          <span>⌘↵ 打开并清筛选</span>
-          <span>Esc 关掉面板，筛选留着</span>
+          <span>{tr("↑↓ Select")}</span>
+          <span>{tr("Enter Open")}</span>
+          <span>{tr("⌘↵ Open and clear filter")}</span>
+          <span>{tr("Esc Close panel, keep filter")}</span>
         </div>
       </div>
     </div>

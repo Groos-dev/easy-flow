@@ -1,3 +1,4 @@
+import { Language, setLanguage } from '../src/shared/i18n.ts'
 /**
  * Codex 侧转发层回归：一是 `/api/hook?agent=codex` 让事件落进 codex 那一格（共用入口缺省算 claude），
  * 二是 scripts/codex-hook.mjs 对 agent 无感的纪律。
@@ -41,6 +42,7 @@ describe('/api/hook?agent=codex', () => {
     writeFileSync(join(reqDir, 'requirement.md'), '# alpha\n\n## 需求\n\n甲需求\n', 'utf8')
 
     app = createBoardApp({ dataDir: dir })
+    setLanguage(Language.Chinese)
     // 同一条 id 挂两个 agent：codex 的事件只能点亮 codex 那条，不能串到 claude
     app.db.addSession({ requirementId: 'req-alpha', agent: 'codex', session: 'cx-http', title: 'codex 会话' })
     app.db.addSession({ requirementId: 'req-alpha', agent: 'claude', session: 'cx-http', title: 'claude 会话' })

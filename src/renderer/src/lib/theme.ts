@@ -1,3 +1,4 @@
+import { ThemeMode } from '../../../shared/domain.ts'
 import { useCallback, useEffect, useState } from 'react'
 import { resolveTheme, type Theme } from '../../../shared/theme'
 import { api } from './api'
@@ -30,7 +31,7 @@ export function useTheme(): {
   setTheme: (theme: Theme) => void
   reloadTheme: () => void
 } {
-  const [theme, setTheme] = useState<Theme>('system')
+  const [theme, setTheme] = useState<Theme>(ThemeMode.System)
 
   const reloadTheme = useCallback(async () => {
     try {

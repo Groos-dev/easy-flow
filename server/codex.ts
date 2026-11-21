@@ -1,3 +1,5 @@
+import { CommandNotFoundError } from './errors.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 /**
  * Codex 桌面应用的 app-server 客户端：起一个 codex 子进程，用 stdio 上的 JSON-RPC 说话。
  *
@@ -28,7 +30,7 @@ async function codexBinary(): Promise<string> {
     if (!found) throw new Error('empty')
     return found
   } catch (err) {
-    throw new Error('找不到 codex 命令：装好 Codex，或让它在 PATH 里再重跑', { cause: err })
+    throw new CommandNotFoundError('codex', err)
   }
 }
 
@@ -47,10 +49,10 @@ type Params = Record<string, unknown>
 function pick<T>(value: unknown, path: string[]): T {
   let cur: unknown = value
   for (const key of path) {
-    if (cur == null || typeof cur !== 'object') throw new Error(`app-server 返回里没有 ${path.join('.')}`)
+    if (cur == null || typeof cur !== 'object') throw new Error(tr("app-server response is missing {0}", [path.join('.')]))
     cur = (cur as Params)[key]
   }
-  if (cur == null) throw new Error(`app-server 返回里没有 ${path.join('.')}`)
+  if (cur == null) throw new Error(tr("app-server response is missing {0}", [path.join('.')]))
   return cur as T
 }
 
@@ -72,7 +74,7 @@ export class AppServer {
     this.child = child
     child.stdout!.setEncoding('utf8')
     child.stdout!.on('data', (chunk: string) => this.feed(chunk))
-    child.on('exit', (code) => this.die(new Error(`codex app-server 提前退出（退出码 ${code}）`)))
+    child.on('exit', (code) => this.die(new Error(tr("codex app-server exited early (exit code {0})", [code]))))
     child.on('error', (err) => this.die(err))
   }
 
@@ -95,7 +97,7 @@ export class AppServer {
         child.once('error', (err: NodeJS.ErrnoException) => {
           reject(
             err.code === 'ENOENT'
-              ? new Error('找不到 codex 命令：装好 Codex，或让它在 PATH 里再重跑')
+              ? new CommandNotFoundError('codex', err)
               : err,
           )
         })
@@ -159,7 +161,7 @@ export class AppServer {
           this.turn = null
           const turn = params.turn as Params
           if (turn.status === 'completed') waiting.resolve(waiting.text)
-          else waiting.reject(new Error(`Codex turn ${turn.status}: ${JSON.stringify(turn.error)}`))
+          else waiting.reject(new Error(tr("Codex turn {0}: {1}", [turn.status, JSON.stringify(turn.error)])))
         }
       }
     }
@@ -178,7 +180,7 @@ export class AppServer {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
-        reject(new Error(`codex app-server 没在 ${Math.round(timeout / 1000)}s 内回应 ${method}`))
+        reject(new Error(tr("codex app-server did not respond to {1} within {0}s", [Math.round(timeout / 1000), method])))
       }, timeout)
       this.pending.set(id, { resolve, reject, timer })
       this.child.stdin!.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`)
@@ -205,7 +207,7 @@ export class AppServer {
   }
 
   close(): void {
-    this.die(new Error('app-server 已关闭'))
+    this.die(new Error(tr("app-server is closed")))
     this.child.kill()
   }
 }

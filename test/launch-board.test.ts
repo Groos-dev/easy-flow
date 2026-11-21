@@ -1,3 +1,4 @@
+import { Language, setLanguage } from '../src/shared/i18n.ts'
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -60,6 +61,7 @@ describe('需求详情页启动会话', () => {
     mkdirSync(worktreePath, { recursive: true })
     mkdirSync(join(testRoot, 'worktree-beta'), { recursive: true })
     app = createBoardApp({ dataDir })
+    setLanguage(Language.Chinese)
     app.db.addWorktree({
       id: 'wt-alpha',
       requirementId: 'req-alpha',
@@ -147,6 +149,34 @@ describe('需求详情页启动会话', () => {
     assert.equal('build' in result.providers.find((p: any) => p.id === 'codex'), false)
   })
 
+  test('cached provider snapshots use current-language names without changing the selected agent', async () => {
+    const vite = await createViteServer({ configFile: false, root: repoRoot, server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
+    try {
+      const locale = await vite.ssrLoadModule('/src/shared/i18n.ts') as { setLanguage(language: Language): void }
+      const { default: Form } = await vite.ssrLoadModule('/src/renderer/src/components/LaunchSessionForm.tsx') as { default: any }
+      const providers = [{ id: 'chengxiaobang', label: 'Chengxiaobang', requiresWorktree: true }]
+      const props = {
+        requirementId: 'req-alpha', providers, worktrees: [], worktreeId: '', agent: 'chengxiaobang',
+        loading: false, providerError: '', requestError: '', busy: false, result: null,
+        onWorktreeChange() {}, onAgentChange() {}, onLaunch() {},
+      }
+      locale.setLanguage(Language.English)
+      const english = renderToStaticMarkup(createElement(Form, props))
+      assert.match(english, /aria-label="Chengxiaobang"/)
+      assert.match(english, /Start a new session in Chengxiaobang/)
+      locale.setLanguage(Language.Chinese)
+      const chinese = renderToStaticMarkup(createElement(Form, props))
+      assert.match(chinese, /aria-label="程小帮"/)
+      assert.match(chinese, /title="程小帮"/)
+      assert.match(chinese, /用 程小帮 打开新会话/)
+      assert.match(chinese, /程小帮 需要先有一个工作区/)
+      assert.match(chinese, /aria-checked="true"/)
+      assert.doesNotMatch(chinese, /Chengxiaobang/)
+      assert.equal(providers[0].label, 'Chengxiaobang', 'cached server data is never rewritten')
+      assert.equal(props.agent, 'chengxiaobang')
+    } finally { await vite.close() }
+  })
+
   test('UI 工作区选择：唯一可用项直选，多项留空，失联目录不可选', () => {
     const one = worktree('wt-one', 'feature-one')
     const two = worktree('wt-two', 'feature-two')
@@ -159,6 +189,8 @@ describe('需求详情页启动会话', () => {
     const renderScript = `
       import { createElement } from 'react'
       import { renderToStaticMarkup } from 'react-dom/server'
+      import { Language, setLanguage } from './src/shared/i18n.ts'
+      setLanguage(Language.Chinese)
       import Form from './src/renderer/src/components/LaunchSessionForm.tsx'
       const base = {
         requirementId: 'req-alpha', providers: [{ id: 'claude', label: 'Claude Code' }, { id: 'codex', label: 'Codex' }, { id: 'cursor', label: 'Cursor', requiresWorktree: true }],
@@ -266,12 +298,12 @@ describe('需求详情页启动会话', () => {
         onWorktreeChange: () => {}, onAgentChange: () => {}, onLaunch: () => {},
       }))
       assert.match(formHtml, /handler unavailable/)
-      assert.match(formHtml, /看提示词原文/)
-      assert.match(formHtml, /aria-label="复制提示词"/)
+      assert.match(formHtml, /View the full prompt/)
+      assert.match(formHtml, /aria-label="Copy Prompt"/)
       assert.match(formHtml, /easy-flow req session add req-alpha --agent codex/)
       await assert.rejects(
         api.launch({ slug: 'alpha', project: 'demo', worktreeId: 'wt-beta', agent: 'claude' }),
-        /does not belong to requirement/,
+        /(?:does not belong to requirement|不属于该需求)/,
       )
 
       const { default: InfoPanel } = await vite.ssrLoadModule('/src/renderer/src/components/InfoPanel.tsx') as {
@@ -285,7 +317,7 @@ describe('需求详情页启动会话', () => {
         ctx: null,
         onOpenTodo: () => {},
       }) as never)
-      assert.doesNotMatch(html, /新建 Agent 会话|wt new req-alpha/)
+      assert.doesNotMatch(html, /New session|wt new req-alpha/)
     } finally {
       globalThis.fetch = previousFetch
       if (previousOpenFail === undefined) delete process.env.EASY_FLOW_TEST_OPEN_FAIL
@@ -412,20 +444,20 @@ describe('需求详情页启动会话', () => {
     const unsupported = await post('/api/launch', {
       slug: 'alpha', project: 'demo', worktreeId: 'wt-alpha', agent: 'gemini',
     })
-    assert.match(unsupported.error, /Unknown launch agent/i)
+    assert.match(unsupported.error, /(?:Unknown launch agent|未知的启动 Agent)/i)
 
     // 跨需求的工作区两个 agent 都拦：它们的 deeplink 都必须带一个本需求的工作目录
     const foreign = await post('/api/launch', {
       slug: 'alpha', project: 'demo', worktreeId: 'wt-beta', agent: 'claude',
     })
-    assert.match(foreign.error, /belong|requirement|Worktree/i)
+    assert.match(foreign.error, /belong|requirement|Worktree|工作区|需求/i)
     const foreignCodex = await post('/api/launch', {
       slug: 'alpha', project: 'demo', worktreeId: 'wt-beta', agent: 'codex',
     })
-    assert.match(foreignCodex.error, /belong|requirement|Worktree/i)
+    assert.match(foreignCodex.error, /belong|requirement|Worktree|工作区|需求/i)
     // 有工作区却不给：两个 agent 一样拒
     const missing = await post('/api/launch', { slug: 'alpha', project: 'demo', agent: 'codex' })
-    assert.match(missing.error, /worktree/i)
+    assert.match(missing.error, /(?:worktree|工作区)/i)
     assert.deepEqual(app.db.listSessions('req-alpha').map((s) => s.session), before)
   })
 })

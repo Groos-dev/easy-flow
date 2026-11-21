@@ -1,3 +1,5 @@
+import { messageDetail } from '../src/shared/i18n.ts'
+import { SessionState } from '../src/shared/domain.ts'
 /**
  * Codex 的落盘兜底：增量 tail ~/.codex/sessions 下的 rollout jsonl。
  *
@@ -67,18 +69,18 @@ export function rolloutStatusOf(line: RolloutLine, observedAt: number): SessionS
     state,
     needsAction: '',
     observedAt,
-    detail: `rollout 事件：${sub ? `${type}/${sub}` : type}`,
+    ...messageDetail("Rollout event: {0}", [sub ? `${type}/${sub}` : type]),
   })
-  if (type === 'session_meta') return of('idle')
+  if (type === 'session_meta') return of(SessionState.Idle)
   if (type === 'event_msg') {
     switch (sub) {
       case 'task_started':
-        return of('thinking')
+        return of(SessionState.Thinking)
       case 'task_complete':
         // 带 error 的这轮没跑完（如 stream disconnected）：落到 failed，不假装 done
-        return line.payload?.error ? of('failed') : of('done')
+        return line.payload?.error ? of(SessionState.Failed) : of(SessionState.Done)
       case 'turn_aborted':
-        return of('blocked')
+        return of(SessionState.Blocked)
       default:
         return null
     }
@@ -87,10 +89,10 @@ export function rolloutStatusOf(line: RolloutLine, observedAt: number): SessionS
     switch (sub) {
       case 'reasoning':
       case 'function_call_output':
-        return of('thinking')
+        return of(SessionState.Thinking)
       case 'function_call':
       case 'web_search_call':
-        return of('working')
+        return of(SessionState.Working)
       default:
         return null
     }

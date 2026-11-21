@@ -1,3 +1,4 @@
+import { t as tr } from "../../../shared/i18n.ts"
 // 键位定义与匹配；设置页、按钮提示与键盘处理共用
 
 import { formatAccelerator } from './shortcut'
@@ -28,17 +29,17 @@ export interface ShortcutDef {
 }
 
 export const CONTEXT_LABEL: Record<KeyContext, string> = {
-  global: '全局',
-  board: '看板',
-  pet: 'agent 头像',
-  next: '下一步',
-  detail: '详情页',
-  info: '信息浮窗',
-  launch: '新建会话',
-  search: '搜索面板',
-  mini: 'mini 面板',
-  map: '导图',
-  settings: '设置',
+  get global() { return tr("Global") },
+  get board() { return tr("Board") },
+  get pet() { return tr("Agent avatars") },
+  get next() { return tr("Next steps") },
+  get detail() { return tr("Details") },
+  get info() { return tr("Information panel") },
+  get launch() { return tr("New session") },
+  get search() { return tr("Search panel") },
+  get mini() { return tr("Mini panel") },
+  get map() { return tr("Mind map") },
+  get settings() { return tr("Settings") },
 }
 
 export const CONTEXT_ORDER: KeyContext[] = [
@@ -61,103 +62,103 @@ const PROJECTS = Array.from({ length: 9 }, (_, i) => `CommandOrControl+${i + 1}`
 
 export const SHORTCUTS: ShortcutDef[] = [
   // ------------------------------------------------------------ 全局
-  { id: 'global.panel', context: 'global', keys: ['CommandOrControl+Shift+E'], label: '呼出 / 收起 mini 面板', hidden: true },
-  { id: 'global.settings', context: 'global', keys: ['CommandOrControl+,'], label: '打开设置（再按返回）' },
-  { id: 'global.view-board', context: 'global', keys: ['CommandOrControl+Alt+1'], label: '切到看板' },
-  { id: 'global.view-next', context: 'global', keys: ['CommandOrControl+Alt+2'], label: '切到下一步' },
-  { id: 'global.view-map', context: 'global', keys: ['CommandOrControl+Alt+3'], label: '切到导图' },
-  { id: 'global.project', context: 'global', keys: ['CommandOrControl+P'], label: '切换项目' },
-  { id: 'global.project-n', context: 'global', keys: PROJECTS, label: '切到第 N 个置顶项目', display: '⌘1..9' },
-  { id: 'global.search', context: 'global', keys: ['CommandOrControl+K'], label: '开合搜索面板' },
-  { id: 'global.clear-filter', context: 'global', keys: ['CommandOrControl+Shift+K'], label: '清掉搜索筛选' },
+  { id: 'global.panel', context: 'global', keys: ['CommandOrControl+Shift+E'], get label() { return tr("Show / hide mini panel") }, hidden: true },
+  { id: 'global.settings', context: 'global', keys: ['CommandOrControl+,'], get label() { return tr("Open settings (press again to return)") } },
+  { id: 'global.view-board', context: 'global', keys: ['CommandOrControl+Alt+1'], get label() { return tr("Switch to board") } },
+  { id: 'global.view-next', context: 'global', keys: ['CommandOrControl+Alt+2'], get label() { return tr("Switch to next steps") } },
+  { id: 'global.view-map', context: 'global', keys: ['CommandOrControl+Alt+3'], get label() { return tr("Switch to mind map") } },
+  { id: 'global.project', context: 'global', keys: ['CommandOrControl+P'], get label() { return tr("Switch project") } },
+  { id: 'global.project-n', context: 'global', keys: PROJECTS, get label() { return tr("Switch to pinned project N") }, display: '⌘1..9' },
+  { id: 'global.search', context: 'global', keys: ['CommandOrControl+K'], get label() { return tr("Toggle search panel") } },
+  { id: 'global.clear-filter', context: 'global', keys: ['CommandOrControl+Shift+K'], get label() { return tr("Clear search filter") } },
 
   // ------------------------------------------------------------ 看板
-  { id: 'board.next', context: 'board', keys: ['J', 'ArrowDown'], label: '下一张卡' },
-  { id: 'board.prev', context: 'board', keys: ['K', 'ArrowUp'], label: '上一张卡' },
-  { id: 'board.left', context: 'board', keys: ['H', 'ArrowLeft'], label: '左边一张卡' },
-  { id: 'board.right', context: 'board', keys: ['L', 'ArrowRight'], label: '右边一张卡' },
+  { id: 'board.next', context: 'board', keys: ['J', 'ArrowDown'], get label() { return tr("Next card") } },
+  { id: 'board.prev', context: 'board', keys: ['K', 'ArrowUp'], get label() { return tr("Previous card") } },
+  { id: 'board.left', context: 'board', keys: ['H', 'ArrowLeft'], get label() { return tr("Card to the left") } },
+  { id: 'board.right', context: 'board', keys: ['L', 'ArrowRight'], get label() { return tr("Card to the right") } },
   {
     id: 'board.attention',
     context: 'board',
     keys: ['CommandOrControl+Shift+N'],
-    label: '跳到下一只要人处理的 pet（回车回会话）',
+    get label() { return tr("Next pet needing attention (Enter to return to session)") },
   },
-  { id: 'board.open', context: 'board', keys: ['Return'], label: '打开选中需求' },
-  { id: 'board.kids', context: 'board', keys: ['Space'], label: '展开 / 收起子需求' },
-  { id: 'board.copy-slug', context: 'board', keys: ['Y'], label: '复制选中需求的 slug' },
-  { id: 'board.pin', context: 'board', keys: ['P'], label: '置顶 / 取消置顶选中需求' },
+  { id: 'board.open', context: 'board', keys: ['Return'], get label() { return tr("Open selected requirement") } },
+  { id: 'board.kids', context: 'board', keys: ['Space'], get label() { return tr("Expand / collapse child requirements") } },
+  { id: 'board.copy-slug', context: 'board', keys: ['Y'], get label() { return tr("Copy selected requirement slug") } },
+  { id: 'board.pin', context: 'board', keys: ['P'], get label() { return tr("Pin / unpin selected requirement") } },
   {
     id: 'board.kid-n',
     context: 'board',
     keys: ['1', '2', '3', '4', '5', '6', '7', '8', '9'],
-    label: '跳到展开清单里的第 N 条子需求',
+    get label() { return tr("Go to child requirement N in the expanded list") },
     display: '1..9',
   },
-  { id: 'board.clear', context: 'board', keys: ['Escape'], label: '取消选中' },
+  { id: 'board.clear', context: 'board', keys: ['Escape'], get label() { return tr("Clear selection") } },
 
   // ------------------------------------------------------------ agent 头像（卡片里的一格）
-  { id: 'pet.focus', context: 'pet', keys: ['Tab'], label: '在卡片与头像之间来回切换焦点' },
-  { id: 'pet.prev', context: 'pet', keys: ['H', 'ArrowLeft', 'K', 'ArrowUp'], label: '前一只头像' },
-  { id: 'pet.next', context: 'pet', keys: ['L', 'ArrowRight', 'J', 'ArrowDown'], label: '后一只头像' },
-  { id: 'pet.open', context: 'pet', keys: ['Return'], label: '回到这个 agent 的会话' },
-  { id: 'pet.back', context: 'pet', keys: ['Escape'], label: '焦点回卡片' },
+  { id: 'pet.focus', context: 'pet', keys: ['Tab'], get label() { return tr("Move focus between card and avatars") } },
+  { id: 'pet.prev', context: 'pet', keys: ['H', 'ArrowLeft', 'K', 'ArrowUp'], get label() { return tr("Previous avatar") } },
+  { id: 'pet.next', context: 'pet', keys: ['L', 'ArrowRight', 'J', 'ArrowDown'], get label() { return tr("Next avatar") } },
+  { id: 'pet.open', context: 'pet', keys: ['Return'], get label() { return tr("Return to this agent's session") } },
+  { id: 'pet.back', context: 'pet', keys: ['Escape'], get label() { return tr("Focus the card") } },
 
   // ------------------------------------------------------------ 下一步
-  { id: 'next.next', context: 'next', keys: ['J', 'ArrowDown'], label: '下一条' },
-  { id: 'next.prev', context: 'next', keys: ['K', 'ArrowUp'], label: '上一条' },
-  { id: 'next.primary', context: 'next', keys: ['Return'], label: '回到会话 / 打开需求' },
-  { id: 'next.open', context: 'next', keys: ['O'], label: '打开需求' },
-  { id: 'next.clear', context: 'next', keys: ['Escape'], label: '取消选中' },
+  { id: 'next.next', context: 'next', keys: ['J', 'ArrowDown'], get label() { return tr("Next item") } },
+  { id: 'next.prev', context: 'next', keys: ['K', 'ArrowUp'], get label() { return tr("Previous item") } },
+  { id: 'next.primary', context: 'next', keys: ['Return'], get label() { return tr("Return to session / open requirement") } },
+  { id: 'next.open', context: 'next', keys: ['O'], get label() { return tr("Open requirement") } },
+  { id: 'next.clear', context: 'next', keys: ['Escape'], get label() { return tr("Clear selection") } },
 
   // ------------------------------------------------------------ 详情页
-  { id: 'detail.close', context: 'detail', keys: ['Escape'], label: '收新建会话表单 / 关浮窗 / 返回看板' },
-  { id: 'detail.back', context: 'detail', keys: ['CommandOrControl+['], label: '返回看板' },
-  { id: 'detail.save', context: 'detail', keys: ['CommandOrControl+S'], label: '立即保存' },
-  { id: 'detail.tab-n', context: 'detail', keys: TABS, label: '切到第 N 个文档标签', display: '⌘1..9' },
-  { id: 'detail.tab-prev', context: 'detail', keys: ['CommandOrControl+Shift+['], label: '上一个标签' },
-  { id: 'detail.tab-next', context: 'detail', keys: ['CommandOrControl+Shift+]'], label: '下一个标签' },
-  { id: 'detail.info', context: 'detail', keys: ['I'], label: '开关信息浮窗' },
-  { id: 'detail.open-dir', context: 'detail', keys: ['CommandOrControl+Shift+O'], label: '打开当前目录' },
-  { id: 'detail.copy-path', context: 'detail', keys: ['CommandOrControl+Alt+C'], label: '复制当前目录路径' },
-  { id: 'detail.new-session', context: 'detail', keys: ['CommandOrControl+Shift+N'], label: '新建会话' },
+  { id: 'detail.close', context: 'detail', keys: ['Escape'], get label() { return tr("Collapse session form / close panel / return to board") } },
+  { id: 'detail.back', context: 'detail', keys: ['CommandOrControl+['], get label() { return tr("Return to board") } },
+  { id: 'detail.save', context: 'detail', keys: ['CommandOrControl+S'], get label() { return tr("Save now") } },
+  { id: 'detail.tab-n', context: 'detail', keys: TABS, get label() { return tr("Switch to document tab N") }, display: '⌘1..9' },
+  { id: 'detail.tab-prev', context: 'detail', keys: ['CommandOrControl+Shift+['], get label() { return tr("Previous tab") } },
+  { id: 'detail.tab-next', context: 'detail', keys: ['CommandOrControl+Shift+]'], get label() { return tr("Next tab") } },
+  { id: 'detail.info', context: 'detail', keys: ['I'], get label() { return tr("Toggle information panel") } },
+  { id: 'detail.open-dir', context: 'detail', keys: ['CommandOrControl+Shift+O'], get label() { return tr("Open current directory") } },
+  { id: 'detail.copy-path', context: 'detail', keys: ['CommandOrControl+Alt+C'], get label() { return tr("Copy current directory path") } },
+  { id: 'detail.new-session', context: 'detail', keys: ['CommandOrControl+Shift+N'], get label() { return tr("New session") } },
 
   // ------------------------------------------------------------ 信息浮窗
-  { id: 'info.next', context: 'info', keys: ['J', 'ArrowDown'], label: '下一项' },
-  { id: 'info.prev', context: 'info', keys: ['K', 'ArrowUp'], label: '上一项' },
+  { id: 'info.next', context: 'info', keys: ['J', 'ArrowDown'], get label() { return tr("Next option") } },
+  { id: 'info.prev', context: 'info', keys: ['K', 'ArrowUp'], get label() { return tr("Previous option") } },
 
   // ------------------------------------------------------------ 新建会话（浮窗里的表单）
-  { id: 'launch.agent-prev', context: 'launch', keys: ['H', 'ArrowLeft'], label: '上一个 agent' },
-  { id: 'launch.agent-next', context: 'launch', keys: ['L', 'ArrowRight'], label: '下一个 agent' },
-  { id: 'launch.row-prev', context: 'launch', keys: ['K', 'ArrowUp'], label: '上一行（工作区 / agent）' },
-  { id: 'launch.row-next', context: 'launch', keys: ['J', 'ArrowDown'], label: '下一行（agent / 工作区 / 启动）' },
+  { id: 'launch.agent-prev', context: 'launch', keys: ['H', 'ArrowLeft'], get label() { return tr("Previous agent") } },
+  { id: 'launch.agent-next', context: 'launch', keys: ['L', 'ArrowRight'], get label() { return tr("Next agent") } },
+  { id: 'launch.row-prev', context: 'launch', keys: ['K', 'ArrowUp'], get label() { return tr("Previous row (workspace / agent)") } },
+  { id: 'launch.row-next', context: 'launch', keys: ['J', 'ArrowDown'], get label() { return tr("Next row (agent / workspace / launch)") } },
 
   // ------------------------------------------------------------ 搜索面板
-  { id: 'search.next', context: 'search', keys: ['ArrowDown'], label: '下一条' },
-  { id: 'search.prev', context: 'search', keys: ['ArrowUp'], label: '上一条' },
-  { id: 'search.open', context: 'search', keys: ['Return'], label: '打开需求，筛选保留' },
-  { id: 'search.open-clear', context: 'search', keys: ['CommandOrControl+Return'], label: '打开需求并清筛选' },
-  { id: 'search.close', context: 'search', keys: ['Escape'], label: '关面板，筛选保留' },
+  { id: 'search.next', context: 'search', keys: ['ArrowDown'], get label() { return tr("Next item") } },
+  { id: 'search.prev', context: 'search', keys: ['ArrowUp'], get label() { return tr("Previous item") } },
+  { id: 'search.open', context: 'search', keys: ['Return'], get label() { return tr("Open requirement, keep filter") } },
+  { id: 'search.open-clear', context: 'search', keys: ['CommandOrControl+Return'], get label() { return tr("Open requirement and clear filter") } },
+  { id: 'search.close', context: 'search', keys: ['Escape'], get label() { return tr("Close panel, keep filter") } },
 
   // ------------------------------------------------------------ mini 面板
-  { id: 'mini.next', context: 'mini', keys: ['ArrowDown'], label: '下一条' },
-  { id: 'mini.prev', context: 'mini', keys: ['ArrowUp'], label: '上一条' },
-  { id: 'mini.expand', context: 'mini', keys: ['ArrowRight'], label: '展开' },
-  { id: 'mini.collapse', context: 'mini', keys: ['ArrowLeft'], label: '收起' },
-  { id: 'mini.activate', context: 'mini', keys: ['Return'], label: '打开选中项' },
-  { id: 'mini.open-detail', context: 'mini', keys: ['CommandOrControl+Return'], label: '打开需求详情' },
-  { id: 'mini.nth', context: 'mini', keys: TABS, label: '打开第 N 张卡的需求详情', display: '⌘1..9' },
-  { id: 'mini.close', context: 'mini', keys: ['Escape'], label: '清筛选 / 收起 / 关闭面板' },
+  { id: 'mini.next', context: 'mini', keys: ['ArrowDown'], get label() { return tr("Next item") } },
+  { id: 'mini.prev', context: 'mini', keys: ['ArrowUp'], get label() { return tr("Previous item") } },
+  { id: 'mini.expand', context: 'mini', keys: ['ArrowRight'], get label() { return tr("Expand") } },
+  { id: 'mini.collapse', context: 'mini', keys: ['ArrowLeft'], get label() { return tr("Collapse") } },
+  { id: 'mini.activate', context: 'mini', keys: ['Return'], get label() { return tr("Open selected item") } },
+  { id: 'mini.open-detail', context: 'mini', keys: ['CommandOrControl+Return'], get label() { return tr("Open requirement details") } },
+  { id: 'mini.nth', context: 'mini', keys: TABS, get label() { return tr("Open requirement details for card N") }, display: '⌘1..9' },
+  { id: 'mini.close', context: 'mini', keys: ['Escape'], get label() { return tr("Clear filter / collapse / close panel") } },
 
   // ------------------------------------------------------------ 导图
-  { id: 'map.fit', context: 'map', keys: ['0'], label: '适应窗口' },
-  { id: 'map.zoom-in', context: 'map', keys: ['+', '='], label: '放大', display: '+' },
-  { id: 'map.zoom-out', context: 'map', keys: ['-'], label: '缩小' },
-  { id: 'map.pan', context: 'map', keys: ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'], label: '平移画布' },
-  { id: 'map.back', context: 'map', keys: ['Escape'], label: '回看板' },
+  { id: 'map.fit', context: 'map', keys: ['0'], get label() { return tr("Fit to window") } },
+  { id: 'map.zoom-in', context: 'map', keys: ['+', '='], get label() { return tr("Zoom in") }, display: '+' },
+  { id: 'map.zoom-out', context: 'map', keys: ['-'], get label() { return tr("Zoom out") } },
+  { id: 'map.pan', context: 'map', keys: ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'], get label() { return tr("Pan canvas") } },
+  { id: 'map.back', context: 'map', keys: ['Escape'], get label() { return tr("Back to board") } },
 
   // ------------------------------------------------------------ 设置
-  { id: 'settings.back', context: 'settings', keys: ['Escape', 'CommandOrControl+,'], label: '返回看板' },
-  { id: 'settings.section', context: 'settings', keys: SECTIONS, label: '切到第 N 个分区', display: '⌘1..5' },
+  { id: 'settings.back', context: 'settings', keys: ['Escape', 'CommandOrControl+,'], get label() { return tr("Return to board") } },
+  { id: 'settings.section', context: 'settings', keys: SECTIONS, get label() { return tr("Switch to section N") }, display: '⌘1..5' },
 ]
 
 const BY_ID = new Map(SHORTCUTS.map((s) => [s.id, s]))

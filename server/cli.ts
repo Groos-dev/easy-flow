@@ -1,3 +1,11 @@
+import { TodoState } from '../src/shared/domain.ts'
+import { SessionAnalysisState } from '../src/shared/domain.ts'
+import { AgentId } from '../src/shared/domain.ts'
+import { requirementStatusLabel } from '../src/shared/i18n.ts'
+import { normalizeRequirementStatus } from '../src/shared/domain.ts'
+import { getLanguage, isLanguage, setLanguage } from '../src/shared/i18n.ts'
+import { RequirementStatus } from '../src/shared/domain.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 /**
  * easy-flow CLI: for agents and humans in a terminal — read context, create projects and
  * requirements, manage worktrees.
@@ -72,6 +80,11 @@ function cliVersion(): string {
 const VERSION = cliVersion()
 
 const config = readConfig()
+const languageArgs = process.argv.slice(2)
+const initialLanguageFlag = languageArgs.find(arg => arg.startsWith('--lang='))?.slice(7)
+  ?? (languageArgs.includes('--lang') ? languageArgs[languageArgs.indexOf('--lang') + 1] : undefined)
+setLanguage(isLanguage(initialLanguageFlag) ? initialLanguageFlag
+  : isLanguage(process.env.EASY_FLOW_LANG) ? process.env.EASY_FLOW_LANG : config.language)
 
 let instance: BoardDatabase | null = null
 
@@ -121,15 +134,13 @@ function projectRoot(project: string): string {
   if (existsSync(root)) return root
   const known = listProjectDirs(config.dataDir).map((p) => p.slug)
   throw new Error(
-    `Project not found: ${project}${
-      known.length ? `. Known projects: ${known.join(', ')}` : ' (no projects under the data dir yet)'
-    }`,
+    tr("Project not found: {0}{1}", [project, known.length ? tr('. Known projects: {0}', [known.join(', ')]) : tr(' (no projects under the data dir yet)')]),
   )
 }
 
 function findById(id: string): Requirement {
   const req = db().byId(id)
-  if (!req) throw new Error(`Requirement not found: ${id}. The id lives at the top of the requirement's requirement.md`)
+  if (!req) throw new Error(tr("Requirement not found: {0}. The id lives at the top of the requirement's requirement.md", [id]))
   return req
 }
 
@@ -141,7 +152,7 @@ function deriveSlug(title: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-  if (!slug) throw new Error(`No ASCII letters or digits in the title, cannot derive a dir name: ${title}. Pass --slug`)
+  if (!slug) throw new Error(tr("No ASCII letters or digits in the title, cannot derive a dir name: {0}. Pass --slug", [title]))
   return slug
 }
 
@@ -156,7 +167,7 @@ function readIfExists(file: string): string | null {
 function worktreeLine(w: Worktree): string {
   const short = w.short ? `${w.short} / ` : ''
   return `- ${w.id}  ${short}${w.repo}  ${w.branch}  ${w.path}${
-    w.missing ? '（目录已失联，可 easy-flow wt rm）' : ''
+    w.missing ? tr("(directory missing; use easy-flow wt rm)") : ''
   }`
 }
 
@@ -176,7 +187,7 @@ const SESSION_ENV: Record<SessionAgent, string[]> = {
  * 链接格式是各应用自己的事，猜错了比没有更糟；调用方可以用 --link 覆盖。
  */
 function sessionLink(agent: SessionAgent, session: string): string {
-  if (agent === 'codex') return `codex://threads/${session}`
+  if (agent === AgentId.Codex) return `codex://threads/${session}`
   // 程小帮当前的系统深链只会聚焦窗口；同一链接在客户端支持 session 路由后可直接打开会话
   if (agent === 'chengxiaobang') return `chengxiaobang://session/${session}`
   // claude 的 desktop（Code 标签页）会话 id 形如 local_…；终端会话是裸 uuid，desktop 里打不开
@@ -189,7 +200,7 @@ function sessionLink(agent: SessionAgent, session: string): string {
 // 会话一行；cwd 命中当前工作区时标出来，一眼看出哪个会话就在这儿干活
 function sessionLine(s: Session, cwd = ''): string {
   const title = s.title ? `  ${s.title}` : ''
-  const here = cwd && s.cwd === cwd ? '（本工作区）' : ''
+  const here = cwd && s.cwd === cwd ? tr("(current workspace)") : ''
   const where = s.cwd ? `  ${s.cwd}` : ''
   const link = s.link ? `\n  ${s.link}` : ''
   return `- ${s.agent}  ${s.session}${title}${here}${where}${link}`
@@ -208,18 +219,18 @@ function requirementView(req: Requirement, extraHead: string[] = []) {
 
   const head = [
     ...extraHead,
-    `需求 id：${req.id}`,
-    `项目：${req.project}${display && display !== req.project ? `（${display}）` : ''}`,
-    `需求：${req.title}（${req.slug}）`,
-    `需求目录：${req.path}`,
-    `状态：${req.status}${req.priority ? ` · 优先级：${req.priority}` : ''}`,
-    `会话分析：${SESSION_ANALYSIS_LABELS[req.sessionAnalysisStatus]}`,
+    tr("Requirement ID: {0}", [req.id]),
+    tr("Project: {0}{1}", [req.project, display && display !== req.project ? `（${display}）` : '']),
+    tr("Requirement: {0} ({1})", [req.title, req.slug]),
+    tr("Requirement directory: {0}", [req.path]),
+    tr("Status: {0}{1}", [requirementStatusLabel(req.status), req.priority ? tr(" · Priority: {0}", [req.priority]) : '']),
+    tr("Session analysis: {0}", [SESSION_ANALYSIS_LABELS[req.sessionAnalysisStatus]]),
   ]
-  if (req.tags.length) head.push(`标签：${req.tags.join(' · ')}`)
-  if (req.repos.length) head.push(`涉及仓库：${req.repos.map((r) => `${r.short}=${r.repo ?? ''}`).join('、')}`)
+  if (req.tags.length) head.push(tr("Tags: {0}", [req.tags.join(' · ')]))
+  if (req.repos.length) head.push(tr("Repositories: {0}", [req.repos.map((r) => `${r.short}=${r.repo ?? ''}`).join('、')]))
   // context.md follows in full right after, no need to list it twice
   const docs = req.docs.filter((d) => d.name !== 'requirement.md' && d.name !== 'context.md')
-  if (docs.length) head.push(`其他文档：${docs.map((d) => d.name).join('、')}`)
+  if (docs.length) head.push(tr("Other documents: {0}", [docs.map((d) => d.name).join('、')]))
 
   const blocks = [head.join('\n')]
   // Hierarchy is how a requirement gets split: a sub-requirement needs its parents in view,
@@ -228,23 +239,23 @@ function requirementView(req: Requirement, extraHead: string[] = []) {
   const board = db()
   const ancestors = board.ancestors(req)
   if (ancestors.length) {
-    blocks.push(`## 上层需求（从近到远）\n${ancestors.map(requirementLine).join('\n')}`)
+    blocks.push(tr("## Ancestor requirements (nearest first)\n{0}", [ancestors.map(requirementLine).join('\n')]))
     const parentMd = readIfExists(join(ancestors[0].path, 'requirement.md'))
-    if (parentMd) blocks.push(`## 父需求描述（${ancestors[0].slug}/requirement.md）\n\n${parentMd.trim()}`)
+    if (parentMd) blocks.push(tr("## Parent requirement ({0}/requirement.md)\n\n{1}", [ancestors[0].slug, parentMd.trim()]))
   }
-  if (convention) blocks.push(`## 项目规范（${join(root, 'AGENTS.md')}）\n\n${convention.trim()}`)
-  if (requirementMd) blocks.push(`## 需求描述（requirement.md）\n\n${requirementMd.trim()}`)
-  if (contextMd) blocks.push(`## 上下文（context.md）\n\n${contextMd.trim()}`)
+  if (convention) blocks.push(tr("## Project conventions ({0})\n\n{1}", [join(root, 'AGENTS.md'), convention.trim()]))
+  if (requirementMd) blocks.push(tr("## Requirement (requirement.md)\n\n{0}", [requirementMd.trim()]))
+  if (contextMd) blocks.push(tr("## Context (context.md)\n\n{0}", [contextMd.trim()]))
   const children = board.children(req.id)
   if (children.length) {
     // 子需求带状态：接手父需求时，「这串活还剩几块」是决定先干什么的第一件事。
     // 全完成就再点一句——父需求不会自己回头看子需求，这一步只能在这里说
     const tip =
-      allDone(children) && req.status !== '已完成'
-        ? `\n\n子需求已全部完成——这条需求自己没有别的活就一并收尾：easy-flow req set ${req.id} --status 已完成`
+      allDone(children) && req.status !== RequirementStatus.Completed
+        ? tr("\n\nAll child requirements are complete. If no other work remains, close this requirement: easy-flow req set {0} --status completed", [req.id])
         : ''
     blocks.push(
-      `## 子需求（${children.length}）\n${children.map((r) => `${requirementLine(r)}  ${r.status}`).join('\n')}${tip}`,
+      tr("## Child requirements ({0})\n{1}{2}", [children.length, children.map((r) => `${requirementLine(r)}  ${requirementStatusLabel(r.status)}`).join('\n'), tip]),
     )
   }
 
@@ -275,7 +286,7 @@ function requirementView(req: Requirement, extraHead: string[] = []) {
 
 // One requirement per line, for the ancestor / child lists
 function requirementLine(r: Requirement): string {
-  return `- ${r.id || '（无 id）'}  ${r.slug}  ${r.title}`
+  return `- ${r.id || tr("(no ID)")}  ${r.slug}  ${r.title}`
 }
 
 interface TodoGroups {
@@ -301,7 +312,7 @@ function todoIds(todos: Todo[]): string {
     .slice(0, TODO_BLOCK_LIMIT)
     .map((t) => t.id)
     .join(' ')
-  return todos.length > TODO_BLOCK_LIMIT ? `${ids} 等 ${todos.length} 条` : ids
+  return todos.length > TODO_BLOCK_LIMIT ? tr("{0} and {1} items in total", [ids, todos.length]) : ids
 }
 
 /**
@@ -317,23 +328,23 @@ function todoBlock({ explicit, candidate }: TodoGroups, reqId: string): string[]
 
   if (explicitOpen.length) {
     blocks.push(
-      `## 待办（${explicitOpen.length}）\n${explicitOpen
+      tr("## Todos ({0})\n{1}\n", [explicitOpen.length, explicitOpen
         .slice(0, TODO_BLOCK_LIMIT)
         .map((t) => todoLine(t))
-        .join('\n')}\n` +
-        `做完一条就置 done：easy-flow todo set ${todoIds(explicitOpen)} --status done`,
+        .join('\n')]) +
+        tr("Mark finished items done: easy-flow todo set {0} --status done", [todoIds(explicitOpen)]),
     )
   }
   if (candidateOpen.length) {
     blocks.push(
-      `## 待办 · 归属未确认（${candidateOpen.length}）\n` +
+      tr("## Todos with unconfirmed ownership ({0})\n", [candidateOpen.length]) +
         `${candidateOpen
           .slice(0, TODO_BLOCK_LIMIT)
           .map((t) => todoLine(t))
           .join('\n')}\n` +
-        `来源会话登记在本需求上，但待办自己没写归属——确认是这条需求的活就补上：\n` +
+        tr("The source session belongs to this requirement, but the todo has no owner. Confirm ownership and run:\n") +
         `  easy-flow todo set ${todoIds(candidateOpen)} --req ${reqId}\n` +
-        '不是这条需求的活，就归到它该去的那条需求，或者不做（--status cancelled）。',
+        tr("Otherwise assign the correct requirement or cancel it (--status cancelled)."),
     )
   }
   return blocks
@@ -359,10 +370,10 @@ function orphanLine(orphans: Todo[]): string {
   const { open, overdue, oldestDays } = orphanStats(orphans)
   if (!open.length) return ''
   return (
-    `## 无归属待办（${open.length}，超期 ${overdue.length}）\n` +
-    `最老 ${oldestDays} 天：${todoIds(open)}\n` +
-    `不挂在任何需求上，也没法从会话推出归属。逐条处置：做 → todo set <id> --status in_progress；` +
-    `不做 → --status cancelled；要交付就立成需求 → easy-flow todo promote <id> --project <项目>`
+    tr("## Unassigned todos ({0}, overdue {1})\n", [open.length, overdue.length]) +
+    tr("Oldest: {0} days: {1}\n", [oldestDays, todoIds(open)]) +
+    tr("No requirement or inferred session owner. Decide for each: work on it → todo set <id> --status in_progress;") +
+    tr("cancel it → --status cancelled; or promote it → easy-flow todo promote <id> --project <project>")
   )
 }
 
@@ -372,10 +383,10 @@ function staleLine(stale: Todo[]): string {
   if (!open.length) return ''
   const lines = open
     .slice(0, TODO_BLOCK_LIMIT)
-    .map((t) => `${todoLine(t)}  → 指向 ${t.requirementId}（库里已没有这条需求）`)
+    .map((t) => tr("{0} → points to {1} (requirement no longer exists)", [todoLine(t), t.requirementId]))
   return (
-    `## 待办 · 指针悬空（${open.length}）\n${lines.join('\n')}\n` +
-    `重新挂到一条存在的需求上：easy-flow todo set ${todoIds(open)} --req <req-…>；不做就 --status cancelled。`
+    tr("## Todos with missing requirements ({0})\n{1}\n", [open.length, lines.join('\n')]) +
+    tr("Assign an existing requirement: easy-flow todo set {0} --req <req-…>; otherwise use --status cancelled.", [todoIds(open)])
   )
 }
 
@@ -385,12 +396,12 @@ function finishedLine(todos: Todo[]): string {
   if (!open.length) return ''
   const lines = open
     .slice(0, TODO_BLOCK_LIMIT)
-    .map((t) => `${todoLine(t)}  → 归属 ${t.requirementId} 已完成`)
+    .map((t) => tr("{0} → requirement {1} is complete", [todoLine(t), t.requirementId]))
   const command =
     open.length <= TODO_BLOCK_LIMIT
-      ? `一并了结：easy-flow todo set ${todoIds(open)} --status done`
-      : `先 easy-flow todo list --status todo 逐条收，或分批 todo set ${todoIds(open)} --status done`
-  return `## 待办 · 归属需求已完成（${open.length}）\n${lines.join('\n')}\n${command}`
+      ? tr("Close together: easy-flow todo set {0} --status done", [todoIds(open)])
+      : tr("Run easy-flow todo list --status todo, then close individually or in batches: todo set {0} --status done", [todoIds(open)])
+  return tr("## Todos owned by completed requirements ({0})\n{1}\n{2}", [open.length, lines.join('\n'), command])
 }
 
 /**
@@ -422,9 +433,9 @@ function todoHint({ explicit, candidate }: TodoGroups, reqId: string): string {
   if (!open.length) return ''
   const command =
     open.length <= TODO_BLOCK_LIMIT
-      ? `收尾时一并了结：easy-flow todo set ${todoIds(open)} --status done`
-      : `收尾时一并了结：easy-flow todo list --req ${reqId}，再分批 todo set --status done`
-  return `这条需求名下还有 ${open.length} 条未完成待办（${todoIds(open)}）——${command}`
+      ? tr("Close remaining work: easy-flow todo set {0} --status done", [todoIds(open)])
+      : tr("Check easy-flow todo list --req {0}, then close finished todos in batches with todo set --status done", [reqId])
+  return tr("This requirement has {0} unfinished todos ({1}) — {2}", [open.length, todoIds(open), command])
 }
 
 // 收尾是必做的处置点：顺手把超期还没人管的无归属待办也顶到眼前
@@ -432,28 +443,28 @@ function overdueOrphanHint(orphans: Todo[]): string {
   const { overdue } = orphanStats(orphans)
   if (!overdue.length) return ''
   return (
-    `另有 ${overdue.length} 条无归属待办已超期（${todoIds(overdue)}）——三选一：` +
-    '归到某条需求（todo set <id> --req <req-…>）/ 立成新需求（todo promote <id> --project <项目>）/ ' +
-    '不做（todo set <id> --status cancelled）'
+    tr("There are also {0} overdue unassigned todos ({1}) — choose:", [overdue.length, todoIds(overdue)]) +
+    tr("assign a requirement (todo set <id> --req <req-…>) / promote to a requirement (todo promote <id> --project <project>) /") +
+    tr("cancel (todo set <id> --status cancelled)")
   )
 }
 
 // 会话块：这条需求上登记了哪些 agent 会话。cwd 传当前工作区时，命中它的会话会被标出来
 function sessionBlock(sessions: Session[], cwd = ''): string[] {
   if (!sessions.length) return []
-  return [`## 会话（${sessions.length}）\n${sessions.map((s) => sessionLine(s, cwd)).join('\n')}`]
+  return [tr("## Sessions ({0})\n{1}", [sessions.length, sessions.map((s) => sessionLine(s, cwd)).join('\n')])]
 }
 
 /**
  * 有工作区、或状态走到 Review 之后，看板上没有链接等于没有入口可点。
  */
 function missingLinks(req: Requirement, hasWorktree: boolean): boolean {
-  return req.linkItems.length === 0 && (hasWorktree || req.status === 'Review' || req.status === '已完成')
+  return req.linkItems.length === 0 && (hasWorktree || req.status === RequirementStatus.Review || req.status === RequirementStatus.Completed)
 }
 
 // 登记链接的命令，提示里共用这一句
 function linkCommand(id: string): string {
-  return `easy-flow req link ${id} "<标题>=<url>"`
+  return tr("easy-flow req link {0} \"<label>=<url>\"", [id])
 }
 
 /**
@@ -462,13 +473,13 @@ function linkCommand(id: string): string {
 function linkBlock(req: Requirement, hasWorktree: boolean): string {
   if (!req.linkItems.length) {
     const command = missingLinks(req, hasWorktree)
-      ? `\n已经开工，却还没有一条链接——MR / 飞书 Story / 文档挂上来：\n${linkCommand(req.id)}`
+      ? tr("\nWork has started but no links are registered. Attach the MR, task, or document:\n{0}", [linkCommand(req.id)])
       : ''
-    return `## 链接（0）${command || '\n（无）'}`
+    return tr("## Links (0){0}", [command || tr("\n(none)")])
   }
-  return `## 链接（${req.linkItems.length}）\n${req.linkItems
+  return tr("## Links ({0})\n{1}", [req.linkItems.length, req.linkItems
     .map((l) => `- ${linkLabel(l)}  ${l.url}`)
-    .join('\n')}`
+    .join('\n')])
 }
 
 /**
@@ -480,7 +491,7 @@ function projectView(slug: string) {
   if (!project) {
     const known = board.listProjects().map((p) => p.slug)
     throw new Error(
-      `Not found: ${slug}. Known projects: ${known.join(', ') || '(none yet)'}; pass req-… for requirements, wt-… for worktrees`,
+      tr("Not found: {0}. Known projects: {1}; pass req-… for requirements, wt-… for worktrees", [slug, known.join(', ') || tr('(none)')]),
     )
   }
   const counts = new Map<string, number>()
@@ -490,16 +501,14 @@ function projectView(slug: string) {
   const requirements = board.listIn(project.slug)
   const lines = requirements.map(
     (r) =>
-      `- ${r.id || '（无 id）'}  ${r.status}  ${r.slug}  ${r.title}` +
-      (counts.get(r.id) ? `（${counts.get(r.id)} 个 worktree）` : ''),
+      `- ${r.id || tr("(no ID)")}  ${requirementStatusLabel(r.status)}  ${r.slug}  ${r.title}` +
+      (counts.get(r.id) ? tr("({0} worktrees)", [counts.get(r.id)]) : ''),
   )
   const blocks = [
-    `项目：${project.name}（${project.slug}）\n目录：${project.root}\n需求（${requirements.length}）：\n${
-      lines.join('\n') || '（无）'
-    }`,
+    tr("Project: {0} ({1})\nDirectory: {2}\nRequirements ({3}):\n{4}", [project.name, project.slug, project.root, requirements.length, lines.join('\n') || tr("(none)")]),
   ]
   if (project.convention) {
-    blocks.push(`## 项目规范（${join(project.root, 'AGENTS.md')}）\n\n${project.convention.trim()}`)
+    blocks.push(tr("## Project conventions ({0})\n\n{1}", [join(project.root, 'AGENTS.md'), project.convention.trim()]))
   }
   const data = {
     project: {
@@ -519,147 +528,43 @@ function projectView(slug: string) {
   return { blocks, data }
 }
 
-const ROOT_USAGE = `easy-flow：需求看板命令行——终端里认路、建项目与需求、开工作区。
-
-用法：
-  easy-flow context <id>         取上下文（id ∈ req-… / wt-… / 项目标识）
-  easy-flow dir                  打印数据目录（需求都在哪）
-  easy-flow project new <slug>   新建项目
-  easy-flow req new|set|link|session …  新建需求 / 改状态优先级 / 追加链接 / 登记 agent 会话
-  easy-flow req tag add|rm|set|ls …  给需求打标签 / 摘标签 / 换标签 / 看标签
-  easy-flow taglist              现有标签与引用次数（打标前先看）
-  easy-flow wt new|rm …          开 / 删工作区（git worktree）
-  easy-flow review <wt-id>       独立 Codex 评审，报告保存到需求目录
-  easy-flow todo new|set|list …  全局待办：记一条 / 改状态 / 看待办
-
-选项：
-  --json      输出 JSON（给脚本解析），出错也是 JSON
-  --help      每个命令都可跟：easy-flow req new --help
-  --version   版本号`
+const ROOT_USAGE = tr("easy-flow: requirements, context, workspaces, and todos.\n\nUsage:\n  easy-flow context <id>                  Read requirement, workspace, or project context\n  easy-flow dir                           Locate data and configuration\n  easy-flow project new <slug>             Create a project\n  easy-flow req new|set|link|session …      Manage requirements and sessions\n  easy-flow req tag add|rm|set|ls …         Manage requirement tags\n  easy-flow taglist                        List existing tags and usage\n  easy-flow wt new|rm …                    Manage Git workspaces\n  easy-flow review <wt-id>                 Run an independent Codex review\n  easy-flow todo new|set|list|show …        Manage global todos\n\nOptions:\n  --lang en|zh    Output language (overrides saved preference and EASY_FLOW_LANG)\n  --json          Structured output, including errors\n  --help          Command help, e.g. easy-flow req new --help\n  --version       Print version")
 
 const USAGE = {
-  review: `用法：easy-flow review <wt-id> [--base <ref>] [--recheck <报告路径>] [--model <模型>] [--json]
+  get review() { return tr("Usage: easy-flow review <wt-id> [--base <ref>] [--recheck <report-path>] [--model <model>] [--json]\n\nWait for an independent read-only Codex review. Reports and logs are saved under docs/review/.\nA requirement/workspace pair reuses one bound reviewer for ordinary reviews, baseline/model changes, retries, and rechecks.\nReview includes committed, staged, unstaged, and untracked changes since the baseline (default: merge base with main-checkout HEAD).\n--recheck inherits the baseline and reads dispositions from the previous successful or failed report; it cannot be combined with --base.\nSuccess means a report was obtained; read its findings. Failure exits 1 and preserves a diagnostic report.\nThe coding session waits without modifying code, then reads the report and addresses findings.") },
+  get context() { return tr("Usage: easy-flow context <id> [--json]\n\nAccepts req-… (requirement), wt-… (workspace), or a project slug.\nPass the explicit ID from requirement.md or the workspace's identity document.") },
 
-等待独立 Codex 完成只读评审，结论保存到需求目录 docs/review/，返回报告与日志路径。
-同一需求和工作区固定一个 reviewer；普通 review、换基线、换模型、失败重试和复核均复用。
-范围含基线之后的提交、暂存、未暂存和未跟踪文件；--base 默认取主 checkout HEAD 的共同祖先。
---recheck 读取同一工作区上一轮成功或失败报告的处理记录并沿用基线，不能同时指定 --base。
-执行成功表示已取得报告，是否需修复以报告正文为准；执行失败退出 1 并保留失败报告。
-原 coding 会话等待并读取报告后继续处理，评审期间暂停修改代码。`,
-  context: `用法：easy-flow context <id> [--json]
+  get dir() { return tr("Usage: easy-flow dir [--json]\n\nPrint the configured data directory (<data>/<project>/<requirement>/).\nDo not hardcode this path. JSON also includes the config path and active project.") },
 
-id 三种都收：req-…（需求）、wt-…（工作区）、项目标识（项目）。
-id 必须显式传：需求编号在需求目录 requirement.md 的开头，工作区编号在工作区说明的开头。`,
+  get project() { return tr("Usage: easy-flow project new <slug> [--name <display-name>] [--json]\n\nCreate a project for requirements. Slugs use lowercase letters, digits, and hyphens.") },
 
-  dir: `用法：easy-flow dir [--json]
+  get 'req new'() { return tr("Usage: easy-flow req new <title> (--project <project> | --parent <req-id>) [--slug <slug>] [--summary <sentence>] [--json]\n\n--parent creates a nested child requirement with a project-relative slug (parent/child).\nUse --slug for non-ASCII titles. Describe the deliverable in the title; it cannot equal its directory name.") },
 
-打印数据目录——需求都在它下面（<数据目录>/<项目>/<需求>/）。
-路径由配置决定，不要写死。--json 另带配置文件路径与当前项目。`,
+  get 'req set'() { return tr("Usage: easy-flow req set <id> [--status <clarification|in_progress|review|completed>] [--priority <p0|p1|p2|p3|\"\">]\n       [--session-analysis <pending|completed|skipped>] [--json]\n\nOnly supplied fields change; an empty update is rejected. --priority \"\" clears priority.\nLegacy Chinese requirement status values and Review remain accepted as input aliases.\nCLI completion requires completed session analysis. Arrange a separate session to analyze all linked sessions, save the conclusions in requirement documents, and register --session-analysis completed.") },
 
-  project: `用法：easy-flow project new <slug> [--name <显示名>] [--json]
+  get 'req link'() { return tr("Usage: easy-flow req link <id> \"<label>=<url>\" [\"<label>=<url>\" …] [--json]\n\nAttach related tasks, MRs/PRs, designs, documents, monitoring, and screenshots.\nRepeated URLs update their labels without removing links. Labels are optional.") },
 
-项目是需求的容器，通常按业务线划分。slug 用英文小写、数字、连字符。`,
+  get 'req tag'() { return tr("Usage: easy-flow req tag add <req-id> <tag>… [--json]\n       easy-flow req tag rm <req-id> <tag>… [--json]\n       easy-flow req tag set <req-id> [<tag>…] [--json]\n       easy-flow req tag ls <req-id> [--json]\n\nTags live in the database, never requirement.md. Check taglist before adding terms.\nAt most 3 tags per requirement and 24 characters per tag; no whitespace or leading #.\nAt capacity, remove a tag or replace the set. set without tags clears it.\nMatching trims and ignores case, preserving the established spelling.") },
 
-  'req new': `用法：easy-flow req new <标题> (--project <项目> | --parent <req-…>) [--slug <目录名>] [--summary <一句话>] [--json]
+  get taglist() { return tr("Usage: easy-flow taglist [--project <project>] [--json]\n\nList tags and usage counts, sorted by descending usage then name.\nCheck existing vocabulary before creating a new term. --project limits the scope.") },
 
---parent 建子需求：目录嵌在父需求里，结构同普通需求。子需求一样入库、一样出现在看板上，
-也能按 id 反查；层级可以往下续，slug 是相对项目根的路径（如 parent/child）。
-中文标题推不出目录名，需要显式给 --slug。
-标题要写成短句说清「在做什么」，不能等于目录名——看板上它是卡片上唯一能扫的东西。`,
+  get 'req session'() { return tr("Usage: easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang> [--id <session-id>] [--title <title>] [--cwd <directory>] [--link <url>] [--json]\n       easy-flow req session rm <req-id> --agent <agent> --id <session-id> [--json]\n       easy-flow req session ls [<req-id>] [--json]\n\nRegister sessions in the database for navigation from the board. --cwd defaults to the current directory.\nIf --id is omitted, read CLAUDE_CODE_HOST_SESSION_ID / CLAUDE_CODE_SESSION_ID, CODEX_THREAD_ID, CURSOR_CONVERSATION_ID, or CHENGXIAOBANG_SESSION_ID for the selected agent. Missing IDs are rejected.\nDefault deep links exist for Codex, desktop Claude local_ sessions, and Chengxiaobang. Cursor and terminal Claude have no session-level deep link.\nRepeated registration refreshes fields without creating a duplicate.") },
 
-  'req set': `用法：easy-flow req set <id> [--status <澄清|执行中|Review|已完成>] [--priority <p0|p1|p2|p3|"">]
-       [--session-analysis <pending|completed|skipped>] [--json]
+  get 'wt new'() { return tr("Usage: easy-flow wt new <req-id> --repo <repository> --branch <branch> [--base <ref>] [--short <short-name>] [--json]\n\nCreate <repository>.<branch> beside the main checkout with identity AGENTS.md and requirement.md / design symlinks.\n--repo accepts a repository name or absolute main-checkout path. --base defaults to main-checkout HEAD.\nCreation is idempotent. --short selects the requirement's docs/<short-name>/ directory.") },
 
-传了哪个改哪个，都没传会报错。--priority "" 清空优先级。
---session-analysis 记录会话分析状态：pending 待分析，completed 已分析，skipped 已跳过分析。
-CLI 设置「已完成」要求会话分析为 completed；尚未分析时，提醒用户另开 session 分析全部关联会话。
-分析 session 完成分析后用 --session-analysis completed 登记，结论保留在需求文档中。`,
+  get 'wt rm'() { return tr("Usage: easy-flow wt rm <wt-id> [--force] [--json]\n\nRemove the directory, Git registration, and easy-flow record while retaining the branch.\nReject uncommitted changes unless --force is authorized to discard them.") },
 
-  'req link': `用法：easy-flow req link <id> "<标题>=<url>" ["<标题>=<url>" …] [--json]
+  get 'todo new'() { return tr("Usage: easy-flow todo new <title> [--source <feishu|chat|agent|manual>] [--session <session-id>]\n       [--channel <at_me|p2p>] [--from <sender>] [--chat <conversation>] [--ref <dedup-key>]\n       [--req <req-id>] [--link <url>] [--at <yyyy-mm-dd HH:mm>] [--summary <handoff>]\n       [--status <todo|in_progress>] [--json]\n\nTodos are global. IDs are assigned as T-YYYYMMDD-NNN on capture.\nInclude known results, next action, completion criteria, key IDs, and evidence in --summary.\nDuplicate --ref values return the existing entry. --req selects an existing owner without requiring promotion.\nAgent/chat sources require the actual source session ID. See the skill for ownership rules.") },
 
-任何与需求相关的链接都走这一条：飞书 Story、MR/PR、设计文档、Wiki、监控、截图。
-只增不删：同一 URL 再传只更新标题（这次没给标题就留着旧的）。
-标题可省——直接写 URL 也行，看板按 URL 推一个短名。`,
+  get 'todo set'() { return tr("Usage: easy-flow todo set <id>… [--status <todo|in_progress|done|cancelled>] [--title <title>]\n       [--summary <handoff>] [--source …] [--session …] [--channel …] [--from …] [--chat …]\n       [--ref …] [--req <req-id>] [--link …] [--at …] [--json]\n\nOnly supplied fields change. Titles/summaries update Markdown and its index; metadata stays in the database.\nAn empty string clears a field. --req changes ownership; use cancelled to abandon work.\nBatch status changes accept several IDs; title/summary changes require one ID.") },
 
-  'req tag': `用法：easy-flow req tag add <req-id> <tag>… [--json]
-       easy-flow req tag rm <req-id> <tag>… [--json]
-       easy-flow req tag set <req-id> <tag>… [--json]
-       easy-flow req tag ls <req-id> [--json]
+  get 'todo list'() { return tr("Usage: easy-flow todo list [--status <todo|in_progress|done|cancelled>] [--source <source>] [--req <req-id>]\n       [--session <session-id-or-link>] [--orphan] [--all] [--limit <n>] [--json]\n\nShow unfinished todos by default; --all includes finished entries. Sort by latest update and show age.\nFilter by owner, source session, or --orphan (neither explicit nor inferred ownership).") },
 
-标签只存库，不写进 requirement.md。词表是开放的：加之前先 easy-flow taglist 看已有的，
-能复用就复用，确实没有再新建。一个需求最多 3 个标签（卡片 footer 的展示上限）：
-已经满了还想加，必须先 rm 摘掉一个，或用 set 整体替换（set 不带标签即清空）。
-一个标签最多 24 个字符，不能带空白、不能以 # 开头（看板与 ⌘K 用 #标签 筛选）。
-同名按 trim 后忽略大小写算一个，沿用词表里已有的写法。`,
+  get 'todo show'() { return tr("Usage: easy-flow todo show <id> [--json]\n\nPrint metadata, Markdown path, and full content.") },
 
-  taglist: `用法：easy-flow taglist [--project <项目>] [--json]
+  get 'todo promote'() { return tr("Usage: easy-flow todo promote <id> --project <project> [--slug <slug>] [--title <title>] [--json]\n\nCreate a requirement from a todo and assign its owner in one operation.\nReuse its title and handoff summary unless overridden. Already-owned todos are rejected.") },
 
-列出数据目录里所有需求的标签与引用次数，按次数降序、同次数按名称排。
---project 只看一个项目。这是给 agent 打标前对齐词表用的：先看，再决定复用还是新建。`,
-
-  'req session': `用法：easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang> [--id <会话 id>] [--title <标题>] [--cwd <目录>] [--link <url>] [--json]
-       easy-flow req session rm <req-id> --agent <…> --id <会话 id> [--json]
-       easy-flow req session ls [<req-id>] [--json]
-
-把 agent 会话登记到需求上（只存库，不写进需求目录），看板据此一键回到那个会话。
---id 省略时按 agent 从环境变量取：claude → CLAUDE_CODE_HOST_SESSION_ID / CLAUDE_CODE_SESSION_ID，
-codex → CODEX_THREAD_ID，cursor → CURSOR_CONVERSATION_ID，chengxiaobang → CHENGXIAOBANG_SESSION_ID；
-一个都没设就报错，不静默写空。
---cwd 缺省用当前目录。--link 是 desktop 应用的 deeplink，缺省按 agent 与 id 推导：
-codex → codex://threads/<id>，claude 的 local_ 会话 → claude://claude.ai/epitaxy/<id>，
-chengxiaobang → chengxiaobang://session/<id>；cursor 与终端里的 claude 没有会话级 deeplink，只存 id。
-同一个会话重复 add 是幂等的：只刷新 title / cwd / link 与时间，不会长出第二条。`,
-
-  'wt new': `用法：easy-flow wt new <req-id> --repo <仓库> --branch <分支> [--base <起点>] [--short <短名>] [--json]
-
-在主 checkout 旁边建 <仓库>.<分支>：写身份文件 AGENTS.md、建 requirement.md 与 design/ 软链，并登记。
---repo 传仓库名（在仓库根下找）或主 checkout 的绝对路径；--base 缺省用主 checkout 的 HEAD。
-同路径重复调用是幂等的；--short 是涉及仓库表里的短名，用来给设计目录 docs/<短名>/ 命名并展示。`,
-
-  'wt rm': `用法：easy-flow wt rm <wt-id> [--force] [--json]
-
-删目录、git 登记与 easy-flow 记录，分支保留。有未提交改动会拒绝，--force 丢弃后强删。`,
-
-  'todo new': `用法：easy-flow todo new <标题> [--source <feishu|chat|agent|manual>] [--session <会话>]
-       [--channel <at_me|p2p>] [--from <来源人>] [--chat <群/会话名>] [--ref <去重键>]
-       [--req <req-…>] [--link <url>] [--at <yyyy-mm-dd HH:mm>] [--summary <可恢复现场的上下文>]
-       [--status <todo|in_progress>] [--json]
-
-待办是全局的，不挂在项目下。id 按首次入库日自动编号（T-YYYYMMDD-NNN）。
---summary 要写成"下一个 agent 只看这一条就能接手"：进度、下一步、完成标准、关键 ID、证据入口；
-只写现象的口号不算数。--ref 重复时会报出已有条目，不再新建。
---req 是这条待办归属的需求：还没立项就写一条现有的需求也算——不要求先新建需求。
-归属、候选（由来源会话推出）与无归属的处置见 easy-flow skill 的「待办」。`,
-
-  'todo set': `用法：easy-flow todo set <id>… [--status <todo|in_progress|done|cancelled>] [--title <标题>]
-       [--summary <上下文>] [--source …] [--session …] [--channel …] [--from …] [--chat …]
-       [--ref …] [--req <req-…>] [--link …] [--at …] [--json]
-
-传了哪个改哪个，都没传会报错。--title / --summary 改的是 md 的内容（改完自动同步回库），
-其余字段只归库。传空串表示清空该字段。--req 是归属的需求；不做（放弃）用 --status cancelled。
-一次可以给多个 id（收尾时成批置 done / cancelled），但 --title / --summary 只能配一条。`,
-
-  'todo list': `用法：easy-flow todo list [--status <todo|in_progress|done|cancelled>] [--source <…>] [--req <req-…>]
-       [--session <会话 id|链接>] [--orphan] [--all] [--limit <n>] [--json]
-
-默认只列未完成的（todo / in_progress）；--all 连已完成的一起列。按最近更新排，行尾带停留天数。
---req 只看挂在这条需求上的；--session 按来源会话反查（需求收尾时一次收干净）；
---orphan 只看无归属的（没写 --req，也推不出归属）。`,
-
-  'todo show': `用法：easy-flow todo show <id> [--json]
-
-列出这条待办的元数据、md 文件路径与全文。`,
-
-  'todo promote': `用法：easy-flow todo promote <id> --project <项目> [--slug <目录名>] [--title <标题>] [--json]
-
-把一条待办立项成需求，并把归属指针回填——两步合成一次。
-标题与摘要沿用待办的（摘要即交接文），--title / --slug 可覆盖。已挂需求的待办会报错并指出那条需求。`,
-
-  'todo import': `用法：easy-flow todo import <目录> [--dry-run] [--json]
-
-把旧 todo 板的按天文件（<目录>/yyyy-mm-dd.md）搬进看板：只搬未完成的（todo / in_progress），
-一条一个 md 写进 <数据目录>/_todos/，元数据入库；已完成的留在原处不动。
-id 与文件原样保留，已入库的跳过，所以重复跑是安全的。`,
+  get 'todo import'() { return tr("Usage: easy-flow todo import <directory> [--dry-run] [--json]\n\nImport unfinished legacy daily todos (<directory>/yyyy-mm-dd.md) into <data>/_todos/ and the database.\nLeave completed entries in place. Preserve IDs and files, skip existing entries, and preview with --dry-run.") },
 }
 
 const GROUP_USAGE = {
@@ -702,7 +607,7 @@ async function cmdDir(argv: string[]): Promise<void> {
   if (bool(values.help)) return out(USAGE.dir)
   emit(
     { dataDir: config.dataDir, configPath: configPath(), activeProject: config.activeProject },
-    `数据目录：${config.dataDir}\n配置文件：${configPath()}`,
+    tr("Data directory: {0}\nConfiguration file: {1}", [config.dataDir, configPath()]),
   )
 }
 
@@ -713,20 +618,20 @@ async function cmdReview(argv: string[]): Promise<void> {
     model: { type: 'string' },
   })
   if (bool(values.help)) return out(USAGE.review)
-  const id = required(positionals[0], 'Missing worktree id (wt-…)', USAGE.review)
-  if (positionals.length !== 1) throw new UsageError('Review accepts one worktree id', USAGE.review)
+  const id = required(positionals[0], tr('Missing worktree id (wt-…)'), USAGE.review)
+  if (positionals.length !== 1) throw new UsageError(tr("Review accepts one worktree id"), USAGE.review)
   if (values.base !== undefined && values.recheck !== undefined) {
-    throw new UsageError('--base and --recheck cannot be combined', USAGE.review)
+    throw new UsageError(tr("--base and --recheck cannot be combined"), USAGE.review)
   }
   const board = db()
   board.syncProjects()
   const worktree = board.worktreeById(id)
-  if (!worktree) throw new Error(`Worktree not found: ${id}`)
+  if (!worktree) throw new Error(tr("Worktree not found: {0}", [id]))
   const req = findById(worktree.requirementId)
-  const title = `${values.recheck ? '复查' : '评审'}：${req.title}`
+  const title = `${values.recheck ? tr("Recheck") : tr("Review")}：${req.title}`
   const view = requirementView(req)
   view.blocks.push(linkBlock(req, true))
-  view.blocks.push(`## 相关工作区\n${board.listWorktrees(req.id).map(worktreeLine).join('\n')}`)
+  view.blocks.push(tr("## Related workspaces\n{0}", [board.listWorktrees(req.id).map(worktreeLine).join('\n')]))
   const result = await reviewWorktree({
     worktree,
     requirementPath: req.path,
@@ -739,16 +644,16 @@ async function cmdReview(argv: string[]): Promise<void> {
     onSessionResolved(session) {
       board.bindReviewSession(req.id, worktree.id, session)
       board.addSession({
-        requirementId: req.id, agent: 'codex', session,
+        requirementId: req.id, agent: AgentId.Codex, session,
         title,
-        cwd: worktree.path, link: sessionLink('codex', session),
+        cwd: worktree.path, link: sessionLink(AgentId.Codex, session),
       })
     },
   })
   emit(result, [
-    result.ok ? '评审执行完成，请读取报告结论并继续处理。' : result.error,
-    `报告：${result.reportPath}`,
-    `日志：${result.logPath}`,
+    result.ok ? tr("Review completed. Read the report and address its findings.") : result.error,
+    tr("Report: {0}", [result.reportPath]),
+    tr("Log: {0}", [result.logPath]),
   ].join('\n'))
   if (!result.ok) process.exitCode = 1
 }
@@ -759,7 +664,7 @@ async function cmdContext(argv: string[]): Promise<void> {
 
   const board = db()
   board.syncProjects()
-  const key = required(positionals[0], 'Missing id (req-… / wt-… / project slug)', USAGE.context)
+  const key = required(positionals[0], tr('Missing id (req-… / wt-… / project slug)'), USAGE.context)
 
   // project slugs may look like req-/wt- ids, so fall back to the project table when the id is unknown
   const tryProject = () => (board.listProjects().some((p) => p.slug === key) ? projectView(key) : null)
@@ -769,23 +674,23 @@ async function cmdContext(argv: string[]): Promise<void> {
     if (!wt) {
       const alt = tryProject()
       if (alt) return emit({ kind: 'project', ...alt.data }, alt.blocks.join('\n\n'))
-      throw new Error(`Worktree not found: ${key}. The id lives in the worktree's AGENTS.md`)
+      throw new Error(tr("Worktree not found: {0}. The id lives in the worktree's AGENTS.md", [key]))
     }
     const req = board.byId(wt.requirementId)
-    if (!req) throw new Error(`Worktree ${key} refers to requirement ${wt.requirementId}, which is no longer in the db`)
+    if (!req) throw new Error(tr("Worktree {0} refers to requirement {1}, which is no longer in the db", [key, wt.requirementId]))
     const view = requirementView(req, [
       `worktree id：${wt.id}`,
-      `仓库：${wt.repo}${wt.short ? `（短名 ${wt.short}）` : ''}`,
-      `分支：${wt.branch}`,
-      `路径：${wt.path}${existsSync(wt.path) ? '' : '（目录已不存在）'}`,
-      `主 checkout：${wt.main}`,
-      `设计文档：${join(wt.path, 'design')} → ${join(req.path, 'docs', (wt.short || wt.repo).trim())}（软链，写在这儿的东西存在需求目录）`,
+      tr("Repository: {0}{1}", [wt.repo, wt.short ? tr("(short name {0})", [wt.short]) : '']),
+      tr("Branch: {0}", [wt.branch]),
+      tr("Path: {0}{1}", [wt.path, existsSync(wt.path) ? '' : tr("(directory no longer exists)")]),
+      tr("Main checkout: {0}", [wt.main]),
+      tr("Design documents: {0} → {1} (symlink; files live in the requirement directory)", [join(wt.path, 'design'), join(req.path, 'docs', (wt.short || wt.repo).trim())]),
     ])
     const siblings = board.listWorktrees(req.id).filter((w) => w.id !== wt.id)
     view.blocks.push(
       siblings.length
-        ? `## 同一需求的其它 worktree\n${siblings.map(worktreeLine).join('\n')}`
-        : '## 同一需求的其它 worktree\n（无）',
+        ? tr("## Other worktrees for this requirement\n{0}", [siblings.map(worktreeLine).join('\n')])
+        : tr("## Other worktrees for this requirement\n(none)"),
     )
     // 会话挂在需求上，工作区视图里照样列出来，并标出哪个会话就在这个目录里干活
     const sessions = board.listSessions(req.id)
@@ -814,14 +719,14 @@ async function cmdContext(argv: string[]): Promise<void> {
     if (!req) {
       const alt = tryProject()
       if (alt) return emit({ kind: 'project', ...alt.data }, alt.blocks.join('\n\n'))
-      throw new Error(`Requirement not found: ${key}`)
+      throw new Error(tr("Requirement not found: {0}", [key]))
     }
     const wts = board.listWorktrees(req.id)
     const view = requirementView(req)
     view.blocks.push(
       wts.length
         ? `## worktree（${wts.length}）\n${wts.map(worktreeLine).join('\n')}`
-        : '## worktree（0）\n还没有工作区；要在某个仓库里动手，先 easy-flow wt new 建一个',
+        : tr("## Worktrees (0)\nNo workspace yet. Run easy-flow wt new before changing repository code."),
     )
     const sessions = board.listSessions(req.id)
     view.blocks.push(...sessionBlock(sessions))
@@ -853,17 +758,17 @@ async function cmdContext(argv: string[]): Promise<void> {
 
 async function cmdProject(action: string | undefined, argv: string[]): Promise<void> {
   if (action === '--help' || action === '-h') return out(GROUP_USAGE.project)
-  if (!action) throw new UsageError('project needs a subcommand: new', GROUP_USAGE.project)
-  if (action !== 'new') throw new UsageError(`Unknown subcommand: project ${action}`, GROUP_USAGE.project)
+  if (!action) throw new UsageError(tr("project needs a subcommand: new"), GROUP_USAGE.project)
+  if (action !== 'new') throw new UsageError(tr("Unknown subcommand: project {0}", [action]), GROUP_USAGE.project)
 
   const { values, positionals } = parse(argv, { name: { type: 'string' } })
   if (bool(values.help)) return out(USAGE.project)
 
-  const slug = required(positionals[0], 'Missing project slug (lowercase letters, digits, hyphens)', USAGE.project)
+  const slug = required(positionals[0], tr('Missing project slug (lowercase letters, digits, hyphens)'), USAGE.project)
   const display = str(values.name)?.trim() || slug
   const dir = createProjectDir(config.dataDir, slug, display)
   db().syncProjects()
-  emit({ ok: true, slug, name: display, dir }, `已创建项目「${display}」（${slug}）\n目录：${dir}`)
+  emit({ ok: true, slug, name: display, dir }, tr("Created project “{0}” ({1})\nDirectory: {2}", [display, slug, dir]))
 }
 
 async function cmdReqNew(argv: string[]): Promise<void> {
@@ -875,16 +780,16 @@ async function cmdReqNew(argv: string[]): Promise<void> {
   })
   if (bool(values.help)) return out(USAGE['req new'])
 
-  const title = required(positionals[0], 'Missing requirement title', USAGE['req new'])
+  const title = required(positionals[0], tr('Missing requirement title'), USAGE['req new'])
   const parentId = str(values.parent)?.trim()
   const project = str(values.project)?.trim()
-  if (parentId && project) throw new UsageError('Pass either --project or --parent, not both', USAGE['req new'])
-  if (!parentId && !project) throw new UsageError('Pass one of --project / --parent', USAGE['req new'])
+  if (parentId && project) throw new UsageError(tr("Pass either --project or --parent, not both"), USAGE['req new'])
+  if (!parentId && !project) throw new UsageError(tr("Pass one of --project / --parent"), USAGE['req new'])
 
   const slug = str(values.slug)?.trim() || deriveSlug(title)
   if (titleIsSlug(title, slug)) {
     throw new UsageError(
-      `Title repeats the directory name, which tells nobody what the requirement does: ${title}. Write it as a short phrase instead — what it does, and where or why.`,
+      tr("Title repeats the directory name, which tells nobody what the requirement does: {0}. Write it as a short phrase instead — what it does, and where or why.", [title]),
       USAGE['req new'],
     )
   }
@@ -895,10 +800,10 @@ async function cmdReqNew(argv: string[]): Promise<void> {
   if (parentId) {
     const parent = findById(parentId)
     created = createRequirementDir(parent.path, slug, title, summary)
-    text = `已在需求「${parent.title}」下创建子需求「${title}」`
+    text = tr("Created child requirement “{1}” under “{0}”", [parent.title, title])
   } else {
     created = createRequirementDir(projectRoot(project!), slug, title, summary)
-    text = `已在项目「${project}」下创建需求「${title}」`
+    text = tr("Created requirement “{1}” in project “{0}”", [project, title])
   }
   db().syncProjects()
 
@@ -907,7 +812,7 @@ async function cmdReqNew(argv: string[]): Promise<void> {
   const stored = db().byId(created.id)
   emit(
     { ok: true, ...created, title, slug: stored?.slug ?? slug, project: stored?.project ?? project ?? null, parent: parentId ?? null },
-    `${text}\n需求 id：${created.id}\n目录：${created.dir}\n看板状态默认「澄清」。`,
+    tr("{0}\nRequirement ID: {1}\nDirectory: {2}\nInitial status: clarification.", [text, created.id, created.dir]),
   )
 }
 
@@ -919,33 +824,35 @@ async function cmdReqSet(argv: string[]): Promise<void> {
   })
   if (bool(values.help)) return out(USAGE['req set'])
 
-  const id = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req set'])
-  const status = str(values.status)?.trim()
+  const id = required(positionals[0], tr('Missing requirement id (req-…)'), USAGE['req set'])
+  const statusInput = str(values.status)?.trim()
+  const status = statusInput === undefined ? undefined : normalizeRequirementStatus(statusInput)
+  if (statusInput !== undefined && status === undefined) throw new Error(tr("Unknown status: {0}. Valid: {1}", [statusInput, STATUSES.join(', ')]))
   const priority = str(values.priority)?.trim()
   const analysis = str(values['session-analysis'])?.trim()
   if (status === undefined && priority === undefined && analysis === undefined) {
-    throw new UsageError('Pass at least one of --status / --priority / --session-analysis', USAGE['req set'])
+    throw new UsageError(tr("Pass at least one of --status / --priority / --session-analysis"), USAGE['req set'])
   }
   if (status !== undefined && !(STATUSES as readonly string[]).includes(status)) {
-    throw new Error(`Unknown status: ${status}. Valid: ${STATUSES.join(', ')}`)
+    throw new Error(tr("Unknown status: {0}. Valid: {1}", [status, STATUSES.join(', ')]))
   }
   if (priority !== undefined && priority !== '' && !(PRIORITIES as readonly string[]).includes(priority)) {
-    throw new Error(`Unknown priority: ${priority}. Valid: ${PRIORITIES.join(', ')}; an empty string clears it`)
+    throw new Error(tr("Unknown priority: {0}. Valid: {1}; an empty string clears it", [priority, PRIORITIES.join(', ')]))
   }
   if (analysis !== undefined && !(SESSION_ANALYSIS_STATUSES as readonly string[]).includes(analysis)) {
-    throw new Error(`Unknown session analysis status: ${analysis}. Valid: ${SESSION_ANALYSIS_STATUSES.join(', ')}`)
+    throw new Error(tr("Unknown session analysis status: {0}. Valid: {1}", [analysis, SESSION_ANALYSIS_STATUSES.join(', ')]))
   }
 
   const board = db()
   board.syncProjects()
   const req = findById(id)
-  if (status === '已完成' && (analysis ?? req.sessionAnalysisStatus) !== 'completed') {
+  if (status === RequirementStatus.Completed && (analysis ?? req.sessionAnalysisStatus) !== SessionAnalysisState.Completed) {
     throw new Error(
-      `需求 ${req.id} 尚未完成会话分析。请提醒用户另开一个 session，分析该需求关联的全部 AI Agent 会话，` +
-      `结合对话、工具调用及结果检查值得沉淀或优化到 Skill 的知识与踩坑。\n` +
-      `会话清单：easy-flow req session ls ${req.id}\n` +
-      `分析 session 完成分析后登记：easy-flow req set ${req.id} --session-analysis completed\n` +
-      `结论保留在需求文档中，再执行：easy-flow req set ${req.id} --status 已完成`,
+      tr("Requirement {0} has no completed session analysis. Ask the user to start a separate session to analyze all linked AI agent sessions,", [req.id]) +
+      tr("including conversations, tool calls, and results, for reusable knowledge and skill improvements.\n") +
+      tr("Session list: easy-flow req session ls {0}\n", [req.id]) +
+      tr("After analysis, register it: easy-flow req set {0} --session-analysis completed\n", [req.id]) +
+      tr("Save the conclusions in requirement documents, then run: easy-flow req set {0} --status completed", [req.id]),
     )
   }
   let next = req
@@ -954,17 +861,17 @@ async function cmdReqSet(argv: string[]): Promise<void> {
   if (priority !== undefined) next = board.setPriority(req.slug, priority as Priority, req.project)
 
   // 刚收掉最后一个子需求时提一句父需求，但不替它改状态——父需求自己可能还有整体验收
-  const hint = status === '已完成' && req.status !== '已完成' ? parentHint(board, next) : ''
+  const hint = status === RequirementStatus.Completed && req.status !== RequirementStatus.Completed ? parentHint(board, next) : ''
   // 收尾时待办也回头看一眼：只提示，不改状态。与父需求提示同一套道理
   const todoReminder =
-    status === '已完成' || status === 'Review'
+    status === RequirementStatus.Completed || status === RequirementStatus.Review
       ? [todoHint(board.todosForRequirement(next.id), next.id), overdueOrphanHint(board.orphanTodos())]
           .filter(Boolean)
           .join('\n')
       : ''
   // 走到 Review 却一条链接都没登记：看板上就没有 MR 可点，先把命令顶到眼前
   const linkReminder = missingLinks(next, board.listWorktrees(next.id).length > 0)
-    ? `还没有登记任何链接——MR / 飞书 Story / 文档挂上来：${linkCommand(next.id)}`
+    ? tr("No links are registered. Attach the MR, task, or document: {0}", [linkCommand(next.id)])
     : ''
 
   emit(
@@ -979,11 +886,7 @@ async function cmdReqSet(argv: string[]): Promise<void> {
       todoHint: todoReminder || undefined,
       linkHint: linkReminder || undefined,
     },
-    `需求：${next.title}（${next.id}）\n状态：${next.status}${
-      next.priority ? ` · 优先级：${next.priority}` : ''
-    }\n会话分析：${SESSION_ANALYSIS_LABELS[next.sessionAnalysisStatus]}${hint ? `\n${hint}` : ''}${todoReminder ? `\n${todoReminder}` : ''}${
-      linkReminder ? `\n${linkReminder}` : ''
-    }`,
+    tr("Requirement: {0} ({1})\nStatus: {2}{3}\nSession analysis: {4}{5}{6}{7}", [next.title, next.id, requirementStatusLabel(next.status), next.priority ? tr(" · Priority: {0}", [next.priority]) : '', SESSION_ANALYSIS_LABELS[next.sessionAnalysisStatus], hint ? `\n${hint}` : '', todoReminder ? `\n${todoReminder}` : '', linkReminder ? `\n${linkReminder}` : '']),
   )
 }
 
@@ -998,13 +901,13 @@ function parentHint(board: BoardDatabase, child: Requirement): string {
   const siblings = board.children(child.parentId)
   if (!allDone(siblings)) return ''
   const parent = board.byId(child.parentId)
-  if (!parent || parent.status === '已完成') return ''
-  return `父需求「${parent.title}」的 ${siblings.length} 个子需求已全部完成——它自己没有别的活就一并收尾：easy-flow req set ${parent.id} --status 已完成`
+  if (!parent || parent.status === RequirementStatus.Completed) return ''
+  return tr("All {1} children of “{0}” are complete. If no other work remains, close the parent: easy-flow req set {2} --status completed", [parent.title, siblings.length, parent.id])
 }
 
 // 这批需求是不是都到了终态。「全完成」只有这一处定义，`req set` 与 `context` 共用
 function allDone(reqs: Requirement[]): boolean {
-  return reqs.every((r) => r.status === '已完成')
+  return reqs.every((r) => r.status === RequirementStatus.Completed)
 }
 
 /**
@@ -1016,9 +919,9 @@ function parseLinkArg(item: string): LinkItem {
   const at = item.indexOf('=')
   const head = at < 0 ? item : item.slice(0, at)
   if (head.includes('://')) return { title: '', url: item }
-  if (at < 1) throw new Error(`Link expects "<标题>=<url>": ${item}`)
+  if (at < 1) throw new Error(tr("Link expects \"<label>=<url>\": {0}", [item]))
   const url = item.slice(at + 1).trim()
-  if (!url) throw new Error(`Link is missing a url: ${item}`)
+  if (!url) throw new Error(tr("Link is missing a url: {0}", [item]))
   return { title: item.slice(0, at).trim(), url }
 }
 
@@ -1037,10 +940,10 @@ async function cmdReqLink(argv: string[]): Promise<void> {
   const { values, positionals } = parse(argv, {})
   if (bool(values.help)) return out(USAGE['req link'])
 
-  const id = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req link'])
+  const id = required(positionals[0], tr('Missing requirement id (req-…)'), USAGE['req link'])
   const incoming = positionals.slice(1).map(parseLinkArg)
   if (!incoming.length) {
-    throw new UsageError('Pass at least one link: "<标题>=<url>"', USAGE['req link'])
+    throw new UsageError(tr("Pass at least one link: \"<label>=<url>\""), USAGE['req link'])
   }
 
   const board = db()
@@ -1057,7 +960,7 @@ async function cmdReqLink(argv: string[]): Promise<void> {
       title: next.title,
       links: next.linkItems,
     },
-    [`需求：${next.title}（${next.id}）`, `链接（${next.linkItems.length}）：`, ...(lines.length ? lines : ['- （空）'])].join(
+    [tr("Requirement: {0} ({1})", [next.title, next.id]), tr("Links ({0}):", [next.linkItems.length]), ...(lines.length ? lines : [tr("- (empty)")])].join(
       '\n',
     ),
   )
@@ -1066,16 +969,16 @@ async function cmdReqLink(argv: string[]): Promise<void> {
 async function cmdReqTag(action: string | undefined, argv: string[]): Promise<void> {
   if (action === '--help' || action === '-h') return out(USAGE['req tag'])
   if (action !== 'add' && action !== 'rm' && action !== 'set' && action !== 'ls') {
-    throw new UsageError('req tag needs a subcommand: add / rm / set / ls', USAGE['req tag'])
+    throw new UsageError(tr("req tag needs a subcommand: add / rm / set / ls"), USAGE['req tag'])
   }
 
   const { values, positionals } = parse(argv, {})
   if (bool(values.help)) return out(USAGE['req tag'])
 
-  const reqId = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req tag'])
+  const reqId = required(positionals[0], tr('Missing requirement id (req-…)'), USAGE['req tag'])
   const incoming = normalizeTags(positionals.slice(1))
   if (action !== 'ls' && action !== 'set' && !incoming.length) {
-    throw new UsageError(`Pass at least one tag: easy-flow req tag ${action} ${reqId} <tag>`, USAGE['req tag'])
+    throw new UsageError(tr("Pass at least one tag: easy-flow req tag {0} {1} <tag>", [action, reqId]), USAGE['req tag'])
   }
 
   const board = db()
@@ -1086,12 +989,12 @@ async function cmdReqTag(action: string | undefined, argv: string[]): Promise<vo
   if (action === 'add' || action === 'set') {
     const target = action === 'add' ? normalizeTags([...req.tags, ...incoming]) : incoming
     if (target.length > TAG_LIMIT) {
-      const current = req.tags.length ? req.tags.join(' · ') : '（空）'
+      const current = req.tags.length ? req.tags.join(' · ') : tr("(empty)")
       throw new UsageError(
         [
-          `一个需求最多 ${TAG_LIMIT} 个标签，这次会变成 ${target.length} 个。现有：${current}`,
-          `要加新的，先摘掉一个：easy-flow req tag rm ${req.id} <tag>`,
-          `或整体替换：easy-flow req tag set ${req.id} <tag> <tag> <tag>`,
+          tr("A requirement allows at most {0} tags; this would produce {1}. Current: {2}", [TAG_LIMIT, target.length, current]),
+          tr("Remove one first: easy-flow req tag rm {0} <tag>", [req.id]),
+          tr("Or replace the set: easy-flow req tag set {0} <tag> <tag> <tag>", [req.id]),
         ].join('\n'),
         USAGE['req tag'],
       )
@@ -1111,8 +1014,8 @@ async function cmdReqTag(action: string | undefined, argv: string[]): Promise<vo
       tags: next.tags,
     },
     [
-      `需求：${next.title}（${next.id}）`,
-      `标签（${next.tags.length}）：${next.tags.length ? next.tags.join(' · ') : '（空）'}`,
+      tr("Requirement: {0} ({1})", [next.title, next.id]),
+      tr("Tags ({0}): {1}", [next.tags.length, next.tags.length ? next.tags.join(' · ') : tr("(empty)")]),
     ].join('\n'),
   )
 }
@@ -1123,19 +1026,19 @@ async function cmdTagList(argv: string[]): Promise<void> {
 
   const project = str(values.project)?.trim()
   if (project && !listProjectDirs(config.dataDir).some((p) => p.slug === project)) {
-    throw new Error(`Project not found: ${project}`)
+    throw new Error(tr("Project not found: {0}", [project]))
   }
 
   const board = db()
   board.syncProjects()
   const tags = board.tagCounts(project || undefined)
-  const head = project ? `项目 ${project} 的标签（${tags.length}）` : `标签（${tags.length}）`
+  const head = project ? tr("Tags for project {0} ({1})", [project, tags.length]) : tr("Tags ({0})", [tags.length])
 
   emit(
     { tags, total: tags.length, project: project ?? null },
     tags.length
       ? `${head}：\n${tags.map((t) => `- ${t.tag}  ${t.count}`).join('\n')}`
-      : `还没有任何标签。第一个：easy-flow req tag add <req-…> <tag>`,
+      : tr("No tags yet. Add one: easy-flow req tag add <req-…> <tag>"),
   )
 }
 
@@ -1149,8 +1052,7 @@ function sessionIdFrom(values: Record<string, unknown>, agent: SessionAgent): st
     if (value) return value
   }
   throw new Error(
-    `Missing --id, and none of ${names.join(' / ')} is set in this shell. ` +
-      `在 ${agent} 的会话里跑这条命令，或显式 --id <会话 id>`,
+    tr('Missing --id, and none of {0} is set in this shell. Run this in a {1} session or supply --id <session-id>.', [names.join(' / '), agent]),
   )
 }
 
@@ -1164,8 +1066,8 @@ async function cmdReqSessionAdd(argv: string[]): Promise<void> {
   })
   if (bool(values.help)) return out(USAGE['req session'])
 
-  const reqId = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req session'])
-  const agent = required(str(values.agent), 'Missing --agent (claude / codex / cursor / chengxiaobang)', USAGE['req session']) as SessionAgent
+  const reqId = required(positionals[0], tr('Missing requirement id (req-…)'), USAGE['req session'])
+  const agent = required(str(values.agent), tr('Missing --agent (claude / codex / cursor / chengxiaobang)'), USAGE['req session']) as SessionAgent
   oneOf(agent, SESSION_AGENTS, 'agent')
   const session = sessionIdFrom(values, agent)
   const title = str(values.title)?.trim() ?? ''
@@ -1180,11 +1082,11 @@ async function cmdReqSessionAdd(argv: string[]): Promise<void> {
   emit(
     { ok: true, ...saved },
     [
-      `已登记会话到需求「${req.title}」（${req.id}）`,
+      tr("Registered session under requirement “{0}” ({1})", [req.title, req.id]),
       sessionLine(saved),
       saved.link
-        ? '看板详情页点这一行即在 desktop 应用里打开；重复登记只刷新字段。'
-        : '这个 agent 没有会话级 deeplink，看板上只展示与复制会话 id。',
+        ? tr("Open it from the board's details panel. Registering again refreshes its fields.")
+        : tr("This agent has no session deep link. The board can only display and copy the session ID."),
     ].join('\n'),
   )
 }
@@ -1193,20 +1095,20 @@ async function cmdReqSessionRm(argv: string[]): Promise<void> {
   const { values, positionals } = parse(argv, { agent: { type: 'string' }, id: { type: 'string' } })
   if (bool(values.help)) return out(USAGE['req session'])
 
-  const reqId = required(positionals[0], 'Missing requirement id (req-…)', USAGE['req session'])
-  const agent = required(str(values.agent), 'Missing --agent (claude / codex / cursor / chengxiaobang)', USAGE['req session']) as SessionAgent
+  const reqId = required(positionals[0], tr('Missing requirement id (req-…)'), USAGE['req session'])
+  const agent = required(str(values.agent), tr('Missing --agent (claude / codex / cursor / chengxiaobang)'), USAGE['req session']) as SessionAgent
   oneOf(agent, SESSION_AGENTS, 'agent')
-  const session = required(str(values.id), 'Missing --id (the session id)', USAGE['req session'])
+  const session = required(str(values.id), tr('Missing --id (the session id)'), USAGE['req session'])
 
   const board = db()
   board.syncProjects()
   const req = findById(reqId)
   const removed = board.removeSession(agent, session)
-  if (!removed) throw new Error(`Session not found on ${req.id}: ${agent} ${session}`)
+  if (!removed) throw new Error(tr("Session not found on {0}: {1} {2}", [req.id, agent, session]))
 
   emit(
     { ok: true, requirementId: req.id, agent, session },
-    `已从需求「${req.title}」摘掉会话 ${agent} ${session}（会话本身没动）`,
+    tr("Unregistered session {1} {2} from “{0}” (the session itself was not changed)", [req.title, agent, session]),
   )
 }
 
@@ -1225,12 +1127,12 @@ async function cmdReqSessionLs(argv: string[]): Promise<void> {
     }
     const blocks = [...groups].map(([id, list]) => {
       const req = board.byId(id)
-      const head = req ? `${req.slug}（${id}）` : `（需求已不在库里：${id}）`
+      const head = req ? `${req.slug}（${id}）` : tr("(requirement no longer exists in the database: {0})", [id])
       return `## ${head}\n${list.map((s) => sessionLine(s)).join('\n')}`
     })
     return emit(
       { sessions, total: sessions.length },
-      blocks.length ? `会话（${sessions.length}）：\n\n${blocks.join('\n\n')}` : '还没有登记过任何会话。',
+      blocks.length ? tr("Sessions ({0}):\n\n{1}", [sessions.length, blocks.join('\n\n')]) : tr("No registered sessions yet."),
     )
   }
 
@@ -1239,18 +1141,18 @@ async function cmdReqSessionLs(argv: string[]): Promise<void> {
   emit(
     { requirementId: req.id, sessions, total: sessions.length },
     sessions.length
-      ? `需求「${req.title}」的会话（${sessions.length}）：\n${sessions.map((s) => sessionLine(s)).join('\n')}`
-      : `需求「${req.title}」上还没有登记会话；在会话里跑 easy-flow req session add ${req.id} --agent <claude|codex|cursor|chengxiaobang>`,
+      ? tr("Sessions for “{0}” ({1}):\n{2}", [req.title, sessions.length, sessions.map((s) => sessionLine(s)).join('\n')])
+      : tr("No sessions registered under “{0}”. Run easy-flow req session add {1} --agent <claude|codex|cursor|chengxiaobang> from the session.", [req.title, req.id]),
   )
 }
 
 async function cmdReqSession(action: string | undefined, argv: string[]): Promise<void> {
   if (action === '--help' || action === '-h') return out(USAGE['req session'])
-  if (!action) throw new UsageError('req session needs a subcommand: add / rm / ls', USAGE['req session'])
+  if (!action) throw new UsageError(tr("req session needs a subcommand: add / rm / ls"), USAGE['req session'])
   if (action === 'add') return cmdReqSessionAdd(argv)
   if (action === 'rm') return cmdReqSessionRm(argv)
   if (action === 'ls') return cmdReqSessionLs(argv)
-  throw new UsageError(`Unknown subcommand: req session ${action}`, USAGE['req session'])
+  throw new UsageError(tr("Unknown subcommand: req session {0}", [action]), USAGE['req session'])
 }
 
 async function cmdWtNew(argv: string[]): Promise<void> {
@@ -1262,18 +1164,18 @@ async function cmdWtNew(argv: string[]): Promise<void> {
   })
   if (bool(values.help)) return out(USAGE['wt new'])
 
-  const requirementId = required(positionals[0], 'Missing requirement id (req-…)', USAGE['wt new'])
+  const requirementId = required(positionals[0], tr('Missing requirement id (req-…)'), USAGE['wt new'])
   const repo = str(values.repo)?.trim()
   const branch = str(values.branch)?.trim()
-  if (!repo) throw new UsageError('Missing --repo (repo name or main checkout path)', USAGE['wt new'])
-  if (!branch) throw new UsageError('Missing --branch (branch name)', USAGE['wt new'])
+  if (!repo) throw new UsageError(tr("Missing --repo (repo name or main checkout path)"), USAGE['wt new'])
+  if (!branch) throw new UsageError(tr("Missing --branch (branch name)"), USAGE['wt new'])
   const base = str(values.base)
   const short = str(values.short)
 
   const board = db()
   board.syncProjects()
   const req = findById(requirementId)
-  if (!existsSync(req.path)) throw new Error(`Requirement dir does not exist: ${req.path}`)
+  if (!existsSync(req.path)) throw new Error(tr("Requirement dir does not exist: {0}", [req.path]))
 
   const target = await resolveCheckout(repo)
   const path = worktreePathFor(target.main, branch)
@@ -1303,8 +1205,7 @@ async function cmdWtNew(argv: string[]): Promise<void> {
   } catch (err) {
     // the dir is already created — do not roll back; a retry adopts it and reads the same id from its AGENTS.md
     throw new Error(
-      `Failed to register: ${(err as Error).message}\n` +
-        `The worktree dir is already created (${provision.path}, its id lives in its AGENTS.md); run easy-flow wt new again to finish the registration.`,
+      tr('Failed to register: {0}\nThe worktree directory already exists ({1}); its ID is in AGENTS.md. Run easy-flow wt new again to finish registration.', [(err as Error).message, provision.path]),
       { cause: err },
     )
   }
@@ -1323,19 +1224,19 @@ async function cmdWtNew(argv: string[]): Promise<void> {
     },
     [
       provision.created
-        ? '已建好 worktree'
-        : '这个 worktree 本就存在，只补齐了 easy-flow 的产物（目录与分支没动）',
+        ? tr("Worktree created")
+        : tr("Worktree already exists; restored only easy-flow artifacts (directory and branch unchanged)"),
       `worktree id：${id}`,
-      `需求：${req.title}（${req.id}）`,
-      `仓库：${target.repo}${short ? `（短名 ${short}）` : ''}`,
-      `分支：${branch}（${provision.branchCreated ? `新建，起点 ${base || '主 checkout 的 HEAD'}` : '复用本地已有分支'}）`,
-      `路径：${provision.path}`,
-      `主 checkout：${target.main}`,
+      tr("Requirement: {0} ({1})", [req.title, req.id]),
+      tr("Repository: {0}{1}", [target.repo, short ? tr("(short name {0})", [short]) : '']),
+      tr("Branch: {0} ({1})", [branch, provision.branchCreated ? tr("new, based on {0}", [base || tr("Main checkout HEAD")]) : tr("reused existing local branch")]),
+      tr("Path: {0}", [provision.path]),
+      tr("Main checkout: {0}", [target.main]),
       provision.excludeNote,
       provision.identityInFile
-        ? `在这个目录里取上下文：easy-flow context ${id}`
-        : `注意：目录里已有一份不是 easy-flow 写的 AGENTS.md，没动它，${id} 因此没落进文件。` +
-          `顺着软链 requirement.md 能走到需求目录，从那份 requirement.md 开头拿需求编号，再 easy-flow context 列出它的 worktree 对号入座。`,
+        ? tr("Read context here: easy-flow context {0}", [id])
+        : tr("An AGENTS.md not created by easy-flow already exists. It was preserved, so {0} was not written into it.", [id]) +
+          tr("Follow requirement.md to the requirement directory, read its requirement ID, then use easy-flow context to identify the worktree."),
     ]
       .filter(Boolean)
       .join('\n'),
@@ -1346,11 +1247,11 @@ async function cmdWtRm(argv: string[]): Promise<void> {
   const { values, positionals } = parse(argv, { force: { type: 'boolean' } })
   if (bool(values.help)) return out(USAGE['wt rm'])
 
-  const id = required(positionals[0], 'Missing worktree id (wt-…)', USAGE['wt rm'])
+  const id = required(positionals[0], tr('Missing worktree id (wt-…)'), USAGE['wt rm'])
   const board = db()
   board.syncProjects()
   const wt = board.worktreeById(id)
-  if (!wt) throw new Error(`Worktree not found: ${id}`)
+  if (!wt) throw new Error(tr("Worktree not found: {0}", [id]))
 
   const result = await deprovisionWorktree({
     path: wt.path,
@@ -1371,11 +1272,11 @@ async function cmdWtRm(argv: string[]): Promise<void> {
       missing: result.missing,
     },
     [
-      result.missing ? '目录本就不在，已清掉记录与 git 登记' : '已移除 worktree',
+      result.missing ? tr("Directory was already absent; removed records and Git registration") : tr("Worktree removed"),
       `worktree id：${wt.id}`,
-      `路径：${wt.path}`,
-      result.discarded.length ? `丢弃了 ${result.discarded.length} 处未提交改动` : '',
-      `分支 ${wt.branch} 已保留；要删：git -C ${wt.main} branch -D ${wt.branch}`,
+      tr("Path: {0}", [wt.path]),
+      result.discarded.length ? tr("Discarded {0} uncommitted changes", [result.discarded.length]) : '',
+      tr("Branch {0} was retained. To delete it: git -C {1} branch -D {2}", [wt.branch, wt.main, wt.branch]),
     ]
       .filter(Boolean)
       .join('\n'),
@@ -1416,7 +1317,7 @@ function todoPatch(values: Record<string, unknown>): TodoPatch {
     if (value !== undefined) patch[key] = value
   }
   const link = str(values.link)?.trim()
-  if (link && !/^https?:\/\//i.test(link)) throw new Error(`Link must start with http(s)://: ${link}`)
+  if (link && !/^https?:\/\//i.test(link)) throw new Error(tr("Link must start with http(s)://: {0}", [link]))
   put('source', str(values.source)?.trim())
   put('session', str(values.session))
   put('channel', str(values.channel)?.trim())
@@ -1431,41 +1332,41 @@ function todoPatch(values: Record<string, unknown>): TodoPatch {
 
 // 校验枚举值，报错时列出合法取值——agent 据此就能自己纠正
 function oneOf(value: string, valid: readonly string[], what: string): void {
-  if (!valid.includes(value)) throw new Error(`Unknown ${what}: ${value}. Valid: ${valid.join(', ')}`)
+  if (!valid.includes(value)) throw new Error(tr("Unknown {0}: {1}. Valid: {2}", [what, value, valid.join(', ')]))
 }
 
 // --req 只收真实存在的需求 id：写错了需求详情页只会一直空着，不如当场报错
 function checkTodoReq(board: BoardDatabase, req: string | undefined): void {
   if (req && !board.byId(req)) {
-    throw new Error(`Requirement not found: ${req}. --req 是归属的需求；要新建一条需求用 easy-flow todo promote`)
+    throw new Error(tr("Requirement not found: {0}. --req selects an owner; use easy-flow todo promote to create a requirement.", [req]))
   }
 }
 
 function todoLine(t: Todo): string {
   const who = t.origin || t.chat
   const days = todoAgeDays(t.created)
-  const age = days > 0 ? `  ${days}天` : ''
-  const overdue = days >= TODO_STALE_DAYS && isOpenTodo(t) ? '  超期' : ''
+  const age = days > 0 ? tr("  {0} days", [days]) : ''
+  const overdue = days >= TODO_STALE_DAYS && isOpenTodo(t) ? tr("  overdue") : ''
   return `- ${t.id}  ${t.status.padEnd(11)} ${t.source || '—'}  ${t.title}${who ? `（${who}）` : ''}${age}${overdue}`
 }
 
 // 元数据一行一个，new 与 show 共用
 function todoHead(t: Todo, file: string): string[] {
   const head = [
-    `待办 id：${t.id}`,
-    `待办：${t.title}`,
-    `状态：${t.status}`,
-    `文件：${file}`,
-    `来源：${t.source || '（未记）'}${t.channel ? ` · ${t.channel}` : ''}`,
+    tr("Todo ID: {0}", [t.id]),
+    tr("Todo: {0}", [t.title]),
+    tr("Status: {0}", [t.status]),
+    tr("File: {0}", [file]),
+    tr("Source: {0}{1}", [t.source || tr("(not recorded)"), t.channel ? ` · ${t.channel}` : '']),
   ]
-  if (t.origin) head.push(`来源人：${t.origin}`)
-  if (t.chat) head.push(`上下文：${t.chat}`)
-  if (t.session) head.push(`会话：${t.session}`)
-  if (t.ref) head.push(`去重键：${t.ref}`)
-  if (t.requirementId) head.push(`需求：${t.requirementId}`)
-  if (t.link) head.push(`链接：${t.link}`)
-  if (t.happened) head.push(`源事件时间：${t.happened}`)
-  head.push(`入库：${t.created} · 更新：${t.updated}`)
+  if (t.origin) head.push(tr("Sender: {0}", [t.origin]))
+  if (t.chat) head.push(tr("Context: {0}", [t.chat]))
+  if (t.session) head.push(tr("Session: {0}", [t.session]))
+  if (t.ref) head.push(tr("Deduplication key: {0}", [t.ref]))
+  if (t.requirementId) head.push(tr("Requirement: {0}", [t.requirementId]))
+  if (t.link) head.push(tr("Link: {0}", [t.link]))
+  if (t.happened) head.push(tr("Source event time: {0}", [t.happened]))
+  head.push(tr("Created: {0} · Updated: {1}", [t.created, t.updated]))
   return head
 }
 
@@ -1477,9 +1378,9 @@ async function cmdTodoNew(argv: string[]): Promise<void> {
   })
   if (bool(values.help)) return out(USAGE['todo new'])
 
-  const title = required(positionals[0], 'Missing todo title', USAGE['todo new'])
+  const title = required(positionals[0], tr('Missing todo title'), USAGE['todo new'])
   const patch = todoPatch(values)
-  const status = (str(values.status)?.trim() || 'todo') as TodoStatus
+  const status = (str(values.status)?.trim() || TodoState.Todo) as TodoStatus
   if (patch.source) oneOf(patch.source, TODO_SOURCES, 'source')
   if (patch.channel) oneOf(patch.channel, TODO_CHANNELS, 'channel')
   oneOf(status, TODO_STATUSES, 'status')
@@ -1494,7 +1395,7 @@ async function cmdTodoNew(argv: string[]): Promise<void> {
     const dup = board.todoByRef(patch.ref)
     if (dup) {
       throw new Error(
-        `Ref already used by ${dup.id}（${dup.title}）; 要补内容用 easy-flow todo set ${dup.id}`,
+        tr("Ref already used by {0} ({1}); update it with easy-flow todo set {2}", [dup.id, dup.title, dup.id]),
       )
     }
   }
@@ -1508,7 +1409,7 @@ async function cmdTodoNew(argv: string[]): Promise<void> {
 
   emit(
     { ok: true, ...todo },
-    [`已记一条待办`, ...todoHead(todo, file), '', '内容写在这个文件里（摘要 = 交接说明，进度往下续）。'].join('\n'),
+    [tr("Todo recorded"), ...todoHead(todo, file), '', tr("Content lives in this file (summary is the handoff; append progress below).")].join('\n'),
   )
 }
 
@@ -1522,17 +1423,17 @@ async function cmdTodoSet(argv: string[]): Promise<void> {
   if (bool(values.help)) return out(USAGE['todo set'])
 
   const ids = positionals.map((p) => p.trim()).filter(Boolean)
-  if (!ids.length) throw new UsageError('Missing todo id (T-…)', USAGE['todo set'])
+  if (!ids.length) throw new UsageError(tr("Missing todo id (T-…)"), USAGE['todo set'])
   const patch = todoPatch(values)
   const status = str(values.status)?.trim()
   const title = str(values.title)?.trim()
   const summary = str(values.summary)
   if (status === undefined && title === undefined && summary === undefined && !Object.keys(patch).length) {
-    throw new UsageError('Pass at least one field to change', USAGE['todo set'])
+    throw new UsageError(tr("Pass at least one field to change"), USAGE['todo set'])
   }
   // 标题与摘要是 md 的正文，一条一份文件；批量只做字段与状态，避免改串
   if (ids.length > 1 && (title !== undefined || summary !== undefined)) {
-    throw new UsageError('--title / --summary 一次只能改一条待办', USAGE['todo set'])
+    throw new UsageError(tr("--title / --summary can update only one todo at a time"), USAGE['todo set'])
   }
   if (status !== undefined) oneOf(status, TODO_STATUSES, 'status')
   if (patch.source) oneOf(patch.source, TODO_SOURCES, 'source')
@@ -1544,7 +1445,7 @@ async function cmdTodoSet(argv: string[]): Promise<void> {
   const unknown = ids.filter((id) => !board.todoById(id))
   if (unknown.length) {
     throw new Error(
-      `Todo not found: ${unknown.join(', ')}. id 就是文件名（${join(config.dataDir, '_todos', '<id>.md')}）`,
+      tr("Todo not found: {0}. The ID is the filename ({1}).", [unknown.join(', '), join(config.dataDir, '_todos', '<id>.md')]),
     )
   }
 
@@ -1564,11 +1465,11 @@ async function cmdTodoSet(argv: string[]): Promise<void> {
   const todos = ids.map((id) => board.todoById(id)!)
   if (todos.length === 1) {
     const [todo] = todos
-    return emit({ ok: true, ...todo }, [`待办：${todo.title}（${todo.id}）`, `状态：${todo.status}`].join('\n'))
+    return emit({ ok: true, ...todo }, [tr("Todo: {0} ({1})", [todo.title, todo.id]), tr("Status: {0}", [todo.status])].join('\n'))
   }
   emit(
     { ok: true, todos },
-    [`已更新 ${todos.length} 条待办：`, ...todos.map((t) => `- ${t.id}  ${t.title}  ${t.status}`)].join('\n'),
+    [tr("Updated {0} todos:", [todos.length]), ...todos.map((t) => `- ${t.id}  ${t.title}  ${t.status}`)].join('\n'),
   )
 }
 
@@ -1590,9 +1491,9 @@ async function cmdTodoList(argv: string[]): Promise<void> {
   const session = str(values.session)?.trim()
   if (status !== undefined) oneOf(status, TODO_STATUSES, 'status')
   if (source !== undefined) oneOf(source, TODO_SOURCES, 'source')
-  if (req && bool(values.orphan)) throw new UsageError('Pass either --req or --orphan', USAGE['todo list'])
+  if (req && bool(values.orphan)) throw new UsageError(tr("Pass either --req or --orphan"), USAGE['todo list'])
   if (session && (req || bool(values.orphan))) {
-    throw new UsageError('Pass --session on its own', USAGE['todo list'])
+    throw new UsageError(tr("Pass --session on its own"), USAGE['todo list'])
   }
 
   const board = db()
@@ -1615,25 +1516,25 @@ async function cmdTodoList(argv: string[]): Promise<void> {
   const hidden = todos.length - shown.length
 
   const scope = req
-    ? `需求 ${req} 的`
+    ? tr("For requirement {0}: ", [req])
     : session
-      ? `会话 ${session} 的`
+      ? tr("For session {0}: ", [session])
       : bool(values.orphan)
-        ? '无归属的'
+        ? tr("Unassigned ")
         : ''
   const blocks = [
-    `${status ? `状态 ${status}` : bool(values.all) ? `${scope}全部待办` : `${scope}未完成的待办`}（${todos.length}）：`,
-    shown.map(todoLine).join('\n') || '（无）',
+    `${status ? tr("Status {0}", [status]) : bool(values.all) ? tr("{0}all todos", [scope]) : tr("{0}unfinished todos", [scope])}（${todos.length}）：`,
+    shown.map(todoLine).join('\n') || tr("(none)"),
   ]
-  if (hidden > 0) blocks.push(`（还有 ${hidden} 条，--limit 调大或加 --status）`)
+  if (hidden > 0) blocks.push(tr("({0} more; increase --limit or filter with --status)", [hidden]))
   if (!status && !bool(values.all) && !req && !session && !bool(values.orphan)) {
     const rest = all.length - open.length
-    if (rest > 0) blocks.push(`（已完成/已取消 ${rest} 条，--all 看全部）`)
+    if (rest > 0) blocks.push(tr("({0} completed/cancelled; use --all to show everything)", [rest]))
   }
   // 验收要的那一条：未归属 N、超期 M、最老 K 天
   if (bool(values.orphan)) {
     const stats = orphanStats(orphans)
-    blocks.push(`（未归属 ${stats.open.length} 条、其中超期 ${stats.overdue.length} 条、最老 ${stats.oldestDays} 天）`)
+    blocks.push(tr("({0} unassigned, {1} overdue, oldest {2} days)", [stats.open.length, stats.overdue.length, stats.oldestDays]))
   }
 
   emit(
@@ -1654,16 +1555,16 @@ async function cmdTodoShow(argv: string[]): Promise<void> {
   const { values, positionals } = parse(argv, {})
   if (bool(values.help)) return out(USAGE['todo show'])
 
-  const id = required(positionals[0], 'Missing todo id (T-…)', USAGE['todo show'])
+  const id = required(positionals[0], tr("Missing todo id (T-…)"), USAGE['todo show'])
   const board = db()
   board.syncTodos()
   const todo = board.todoById(id)
-  if (!todo) throw new Error(`Todo not found: ${id}`)
+  if (!todo) throw new Error(tr("Todo not found: {0}", [id]))
   const { path, content } = board.readTodoDoc(id)
 
   emit(
     { todo, path, content },
-    [todoHead(todo, path).join('\n'), `## 内容（${path}）\n\n${content.trim()}`].join('\n\n'),
+    [todoHead(todo, path).join('\n'), tr("## Content ({0})\n\n{1}", [path, content.trim()])].join('\n\n'),
   )
 }
 
@@ -1679,16 +1580,16 @@ async function cmdTodoPromote(argv: string[]): Promise<void> {
   })
   if (bool(values.help)) return out(USAGE['todo promote'])
 
-  const id = required(positionals[0], 'Missing todo id (T-…)', USAGE['todo promote'])
-  const project = required(str(values.project)?.trim(), 'Missing --project', USAGE['todo promote'])
+  const id = required(positionals[0], tr("Missing todo id (T-…)"), USAGE['todo promote'])
+  const project = required(str(values.project)?.trim(), tr('Missing --project'), USAGE['todo promote'])
 
   const board = db()
   board.syncTodos()
   const todo = board.todoById(id)
-  if (!todo) throw new Error(`Todo not found: ${id}`)
+  if (!todo) throw new Error(tr("Todo not found: {0}", [id]))
   if (todo.requirementId) {
     throw new Error(
-      `Todo ${id} already belongs to ${todo.requirementId}. 要换归属用 easy-flow todo set ${id} --req <req-…>`,
+      tr("Todo {0} already belongs to {1}. Reassign with easy-flow todo set {2} --req <req-…>.", [id, todo.requirementId, id]),
     )
   }
 
@@ -1696,7 +1597,7 @@ async function cmdTodoPromote(argv: string[]): Promise<void> {
   const slug = str(values.slug)?.trim() || deriveSlug(title)
   if (titleIsSlug(title, slug)) {
     throw new UsageError(
-      `Title repeats the directory name, which tells nobody what the requirement does: ${title}. 用 --title 或 --slug 改一个`,
+      tr("The title repeats the directory name: {0}. Change --title or --slug to describe the deliverable.", [title]),
       USAGE['todo promote'],
     )
   }
@@ -1720,12 +1621,12 @@ async function cmdTodoPromote(argv: string[]): Promise<void> {
       requirement: { id: requirementId, slug: stored?.slug ?? slug, project, title, dir: created.dir },
     },
     [
-      `已立项：${todo.title}（${id}）`,
-      `需求 id：${requirementId}`,
-      `目录：${created.dir}`,
-      `看板状态默认「澄清」。待办已挂到这条需求上。`,
+      tr("Promoted: {0} ({1})", [todo.title, id]),
+      tr("Requirement ID: {0}", [requirementId]),
+      tr("Directory: {0}", [created.dir]),
+      tr("Initial status: clarification. The todo is now linked to this requirement."),
       '',
-      `下一步：easy-flow wt new ${requirementId} --repo <仓库> --branch feature-${stored?.slug ?? slug}`,
+      tr("Next: easy-flow wt new {0} --repo <repository> --branch feature-{1}", [requirementId, stored?.slug ?? slug]),
     ].join('\n'),
   )
 }
@@ -1769,12 +1670,12 @@ async function cmdTodoImport(argv: string[]): Promise<void> {
   const { values, positionals } = parse(argv, { 'dry-run': { type: 'boolean' } })
   if (bool(values.help)) return out(USAGE['todo import'])
 
-  const dir = required(positionals[0], 'Missing source dir (the old todo board, e.g. ~/todo)', USAGE['todo import'])
-  if (!existsSync(dir)) throw new Error(`Directory not found: ${dir}`)
+  const dir = required(positionals[0], tr('Missing source dir (the old todo board, e.g. ~/todo)'), USAGE['todo import'])
+  if (!existsSync(dir)) throw new Error(tr("Directory not found: {0}", [dir]))
   const files = readdirSync(dir)
     .filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f))
     .sort()
-  if (!files.length) throw new Error(`No yyyy-mm-dd.md under ${dir}`)
+  if (!files.length) throw new Error(tr("No yyyy-mm-dd.md under {0}", [dir]))
 
   const dryRun = bool(values['dry-run'])
   const board = db()
@@ -1786,7 +1687,7 @@ async function cmdTodoImport(argv: string[]): Promise<void> {
   for (const file of files) {
     for (const entry of parseLegacyTodoFile(readFileSync(join(dir, file), 'utf8'))) {
       // 只搬未完成的：已完成的留在原处当历史，进看板只会淹没真正要做的事
-      if (entry.status !== 'todo' && entry.status !== 'in_progress') {
+      if (entry.status !== TodoState.Todo && entry.status !== TodoState.InProgress) {
         finished++
         continue
       }
@@ -1835,11 +1736,11 @@ async function cmdTodoImport(argv: string[]): Promise<void> {
       todosDir: join(config.dataDir, '_todos'),
     },
     [
-      dryRun ? `将迁移 ${created.length} 条未完成的待办（--dry-run，没落盘）` : `已迁移 ${created.length} 条未完成的待办`,
+      dryRun ? tr("Would migrate {0} unfinished todos (--dry-run; no files written)", [created.length]) : tr("Migrated {0} unfinished todos", [created.length]),
       created.length ? `id：${created.join('、')}` : '',
-      skipped.length ? `已存在跳过 ${skipped.length} 条：${skipped.join('、')}` : '',
-      finished ? `已完成/已取消 ${finished} 条留在原处不动` : '',
-      `待办文件目录：${join(config.dataDir, '_todos')}`,
+      skipped.length ? tr("Skipped {0} existing entries: {1}", [skipped.length, skipped.join('、')]) : '',
+      finished ? tr("Left {0} completed/cancelled entries in place", [finished]) : '',
+      tr("Todo directory: {0}", [join(config.dataDir, '_todos')]),
     ]
       .filter(Boolean)
       .join('\n'),
@@ -1848,33 +1749,33 @@ async function cmdTodoImport(argv: string[]): Promise<void> {
 
 async function cmdTodo(action: string | undefined, argv: string[]): Promise<void> {
   if (action === '--help' || action === '-h') return out(GROUP_USAGE.todo)
-  if (!action) throw new UsageError('todo needs a subcommand: new / set / list / show / promote / import', GROUP_USAGE.todo)
+  if (!action) throw new UsageError(tr("todo needs a subcommand: new / set / list / show / promote / import"), GROUP_USAGE.todo)
   if (action === 'new') return cmdTodoNew(argv)
   if (action === 'set') return cmdTodoSet(argv)
   if (action === 'list') return cmdTodoList(argv)
   if (action === 'show') return cmdTodoShow(argv)
   if (action === 'promote') return cmdTodoPromote(argv)
   if (action === 'import') return cmdTodoImport(argv)
-  throw new UsageError(`Unknown subcommand: todo ${action}`, GROUP_USAGE.todo)
+  throw new UsageError(tr("Unknown subcommand: todo {0}", [action]), GROUP_USAGE.todo)
 }
 
 async function cmdReq(action: string | undefined, argv: string[]): Promise<void> {
   if (action === '--help' || action === '-h') return out(GROUP_USAGE.req)
-  if (!action) throw new UsageError('req needs a subcommand: new / set / link / tag / session', GROUP_USAGE.req)
+  if (!action) throw new UsageError(tr("req needs a subcommand: new / set / link / tag / session"), GROUP_USAGE.req)
   if (action === 'new') return cmdReqNew(argv)
   if (action === 'set') return cmdReqSet(argv)
   if (action === 'link') return cmdReqLink(argv)
   if (action === 'tag') return cmdReqTag(argv[0], argv.slice(1))
   if (action === 'session') return cmdReqSession(argv[0], argv.slice(1))
-  throw new UsageError(`Unknown subcommand: req ${action}`, GROUP_USAGE.req)
+  throw new UsageError(tr("Unknown subcommand: req {0}", [action]), GROUP_USAGE.req)
 }
 
 async function cmdWt(action: string | undefined, argv: string[]): Promise<void> {
   if (action === '--help' || action === '-h') return out(GROUP_USAGE.wt)
-  if (!action) throw new UsageError('wt needs a subcommand: new / rm', GROUP_USAGE.wt)
+  if (!action) throw new UsageError(tr("wt needs a subcommand: new / rm"), GROUP_USAGE.wt)
   if (action === 'new') return cmdWtNew(argv)
   if (action === 'rm') return cmdWtRm(argv)
-  throw new UsageError(`Unknown subcommand: wt ${action}`, GROUP_USAGE.wt)
+  throw new UsageError(tr("Unknown subcommand: wt {0}", [action]), GROUP_USAGE.wt)
 }
 
 async function run(argv: string[]): Promise<void> {
@@ -1889,11 +1790,30 @@ async function run(argv: string[]): Promise<void> {
   if (group === 'req') return cmdReq(action, rest)
   if (group === 'wt') return cmdWt(action, rest)
   if (group === 'todo') return cmdTodo(action, rest)
-  throw new UsageError(`Unknown command: ${group}`, ROOT_USAGE)
+  throw new UsageError(tr("Unknown command: {0}", [group]), ROOT_USAGE)
 }
 
 async function main(): Promise<void> {
-  const argv = process.argv.slice(2)
+  const raw = process.argv.slice(2)
+  asJson = raw.includes('--json')
+  let hasLanguageFlag = false
+  let language = getLanguage()
+  const argv: string[] = []
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] === '--lang' || raw[i].startsWith('--lang=')) {
+      const value = raw[i] === '--lang' ? raw[++i] : raw[i].slice(7)
+      if (!isLanguage(value) || hasLanguageFlag) {
+        const error = tr('Invalid --lang; use en or zh')
+        if (asJson) out(JSON.stringify({ error }))
+        else process.stderr.write(`${error}\n`)
+        process.exitCode = 2
+        return
+      }
+      hasLanguageFlag = true
+      language = value
+    } else argv.push(raw[i])
+  }
+  setLanguage(language)
   asJson = argv.includes('--json')
   try {
     await run(argv.filter((a) => a !== '--json'))

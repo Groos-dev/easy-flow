@@ -1,30 +1,20 @@
+import { message, type MessageDescriptor } from '../src/shared/i18n.ts'
+import type { MessageKey } from '../src/shared/messages.ts'
+import { clipActionText, formatActionText, type SessionAction } from '../src/shared/session-text.ts'
+export { ACTION_MAX_WIDTH } from '../src/shared/session-text.ts'
+export type { SessionAction } from '../src/shared/session-text.ts'
 /**
  * 一次工具调用 → 气泡里那句动作。
  *
  * hook 推来的 PreToolUse 报文里有工具名与参数，codex 落盘的 function_call 里也有，
  * 所以归一只有这一处：认得就拼一句，认不出返回空串。
  */
-export interface SessionAction {
-  // 展示文案，形如「改 hook.ts」
-  text: string
-  // 这次工具调用发生的时刻（epoch ms）
-  calledAt: number
-}
-
 // 描述类文案的字数上限
 const DESC_MAX = 12
 
-/**
- * 一句动作的宽度上限（半角宽），取渲染层两行的容量。
- *
- * 源头只切超过两行的，渲染层的两行封顶与省略号只是兜底。气泡宽度由 UI 那份需求定稿，
- * 定稿后回填这个数。
- */
-export const ACTION_MAX_WIDTH = 36
-
 interface Rule {
   // 拼在文案最前面的动词
-  verb: string
+  messageKey: MessageKey
   // 从工具参数里取哪个字段
   field: string
   // 取到之后怎么裁
@@ -36,40 +26,46 @@ interface Rule {
  * 程小帮的 Shell 与 Bash 同形。
  */
 const RULES: Record<string, Rule> = {
-  Edit: { verb: '改', field: 'file_path', cut: tailPath },
-  Write: { verb: '写', field: 'file_path', cut: tailPath },
-  Read: { verb: '读', field: 'file_path', cut: tailPath },
-  Bash: { verb: '跑', field: 'command', cut: headWords },
-  Shell: { verb: '跑', field: 'command', cut: headWords },
-  Grep: { verb: '搜', field: 'pattern', cut: raw },
-  Glob: { verb: '搜', field: 'pattern', cut: raw },
-  Agent: { verb: '派', field: 'description', cut: clipText },
-  Task: { verb: '派', field: 'description', cut: clipText },
-  Delete: { verb: '删', field: 'file_path', cut: tailPath },
-  WebSearch: { verb: '查', field: 'query', cut: clipText },
-  WebFetch: { verb: '查', field: 'url', cut: clipText },
-  CallMcpTool: { verb: '调', field: 'toolName', cut: clipText },
-  exec_command: { verb: '跑', field: 'cmd', cut: headWords },
-  view_image: { verb: '看', field: 'path', cut: tailPath },
+  Edit: { messageKey: 'Edit {0}', field: 'file_path', cut: tailPath },
+  Write: { messageKey: 'Write {0}', field: 'file_path', cut: tailPath },
+  Read: { messageKey: 'Read {0}', field: 'file_path', cut: tailPath },
+  Bash: { messageKey: 'Run {0}', field: 'command', cut: headWords },
+  Shell: { messageKey: 'Run {0}', field: 'command', cut: headWords },
+  Grep: { messageKey: 'Search {0}', field: 'pattern', cut: raw },
+  Glob: { messageKey: 'Search {0}', field: 'pattern', cut: raw },
+  Agent: { messageKey: 'Delegate {0}', field: 'description', cut: clipText },
+  Task: { messageKey: 'Delegate {0}', field: 'description', cut: clipText },
+  Delete: { messageKey: 'Delete {0}', field: 'file_path', cut: tailPath },
+  WebSearch: { messageKey: 'Inspect {0}', field: 'query', cut: clipText },
+  WebFetch: { messageKey: 'Inspect {0}', field: 'url', cut: clipText },
+  CallMcpTool: { messageKey: 'Call {0}', field: 'toolName', cut: clipText },
+  exec_command: { messageKey: 'Run {0}', field: 'cmd', cut: headWords },
+  view_image: { messageKey: 'View {0}', field: 'path', cut: tailPath },
 }
 
 /**
  * 一次工具调用 → 一句动作文案。
  * 认不出的工具、取不到参数、取到空，都返回空串。
  */
-export function actionTextOf(tool: string, input: unknown): string {
+function actionMessageOf(tool: string, input: unknown): MessageDescriptor | undefined {
   const rule = RULES[tool]
-  if (!rule || !input || typeof input !== 'object') return ''
-  const raw = (input as Record<string, unknown>)[rule.field]
-  if (typeof raw !== 'string') return ''
-  const text = rule.cut(raw)
-  return text ? clip(`${rule.verb} ${text}`) : ''
+  if (!rule || !input || typeof input !== 'object') return undefined
+  const value = (input as Record<string, unknown>)[rule.field]
+  if (typeof value !== 'string') return undefined
+  const text = clipActionText(rule.cut(value))
+  return text ? message(rule.messageKey, [text]) : undefined
 }
 
-// 带时刻的动作。认不出就是 null——读不到一律不猜
+export function actionTextOf(tool: string, input: unknown): string {
+  const descriptor = actionMessageOf(tool, input)
+  return descriptor ? formatActionText({ text: '', calledAt: 0, message: descriptor }) : ''
+}
+
 export function actionOf(tool: string, input: unknown, calledAt: number): SessionAction | null {
-  const text = actionTextOf(tool, input)
-  return text ? { text, calledAt } : null
+  const descriptor = actionMessageOf(tool, input)
+  if (!descriptor) return null
+  const action: SessionAction = { text: '', calledAt, message: descriptor }
+  return { ...action, text: formatActionText(action) }
 }
 
 /**
@@ -107,26 +103,6 @@ function clipText(raw: string): string {
  */
 function raw(text: string): string {
   return collapse(text)
-}
-
-/**
- * 整句封顶：本机取样里超过两行的有 23%，最长的 409 个半角宽。
- */
-function clip(text: string): string {
-  if (width(text) <= ACTION_MAX_WIDTH) return text
-  let cut = ''
-  for (const ch of text) {
-    if (width(cut + ch) > ACTION_MAX_WIDTH - 1) break
-    cut += ch
-  }
-  return `${cut}…`
-}
-
-// 展示宽度：全角算 2、半角算 1
-function width(text: string): number {
-  let n = 0
-  for (const ch of text) n += ch.codePointAt(0)! > 0x2e80 ? 2 : 1
-  return n
 }
 
 function collapse(raw: string): string {

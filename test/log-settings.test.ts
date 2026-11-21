@@ -24,7 +24,7 @@ test('日志级别设置可读取、保存并拒绝非法值', async () => {
     assert.equal((await (await post('debug')).json()).logLevel, 'debug')
     assert.equal(readConfig().logLevel, 'debug')
     assert.equal((await (await fetch(url)).json()).logLevel, 'debug')
-    assert.match((await (await post('verbose')).json()).error, /Unknown log level/)
+    assert.match((await (await post('verbose')).json()).error, /(?:Unknown log level|未知日志级别)/)
     assert.equal(readConfig().logLevel, 'debug')
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))

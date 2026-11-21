@@ -1,3 +1,4 @@
+import { t as tr } from "../src/shared/i18n.ts"
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
@@ -38,7 +39,7 @@ const CANDIDATES: Array<{ id: string; label: string; kind: OpenKind; apps: strin
   { id: 'iterm', label: 'iTerm', kind: 'terminal', apps: ['iTerm.app', 'iTerm2.app'] },
   { id: 'warp', label: 'Warp', kind: 'terminal', apps: ['Warp.app'] },
   { id: 'ghostty', label: 'Ghostty', kind: 'terminal', apps: ['Ghostty.app'] },
-  { id: 'terminal', label: '终端', kind: 'terminal', apps: ['Terminal.app'] },
+  { id: 'terminal', get label() { return tr("Terminal") }, kind: 'terminal', apps: ['Terminal.app'] },
 ]
 
 export function appIconFile(appPath: string): string {

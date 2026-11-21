@@ -16,7 +16,7 @@ function req(over: Partial<Requirement> & { slug: string }): Requirement {
     project: 'easy-flow',
     parentId: '',
     title: over.slug,
-    status: '执行中',
+    status: 'in_progress',
     pinned: false,
     sessionAnalysisStatus: 'pending',
     priority: '',
@@ -65,10 +65,10 @@ describe('mini 面板的首屏', () => {
 describe('mini 面板的过滤', () => {
   test('全部需求阶段均按最近活跃出现', () => {
     const rows = rowsOf(
-      req({ slug: 'doing', status: '执行中', mtime: NOW - 3000 }),
-      req({ slug: 'review', status: 'Review', mtime: NOW - 2000 }),
-      req({ slug: 'clarify', status: '澄清', mtime: NOW - 1000 }),
-      req({ slug: 'done', status: '已完成', mtime: NOW - 500 }),
+      req({ slug: 'doing', status: 'in_progress', mtime: NOW - 3000 }),
+      req({ slug: 'review', status: 'review', mtime: NOW - 2000 }),
+      req({ slug: 'clarify', status: 'clarification', mtime: NOW - 1000 }),
+      req({ slug: 'done', status: 'completed', mtime: NOW - 500 }),
     )
     assert.deepEqual(slugs(buildMiniBlocks({ rows, sessions: [], query: '', expanded: '' })), [
       'done',
@@ -95,8 +95,8 @@ describe('mini 面板的过滤', () => {
 
   test('有过滤词时穿透状态：刚合入的需求也搜得到', () => {
     const rows = rowsOf(
-      req({ slug: 'done', title: '刚合入的需求', status: '已完成' }),
-      req({ slug: 'doing', title: '还在做', status: '执行中' }),
+      req({ slug: 'done', title: '刚合入的需求', status: 'completed' }),
+      req({ slug: 'doing', title: '还在做', status: 'in_progress' }),
     )
     const blocks = buildMiniBlocks({ rows, sessions: [], query: '刚合入', expanded: '' })
     assert.deepEqual(slugs(blocks), ['done'])

@@ -18,7 +18,7 @@
     "lint:fix": "eslint . --fix",
     "check": "pnpm lint && pnpm typecheck && pnpm dead-code && pnpm test",
     "dead-code": "node scripts/dead-code.mjs",
-    "test": "tsx --tsconfig tsconfig.test.json --test --test-concurrency=1 \"test/*.test.ts\""
+    "test": "tsx --tsconfig tsconfig.test.json --import ./scripts/test-language.mjs --test --test-concurrency=1 \"test/*.test.ts\""
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",

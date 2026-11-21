@@ -1,3 +1,5 @@
+import { getLanguage, Language } from '../src/shared/i18n.ts'
+import { t as tr } from "../src/shared/i18n.ts"
 /**
  * 目录规范与模板。
  *
@@ -46,63 +48,29 @@ export function titleIsSlug(title: string, slug: string): boolean {
  */
 export function renderProjectTemplate(name: string, seed = false): string {
   const howto = seed
-    ? '\n     模板用法：把本目录整个复制到数据目录下，目录名改成项目标识（英文小写 + 连字符）。'
+    ? tr("\n     Template: copy this directory into the data directory and rename it to a project slug (lowercase letters and hyphens).")
     : ''
-  return `---
-name: ${oneLine(name)}
----
-
-# 项目规范
-
-<!-- easy-flow 项目规范：显示名取上面 frontmatter 的 name，留空则用目录名，改完下次刷新生效。${howto}
-     状态（看板列、优先级）存在 easy-flow.db 里，不要写进任何 md。
-     完整流程（三阶段、每阶段做什么、内容放哪）见 easy-flow skill。 -->
-
-## 背景
-
-## 约定
-`
+  return tr("---\nname: {0}\n---\n\n# Project conventions\n\n<!-- easy-flow: the display name comes from frontmatter name, or the directory name when empty. Changes appear on refresh.{1}\n     Status and priority live in easy-flow.db, never in Markdown.\n     See the easy-flow skill for the workflow. -->\n\n## Background\n\n## Conventions\n", [oneLine(name), howto])
 }
 
 // requirement.md：需求描述。编号写在开头，标题与摘要从正文来
 function requirementDesc(title: string, summary: string, id = ''): string {
   const head = id ? `---\nid: ${id}\n---\n\n` : ''
-  return `${head}# ${oneLine(title)}
-
-## 需求
-
-${summary}
-
-## 验收
-
-## 涉及仓库
-
-| 短名 | 仓库 |
-| --- | --- |
-
-## 链接
-
--
-`
+  return tr("{0}# {1}\n\n## Summary\n\n{2}\n\n## Acceptance criteria\n\n## Repos\n\n| Short name | Repository |\n| --- | --- |\n\n## Links\n\n-\n", [head, oneLine(title), summary])
 }
 
 // context.md：需求的上下文。一开始只是骨架，边做边补
-const REQUIREMENT_CONTEXT_TEMPLATE = `## 背景
+const requirementContextTemplate = () => tr("## Background\n\n## Constraints\n\n## Decisions\n")
 
-## 约束
+const placeholderSummary = () => tr("Briefly describe the deliverable and its motivation.")
 
-## 决策
-`
-
-const PLACEHOLDER_SUMMARY = '一句话说清要做什么、为什么。'
-
-const REQUIREMENT_DESC_TEMPLATE = requirementDesc('这条需求在做什么（短句，别写目录名）', PLACEHOLDER_SUMMARY)
+const requirementDescTemplate = () => requirementDesc(tr("Describe the requirement's action and outcome"), placeholderSummary())
 
 // 补上 context.md 脚手架：缺才写，已有不动
 export function ensureRequirementContext(dir: string): boolean {
   const file = join(dir, 'context.md')
   if (existsSync(file)) return false
-  writeFileSync(file, REQUIREMENT_CONTEXT_TEMPLATE, 'utf8')
+  writeFileSync(file, requirementContextTemplate(), 'utf8')
   return true
 }
 
@@ -142,25 +110,7 @@ export function renderWorktreeAgents(input: {
   // design/ 软链指向的真实目录
   designDir: string
 }): string {
-  return `---
-id: ${input.id}
-requirement: ${input.requirementId}
----
-
-<!-- easy-flow worktree 指令：这里是一份代码工作区，需求内容在软链 requirement.md 里。
-     身份认上面 frontmatter 的 id：取上下文时显式传它（easy-flow context wt-…）。
-     完整流程（三阶段、每阶段做什么、内容放哪）见 easy-flow skill。 -->
-
-需求目录：${input.requirementDir}
-仓库：${oneLine(input.repo)}
-分支：${oneLine(input.branch)}
-
-## 设计文档写在哪
-
-\`design/\` 是软链，指向 ${input.designDir}。
-这个仓库在这个需求下的设计、取舍、踩坑写在那里——文件存在需求目录里，
-不进 git、也不要提交；详情页的标签栏会直接读到。
-`
+  return tr("---\nid: {0}\nrequirement: {1}\n---\n\n<!-- easy-flow workspace: read requirement content through the requirement.md symlink.\n     Use the explicit frontmatter ID with easy-flow context wt-….\n     See the easy-flow skill for the workflow. -->\n\nRequirement directory: {2}\nRepository: {3}\nBranch: {4}\n\n## Design documents\n\n`design/` links to {5}.\nWrite design, decisions, and findings there. Files live in the requirement directory,\nare not committed to Git, and appear in the details panel's document tabs.\n", [input.id, input.requirementId, input.requirementDir, oneLine(input.repo), oneLine(input.branch), input.designDir])
 }
 
 /**
@@ -172,8 +122,8 @@ export function ensureTemplates(dataDir: string): void {
     const root = templatesDir(dataDir)
     const files: Array<[string, string]> = [
       ['project/AGENTS.md', renderProjectTemplate('', true)],
-      ['requirement/requirement.md', REQUIREMENT_DESC_TEMPLATE],
-      ['requirement/context.md', REQUIREMENT_CONTEXT_TEMPLATE],
+      ['requirement/requirement.md', requirementDescTemplate()],
+      ['requirement/context.md', requirementContextTemplate()],
     ]
     for (const [rel, content] of files) {
       const file = join(root, rel)
@@ -194,10 +144,10 @@ export function ensureTemplates(dataDir: string): void {
  */
 export function createProjectDir(dataDir: string, slug: string, name = ''): string {
   if (!SLUG_RE.test(slug)) {
-    throw new Error(`Project slug may only contain lowercase letters, digits and hyphens, and may not start with a hyphen: ${slug}`)
+    throw new Error(tr("Project slug may only contain lowercase letters, digits and hyphens, and may not start with a hyphen: {0}", [slug]))
   }
   const dir = join(dataDir, slug)
-  if (existsSync(dir)) throw new Error(`Directory already exists: ${dir}`)
+  if (existsSync(dir)) throw new Error(tr("Directory already exists: {0}", [dir]))
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'AGENTS.md'), renderProjectTemplate(name), 'utf8')
   return dir
@@ -214,13 +164,13 @@ export function createRequirementDir(
   summary = '',
 ): { dir: string; id: string } {
   if (!SLUG_RE.test(slug)) {
-    throw new Error(`Requirement slug may only contain lowercase letters, digits and hyphens, and may not start with a hyphen: ${slug}`)
+    throw new Error(tr("Requirement slug may only contain lowercase letters, digits and hyphens, and may not start with a hyphen: {0}", [slug]))
   }
   const dir = join(root, slug)
-  if (existsSync(dir)) throw new Error(`Directory already exists: ${dir}`)
+  if (existsSync(dir)) throw new Error(tr("Directory already exists: {0}", [dir]))
   const id = newRequirementId()
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'requirement.md'), requirementDesc(title, summary || PLACEHOLDER_SUMMARY, id), 'utf8')
+  writeFileSync(join(dir, 'requirement.md'), requirementDesc(title, summary || placeholderSummary(), id), 'utf8')
   ensureRequirementContext(dir)
   return { dir, id }
 }
@@ -233,17 +183,17 @@ export function createRequirementDir(
 export function projectIssues(slug: string, root: string): string[] {
   const issues: string[] = []
   if (!SLUG_RE.test(slug)) {
-    issues.push('目录名不合规范（建议英文小写、数字、连字符）')
+    issues.push(tr("Directory name does not follow the convention (use lowercase letters, digits, and hyphens)"))
   }
   if (!readProjectConvention(root)) {
-    issues.push(`缺少项目规范 AGENTS.md（可从 ${TEMPLATES_DIR}/project 复制）`)
+    issues.push(tr("Missing project AGENTS.md (copy from {0}/project)", [TEMPLATES_DIR]))
   }
 
   const stray = listStrayDirs(root)
   if (stray.length) {
     const shown = stray.slice(0, 3).join('、')
-    const more = stray.length > 3 ? ` 等 ${stray.length} 个` : ''
-    issues.push(`子目录 ${shown}${more} 不是需求（需 requirement.md），不会出现在看板`)
+    const more = stray.length > 3 ? tr(" and {0} more", [stray.length]) : ''
+    issues.push(tr("Subdirectory {0}{1} is not a requirement (requires requirement.md) and will not appear on the board", [shown, more]))
   }
   return issues
 }
@@ -259,15 +209,7 @@ export function projectIssues(slug: string, root: string): string[] {
  * 格式约定写在 easy-flow skill 的「待办」里，正文只留内容。
  */
 export function renderTodoDoc(title: string, summary = ''): string {
-  return `# ${oneLine(title)}
-
-## 摘要
-
-${summary.trim()}
-
-## 进度
-
-`
+  return tr("# {0}\n\n## Summary\n\n{1}\n\n## Progress\n\n", [oneLine(title), summary.trim()])
 }
 
 // 待办目录（<dataDir>/_todos）。不存在时按需建出来
@@ -284,7 +226,7 @@ export function createTodoDoc(
 ): { file: string } {
   const dir = todosDir(dataDir)
   const file = join(dir, `${id}.md`)
-  if (existsSync(file)) throw new Error(`Todo file already exists: ${file}`)
+  if (existsSync(file)) throw new Error(tr("Todo file already exists: {0}", [file]))
   mkdirSync(dir, { recursive: true })
   writeFileSync(file, renderTodoDoc(title, summary), 'utf8')
   return { file }
@@ -299,8 +241,8 @@ export function setTodoTitle(text: string, title: string): string {
 // 改写「摘要」段，其余（H1、进度段等）原样保留；段不存在就追加到末尾
 export function setTodoSummary(text: string, summary: string): string {
   const lines = text.split('\n')
-  const start = lines.findIndex((l) => /^##\s*摘要\s*$/.test(l))
-  const block = ['## 摘要', '', ...summary.trim().split('\n'), '']
+  const start = lines.findIndex((l) => /^##\s*(摘要|Summary)\s*$/i.test(l))
+  const block = [start === -1 ? (getLanguage() === Language.Chinese ? '## 摘要' : '## Summary') : lines[start], '', ...summary.trim().split('\n'), '']
   if (start === -1) {
     return `${text.replace(/\s*$/, '')}\n\n${block.join('\n').replace(/\n+$/, '')}\n`
   }

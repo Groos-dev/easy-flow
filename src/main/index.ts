@@ -1,3 +1,5 @@
+import { setLanguage } from '../shared/i18n.ts'
+import { t as tr } from "../shared/i18n.ts"
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, Notification, screen, session, shell } from 'electron'
 import { execFile } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
@@ -260,7 +262,7 @@ function notificationSettingsUrl(): string | null {
 function registerIpc(): void {
   ipcMain.handle('easy-flow:pick-directory', async () => {
     const result = await dialog.showOpenDialog(win ?? undefined!, {
-      title: '选择数据目录',
+      get title() { return tr("Choose data directory") },
       properties: ['openDirectory', 'createDirectory'],
     })
     return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
@@ -274,16 +276,16 @@ function registerIpc(): void {
 
   ipcMain.handle('easy-flow:set-shortcut', async (_event, accel: string) => {
     const next = accel.trim()
-    if (!next) return { ok: false, error: '快捷键不能为空' }
+    if (!next) return { ok: false, get error() { return tr("The shortcut cannot be empty") } }
     if (!rebindShortcut(next)) {
-      return { ok: false, error: `${next} 注册不上：多半被别的应用占用了，换一个` }
+      return { ok: false, get error() { return tr("Cannot register {0}; it may be used by another application. Choose another shortcut.", [next]) } }
     }
     try {
       const { writeConfig } = await import('../../server/config.ts')
       writeConfig({ panelShortcut: next })
     } catch (e) {
       // 注册已经生效，只是没记住；下次启动会回到旧值，得说出来
-      return { ok: true, shortcut: next, error: `已生效，但写入配置失败：${(e as Error).message}` }
+      return { ok: true, shortcut: next, get error() { return tr("Applied, but could not save the configuration: {0}", [(e as Error).message]) } }
     }
     return { ok: true, shortcut: next }
   })
@@ -304,7 +306,7 @@ function registerIpc(): void {
   // 设置页的「通知时机」：写进配置并即时生效，不用重启
   ipcMain.handle('easy-flow:notification-mode', () => attention?.mode() ?? 'unfocused')
   ipcMain.handle('easy-flow:set-notification-mode', async (_event, value: unknown) => {
-    if (!isNotificationMode(value)) return { ok: false, error: '未知的通知时机' }
+    if (!isNotificationMode(value)) return { ok: false, get error() { return tr("Unknown notification mode") } }
     try {
       const { writeConfig } = await import('../../server/config.ts')
       writeConfig({ notificationMode: value })
@@ -354,7 +356,7 @@ function registerIpc(): void {
       }
       const template: Electron.MenuItemConstructorOptions[] = [
         {
-          label: '在访达里打开',
+          get label() { return tr("Open in Finder") },
           type: 'checkbox',
           checked: defaultOpen === '',
           click: pick('finder', () => void shell.openPath(dir)),
@@ -372,7 +374,7 @@ function registerIpc(): void {
           })
         }
       }
-      template.push({ type: 'separator' }, { label: '复制路径', click: pick('copy', () => clipboard.writeText(dir)) })
+      template.push({ type: 'separator' }, { get label() { return tr("Copy path") }, click: pick('copy', () => clipboard.writeText(dir)) })
       // 点菜单外面关掉时也走到这儿：没选就是没选
       Menu.buildFromTemplate(template).popup({ window: win ?? undefined, callback: () => resolve(picked) })
     })
@@ -398,45 +400,45 @@ function registerMenu(): void {
     {
       label: app.name,
       submenu: [
-        { role: 'about' },
+        { role: 'about', label: tr('About easy-flow') },
         { type: 'separator' },
-        { label: '设置…', accelerator: 'CommandOrControl+,', click: send },
+        { get label() { return tr("Settings…") }, accelerator: 'CommandOrControl+,', click: send },
         { type: 'separator' },
-        { role: 'services' },
+        { role: 'services', label: tr('Services') },
         { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
+        { role: 'hide', label: tr('Hide easy-flow') },
+        { role: 'hideOthers', label: tr('Hide Others') },
+        { role: 'unhide', label: tr('Show All') },
         { type: 'separator' },
-        { role: 'quit' },
+        { role: 'quit', label: tr('Quit easy-flow') },
       ],
     },
     {
-      label: '编辑',
+      get label() { return tr("Edit") },
       submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
+        { role: 'undo', label: tr('Undo') },
+        { role: 'redo', label: tr('Redo') },
         { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
+        { role: 'cut', label: tr('Cut') },
+        { role: 'copy', label: tr('Copy') },
+        { role: 'paste', label: tr('Paste') },
+        { role: 'selectAll', label: tr('Select All') },
       ],
     },
     {
-      label: '视图',
+      get label() { return tr("View") },
       submenu: [
-        { role: 'reload' },
-        { role: 'toggleDevTools' },
+        { role: 'reload', label: tr('Reload') },
+        { role: 'toggleDevTools', label: tr('Toggle Developer Tools') },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
+        { role: 'resetZoom', label: tr('Actual Size') },
+        { role: 'zoomIn', label: tr('Zoom In') },
+        { role: 'zoomOut', label: tr('Zoom Out') },
         { type: 'separator' },
-        { role: 'togglefullscreen' },
+        { role: 'togglefullscreen', label: tr('Toggle Full Screen') },
       ],
     },
-    { label: '窗口', submenu: [{ role: 'minimize' }, { role: 'close' }] },
+    { get label() { return tr("Window") }, submenu: [{ role: 'minimize', label: tr('Minimize') }, { role: 'close', label: tr('Close') }] },
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
@@ -457,6 +459,7 @@ async function boot(): Promise<void> {
   process.env.EASY_FLOW_USER_DATA = app.getPath('userData')
   process.env.EASY_FLOW_CONFIG = join(app.getPath('userData'), 'config.json')
   const { readConfig } = await import('../../server/config.ts')
+  setLanguage(readConfig().language)
   setLogLevel(readConfig().logLevel)
   stopFileLogging = startFileLogging(join(app.getPath('userData'), 'logs', 'app.log'))
   // server 侧读不到 package.json（被单独打包成 chunk），版本号由这里注入
@@ -470,6 +473,7 @@ async function boot(): Promise<void> {
   fileSync = createFileSync(join(__dirname, 'sync-worker.js'))
   boardServer = await startBoardServer({
     syncFiles: dir => fileSync!.scan(dir),
+    onLanguageChange: () => registerMenu(),
     port: DEFAULT_PORT,
     // pull / hook / 点 pet 之后立刻刷通知层，不再靠主进程定时轮询
     onAttention: () => attention?.refresh(),

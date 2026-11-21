@@ -1,3 +1,5 @@
+import { useLanguage } from '../lib/language'
+import { t as tr } from "../../../shared/i18n.ts"
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CheckIcon, CopyIcon } from './icons'
 
@@ -19,6 +21,7 @@ export function InfoBlock({
   count?: number
   children: ReactNode
 }) {
+  useLanguage()
   const [open, setOpen] = useState(true)
   return (
     <section className="info-block">
@@ -62,6 +65,7 @@ export function OneLine(props: {
   disabled?: boolean
   onClick?: () => void
 }) {
+  useLanguage()
   const cls = `line ${props.className}${props.disabled ? ' disabled' : ''}`
 
   if (props.href) {
@@ -95,6 +99,7 @@ export function OneLine(props: {
  * showLabel 是给兜底路径用的——那里只有「复制提示词」这一个动作，光一个图标认不出来。
  */
 export function CopyButton({ text, label, showLabel = false }: { text: string; label: string; showLabel?: boolean }) {
+  useLanguage()
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -120,8 +125,8 @@ export function CopyButton({ text, label, showLabel = false }: { text: string; l
           })
           .catch(() => {})
       }}
-      title={`复制${label}`}
-      aria-label={`复制${label}`}
+      title={tr("Copy {0}", [label])}
+      aria-label={tr("Copy {0}", [label])}
     >
       {copied ? <CheckIcon /> : <CopyIcon />}
       {showLabel && label}

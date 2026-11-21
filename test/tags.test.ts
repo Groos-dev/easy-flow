@@ -31,12 +31,12 @@ describe('标签字段', () => {
   test('normalizeTags 去空白、忽略大小写去重，拒绝空串与超长', () => {
     assert.deepEqual(normalizeTags([' 看板 ', '看板', 'Kanban', 'kanban']), ['看板', 'Kanban'])
     assert.deepEqual(normalizeTags([]), [])
-    assert.throws(() => normalizeTags(['   ']), /empty/)
-    assert.throws(() => normalizeTags(['x'.repeat(TAG_MAX_LENGTH + 1)]), /longer/)
-    assert.throws(() => normalizeTags(['Full GC']), /whitespace/)
-    assert.throws(() => normalizeTags(['#选座']), /start with #/)
-    assert.throws(() => normalizeTags([1]), /string/)
-    assert.throws(() => normalizeTags('看板' as never), /array/)
+    assert.throws(() => normalizeTags(['   ']), /(?:empty|为空|不能为空)/)
+    assert.throws(() => normalizeTags(['x'.repeat(TAG_MAX_LENGTH + 1)]), /(?:longer|超过)/)
+    assert.throws(() => normalizeTags(['Full GC']), /(?:whitespace|空白)/)
+    assert.throws(() => normalizeTags(['#选座']), /(?:start with #|以 # 开头)/)
+    assert.throws(() => normalizeTags([1]), /(?:string|字符串)/)
+    assert.throws(() => normalizeTags('看板' as never), /(?:array|数组)/)
   })
 
   test('setTags 落库，重新同步不清标签；tagCounts 跨项目统计并按次数排序', () => {
@@ -53,7 +53,7 @@ describe('标签字段', () => {
     db.syncProjects()
 
     assert.deepEqual(db.get('alpha', 'onex')?.tags, ['看板', '卡片'])
-    assert.throws(() => db.setTags('alpha', ['看板', '卡片', '样式', '发布'], 'onex'), /At most 3/)
+    assert.throws(() => db.setTags('alpha', ['看板', '卡片', '样式', '发布'], 'onex'), /(?:At most 3|最多 3)/)
     assert.deepEqual(db.get('alpha', 'onex')?.tags, ['看板', '卡片'])
     assert.deepEqual(db.tagCounts(), [
       { tag: '看板', count: 3 },
@@ -136,7 +136,7 @@ describe('标签字段', () => {
       id: 'req-1',
       parentId: '',
       title: '标题',
-      status: '执行中',
+      status: 'in_progress',
       pinned: false,
       sessionAnalysisStatus: 'pending',
       priority: '',

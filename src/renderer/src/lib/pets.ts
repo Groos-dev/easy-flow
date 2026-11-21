@@ -1,3 +1,6 @@
+import { formatActionText } from '../../../shared/session-text.ts'
+import { SessionState } from '../../../shared/domain.ts'
+import { t as tr } from "../../../shared/i18n.ts"
 /**
  * 卡上 pet 的姿势与挑选规则。
  *
@@ -16,14 +19,14 @@ export type Pose = Exclude<ThreadState, 'unknown'>
 
 // 状态显示名，悬停提示用
 export const PET_LABEL: Record<ThreadState, string> = {
-  idle: '静止',
-  thinking: '思考',
-  working: '干活',
-  sweeping: '压上下文',
-  blocked: '等你',
-  done: '跑完待看',
-  failed: '失败',
-  unknown: '读不到状态',
+  get idle() { return tr("Idle") },
+  get thinking() { return tr("Thinking") },
+  get working() { return tr("Working") },
+  get sweeping() { return tr("Compacting context") },
+  get blocked() { return tr("Waiting for you") },
+  get done() { return tr("Finished, awaiting review") },
+  get failed() { return tr("Failed") },
+  get unknown() { return tr("Status unavailable") },
 }
 
 /**
@@ -61,13 +64,13 @@ export function focusIndex(states: ThreadState[]): number {
 }
 
 // 真在动的三档（与 server/session-state.ts 的 isActive 同口径）：只有它们可能显示实时动作
-const ACTIVE: Pose[] = ['thinking', 'working', 'sweeping']
+const ACTIVE: Pose[] = [SessionState.Thinking, SessionState.Working, SessionState.Compacting]
 
 // 气泡的调子：事件三档用自己的状态色，静止一档暗，真在动的那几档亮
 export type BubbleTone = 'act' | 'title' | 'blocked' | 'done' | 'failed'
 
 export function bubbleToneOf(state: Pose): BubbleTone {
-  return state === 'idle' ? 'title' : state === 'blocked' || state === 'done' || state === 'failed' ? state : 'act'
+  return state === SessionState.Idle ? 'title' : state === SessionState.Blocked || state === SessionState.Done || state === SessionState.Failed ? state : 'act'
 }
 
 export interface PetItem {
@@ -94,7 +97,7 @@ export interface PetRowPlan {
 export function planPetRow(sessions: Session[]): PetRowPlan {
   const pets = sessions
     .map((session) => ({ session, state: session.status.state }))
-    .filter((p): p is { session: Session; state: Pose } => p.state !== 'unknown')
+    .filter((p): p is { session: Session; state: Pose } => p.state !== SessionState.Unknown)
     // 登记时间只到分钟，同分钟的按 agent 与会话 id 定序，免得跟着 updated 来回跳
     .sort((a, b) =>
       parseStamp(a.session.created) - parseStamp(b.session.created) ||
@@ -119,6 +122,6 @@ export function planPetRow(sessions: Session[]): PetRowPlan {
 }
 
 function bubbleTextOf(session: Session, state: Pose): string {
-  const act = ACTIVE.includes(state) ? session.action?.text ?? '' : ''
-  return (state === 'blocked' && session.status.needsAction) || act || session.title
+  const act = ACTIVE.includes(state) && session.action ? formatActionText(session.action) : ''
+  return (state === SessionState.Blocked && session.status.needsAction) || act || session.title
 }

@@ -1,3 +1,4 @@
+import { SessionState } from '../src/shared/domain.ts'
 /**
  * 通知层的编排：把 tracker 的结论落到 badge、通知与持久化上。
  *
@@ -80,8 +81,8 @@ export class AttentionRuntime {
     const grace = this.options.notifyGraceMs ?? DEFAULT_NOTIFY_GRACE_MS
     for (const event of diff.added) {
       // 用户自己按 Esc / 打断，不需要再通知一次；按 hook 事件名判断
-      if (event.state === 'blocked' && event.hookEvent === 'Interrupt') continue
-      if (event.state === 'failed') {
+      if (event.state === SessionState.Blocked && event.hookEvent === 'Interrupt') continue
+      if (event.state === SessionState.Failed) {
         // 先挂起，等下一个周期确认它还在；
         // 一次工具报错通常活不过这个窗口
         this.pending.set(event.id, { event, dueAt: now + grace })
