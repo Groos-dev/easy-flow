@@ -1,5 +1,5 @@
 import { SessionState } from '../src/shared/domain.ts'
-import { t as tr } from "../src/shared/i18n.ts"
+import { agentLabel } from '../src/shared/agents.ts'
 /**
  * 会话事件 → dock 红点与系统通知：只做判断与文案，不碰 Electron。
  *
@@ -199,17 +199,6 @@ export class AttentionTracker {
 }
 
 // ---------------------------------------------------------------- 通知文案
-
-const AGENT_LABELS: Record<string, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  cursor: 'Cursor',
-  get chengxiaobang() { return tr("Chengxiaobang") },
-}
-
-function agentLabel(agent: string): string {
-  return AGENT_LABELS[agent] ?? agent
-}
 
 export interface AttentionNotification {
   title: string

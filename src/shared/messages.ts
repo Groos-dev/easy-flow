@@ -284,9 +284,9 @@ export const messages = {
     "en": "Could not open",
     "zh": "打开失败"
   },
-  "Open this session's workspace in Cursor (does not navigate to the session): {0}": {
-    "en": "Open this session's workspace in Cursor (does not navigate to the session): {0}",
-    "zh": "在 Cursor 里打开这条会话所在的工作区（不直达会话）：{0}"
+  "Open this session's workspace in {0} (does not navigate to the session): {1}": {
+    "en": "Open this session's workspace in {0} (does not navigate to the session): {1}",
+    "zh": "在 {0} 里打开这条会话所在的工作区（不直达会话）：{1}"
   },
   "No session link is available. Find it in {0}: {1}": {
     "en": "No session link is available. Find it in {0}: {1}",
@@ -1696,9 +1696,9 @@ export const messages = {
     "en": "Usage: easy-flow taglist [--project <project>] [--json]\n\nList tags and usage counts, sorted by descending usage then name.\nCheck existing vocabulary before creating a new term. --project limits the scope.",
     "zh": "用法：easy-flow taglist [--project <项目>] [--json]\n\n列出数据目录里所有需求的标签与引用次数，按次数降序、同次数按名称排。\n--project 只看一个项目。这是给 agent 打标前对齐词表用的：先看，再决定复用还是新建。"
   },
-  "Usage: easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang> [--id <session-id>] [--title <title>] [--cwd <directory>] [--link <url>] [--json]\n       easy-flow req session rm <req-id> --agent <agent> --id <session-id> [--json]\n       easy-flow req session ls [<req-id>] [--json]\n\nRegister sessions in the database for navigation from the board. --cwd defaults to the current directory.\nIf --id is omitted, read CLAUDE_CODE_HOST_SESSION_ID / CLAUDE_CODE_SESSION_ID, CODEX_THREAD_ID, CURSOR_CONVERSATION_ID, or CHENGXIAOBANG_SESSION_ID for the selected agent. Missing IDs are rejected.\nDefault deep links exist for Codex, desktop Claude local_ sessions, and Chengxiaobang. Cursor and terminal Claude have no session-level deep link.\nRepeated registration refreshes fields without creating a duplicate.": {
-    "en": "Usage: easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang> [--id <session-id>] [--title <title>] [--cwd <directory>] [--link <url>] [--json]\n       easy-flow req session rm <req-id> --agent <agent> --id <session-id> [--json]\n       easy-flow req session ls [<req-id>] [--json]\n\nRegister sessions in the database for navigation from the board. --cwd defaults to the current directory.\nIf --id is omitted, read CLAUDE_CODE_HOST_SESSION_ID / CLAUDE_CODE_SESSION_ID, CODEX_THREAD_ID, CURSOR_CONVERSATION_ID, or CHENGXIAOBANG_SESSION_ID for the selected agent. Missing IDs are rejected.\nDefault deep links exist for Codex, desktop Claude local_ sessions, and Chengxiaobang. Cursor and terminal Claude have no session-level deep link.\nRepeated registration refreshes fields without creating a duplicate.",
-    "zh": "用法：easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang> [--id <会话 id>] [--title <标题>] [--cwd <目录>] [--link <url>] [--json]\n       easy-flow req session rm <req-id> --agent <…> --id <会话 id> [--json]\n       easy-flow req session ls [<req-id>] [--json]\n\n把 agent 会话登记到需求上（只存库，不写进需求目录），看板据此一键回到那个会话。\n--id 省略时按 agent 从环境变量取：claude → CLAUDE_CODE_HOST_SESSION_ID / CLAUDE_CODE_SESSION_ID，\ncodex → CODEX_THREAD_ID，cursor → CURSOR_CONVERSATION_ID，chengxiaobang → CHENGXIAOBANG_SESSION_ID；\n一个都没设就报错，不静默写空。\n--cwd 缺省用当前目录。--link 是 desktop 应用的 deeplink，缺省按 agent 与 id 推导：\ncodex → codex://threads/<id>，claude 的 local_ 会话 → claude://claude.ai/epitaxy/<id>，\nchengxiaobang → chengxiaobang://session/<id>；cursor 与终端里的 claude 没有会话级 deeplink，只存 id。\n同一个会话重复 add 是幂等的：只刷新 title / cwd / link 与时间，不会长出第二条。"
+  "Usage: easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang|antigravity> [--id <session-id>] [--title <title>] [--cwd <directory>] [--link <url>] [--json]\n       easy-flow req session rm <req-id> --agent <agent> --id <session-id> [--json]\n       easy-flow req session ls [<req-id>] [--json]\n\nRegister sessions in the database for navigation from the board. --cwd defaults to the current directory.\nIf --id is omitted, read CLAUDE_CODE_HOST_SESSION_ID / CLAUDE_CODE_SESSION_ID, CODEX_THREAD_ID, CURSOR_CONVERSATION_ID, CHENGXIAOBANG_SESSION_ID, or ANTIGRAVITY_CONVERSATION_ID for the selected agent. Missing IDs are rejected.\nDefault deep links exist for Codex, desktop Claude local_ sessions, and Chengxiaobang. Cursor, Antigravity App, and terminal Claude have no session-level deep link.\nRepeated registration refreshes fields without creating a duplicate.": {
+    "en": "Usage: easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang|antigravity> [--id <session-id>] [--title <title>] [--cwd <directory>] [--link <url>] [--json]\n       easy-flow req session rm <req-id> --agent <agent> --id <session-id> [--json]\n       easy-flow req session ls [<req-id>] [--json]\n\nRegister sessions in the database for navigation from the board. --cwd defaults to the current directory.\nIf --id is omitted, read CLAUDE_CODE_HOST_SESSION_ID / CLAUDE_CODE_SESSION_ID, CODEX_THREAD_ID, CURSOR_CONVERSATION_ID, CHENGXIAOBANG_SESSION_ID, or ANTIGRAVITY_CONVERSATION_ID for the selected agent. Missing IDs are rejected.\nDefault deep links exist for Codex, desktop Claude local_ sessions, and Chengxiaobang. Cursor, Antigravity App, and terminal Claude have no session-level deep link.\nRepeated registration refreshes fields without creating a duplicate.",
+    "zh": "用法：easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang|antigravity> [--id <会话 id>] [--title <标题>] [--cwd <目录>] [--link <url>] [--json]\n       easy-flow req session rm <req-id> --agent <…> --id <会话 id> [--json]\n       easy-flow req session ls [<req-id>] [--json]\n\n把 agent 会话登记到需求上（只存库，不写进需求目录），看板据此一键回到那个会话。\n--id 省略时按 agent 从环境变量取：claude → CLAUDE_CODE_HOST_SESSION_ID / CLAUDE_CODE_SESSION_ID，\ncodex → CODEX_THREAD_ID，cursor → CURSOR_CONVERSATION_ID，chengxiaobang → CHENGXIAOBANG_SESSION_ID，antigravity → ANTIGRAVITY_CONVERSATION_ID；\n一个都没设就报错，不静默写空。\n--cwd 缺省用当前目录。--link 是 desktop 应用的 deeplink，缺省按 agent 与 id 推导：\ncodex → codex://threads/<id>，claude 的 local_ 会话 → claude://claude.ai/epitaxy/<id>，\nchengxiaobang → chengxiaobang://session/<id>；cursor、Antigravity App 与终端里的 claude 没有会话级 deeplink；有登记目录的会话可使用应用交接入口。\n同一个会话重复 add 是幂等的：只刷新 title / cwd / link 与时间，不会长出第二条。"
   },
   "Usage: easy-flow wt new <req-id> --repo <repository> --branch <branch> [--base <ref>] [--short <short-name>] [--json]\n\nCreate <repository>.<branch> beside the main checkout with identity AGENTS.md and requirement.md / design symlinks.\n--repo accepts a repository name or absolute main-checkout path. --base defaults to main-checkout HEAD.\nCreation is idempotent. --short selects the requirement's docs/<short-name>/ directory.": {
     "en": "Usage: easy-flow wt new <req-id> --repo <repository> --branch <branch> [--base <ref>] [--short <short-name>] [--json]\n\nCreate <repository>.<branch> beside the main checkout with identity AGENTS.md and requirement.md / design symlinks.\n--repo accepts a repository name or absolute main-checkout path. --base defaults to main-checkout HEAD.\nCreation is idempotent. --short selects the requirement's docs/<short-name>/ directory.",
@@ -1932,9 +1932,9 @@ export const messages = {
     "en": "Sessions for “{0}” ({1}):\n{2}",
     "zh": "需求「{0}」的会话（{1}）：\n{2}"
   },
-  "No sessions registered under “{0}”. Run easy-flow req session add {1} --agent <claude|codex|cursor|chengxiaobang> from the session.": {
-    "en": "No sessions registered under “{0}”. Run easy-flow req session add {1} --agent <claude|codex|cursor|chengxiaobang> from the session.",
-    "zh": "需求「{0}」上还没有登记会话；在会话里跑 easy-flow req session add {1} --agent <claude|codex|cursor|chengxiaobang>"
+  "No sessions registered under “{0}”. Run easy-flow req session add {1} --agent <claude|codex|cursor|chengxiaobang|antigravity> from the session.": {
+    "en": "No sessions registered under “{0}”. Run easy-flow req session add {1} --agent <claude|codex|cursor|chengxiaobang|antigravity> from the session.",
+    "zh": "需求「{0}」上还没有登记会话；在会话里跑 easy-flow req session add {1} --agent <claude|codex|cursor|chengxiaobang|antigravity>"
   },
   "Worktree created": {
     "en": "Worktree created",
@@ -3012,9 +3012,9 @@ export const messages = {
     "en": "Session not found: {0}:{1}",
     "zh": "找不到会话：{0}:{1}"
   },
-  "Only Cursor sessions can focus a workspace": {
-    "en": "Only Cursor sessions can focus a workspace",
-    "zh": "只有 Cursor 会话可以聚焦工作区"
+  "This agent cannot open a session workspace: {0}": {
+    "en": "This agent cannot open a session workspace: {0}",
+    "zh": "该 agent 不支持打开会话工作区：{0}"
   },
   "Session has no cwd": {
     "en": "Session has no cwd",
@@ -3228,9 +3228,9 @@ export const messages = {
     "en": "Missing requirement id (req-…)",
     "zh": "缺少需求编号（req-…）"
   },
-  "Missing --agent (claude / codex / cursor / chengxiaobang)": {
-    "en": "Missing --agent (claude / codex / cursor / chengxiaobang)",
-    "zh": "缺少 --agent（claude / codex / cursor / chengxiaobang）"
+  "Missing --agent (claude / codex / cursor / chengxiaobang / antigravity)": {
+    "en": "Missing --agent (claude / codex / cursor / chengxiaobang / antigravity)",
+    "zh": "缺少 --agent（claude / codex / cursor / chengxiaobang / antigravity）"
   },
   "Missing --id (the session id)": {
     "en": "Missing --id (the session id)",
@@ -3355,6 +3355,90 @@ export const messages = {
   " (no projects under the data dir yet)": {
     "en": " (no projects under the data dir yet)",
     "zh": "（数据目录下还没有项目）"
+  },
+  "Antigravity transcript: waiting for a model response": {
+    "en": "Antigravity transcript: waiting for a model response",
+    "zh": "Antigravity 会话记录：等模型回复"
+  },
+  "Antigravity transcript: calling {0}": {
+    "en": "Antigravity transcript: calling {0}",
+    "zh": "Antigravity 会话记录：正在调用 {0}"
+  },
+  "Antigravity transcript: running a tool": {
+    "en": "Antigravity transcript: running a tool",
+    "zh": "Antigravity 会话记录：工具在跑"
+  },
+  "Antigravity transcript: this turn finished": {
+    "en": "Antigravity transcript: this turn finished",
+    "zh": "Antigravity 会话记录：这一轮跑完了"
+  },
+  "Antigravity transcript: this turn failed": {
+    "en": "Antigravity transcript: this turn failed",
+    "zh": "Antigravity 会话日志：本轮失败",
+  },
+  "Antigravity database: {0}": {
+    "en": "Antigravity database: {0}",
+    "zh": "Antigravity 会话数据库：{0}",
+  },
+  "Open Antigravity to find the conversation manually; original workspace: {0}.": {
+    "en": "Open Antigravity to find the conversation manually; original workspace: {0}.",
+    "zh": "打开 Antigravity 后手动查找对应对话；原工作区：{0}。"
+  },
+  "Open Antigravity and find this conversation manually.": {
+    "en": "Open Antigravity and find this conversation manually.",
+    "zh": "打开 Antigravity 后手动查找对应对话。"
+  },
+  "Antigravity is open. The original workspace is unavailable; find the conversation manually in the App.": {
+    "en": "Antigravity is open. The original workspace is unavailable; find the conversation manually in the App.",
+    "zh": "已打开 Antigravity。原工作区已不可用，请在 App 中手动查找对应对话。"
+  },
+  "This agent has no session deep link. {0}": {
+    "en": "This agent has no session deep link. {0}",
+    "zh": "这个 agent 没有会话级 deeplink。{0}"
+  },
+  "Antigravity hooks are configured but the easy-flow group is disabled.": {
+    "en": "Antigravity hooks are configured but the easy-flow group is disabled.",
+    "zh": "Antigravity hooks 已配置，但 easy-flow 分组被禁用。"
+  },
+  "Antigravity hooks are incomplete: {0}/{1} events are configured.": {
+    "en": "Antigravity hooks are incomplete: {0}/{1} events are configured.",
+    "zh": "Antigravity hooks 配置不完整：已配置 {0}/{1} 个事件。"
+  },
+  "Open Antigravity and select a project containing {0}; this does not navigate to the conversation.": {
+    "en": "Open Antigravity and select a project containing {0}; this does not navigate to the conversation.",
+    "zh": "打开 Antigravity 后选择包含 {0} 的项目；这不会自动跳到对应对话。"
+  },
+  "In Antigravity, choose a project containing {0}, then run commands from that directory.": {
+    "en": "In Antigravity, choose a project containing {0}, then run commands from that directory.",
+    "zh": "在 Antigravity 中选择包含 {0} 的项目，再从该目录执行命令。"
+  },
+  "Use ANTIGRAVITY_CONVERSATION_ID to register this conversation when available; otherwise pass its exact ID with --id. Do not guess another conversation's ID.": {
+    "en": "Use ANTIGRAVITY_CONVERSATION_ID to register this conversation when available; otherwise pass its exact ID with --id. Do not guess another conversation's ID.",
+    "zh": "可用时使用 ANTIGRAVITY_CONVERSATION_ID 登记当前对话，否则通过 --id 传入准确的会话 ID。不要猜测或使用其他对话的 ID。"
+  },
+  "Antigravity is open. Choose a project containing {0}, then paste the prompt into a new conversation.": {
+    "en": "Antigravity is open. Choose a project containing {0}, then paste the prompt into a new conversation.",
+    "zh": "已打开 Antigravity。请选择包含 {0} 的项目，再新建对话并粘贴剪贴板中的提示词。"
+  },
+  "Antigravity is open. Choose a project containing {0}, then copy the prompt below into a new conversation.": {
+    "en": "Antigravity is open. Choose a project containing {0}, then copy the prompt below into a new conversation.",
+    "zh": "已打开 Antigravity。请选择包含 {0} 的项目，再复制下方提示词并粘贴到新对话。"
+  },
+  "No Antigravity transcript for this session": {
+    "en": "No Antigravity transcript for this session",
+    "zh": "找不到这条会话的 Antigravity 会话记录"
+  },
+  "{0} already has a {1} entry that easy-flow did not write; no changes made": {
+    "en": "{0} already has a {1} entry that easy-flow did not write; no changes made",
+    "zh": "{0} 里已有一个不是 easy-flow 写的 {1} 分组；未做任何改动"
+  },
+  "Workspace opened in Antigravity. The prompt is on the clipboard; paste it into a new Agent Manager conversation.": {
+    "en": "Workspace opened in Antigravity. The prompt is on the clipboard; paste it into a new Agent Manager conversation.",
+    "zh": "已在 Antigravity 打开工作区；提示词已在剪贴板里，到 Agent Manager 新建对话粘贴即可。"
+  },
+  "Workspace opened in Antigravity. Copy the prompt and start a new Agent Manager conversation.": {
+    "en": "Workspace opened in Antigravity. Copy the prompt and start a new Agent Manager conversation.",
+    "zh": "已在 Antigravity 打开工作区；复制提示词，到 Agent Manager 新建对话。"
   }
 } as const
 

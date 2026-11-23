@@ -3,6 +3,7 @@ import { SessionState } from '../../../shared/domain.ts'
 import { t as tr } from "../../../shared/i18n.ts"
 import { memo, useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import { api } from '../lib/api'
+import { canOpenWorkspace, workspaceOpenHint, workspaceOpenNotice } from '../../../shared/agents.ts'
 import { AGENT_LABELS } from '../lib/labels'
 import { shortcut } from '../lib/keys'
 import { petArt, scopeCloudling, idleMoodOf, nextIdleStageIn, isWaking, type IdleMood } from '../lib/pet-art'
@@ -267,16 +268,18 @@ function PetSlot({ item, compact }: { item: PetItem; compact: boolean }) {
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
   const [openError, setOpenError] = useState('')
+  const [openNotice, setOpenNotice] = useState('')
   const { session, state } = item
   const hasBubble = item.bubble !== ''
   // 焦点与悬停共用一条气泡规则：移开焦点和移开鼠标一样，气泡再留 1 分钟
   const shown = useBubbleShown(hasBubble && state !== SessionState.Idle, hovered || focused)
   const mood = useIdleMood(state === SessionState.Idle ? session.status.observedAt : 0)
-  const canFocusWorkspace = session.agent === 'cursor' && !!session.cwd
+  const canFocusWorkspace = canOpenWorkspace(session)
   const focusable = !!session.link || canFocusWorkspace
   const openFromSlot = () => {
     if (!session.link && !canFocusWorkspace) return
     setOpenError('')
+    setOpenNotice('')
     if (session.link) {
       api.markSessionClicked(session.agent, session.session).catch(() => {})
       if (window.easyFlow?.openExternal) {
@@ -287,7 +290,10 @@ function PetSlot({ item, compact }: { item: PetItem; compact: boolean }) {
     }
     void api
       .openSessionWorkspace(session.agent, session.session)
-      .then(() => api.markSessionClicked(session.agent, session.session))
+      .then(result => {
+        setOpenNotice(workspaceOpenNotice(result))
+        void api.markSessionClicked(session.agent, session.session).catch(() => {})
+      })
       .catch((error: Error) => setOpenError(error.message || tr("Could not open")))
   }
 
@@ -326,17 +332,17 @@ function PetSlot({ item, compact }: { item: PetItem; compact: boolean }) {
         focusable
           ? session.link
             ? tr("Return to the {0} session", [AGENT_LABELS[session.agent] ?? session.agent])
-            : tr("Open the {0} workspace", [AGENT_LABELS[session.agent] ?? session.agent])
+            : session.agent === 'antigravity' ? workspaceOpenHint(session) : tr("Open the {0} workspace", [AGENT_LABELS[session.agent] ?? session.agent])
           : undefined
       }
       title={
         openError
           ? tr("Could not open: {0}", [openError])
-          : focusable
+          : openNotice || (focusable
             ? session.link
               ? session.title || session.session
-              : tr("Open workspace; session {0}", [session.session])
-            : undefined
+              : session.agent === 'antigravity' ? workspaceOpenHint(session) : tr("Open workspace; session {0}", [session.session])
+            : undefined)
       }
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -371,6 +377,7 @@ function PetSlot({ item, compact }: { item: PetItem; compact: boolean }) {
           !
         </span>
       )}
+      {openNotice && <span className="pet-error" role="status" aria-label={openNotice} title={openNotice}>!</span>}
       <Pet
         agent={session.agent}
         state={state}

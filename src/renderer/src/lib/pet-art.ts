@@ -210,11 +210,29 @@ const CURSOR: Theme = {
   inline: false,
 }
 
+const ANTIGRAVITY: Theme = {
+  files: {
+    idle: 'antigravity-idle.svg', thinking: 'antigravity-thinking.svg', working: 'antigravity-working.svg',
+    sweeping: 'antigravity-sweeping.svg', blocked: 'antigravity-blocked.svg', done: 'antigravity-done.svg', failed: 'antigravity-failed.svg',
+  },
+  minis: {
+    idle: 'antigravity-mini-idle.svg', thinking: 'antigravity-mini-peek.svg', working: 'antigravity-mini-typing.svg',
+    sweeping: 'antigravity-mini-typing.svg', blocked: 'antigravity-mini-alert.svg', done: 'antigravity-mini-happy.svg', failed: 'antigravity-mini-alert.svg',
+  },
+  idle: {
+    awake: 'antigravity-idle.svg', yawning: 'antigravity-idle-yawn.svg', dozing: 'antigravity-idle-doze.svg',
+    collapsing: 'antigravity-collapse-sleep.svg', sleeping: 'antigravity-sleeping.svg',
+  },
+  miniSleep: 'antigravity-mini-sleep.svg',
+  inline: false,
+}
+
 // 认不出的 agent 落到 clawd（默认那只）；四个认识的 agent 各自一套形象
 function themeFor(agent: string): Theme {
   if (agent === 'codex') return CLOUDLING
   if (agent === 'chengxiaobang') return CXB
   if (agent === 'cursor') return CURSOR
+  if (agent === 'antigravity') return ANTIGRAVITY
   return CLAWD
 }
 

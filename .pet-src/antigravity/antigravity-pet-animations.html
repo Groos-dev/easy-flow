@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Antigravity Pet · 四种状态动画</title><style>
+/* Official logo artwork is unchanged. Faces, props and animation are custom. */
+.ag-pet{--pet-size:240px;--time-scale:1;position:relative;width:var(--pet-size);height:var(--pet-size);flex:none;isolation:isolate;pointer-events:none;user-select:none}
+.ag-pet *{box-sizing:border-box}
+.ag-body-motion{position:absolute;inset:0;transform-origin:50% 83%;will-change:transform}
+.ag-body{position:absolute;inset:0;transform-origin:50% 70%}
+.ag-logo,.ag-face{position:absolute;inset:0;display:block;width:100%;height:100%;overflow:visible}
+.ag-logo{object-fit:contain}
+.ag-face{z-index:1;transition:opacity .2s}
+.ag-pet[data-face="false"] .ag-face{opacity:0}
+.ag-eye{transform-box:fill-box;transform-origin:center;animation:ag-blink calc(5.8s * var(--time-scale)) linear infinite}
+.ag-eye-right{animation-delay:calc(.03s * var(--time-scale))}
+.ag-pupil{transition:transform .25s}
+.ag-happy-eye,.ag-brows,.ag-happy-mouth{opacity:0}
+.ag-mouth{fill:none;stroke:#1c315c;stroke-width:2.3;stroke-linecap:round}
+.ag-shadow{position:absolute;width:44%;height:5%;bottom:9%;left:28%;border-radius:50%;background:radial-gradient(ellipse,#31598e30,transparent 72%);transform-origin:center;animation:ag-shadow calc(3.6s * var(--time-scale)) ease-in-out infinite}
+.ag-thought{position:absolute;z-index:3;top:4%;right:0;width:32%;height:17%;opacity:0;transform-origin:10% 100%}
+.ag-thought-cloud{height:100%;display:flex;align-items:center;justify-content:center;gap:10%;background:#fff;border:1px solid #dce4f2;border-radius:999px;box-shadow:0 5px 15px #23486e0a}
+.ag-thought:before,.ag-thought:after{content:"";position:absolute;background:#fff;border:1px solid #dce4f2;border-radius:50%}
+.ag-thought:before{width:13%;height:25%;left:7%;bottom:-24%}.ag-thought:after{width:7%;height:13%;left:0;bottom:-43%}
+.ag-thought-dot{width:10%;aspect-ratio:1;border-radius:50%;background:#4285f4}
+.ag-thought-dot:nth-child(2){background:#fbbc04;animation-delay:calc(.18s * var(--time-scale))!important}
+.ag-thought-dot:nth-child(3){background:#34a853;animation-delay:calc(.36s * var(--time-scale))!important}
+.ag-terminal{position:absolute;z-index:4;left:20%;top:60%;width:60%;height:31%;opacity:0;transform:translateY(8%);border-radius:9%;border:1px solid #7799d0;background:linear-gradient(150deg,#243e69,#172c50);box-shadow:0 8px 18px #182f5b20;overflow:visible}
+.ag-terminal-header{height:25%;padding:7% 9% 0;display:flex;gap:5%;align-items:center}
+.ag-terminal-header i{width:4%;aspect-ratio:1;border-radius:50%;background:#97b0d1}.ag-terminal-header i:first-child{background:#fc7d76}.ag-terminal-header i:nth-child(2){background:#f9d166}.ag-terminal-header i:nth-child(3){background:#75d59a}
+.ag-code{position:absolute;left:12%;right:12%;top:37%;bottom:13%;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+.ag-code-line{height:13%;display:flex;gap:7%;transform-origin:left}
+.ag-code-line i{display:block;height:100%;width:38%;border-radius:999px;background:#8eb5ff}.ag-code-line i+ i{width:22%;background:#f8d77a}.ag-code-line:nth-child(2){width:70%;margin-left:12%}.ag-code-line:nth-child(2) i{background:#82dbc0}.ag-code-line:nth-child(3){width:85%}.ag-code-line:nth-child(3) i+ i{background:#d5a7ee}
+.ag-hand{position:absolute;z-index:5;width:14%;height:23%;top:61%;border-radius:45%;background:linear-gradient(140deg,#8eb7ff,#3186ff);box-shadow:0 1px 2px #142e4c30}.ag-hand-left{left:-8%;transform:rotate(-12deg)}.ag-hand-right{right:-8%;transform:rotate(12deg)}
+.ag-success{position:absolute;z-index:6;right:8%;top:18%;width:24%;aspect-ratio:1;opacity:0;transform:scale(.5);border-radius:50%;background:#eaf8ef;border:1px solid #b8e3c5;box-shadow:0 3px 10px #133c2810}
+.ag-success svg{width:100%;height:100%;padding:22%;overflow:visible}.ag-success path{fill:none;stroke:#249956;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:36;stroke-dashoffset:36}
+.ag-burst{position:absolute;z-index:2;inset:0;opacity:0}.ag-confetti{position:absolute;left:49%;top:42%;width:3%;height:5%;border-radius:30%;background:var(--color);opacity:0;transform:translate(0,0)}
+.ag-pet[data-state="idle"] .ag-body-motion{animation:ag-idle calc(3.6s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="idle"] .ag-body{animation:ag-breathe calc(3.6s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="thinking"] .ag-body-motion{animation:ag-think calc(2.8s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="thinking"] .ag-pupil{transform:translate(2px,-3px)}
+.ag-pet[data-state="thinking"] .ag-mouth-normal{d:path('M86 79 Q91 76 96 78')}
+.ag-pet[data-state="thinking"] .ag-thought{opacity:1;animation:ag-thought-float calc(2.8s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="thinking"] .ag-thought-dot{animation:ag-dot calc(1.3s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="working"] .ag-body-motion{animation:ag-work calc(.72s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="working"] .ag-eye{animation-name:ag-work-blink;animation-duration:calc(4.8s * var(--time-scale))}
+.ag-pet[data-state="working"] .ag-pupil{transform:translate(0,2px)}
+.ag-pet[data-state="working"] .ag-brows{opacity:1}
+.ag-pet[data-state="working"] .ag-terminal{opacity:1;transform:translateY(0)}
+.ag-pet[data-state="working"] .ag-code-line{animation:ag-code calc(1.8s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="working"] .ag-code-line:nth-child(2){animation-delay:calc(-.6s * var(--time-scale))}
+.ag-pet[data-state="working"] .ag-code-line:nth-child(3){animation-delay:calc(-1.2s * var(--time-scale))}
+.ag-pet[data-state="working"] .ag-hand{animation:ag-tap-left calc(.36s * var(--time-scale)) ease-in-out infinite alternate}
+.ag-pet[data-state="working"] .ag-hand-right{animation-name:ag-tap-right;animation-delay:calc(-.36s * var(--time-scale))}
+.ag-pet[data-state="complete"] .ag-body-motion{animation:ag-celebrate calc(1.5s * var(--time-scale)) ease-out both}
+.ag-pet[data-state="complete"] .ag-body{animation:ag-complete-float calc(3s * var(--time-scale)) calc(1.5s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="complete"] .ag-eyes-normal,.ag-pet[data-state="complete"] .ag-mouth-normal{opacity:0}
+.ag-pet[data-state="complete"] .ag-happy-eye,.ag-pet[data-state="complete"] .ag-happy-mouth{opacity:1}
+.ag-pet[data-state="complete"] .ag-success{animation:ag-badge calc(.6s * var(--time-scale)) calc(.25s * var(--time-scale)) cubic-bezier(.2,1.6,.5,1) both}
+.ag-pet[data-state="complete"] .ag-success path{animation:ag-check calc(.4s * var(--time-scale)) calc(.65s * var(--time-scale)) ease-out both}
+.ag-pet[data-state="complete"] .ag-burst{opacity:1}
+.ag-pet[data-state="complete"] .ag-confetti{animation:ag-confetti calc(1.25s * var(--time-scale)) calc(.28s * var(--time-scale)) cubic-bezier(.15,.65,.4,1) both}
+.ag-pet[data-paused="true"],.ag-pet[data-paused="true"] *{animation-play-state:paused!important}
+@keyframes ag-idle{0%,100%{transform:translateY(2%) rotate(-1.5deg)}50%{transform:translateY(-2.5%) rotate(1.5deg)}}
+@keyframes ag-breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.018,.982)}}
+@keyframes ag-shadow{0%,100%{transform:scaleX(1);opacity:.8}50%{transform:scaleX(.82);opacity:.45}}
+@keyframes ag-blink{0%,41%,45%,100%{transform:scaleY(1)}43%{transform:scaleY(.08)}}
+@keyframes ag-work-blink{0%,42%,46%,100%{transform:scaleY(.84)}44%{transform:scaleY(.08)}}
+@keyframes ag-think{0%,100%{transform:translateY(-1%) rotate(-7deg)}50%{transform:translateY(-4%) rotate(-11deg)}}
+@keyframes ag-thought-float{0%,100%{transform:translateY(0) rotate(2deg)}50%{transform:translateY(-12%) rotate(-3deg)}}
+@keyframes ag-dot{0%,55%,100%{transform:translateY(0);opacity:.45}28%{transform:translateY(-55%);opacity:1}}
+@keyframes ag-work{0%,100%{transform:translateY(1%) rotate(-1deg)}50%{transform:translateY(-.8%) rotate(1deg)}}
+@keyframes ag-code{0%,100%{transform:scaleX(.68);opacity:.6}50%{transform:scaleX(1);opacity:1}}
+@keyframes ag-tap-left{from{transform:translateY(-15%) rotate(-15deg)}to{transform:translateY(12%) rotate(8deg)}}
+@keyframes ag-tap-right{from{transform:translateY(-15%) rotate(15deg)}to{transform:translateY(12%) rotate(-8deg)}}
+@keyframes ag-celebrate{0%{transform:translateY(0) scale(1)}12%{transform:translateY(4%) scale(1.12,.88)}33%{transform:translateY(-21%) scale(.94,1.08) rotate(-7deg)}52%{transform:translateY(0) scale(1.1,.9) rotate(2deg)}70%{transform:translateY(-8%) scale(.98,1.02) rotate(3deg)}88%{transform:translateY(1%) scale(1.025,.975)}100%{transform:translateY(0) scale(1)}}
+@keyframes ag-complete-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-2%)}}
+@keyframes ag-badge{from{opacity:0;transform:scale(.25) rotate(-25deg)}to{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes ag-check{to{stroke-dashoffset:0}}
+@keyframes ag-confetti{0%{opacity:0;transform:translate(0,0) rotate(0)}12%{opacity:1}75%{opacity:1}100%{opacity:0;transform:translate(calc(var(--dx) * var(--pet-size)),calc(var(--dy) * var(--pet-size))) rotate(var(--turn))}}
+@media(prefers-reduced-motion:reduce){.ag-pet,.ag-pet *{animation:none!important;transition:none!important}.ag-pet[data-state="thinking"] .ag-body-motion{transform:rotate(-8deg)}.ag-pet[data-state="complete"] .ag-success{opacity:1;transform:scale(1)}.ag-pet[data-state="complete"] .ag-success path{stroke-dashoffset:0}.ag-pet[data-state="complete"] .ag-burst{display:none}}
+
+</style><style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;color:#202735;background:#f7f9fc;font-synthesis:none;color-scheme:light}
+*{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{cursor:pointer;color:inherit}button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:3px solid #4285f4;outline-offset:4px}a{color:#356dd1;text-underline-offset:4px}.shell{max-width:1200px;margin:auto;padding:28px 40px 48px}
+header{display:flex;justify-content:space-between;align-items:center;padding-bottom:20px;border-bottom:1px solid #e3e8f0;gap:20px}.brand{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:600;letter-spacing:-.3px}.brand img{width:32px;height:32px}.header-note{font-size:12px;letter-spacing:.13em;color:#818b9b}
+.intro{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:32px 0 24px}h1{font-size:32px;line-height:1.3;font-weight:600;letter-spacing:-1px;margin:0 0 10px}.intro p{margin:0;color:#778192;font-size:15px;line-height:1.8}.intro-tag{white-space:nowrap;font-size:13px;color:#617390;border:1px solid #dbe3ef;border-radius:999px;padding:7px 12px;background:#fff}
+.workspace{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:22px}.stage{height:424px;border:1px solid #dfe5ee;border-radius:18px;background:#f0f4fb;position:relative;overflow:hidden;isolation:isolate}.stage[data-bg="dark"]{background:#17202f;border-color:#26344d}.stage[data-bg="checker"]{background-color:#fff;background-image:conic-gradient(#e9edf4 25%,transparent 0 50%,#e9edf4 0 75%,transparent 0);background-size:24px 24px}
+.stage .stage-heading{position:absolute;left:24px;top:21px;font-size:12px;letter-spacing:.12em;color:#8b9aaf;font-weight:600}.stage .stage-status{position:absolute;right:23px;top:18px;background:#ffffffb8;border:1px solid #dce6f3;border-radius:999px;font-size:13px;padding:6px 12px;color:#587296;display:flex;align-items:center;gap:7px}.stage[data-bg="dark"] .stage-status{background:#263348;border-color:#344561;color:#b6caeb}.status-dot{width:6px;height:6px;border-radius:50%;background:#83a6df}.stage[data-state="working"] .status-dot{background:#fbbc04}.stage[data-state="complete"] .status-dot{background:#34a853}
+.orbit{position:absolute;width:284px;height:284px;left:50%;top:45%;transform:translate(-50%,-50%);border:1px dashed #dce4f0;border-radius:50%;pointer-events:none}.stage[data-bg="dark"] .orbit{border-color:#2c3b53}.pet-anchor{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);cursor:grab;touch-action:none;user-select:none;outline-offset:8px;border-radius:24px}.pet-anchor:active{cursor:grabbing}.stage-copy{position:absolute;bottom:30px;left:24px;right:24px;text-align:center;pointer-events:none}.stage-copy h2{margin:0 0 7px;font-size:20px;font-weight:500;letter-spacing:-.5px;color:#384c6a}.stage-copy p{margin:0;font-size:14px;color:#8b9ab0}.stage[data-bg="dark"] .stage-copy h2{color:#dee8fa}.stage[data-bg="dark"] .stage-copy p{color:#8299ba}
+.state-switches{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}.state-switches button{display:flex;align-items:center;justify-content:center;gap:9px;padding:12px 6px;background:#fff;border:1px solid #e0e6ee;border-radius:10px;font-size:15px;color:#7b8798;transition:background .15s,color .15s,border-color .15s}.state-switches button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.state-switches button[aria-pressed="true"]{color:#2e6dd3;background:#edf4ff;border-color:#a7c6f8;font-weight:500}.state-switches button:hover{border-color:#aac5ec}
+.panel{border:1px solid #e0e6ee;border-radius:18px;background:#fff;padding:22px}.panel h2{font-size:16px;margin:0 0 23px;font-weight:600}.field{margin-bottom:21px}.field-label{display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:500;margin-bottom:10px}.field-label output{font-size:13px;color:#8290a4;font-weight:400;font-variant-numeric:tabular-nums}.segmented{display:flex;gap:4px;background:#f3f6fa;border-radius:9px;padding:4px}.segmented button{flex:1;min-width:0;border:0;background:transparent;border-radius:6px;padding:8px 0;font-size:13px;color:#8490a2}.segmented button[aria-pressed="true"]{background:#fff;color:#356bc4;box-shadow:0 1px 4px #2634480d}.range{width:100%;accent-color:#4285f4;margin:7px 0}select{appearance:none;width:100%;padding:9px 31px 9px 11px;background-color:#fff;border:1px solid #dce3ed;border-radius:8px;color:#57667d;font-size:14px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%23778599' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-size:15px;background-position:right 10px center}.toggle{display:flex;gap:9px;align-items:center;font-size:14px;color:#56657a}.toggle input{accent-color:#4285f4;width:17px;height:17px}.button-row{display:flex;gap:8px}.button-row button{flex:1;background:#fff;border:1px solid #dce3ed;border-radius:8px;font-size:14px;padding:9px 4px}.button-row button:hover{background:#f6f9fe}.demo{display:block;width:100%;padding:11px 8px;background:#326fd1;color:#fff;border:1px solid #326fd1;border-radius:9px;font-size:14px;margin-top:12px}.demo:hover{background:#255ebc}.demo.active{background:#edf4ff;border-color:#c5d9f6;color:#356bc4}.demo-note{min-height:20px;font-size:12px;color:#8b96a8;line-height:1.7;margin:10px 0 0}.caption{font-size:12px;color:#8b96a8;line-height:1.8;margin:11px 2px 0}
+.comparison{margin-top:30px}.comparison-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:14px}.comparison-heading h2{font-size:18px;font-weight:600;margin:0}.comparison-heading p{margin:0;font-size:13px;color:#8a95a6}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.card{border:1px solid #e0e6ee;background:#fff;border-radius:13px;overflow:hidden}.card-scene{height:166px;display:flex;align-items:center;justify-content:center;background:#f0f4fb}.card:nth-child(2) .card-scene{background:#f3f1fc}.card:nth-child(3) .card-scene{background:#edf5fe}.card:nth-child(4) .card-scene{background:#eff8f3}.card-copy{padding:13px 15px 16px}.card-copy h3{font-size:15px;font-weight:500;margin:0 0 5px;color:#465975}.card-copy p{font-size:12px;color:#8794a8;margin:0;line-height:1.7}.card-copy .replay-small{border:0;background:transparent;color:#5986c9;padding:0;margin-top:7px;font-size:12px;cursor:pointer}
+footer{display:flex;justify-content:space-between;gap:20px;font-size:12px;color:#8e98a8;line-height:1.8;margin-top:27px}footer a{color:#8290a6}noscript{display:block;padding:18px;background:#fff1da;color:#815623}
+@media(max-width:900px){.shell{padding:24px}.workspace{grid-template-columns:minmax(0,1fr) 254px;gap:16px}.panel{padding:20px}.cards{gap:9px}.card-copy{padding:12px}.card-copy p{font-size:12px}.card-scene{height:150px}}
+@media(max-width:650px){.shell{padding:20px 16px 32px}.header-note{display:none}.intro{margin-top:25px;align-items:start;flex-direction:column;gap:13px}h1{font-size:27px}.intro-tag{font-size:12px}.workspace{grid-template-columns:1fr}.stage{height:400px}.panel{padding:22px;display:grid;grid-template-columns:1fr 1fr;column-gap:22px}.panel h2,.playback-control,.demo-note{grid-column:1/-1}.panel h2{margin-bottom:21px}.cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.comparison-heading{align-items:start;flex-direction:column;gap:7px}.card-scene{height:160px}footer{flex-direction:column;gap:6px}.state-switches button{gap:6px;font-size:14px}.stage-copy h2{font-size:19px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+</style></head>
+<body>
+<main class="shell">
+ <header><div class="brand"><img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDE4MCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xNDQuMjQ4IDE0OS4wNjJDMTUxLjc0OCAxNTQuNjg4IDE2Mi45OTggMTUwLjkzOCAxNTIuNjg1IDE0MC42MjVDMTIxLjc0OCAxMTAuNjI1IDEyOC4zMSAyOC4xMjUgODkuODcyNyAyOC4xMjVDNTEuNDM1MiAyOC4xMjUgNTcuOTk3NyAxMTAuNjI1IDI3LjA2MDIgMTQwLjYyNUMxNS44MTAyIDE1MS44NzUgMjcuOTk3NyAxNTQuNjg4IDM1LjQ5NzcgMTQ5LjA2MkM2NC41NjAyIDEyOS4zNzUgNjIuNjg1MiA5NC42ODc1IDg5Ljg3MjcgOTQuNjg3NUMxMTcuMDYgOTQuNjg3NSAxMTUuMTg1IDEyOS4zNzUgMTQ0LjI0OCAxNDkuMDYyWiIgZmlsbD0iIzMxODZGRiIvPgo8bWFzayBpZD0ibWFzazBfNjAwMV80MDkiIHN0eWxlPSJtYXNrLXR5cGU6YWxwaGEiIG1hc2tVbml0cz0idXNlclNwYWNlT25Vc2UiIHg9IjIyIiB5PSIyOCIgd2lkdGg9IjEzNiIgaGVpZ2h0PSIxMjUiPgo8cGF0aCBkPSJNMTQ0LjI0OCAxNDkuMDYyQzE1MS43NDggMTU0LjY4OCAxNjIuOTk4IDE1MC45MzggMTUyLjY4NSAxNDAuNjI1QzEyMS43NDggMTEwLjYyNSAxMjguMzEgMjguMTI1IDg5Ljg3MjcgMjguMTI1QzUxLjQzNTIgMjguMTI1IDU3Ljk5NzcgMTEwLjYyNSAyNy4wNjAyIDE0MC42MjVDMTUuODEwMiAxNTEuODc1IDI3Ljk5NzcgMTU0LjY4OCAzNS40OTc3IDE0OS4wNjJDNjQuNTYwMiAxMjkuMzc1IDYyLjY4NTIgOTQuNjg3NSA4OS44NzI3IDk0LjY4NzVDMTE3LjA2IDk0LjY4NzUgMTE1LjE4NSAxMjkuMzc1IDE0NC4yNDggMTQ5LjA2MloiIGZpbGw9IndoaXRlIi8+CjwvbWFzaz4KPGcgbWFzaz0idXJsKCNtYXNrMF82MDAxXzQwOSkiPgo8ZyBmaWx0ZXI9InVybCgjZmlsdGVyMF9mXzYwMDFfNDA5KSI+CjxlbGxpcHNlIGN4PSIzNi42MjI1IiBjeT0iNDMuMDg3MiIgcng9IjM2LjYyMjUiIHJ5PSI0My4wODcyIiB0cmFuc2Zvcm09Im1hdHJpeCgtMC4xMTI3ODQgMC45OTM2MiAtMC45OTM2MiAtMC4xMTI3ODEgMTA2LjU1NyAtMjYuNDg0NykiIGZpbGw9IiNGRkU0MzIiLz4KPC9nPgo8ZyBmaWx0ZXI9InVybCgjZmlsdGVyMV9mXzYwMDFfNDA5KSI+CjxlbGxpcHNlIGN4PSIxNTUuMTYzIiBjeT0iNTQuOTI5MiIgcng9IjQ3LjQxMTgiIHJ5PSI0OC40NTQxIiB0cmFuc2Zvcm09InJvdGF0ZSg3Ni45MjQzIDE1NS4xNjMgNTQuOTI5MikiIGZpbGw9IiNGQzQxM0QiLz4KPC9nPgo8ZyBmaWx0ZXI9InVybCgjZmlsdGVyMl9mXzYwMDFfNDA5KSI+CjxlbGxpcHNlIGN4PSIxNC42MDA2IiBjeT0iNjUuNDQyNSIgcng9IjQ5LjU1MTUiIHJ5PSI2NC4xOTIiIHRyYW5zZm9ybT0icm90YXRlKDc0LjEyNTcgMTQuNjAwNiA2NS40NDI1KSIgZmlsbD0iIzAwQjk1QyIvPgo8L2c+CjxnIGZpbHRlcj0idXJsKCNmaWx0ZXIzX2ZfNjAwMV80MDkpIj4KPGVsbGlwc2UgY3g9IjE0LjYwMDYiIGN5PSI2NS40NDI1IiByeD0iNDkuNTUxNSIgcnk9IjY0LjE5MiIgdHJhbnNmb3JtPSJyb3RhdGUoNzQuMTI1NyAxNC42MDA2IDY1LjQ0MjUpIiBmaWxsPSIjMDBCOTVDIi8+CjwvZz4KPGcgZmlsdGVyPSJ1cmwoI2ZpbHRlcjRfZl82MDAxXzQwOSkiPgo8ZWxsaXBzZSBjeD0iMTguMTIyNiIgY3k9IjY3LjQxNCIgcng9IjQ4LjU2NzkiIHJ5PSI1My40Njg4IiB0cmFuc2Zvcm09InJvdGF0ZSg0NS42MDY1IDE4LjEyMjYgNjcuNDE0KSIgZmlsbD0iIzAwQjk1QyIvPgo8L2c+CjxnIGZpbHRlcj0idXJsKCNmaWx0ZXI1X2ZfNjAwMV80MDkpIj4KPGVsbGlwc2UgY3g9IjEyMS44MzciIGN5PSIxNjYuOTQ1IiByeD0iNDYuNjM1NiIgcnk9IjQ0LjkwODQiIHRyYW5zZm9ybT0icm90YXRlKDc2LjkyNDMgMTIxLjgzNyAxNjYuOTQ1KSIgZmlsbD0iIzMxODZGRiIvPgo8L2c+CjxnIGZpbHRlcj0idXJsKCNmaWx0ZXI2X2ZfNjAwMV80MDkpIj4KPGVsbGlwc2UgY3g9IjUzLjk0NTYiIGN5PSI1Ni44OTk3IiByeD0iNTMuOTQ1NiIgcnk9IjU2Ljg5OTciIHRyYW5zZm9ybT0ibWF0cml4KC0wLjQwOTUzOSAwLjkxMjI5MyAtMC45MTIyOTQgLTAuNDA5NTM3IDE2Mi44MTEgLTI1Ljg5NSkiIGZpbGw9IiNGQkJDMDQiLz4KPC9nPgo8ZyBmaWx0ZXI9InVybCgjZmlsdGVyN19mXzYwMDFfNDA5KSI+CjxwYXRoIGQ9Ik00LjIxNTU3IDIzOS4wNjNDLTI1LjMyMzEgMjI3LjQ2NyAyNS4xNTc3IDEzMi4wNjEgMzcuNzEwNSAxMDAuMDg1QzUwLjI2MzQgNjguMTA5NyA4NC4zODUzIDUxLjU4ODggMTEzLjkyNCA2My4xODQ4QzE0My40NjMgNzQuNzgwOSAxNzguNDc0IDEzOC42NSAxNjUuOTIxIDE3MC42MjZDMTUzLjM2OCAyMDIuNjAxIDMzLjc1NDMgMjUwLjY1OSA0LjIxNTU3IDIzOS4wNjNaIiBmaWxsPSIjMzE4NkZGIi8+CjwvZz4KPGcgZmlsdGVyPSJ1cmwoI2ZpbHRlcjhfZl82MDAxXzQwOSkiPgo8cGF0aCBkPSJNMTgzLjE5NyAxMjAuMzE1QzE3NS4yODkgMTI5LjU0NSAxNTQuNjUyIDEyNC44MzkgMTM3LjEwMiAxMDkuODAzQzExOS41NTMgOTQuNzY2OCAxMTEuNzM4IDc1LjA5NTUgMTE5LjY0NiA2NS44NjU2QzEyNy41NTQgNTYuNjM1NyAxNDguMTkxIDYxLjM0MjMgMTY1Ljc0IDc2LjM3ODJDMTgzLjI4OSA5MS40MTQgMTkxLjEwNSAxMTEuMDg1IDE4My4xOTcgMTIwLjMxNVoiIGZpbGw9IiM3NDlCRkYiLz4KPC9nPgo8ZyBmaWx0ZXI9InVybCgjZmlsdGVyOV9mXzYwMDFfNDA5KSI+CjxlbGxpcHNlIGN4PSIxNDguOTI4IiBjeT0iMzYuNzI1MiIgcng9IjcxLjEwMTgiIHJ5PSI0NC4xOTkiIHRyYW5zZm9ybT0icm90YXRlKDM0LjA3NjMgMTQ4LjkyOCAzNi43MjUyKSIgZmlsbD0iI0ZDNDEzRCIvPgo8L2c+CjxnIGZpbHRlcj0idXJsKCNmaWx0ZXIxMF9mXzYwMDFfNDA5KSI+CjxlbGxpcHNlIGN4PSIzNy44NDgiIGN5PSI0Ni4wMzQ2IiByeD0iMzguMTAwOCIgcnk9IjIyLjE1NzUiIHRyYW5zZm9ybT0icm90YXRlKDExMi41MTYgMzcuODQ4IDQ2LjAzNDYpIiBmaWxsPSIjRkZFRTQ4Ii8+CjwvZz4KPC9nPgo8ZGVmcz4KPGZpbHRlciBpZD0iZmlsdGVyMF9mXzYwMDFfNDA5IiB4PSI0LjA5NTkxIiB5PSItNDQuMTc2MSIgd2lkdGg9IjExMS4wMzciIGhlaWdodD0iOTguNDQxNiIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIiBjb2xvci1pbnRlcnBvbGF0aW9uLWZpbHRlcnM9InNSR0IiPgo8ZmVHYXVzc2lhbkJsdXIgc3RkRGV2aWF0aW9uPSI2LjI1MjM0Ii8+CjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJmaWx0ZXIxX2ZfNjAwMV80MDkiIHg9IjQ2LjI5NzQiIHk9Ii01My4wMDA5IiB3aWR0aD0iMjE3LjczMSIgaGVpZ2h0PSIyMTUuODYiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMzAuMjI2OCIvPgo8L2ZpbHRlcj4KPGZpbHRlciBpZD0iZmlsdGVyMl9mXzYwMDFfNDA5IiB4PSItMTAwLjAxOCIgeT0iLTM2Ljc1NTgiIHdpZHRoPSIyMjkuMjM4IiBoZWlnaHQ9IjIwNC4zOTciIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMjUuNjk1NyIvPgo8L2ZpbHRlcj4KPGZpbHRlciBpZD0iZmlsdGVyM19mXzYwMDFfNDA5IiB4PSItMTAwLjAxOCIgeT0iLTM2Ljc1NTgiIHdpZHRoPSIyMjkuMjM4IiBoZWlnaHQ9IjIwNC4zOTciIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMjUuNjk1NyIvPgo8L2ZpbHRlcj4KPGZpbHRlciBpZD0iZmlsdGVyNF9mXzYwMDFfNDA5IiB4PSItODQuMzk4NSIgeT0iLTM1LjAwMyIgd2lkdGg9IjIwNS4wNDIiIGhlaWdodD0iMjA0LjgzNCIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIiBjb2xvci1pbnRlcnBvbGF0aW9uLWZpbHRlcnM9InNSR0IiPgo8ZmVHYXVzc2lhbkJsdXIgc3RkRGV2aWF0aW9uPSIyNS42OTU3Ii8+CjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJmaWx0ZXI1X2ZfNjAwMV80MDkiIHg9IjI3Ljk5MTUiIHk9IjcxLjU0OTMiIHdpZHRoPSIxODcuNjkxIiBoZWlnaHQ9IjE5MC43OTEiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMjQuNDE4NCIvPgo8L2ZpbHRlcj4KPGZpbHRlciBpZD0iZmlsdGVyNl9mXzYwMDFfNDA5IiB4PSItMTEuODgwOCIgeT0iLTk4LjcwODUiIHdpZHRoPSIyMDEuMzgiIGhlaWdodD0iMTk3LjQ1IiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+CjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjIyLjEzMDEiLz4KPC9maWx0ZXI+CjxmaWx0ZXIgaWQ9ImZpbHRlcjdfZl82MDAxXzQwOSIgeD0iLTQ0LjQ0MzIiIHk9IjE5Ljk1MjIiIHdpZHRoPSIyNTIuNTEzIiBoZWlnaHQ9IjI2MC40MDQiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMTkuNzYzMSIvPgo8L2ZpbHRlcj4KPGZpbHRlciBpZD0iZmlsdGVyOF9mXzYwMDFfNDA5IiB4PSI4MS4xOTE1IiB5PSIyNS43NzIyIiB3aWR0aD0iMTQwLjQ2IiBoZWlnaHQ9IjEzNC42MzciIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMTcuNjg0MyIvPgo8L2ZpbHRlcj4KPGZpbHRlciBpZD0iZmlsdGVyOV9mXzYwMDFfNDA5IiB4PSI1NS4xNDk5IiB5PSItNDcuMjUzMSIgd2lkdGg9IjE4Ny41NTUiIGhlaWdodD0iMTY3Ljk1NyIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIiBjb2xvci1pbnRlcnBvbGF0aW9uLWZpbHRlcnM9InNSR0IiPgo8ZmVHYXVzc2lhbkJsdXIgc3RkRGV2aWF0aW9uPSIxNC45MzY1Ii8+CjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJmaWx0ZXIxMF9mXzYwMDFfNDA5IiB4PSItMjQuMjYzMyIgeT0iLTI3LjE1MTUiIHdpZHRoPSIxMjQuMjIzIiBoZWlnaHQ9IjE0Ni4zNzIiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMTguNDg2NSIvPgo8L2ZpbHRlcj4KPC9kZWZzPgo8L3N2Zz4K" alt=""><span>Google Antigravity</span></div><span class="header-note">PET MOTION STUDY</span></header>
+ <section class="intro"><div><h1>一个 Logo，四种小情绪。</h1><p>让熟悉的反重力形象，陪你从等待走到完成。</p></div><span class="intro-tag">官方形象衍生 · 动画预览</span></section>
+ <noscript>此预览需要 JavaScript，以加载宠物并切换动画状态。</noscript>
+ <section class="workspace" aria-label="宠物动画预览">
+  <div>
+   <div class="stage" id="pet-stage" data-bg="light" data-state="idle"><span class="stage-heading">ANTIGRAVITY COMPANION</span><span class="stage-status"><i class="status-dot"></i><span id="status-label">待机</span></span><div class="orbit" aria-hidden="true"></div><div class="pet-anchor" id="pet-anchor" tabindex="0" role="button" aria-label="拖动宠物，也可使用方向键移动"><div id="main-pet"></div></div><div class="stage-copy" aria-live="polite"><h2 id="state-title">我在，随时开始。</h2><p id="state-description">轻轻悬浮，偶尔眨眼。</p></div></div>
+   <div class="state-switches" role="group" aria-label="宠物状态">
+    <button type="button" data-select-state="idle" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16c1-7 2-11 6-11s5 4 6 11M9 18h6"/></svg>待机</button>
+    <button type="button" data-select-state="thinking" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 14a7 7 0 1 1 5 5l-5 2 1-5"/><path d="M8 11h.01M12 11h.01M16 11h.01" stroke-width="2.5"/></svg>思考</button>
+    <button type="button" data-select-state="working" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="13" rx="2"/><path d="m7 9 3 3-3 3M13 15h4M8 21h8"/></svg>工作</button>
+    <button type="button" data-select-state="complete" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m7.5 12 3 3 6-6"/></svg>完成</button>
+   </div><p class="caption">可拖拽或用方向键移动。完成状态的跳跃与彩屑仅播放一次，可点击重播。</p>
+  </div>
+  <aside class="panel" aria-label="动画设置"><h2>动画设置</h2>
+   <div class="field"><span class="field-label" id="background-label">背景</span><div class="segmented" role="group" aria-labelledby="background-label"><button type="button" data-bg="light" aria-pressed="true">浅色</button><button type="button" data-bg="dark" aria-pressed="false">深色</button><button type="button" data-bg="checker" aria-pressed="false">透明格</button></div></div>
+   <div class="field"><label class="field-label" for="speed">播放速度</label><select id="speed"><option value="0.5">0.5× · 慢速观察</option><option value="1" selected>1× · 正常节奏</option><option value="1.5">1.5× · 轻快</option><option value="2">2× · 快速预览</option></select></div>
+   <div class="field"><label class="field-label" for="pet-size">宠物尺寸<output id="size-value" for="pet-size">240 px</output></label><input class="range" type="range" min="128" max="288" step="8" value="240" id="pet-size" aria-label="宠物尺寸"></div>
+   <div class="field"><label class="toggle"><input type="checkbox" id="face" checked>显示面部表情</label></div>
+   <div class="playback-control"><div class="button-row"><button type="button" id="pause" aria-pressed="false">暂停动画</button><button type="button" id="replay">重新播放</button></div><button class="demo" type="button" id="demo" aria-pressed="false">播放完整流程</button></div>
+   <p class="demo-note" id="demo-note" aria-live="polite">依次演示：待机、思考、工作、完成。</p>
+  </aside>
+ </section>
+ <section class="comparison" aria-labelledby="compare-title"><div class="comparison-heading"><h2 id="compare-title">四种状态，一起看。</h2><p>同一形象，通过动作与表情传递状态。</p></div><div class="cards">
+  <article class="card"><div class="card-scene"><div class="mini-pet" data-mini-state="idle"></div></div><div class="card-copy"><h3>待机</h3><p>呼吸轻浮 · 放松眨眼</p></div></article>
+  <article class="card"><div class="card-scene"><div class="mini-pet" data-mini-state="thinking"></div></div><div class="card-copy"><h3>思考</h3><p>歪头凝视 · 思绪点跳动</p></div></article>
+  <article class="card"><div class="card-scene"><div class="mini-pet" data-mini-state="working"></div></div><div class="card-copy"><h3>工作</h3><p>专注神情 · 交替敲击终端</p></div></article>
+  <article class="card"><div class="card-scene"><div class="mini-pet" data-mini-state="complete"></div></div><div class="card-copy"><h3>完成</h3><p>开心跳跃 · 勾选与短暂彩屑</p><button class="replay-small" id="replay-complete" type="button">重播完成动画</button></div></article>
+ </div></section>
+ <footer><span>基于官方 Logo 制作的自定义宠物动效。</span><a href="https://antigravity.google/press" target="_blank" rel="noopener noreferrer">官方原始素材</a></footer>
+</main>
+<script>
+(function () {
+  'use strict';
+  const names = { idle: '待机', thinking: '思考', working: '工作', complete: '完成' };
+  const markup = `<div class="ag-shadow"></div><div class="ag-body-motion"><div class="ag-body">
+    <img class="ag-logo" alt="" draggable="false">
+    <svg class="ag-face" viewBox="0 0 180 180" aria-hidden="true">
+      <g class="ag-eyes-normal">
+        <g class="ag-eye"><ellipse cx="78" cy="61" rx="6.5" ry="8.5" fill="white"/><g class="ag-pupil"><ellipse cx="78.5" cy="62" rx="3.1" ry="4.4" fill="#203659"/><circle cx="79.4" cy="60.4" r="1" fill="white"/></g></g>
+        <g class="ag-eye ag-eye-right"><ellipse cx="102" cy="61" rx="6.5" ry="8.5" fill="white"/><g class="ag-pupil"><ellipse cx="102.5" cy="62" rx="3.1" ry="4.4" fill="#203659"/><circle cx="103.4" cy="60.4" r="1" fill="white"/></g></g>
+      </g>
+      <g class="ag-brows" stroke="#203659" stroke-width="2.1" stroke-linecap="round"><path d="m72 48 11 3M97 51l11-3"/></g>
+      <g class="ag-happy-eye" fill="none" stroke="#203659" stroke-width="3" stroke-linecap="round"><path d="M72 62q6-9 12 0M96 62q6-9 12 0"/></g>
+      <path class="ag-mouth ag-mouth-normal" d="M84 78q6 6 12 0"/>
+      <path class="ag-happy-mouth" d="M83 76q7 4 14 0q-1 12-7 12t-7-12" fill="#203659"/><path class="ag-happy-mouth" d="M86 84q4-3 8 0q-4 6-8 0" fill="#fb9696"/>
+    </svg></div></div>
+    <div class="ag-thought"><div class="ag-thought-cloud"><i class="ag-thought-dot"></i><i class="ag-thought-dot"></i><i class="ag-thought-dot"></i></div></div>
+    <div class="ag-terminal"><div class="ag-terminal-header"><i></i><i></i><i></i></div><div class="ag-code"><div class="ag-code-line"><i></i><i></i></div><div class="ag-code-line"><i></i><i></i></div><div class="ag-code-line"><i></i><i></i></div></div><i class="ag-hand ag-hand-left"></i><i class="ag-hand ag-hand-right"></i></div>
+    <div class="ag-success"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="m4 14 7 7L24 6"/></svg></div>
+    <div class="ag-burst" aria-hidden="true"></div>`;
+
+  class AntigravityPet {
+    constructor(element, options = {}) {
+      if (!(element instanceof HTMLElement)) throw new TypeError('A pet container element is required.');
+      this.element = element;
+      this.destroyed = false;
+      element.classList.add('ag-pet');
+      element.innerHTML = markup;
+      element.setAttribute('role', 'img');
+      element.querySelector('.ag-logo').src = options.imageSrc || './assets/antigravity.svg';
+      const colors = ['#4285f4', '#fbbc04', '#34a853', '#ea4335'];
+      for (let i = 0; i < 12; i++) {
+        const bit = document.createElement('i');
+        const angle = (i / 12) * Math.PI * 2;
+        bit.className = 'ag-confetti';
+        bit.style.setProperty('--dx', String(Math.cos(angle) * .62));
+        bit.style.setProperty('--dy', String(Math.sin(angle) * .57 - .12));
+        bit.style.setProperty('--turn', `${i % 2 ? 250 : -210}deg`);
+        bit.style.setProperty('--color', colors[i % 4]);
+        element.querySelector('.ag-burst').append(bit);
+      }
+      this.setSize(options.size ?? 240);
+      this.setSpeed(options.speed ?? 1);
+      this.setFace(options.face !== false);
+      this.setPaused(Boolean(options.paused));
+      this.setState(options.state || 'idle');
+    }
+    setState(state, { restart = false } = {}) {
+      if (!Object.hasOwn(names, state)) throw new RangeError(`Unknown pet state: ${state}`);
+      if (this.destroyed) return;
+      if (restart && this.element.dataset.state === state) {
+        this.element.dataset.state = '';
+        void this.element.offsetWidth;
+      }
+      this.element.dataset.state = state;
+      this.element.setAttribute('aria-label', `Antigravity 宠物：${names[state]}`);
+      this.element.dispatchEvent(new CustomEvent('petstatechange', { detail: { state } }));
+    }
+    setSpeed(value) {
+      const speed = Number(value);
+      if (!Number.isFinite(speed) || speed < .25 || speed > 3) throw new RangeError('Speed must be between 0.25 and 3.');
+      this.element.style.setProperty('--time-scale', String(1 / speed));
+    }
+    setSize(value) {
+      const size = Number(value);
+      if (!Number.isFinite(size) || size < 32 || size > 1024) throw new RangeError('Size must be between 32 and 1024.');
+      this.element.style.setProperty('--pet-size', `${size}px`);
+    }
+    setFace(value) { this.element.dataset.face = String(Boolean(value)); }
+    setPaused(value) { this.element.dataset.paused = String(Boolean(value)); }
+    restart() { this.setState(this.element.dataset.state, { restart: true }); }
+    destroy() { this.destroyed = true; this.element.replaceChildren(); }
+  }
+  window.AntigravityPet = AntigravityPet;
+}());
+
+</script><script>
+(function () {
+  'use strict';
+  const states = {
+    idle: { name: '待机', title: '我在，随时开始。', description: '轻轻悬浮，偶尔眨眼。', duration: 2500 },
+    thinking: { name: '思考', title: '让我想一想。', description: '歪着脑袋，把思路慢慢串起来。', duration: 3500 },
+    working: { name: '工作', title: '好，交给我。', description: '专注敲击，让想法一点点成形。', duration: 4500 },
+    complete: { name: '完成', title: '完成啦！', description: '跳一下，庆祝这个小小的进展。', duration: 3500 }
+  };
+  const stage = document.getElementById('pet-stage');
+  const anchor = document.getElementById('pet-anchor');
+  const mainElement = document.getElementById('main-pet');
+  const imageSrc = document.querySelector('.brand img').getAttribute('src');
+  const pet = new AntigravityPet(mainElement, { imageSrc });
+  const minis = Array.from(document.querySelectorAll('.mini-pet')).map(element => new AntigravityPet(element, { imageSrc, size: 145, state: element.dataset.miniState }));
+  const allPets = [pet, ...minis];
+  const pauseButton = document.getElementById('pause');
+  const demoButton = document.getElementById('demo');
+  const demoNote = document.getElementById('demo-note');
+  const sizeInput = document.getElementById('pet-size');
+  const order = Object.keys(states);
+  let paused = false, speed = 1, demo = false, demoIndex = 0, elapsed = 0, lastTime = null, raf = 0;
+  let position = { x: .5, y: .45 }, drag = null;
+  function setState(state, restart = true) {
+    pet.setState(state, { restart });
+    stage.dataset.state = state;
+    document.getElementById('status-label').textContent = states[state].name;
+    document.getElementById('state-title').textContent = states[state].title;
+    document.getElementById('state-description').textContent = states[state].description;
+    document.querySelectorAll('[data-select-state]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.selectState === state)));
+  }
+  function demoUI(message) {
+    demoButton.classList.toggle('active', demo);
+    demoButton.setAttribute('aria-pressed', String(demo));
+    demoButton.textContent = demo ? '停止流程演示' : '播放完整流程';
+    stage.dataset.demo = demo ? 'running' : 'stopped';
+    if (message) demoNote.textContent = message;
+  }
+  function stopDemo(message) {
+    demo = false;
+    cancelAnimationFrame(raf);
+    raf = 0; lastTime = null;
+    demoUI(message);
+  }
+  function tick(now) {
+    if (!demo || paused || document.hidden) { lastTime = null; raf = 0; return; }
+    if (lastTime !== null) elapsed += (now - lastTime) * speed;
+    lastTime = now;
+    if (elapsed >= states[order[demoIndex]].duration) {
+      elapsed = 0;
+      demoIndex++;
+      if (demoIndex >= order.length) {
+        stopDemo('流程演示完成，可手动切换状态或再次播放。');
+        stage.dataset.demo = 'complete';
+        return;
+      }
+      setState(order[demoIndex]);
+      demoNote.textContent = `正在演示 ${demoIndex + 1}/4 · ${states[order[demoIndex]].name}`;
+    }
+    raf = requestAnimationFrame(tick);
+  }
+  function resumeDemo() { if (demo && !paused && !document.hidden && !raf) { lastTime = null; raf = requestAnimationFrame(tick); } }
+  function setPaused(value) {
+    paused = value;
+    allPets.forEach(item => item.setPaused(paused || document.hidden));
+    pauseButton.textContent = paused ? '继续动画' : '暂停动画';
+    pauseButton.setAttribute('aria-pressed', String(paused));
+    if (paused) { cancelAnimationFrame(raf); raf = 0; lastTime = null; }
+    else resumeDemo();
+  }
+  document.querySelectorAll('[data-select-state]').forEach(button => button.addEventListener('click', () => {
+    stopDemo('手动预览 · 可重新播放当前状态。');
+    setState(button.dataset.selectState);
+  }));
+  document.querySelectorAll('.segmented [data-bg]').forEach(button => button.addEventListener('click', () => {
+    stage.dataset.bg = button.dataset.bg;
+    document.querySelectorAll('.segmented [data-bg]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+  }));
+  pauseButton.addEventListener('click', () => setPaused(!paused));
+  document.getElementById('replay').addEventListener('click', () => {
+    stopDemo('已重播当前状态。');
+    setState(mainElement.dataset.state);
+  });
+  document.getElementById('replay-complete').addEventListener('click', () => minis[3].restart());
+  demoButton.addEventListener('click', () => {
+    if (demo) { stopDemo('流程已停止，可手动切换状态。'); return; }
+    demo = true; demoIndex = 0; elapsed = 0; lastTime = null;
+    setPaused(false); setState('idle');
+    demoUI('正在演示 1/4 · 待机');
+    resumeDemo();
+  });
+  document.getElementById('speed').addEventListener('change', event => {
+    speed = Number(event.target.value);
+    allPets.forEach(item => item.setSpeed(speed));
+  });
+  document.getElementById('face').addEventListener('change', event => allPets.forEach(item => item.setFace(event.target.checked)));
+  function place(x, y) {
+    const bounds = stage.getBoundingClientRect();
+    const size = Number(sizeInput.value), half = size / 2 + 8;
+    const nx = Math.max(half, Math.min(bounds.width - half, x));
+    const ny = Math.max(half, Math.min(bounds.height - half - 50, y));
+    position = { x: nx / bounds.width, y: ny / bounds.height };
+    anchor.style.left = `${position.x * 100}%`; anchor.style.top = `${position.y * 100}%`;
+  }
+  sizeInput.addEventListener('input', () => {
+    pet.setSize(sizeInput.value);
+    document.getElementById('size-value').textContent = `${sizeInput.value} px`;
+    const b = stage.getBoundingClientRect(); place(position.x * b.width, position.y * b.height);
+  });
+  new ResizeObserver(() => { const b = stage.getBoundingClientRect(); place(position.x * b.width, position.y * b.height); }).observe(stage);
+  anchor.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || !event.isPrimary) return;
+    const b = stage.getBoundingClientRect();
+    drag = { id: event.pointerId, dx: event.clientX - b.left - b.width * position.x, dy: event.clientY - b.top - b.height * position.y };
+    anchor.setPointerCapture(event.pointerId);
+  });
+  anchor.addEventListener('pointermove', event => { if (drag && drag.id === event.pointerId) { const b = stage.getBoundingClientRect(); place(event.clientX - b.left - drag.dx, event.clientY - b.top - drag.dy); } });
+  for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) anchor.addEventListener(name, () => { drag = null; });
+  anchor.addEventListener('keydown', event => {
+    const delta = { ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, -10], ArrowDown: [0, 10] }[event.key];
+    if (delta) { event.preventDefault(); const b = stage.getBoundingClientRect(); place(position.x * b.width + delta[0], position.y * b.height + delta[1]); }
+  });
+  document.addEventListener('visibilitychange', () => {
+    allPets.forEach(item => item.setPaused(paused || document.hidden));
+    if (document.hidden) { cancelAnimationFrame(raf); raf = 0; lastTime = null; }
+    else resumeDemo();
+  });
+  // The public component is reusable; page controls are only a preview of agent states.
+  window.antigravityPet = pet;
+  setState('idle', false);
+  demoUI();
+}());
+
+</script>
+</body></html>

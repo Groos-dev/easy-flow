@@ -2883,7 +2883,7 @@ describe('HTTP 层', () => {
     }
   })
 
-  test('POST /api/sessions/open-workspace 只认 Cursor 且目录必须还在', async () => {
+  test('POST /api/sessions/open-workspace 只认有工作区应用的 agent，且目录必须还在', async () => {
     const missing = await post('/api/sessions/open-workspace', { agent: 'cursor', session: 'nope' })
     assert.match(missing.error, /(?:Session not found|找不到会话)/)
 
@@ -2892,7 +2892,7 @@ describe('HTTP 层', () => {
     assert.match(gone.error, /(?:Directory no longer exists|目录已不存在)/)
 
     const wrong = await post('/api/sessions/open-workspace', { agent: 'codex', session: 'th-ctx' })
-    assert.match(wrong.error, /(?:Only Cursor|只有 Cursor)/)
+    assert.match(wrong.error, /(?:cannot open a session workspace|不支持打开会话工作区)/)
   })
 
   test('POST /api/sessions/clicked 把这条会话写成静止，下一个 hook 事件直接覆盖', async () => {
@@ -3096,7 +3096,7 @@ describe('HTTP 层', () => {
     assert.ok(r.shim.path.endsWith('/.local/bin/easy-flow'))
     assert.deepEqual(
       r.agents.map((a: { id: string }) => a.id),
-      ['claude', 'cursor', 'codex', 'chengxiaobang'],
+      ['claude', 'cursor', 'codex', 'antigravity', 'chengxiaobang'],
     )
     for (const a of r.agents) {
       assert.equal(typeof a.linked, 'boolean')

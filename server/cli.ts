@@ -1,6 +1,7 @@
 import { TodoState } from '../src/shared/domain.ts'
 import { SessionAnalysisState } from '../src/shared/domain.ts'
 import { AgentId } from '../src/shared/domain.ts'
+import { canOpenWorkspace, workspaceOpenHint } from '../src/shared/agents.ts'
 import { requirementStatusLabel } from '../src/shared/i18n.ts'
 import { normalizeRequirementStatus } from '../src/shared/domain.ts'
 import { getLanguage, isLanguage, setLanguage } from '../src/shared/i18n.ts'
@@ -180,10 +181,12 @@ const SESSION_ENV: Record<SessionAgent, string[]> = {
   codex: ['CODEX_THREAD_ID'],
   cursor: ['CURSOR_CONVERSATION_ID'],
   chengxiaobang: ['CHENGXIAOBANG_SESSION_ID'],
+  // Antigravity 把当前对话 id 注入 agent 的 shell
+  antigravity: ['ANTIGRAVITY_CONVERSATION_ID'],
 }
 
 /**
- * desktop 应用的会话 deeplink。推导不出来的（终端里的 claude、cursor 的本地会话）返回空串：
+ * desktop 应用的会话 deeplink。推导不出来的（终端里的 claude、cursor / antigravity 的本地会话）返回空串：
  * 链接格式是各应用自己的事，猜错了比没有更糟；调用方可以用 --link 覆盖。
  */
 function sessionLink(agent: SessionAgent, session: string): string {
@@ -548,7 +551,7 @@ const USAGE = {
 
   get taglist() { return tr("Usage: easy-flow taglist [--project <project>] [--json]\n\nList tags and usage counts, sorted by descending usage then name.\nCheck existing vocabulary before creating a new term. --project limits the scope.") },
 
-  get 'req session'() { return tr("Usage: easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang> [--id <session-id>] [--title <title>] [--cwd <directory>] [--link <url>] [--json]\n       easy-flow req session rm <req-id> --agent <agent> --id <session-id> [--json]\n       easy-flow req session ls [<req-id>] [--json]\n\nRegister sessions in the database for navigation from the board. --cwd defaults to the current directory.\nIf --id is omitted, read CLAUDE_CODE_HOST_SESSION_ID / CLAUDE_CODE_SESSION_ID, CODEX_THREAD_ID, CURSOR_CONVERSATION_ID, or CHENGXIAOBANG_SESSION_ID for the selected agent. Missing IDs are rejected.\nDefault deep links exist for Codex, desktop Claude local_ sessions, and Chengxiaobang. Cursor and terminal Claude have no session-level deep link.\nRepeated registration refreshes fields without creating a duplicate.") },
+  get 'req session'() { return tr("Usage: easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang|antigravity> [--id <session-id>] [--title <title>] [--cwd <directory>] [--link <url>] [--json]\n       easy-flow req session rm <req-id> --agent <agent> --id <session-id> [--json]\n       easy-flow req session ls [<req-id>] [--json]\n\nRegister sessions in the database for navigation from the board. --cwd defaults to the current directory.\nIf --id is omitted, read CLAUDE_CODE_HOST_SESSION_ID / CLAUDE_CODE_SESSION_ID, CODEX_THREAD_ID, CURSOR_CONVERSATION_ID, CHENGXIAOBANG_SESSION_ID, or ANTIGRAVITY_CONVERSATION_ID for the selected agent. Missing IDs are rejected.\nDefault deep links exist for Codex, desktop Claude local_ sessions, and Chengxiaobang. Cursor, Antigravity App, and terminal Claude have no session-level deep link.\nRepeated registration refreshes fields without creating a duplicate.") },
 
   get 'wt new'() { return tr("Usage: easy-flow wt new <req-id> --repo <repository> --branch <branch> [--base <ref>] [--short <short-name>] [--json]\n\nCreate <repository>.<branch> beside the main checkout with identity AGENTS.md and requirement.md / design symlinks.\n--repo accepts a repository name or absolute main-checkout path. --base defaults to main-checkout HEAD.\nCreation is idempotent. --short selects the requirement's docs/<short-name>/ directory.") },
 
@@ -1067,7 +1070,7 @@ async function cmdReqSessionAdd(argv: string[]): Promise<void> {
   if (bool(values.help)) return out(USAGE['req session'])
 
   const reqId = required(positionals[0], tr('Missing requirement id (req-…)'), USAGE['req session'])
-  const agent = required(str(values.agent), tr('Missing --agent (claude / codex / cursor / chengxiaobang)'), USAGE['req session']) as SessionAgent
+  const agent = required(str(values.agent), tr('Missing --agent (claude / codex / cursor / chengxiaobang / antigravity)'), USAGE['req session']) as SessionAgent
   oneOf(agent, SESSION_AGENTS, 'agent')
   const session = sessionIdFrom(values, agent)
   const title = str(values.title)?.trim() ?? ''
@@ -1086,7 +1089,8 @@ async function cmdReqSessionAdd(argv: string[]): Promise<void> {
       sessionLine(saved),
       saved.link
         ? tr("Open it from the board's details panel. Registering again refreshes its fields.")
-        : tr("This agent has no session deep link. The board can only display and copy the session ID."),
+        : canOpenWorkspace(saved) ? tr("This agent has no session deep link. {0}", [workspaceOpenHint(saved)])
+          : tr("This agent has no session deep link. The board can only display and copy the session ID."),
     ].join('\n'),
   )
 }
@@ -1096,7 +1100,7 @@ async function cmdReqSessionRm(argv: string[]): Promise<void> {
   if (bool(values.help)) return out(USAGE['req session'])
 
   const reqId = required(positionals[0], tr('Missing requirement id (req-…)'), USAGE['req session'])
-  const agent = required(str(values.agent), tr('Missing --agent (claude / codex / cursor / chengxiaobang)'), USAGE['req session']) as SessionAgent
+  const agent = required(str(values.agent), tr('Missing --agent (claude / codex / cursor / chengxiaobang / antigravity)'), USAGE['req session']) as SessionAgent
   oneOf(agent, SESSION_AGENTS, 'agent')
   const session = required(str(values.id), tr('Missing --id (the session id)'), USAGE['req session'])
 
@@ -1142,7 +1146,7 @@ async function cmdReqSessionLs(argv: string[]): Promise<void> {
     { requirementId: req.id, sessions, total: sessions.length },
     sessions.length
       ? tr("Sessions for “{0}” ({1}):\n{2}", [req.title, sessions.length, sessions.map((s) => sessionLine(s)).join('\n')])
-      : tr("No sessions registered under “{0}”. Run easy-flow req session add {1} --agent <claude|codex|cursor|chengxiaobang> from the session.", [req.title, req.id]),
+      : tr("No sessions registered under “{0}”. Run easy-flow req session add {1} --agent <claude|codex|cursor|chengxiaobang|antigravity> from the session.", [req.title, req.id]),
   )
 }
 

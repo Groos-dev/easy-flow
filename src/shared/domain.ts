@@ -61,6 +61,7 @@ export const AgentId = {
   Codex: 'codex',
   Cursor: 'cursor',
   Chengxiaobang: 'chengxiaobang',
+  Antigravity: 'antigravity',
 } as const
 export type AgentId = (typeof AgentId)[keyof typeof AgentId]
 

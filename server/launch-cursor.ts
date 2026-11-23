@@ -96,6 +96,7 @@ export const cursorProvider: LaunchProvider = {
   id: AgentId.Cursor,
   label: 'Cursor',
   requiresWorktree: true,
+  copyPromptOnFailure: true,
   prepare: (input) => {
     assertUniqueWorkspace(input)
     return openCursorWorkspace(input.worktreePath)

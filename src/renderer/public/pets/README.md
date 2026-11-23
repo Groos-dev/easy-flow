@@ -1,4 +1,4 @@
-# pet 素材（clawd / cloudling / cxb / cursor）
+# pet 素材（clawd / cloudling / cxb / cursor / antigravity）
 
 看板卡片上那只 pet 的素材。一个 agent 一套形象：
 
@@ -6,6 +6,22 @@
 - **Codex** → cloudling 云宝（`.pet-src/cloudling`，作者 stlabslogo），**内联成 `<svg>`**
 - **程小帮** → cxb 蓝卫衣短发女孩（`cxb-*.webp`，循环动画），走 `<img>`
 - **Cursor** → cursor 立方体小机器人（`cursor-*.webp`，循环动画，方块 logo + 指针箭头），走 `<img>`
+- **Antigravity** → official gradient arch with custom faces and props (`antigravity-*.svg`), rendered through `<img>`.
+
+## Antigravity
+
+The Antigravity theme uses the original [official Google artwork](https://antigravity.google/press),
+with custom expressions and CSS animation. Source material, provenance and standalone HTML
+previews are in `.pet-src/antigravity/`. These are custom derivatives, not an official Google pet.
+
+All seven application poses have Antigravity artwork, with compact variants, idle moods and
+matching `still/` files for offscreen rendering. The SVGs contain their own CSS and no scripts;
+each `<img>` isolates definitions and animation names. The completion jump/confetti play once.
+System reduced-motion settings disable animation. Rebuild with Python 3:
+
+```bash
+python3 scripts/build-antigravity-pet.py
+```
 
 ## 四套的通道与动效
 

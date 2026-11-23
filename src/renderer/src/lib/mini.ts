@@ -1,4 +1,5 @@
 import { t as tr } from "../../../shared/i18n.ts"
+import { canOpenWorkspace } from '../../../shared/agents.ts'
 import type { Requirement, Session } from './types'
 import { isCodeLink, linkLabel } from './links'
 import { isEventState, sessionActive } from './threads'
@@ -63,7 +64,7 @@ export function needsHuman(sessions: Session[]): boolean {
 }
 
 export function miniSessionOpenable(session: Session): boolean {
-  return !!session.link || (session.agent === 'cursor' && !!session.cwd)
+  return !!session.link || canOpenWorkspace(session)
 }
 
 export function miniSearchTokens(query: string): string[] {

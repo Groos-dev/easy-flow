@@ -1,4 +1,5 @@
 import { message } from '../src/shared/i18n.ts'
+import { workspaceAppOf, workspaceOpenArgs } from '../src/shared/agents.ts'
 import { AgentId } from '../src/shared/domain.ts'
 import { getLanguage, isLanguage, setLanguage, type Language } from '../src/shared/i18n.ts'
 import { t as tr } from "../src/shared/i18n.ts"
@@ -45,6 +46,7 @@ import { codeLinkStatuses } from './code-host.ts'
 import './launch-codex.ts'
 import './launch-chengxiaobang.ts'
 import './launch-cursor.ts'
+import './launch-antigravity.ts'
 import {
   allowOrigin,
   json,
@@ -140,9 +142,10 @@ function openDir(path: string): void {
 function copyPrompt(text: string): Promise<boolean> {
   return new Promise((resolve) => {
     if (process.platform !== 'darwin') return resolve(false)
-    const child = spawn('pbcopy')
+    const child = spawn('pbcopy', [], { timeout: 1_000 })
     child.on('error', () => resolve(false))
     child.on('close', (code) => resolve(code === 0))
+    child.stdin.on('error', () => resolve(false))
     child.stdin.end(text)
   })
 }
@@ -278,7 +281,8 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, onLa
       if (url.pathname === '/api/hook' && req.method === 'POST') {
         let payload: Record<string, unknown> = {}
         try {
-          payload = await readBody(req)
+          const body = await readBody(req)
+          if (body && typeof body === 'object' && !Array.isArray(body)) payload = body
         } catch {
           /* 报文不是合法 JSON：当没收到，照常回 200 */
         }
@@ -286,6 +290,9 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, onLa
         // codex 的转发脚本用 ?agent=codex 或报文里带 agent
         const fromQuery = url.searchParams.get('agent')
         const fromBody = typeof payload.agent === 'string' && payload.agent ? payload.agent : ''
+        // Antigravity 老版本的报文不带事件名，安装的命令把它放进 ?event=；报文里有就以报文为准
+        const eventFromQuery = url.searchParams.get('event')
+        if (eventFromQuery && !payload.hook_event_name && !payload.hookEventName) payload.hook_event_name = eventFromQuery
         recordHook(payload, { agent: fromQuery || fromBody || 'claude' }, stateStore)
         // 推送到达就刷新通知层，通知延迟不再等下一次 pull
         notifyAttention()
@@ -516,16 +523,20 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, onLa
         const session = String(body.session)
         const found = db.sessionBy(agent, session)
         if (!found) throw new Error(tr("Session not found: {0}:{1}", [agent, session]))
-        if (agent !== AgentId.Cursor) throw new Error(tr("Only Cursor sessions can focus a workspace"))
-        if (!found.cwd) throw new Error(tr("Session has no cwd"))
-        if (!existsSync(found.cwd)) throw new Error(tr("Directory no longer exists: {0}", [found.cwd]))
+        // 只有没有会话级 deeplink 的 agent 才走这条路，用哪个应用打开见 shared/agents.ts
+        const app = workspaceAppOf(agent)
+        if (!app) throw new Error(tr("This agent cannot open a session workspace: {0}", [agent]))
+        const manualWorkspaceSelection = agent === AgentId.Antigravity
+        const workspaceExists = !!found.cwd && existsSync(found.cwd)
+        if (!manualWorkspaceSelection && !found.cwd) throw new Error(tr("Session has no cwd"))
+        if (!manualWorkspaceSelection && !workspaceExists) throw new Error(tr("Directory no longer exists: {0}", [found.cwd]))
         await new Promise<void>((resolve, reject) => {
-          execFile('open', ['-a', 'Cursor', found.cwd], (error, _stdout, stderr) => {
+          execFile('open', workspaceOpenArgs(agent, found.cwd), (error, _stdout, stderr) => {
             if (error) reject(new Error(stderr.trim() || error.message))
             else resolve()
           })
         })
-        json(req, res, 200, { ok: true, path: found.cwd })
+        json(req, res, 200, { ok: true, path: found.cwd, manualWorkspaceSelection, workspaceExists })
         return
       }
 
@@ -623,24 +634,31 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, onLa
         let targetUrl = ''
         let promptCopied = false
         try {
+          // 没有能预填提示词的 deeplink：先把提示词放进剪贴板，应用一打开就能粘贴
+          if (provider.copyPromptBeforeOpen) promptCopied = await copyPrompt(prompt)
           await provider.prepare?.(input)
           targetUrl = await provider.build(input, prompt)
-          await new Promise<void>((resolve, reject) => {
-            execFile('open', [targetUrl], (error, _stdout, stderr) => {
-              if (error) reject(new Error(stderr.trim() || error.message))
-              else resolve()
+          if (provider.open) {
+            await provider.open(input)
+          } else {
+            await new Promise<void>((resolve, reject) => {
+              execFile('open', [targetUrl], (error, _stdout, stderr) => {
+                if (error) reject(new Error(stderr.trim() || error.message))
+                else resolve()
+              })
             })
-          })
-          json(req, res, 200, { agent, url: targetUrl, prompt, opened: true })
+          }
+          json(req, res, 200, { agent, url: targetUrl, prompt, opened: true, promptCopied, worktreePath: input.worktreePath })
         } catch (error) {
-          // Cursor 启动失败时把提示词放进剪贴板，用户不至于手抄
-          if (agent === AgentId.Cursor) promptCopied = await copyPrompt(prompt)
+          // 声明了兜底的 provider 启动失败时把提示词放进剪贴板，用户不至于手抄
+          if (provider.copyPromptOnFailure && !promptCopied) promptCopied = await copyPrompt(prompt)
           json(req, res, 200, {
             agent,
             url: targetUrl,
             prompt,
             opened: false,
             promptCopied,
+            worktreePath: input.worktreePath,
             error: (error as Error).message,
           })
         }

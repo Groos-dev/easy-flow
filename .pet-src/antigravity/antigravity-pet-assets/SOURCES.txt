@@ -1,0 +1,22 @@
+Google Antigravity 静态资源
+
+来源：https://antigravity.google/press
+原始素材包：https://antigravity.google/assets/image/brand/Google-Antigravity-Press-Kit.zip
+核实日期：2026-11-22（America/Los_Angeles）
+
+调查结果
+- 官网 Press Assets 提供彩色、单色、白色图标，以及品牌组合与文字标识。
+- 下载的官方素材包包含 6 个 PNG 和 6 个 SVG。
+- 本次公开官网、文档与网络检索未找到可核实的官方宠物角色立绘或动作精灵表；此结果不代表官方一定不存在此类资源。
+- 网络上的第三方桌宠项目不作为 Google 官方形象来源。
+
+本次采用
+- 直接复用官方彩色拱形 Logo，作为当前静态形象。
+- official/：官方原始文件，未修改。
+- static/idle.png：官方 540×540 透明 PNG 的原样副本。
+- static/idle.svg：官方 SVG 的原样副本。
+- static/idle-{64,128,256,512}.png：仅调整尺寸，保留透明通道。
+- asset-manifest.json：本地资源索引与 SHA-256；尚未接入具体 pet 运行时。
+- Google-Antigravity-Press-Kit.zip：保留官方原始压缩包。
+
+这些是 Google 官方品牌素材；本包不声明其为开源素材，也未生成或声称存在官方宠物角色。

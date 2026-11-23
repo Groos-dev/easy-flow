@@ -1,0 +1,200 @@
+{
+  "source_directory": "/Users/groos/Documents/Codex/2026-11-22/re/outputs",
+  "destination": "/Users/groos/repo/easy-flow/.pet-src/antigravity",
+  "branch": "main",
+  "requirement_id": "req-ae642c2f64",
+  "session_id": "01a202eb-6cbe-7c21-a715-b5398d46e8e2",
+  "file_count": 37,
+  "files": [
+    {
+      "path": "antigravity-pet-animations/USAGE.txt",
+      "bytes": 916,
+      "sha256": "ea024b98c932f619fb020dff09defc5b97149533980aa46bf3de329eb1f8807d"
+    },
+    {
+      "path": "antigravity-pet-animations/animation-manifest.json",
+      "bytes": 1511,
+      "sha256": "556a1722a378e31ddaf680e15256f06ce6a6676916ed4c49e2da6aa60432711f"
+    },
+    {
+      "path": "antigravity-pet-animations/assets/antigravity.svg",
+      "bytes": 5301,
+      "sha256": "d775965ea1f8060538c15f758a3e22487317211fcb6051333b5e023f35aa726f"
+    },
+    {
+      "path": "antigravity-pet-animations/index.html",
+      "bytes": 5508,
+      "sha256": "1f85afc4dca8c7c271c166304c9fe03a389c04aa76acf8dc0dcd44a17d0909ff"
+    },
+    {
+      "path": "antigravity-pet-animations/pet.css",
+      "bytes": 9402,
+      "sha256": "7d875af241eb1d91f97fca53013a52c6b4d8285af723407c26f942fe33df0e9e"
+    },
+    {
+      "path": "antigravity-pet-animations/pet.js",
+      "bytes": 4681,
+      "sha256": "a0fb24e90e53ae66491146b361f0c896977c0cb1cb6f0997e52c83f52a575b61"
+    },
+    {
+      "path": "antigravity-pet-animations/preview.css",
+      "bytes": 7819,
+      "sha256": "f06b8d73bceb36dd0ca4def5e31cdae52a90d1093f5caca9c56f49fbd1f07b69"
+    },
+    {
+      "path": "antigravity-pet-animations/preview.js",
+      "bytes": 7331,
+      "sha256": "6303a523f7598dcf2dbbf8aafa47b0b5f2cacfb15de7a6eb7508ff9db01d2961"
+    },
+    {
+      "path": "antigravity-pet-animations-detail.jpg",
+      "bytes": 136145,
+      "sha256": "508697b4586b0bf4699217438faa02d83486ee294c6ef9fc533d00a878e2e659"
+    },
+    {
+      "path": "antigravity-pet-animations.html",
+      "bytes": 41741,
+      "sha256": "9d20387de34fd3649c3251d6cc845056bb6c7d537b650d043d410094d51cdcae"
+    },
+    {
+      "path": "antigravity-pet-animations.jpg",
+      "bytes": 99905,
+      "sha256": "310b561e836a416fc5e984150c003313c222b870ad094626cc609d0594452f4f"
+    },
+    {
+      "path": "antigravity-pet-animations.zip",
+      "bytes": 28638,
+      "sha256": "53a08bb4f5eb6240d74684df56b81581e117b9bfba2edda2c7d37601ae8656e3"
+    },
+    {
+      "path": "antigravity-pet-assets/Google-Antigravity-Press-Kit.zip",
+      "bytes": 274785,
+      "sha256": "3378d66703e1018cfac865fbe1b78e14b75843fc21038ba8aff3d8eb1c64e4c8"
+    },
+    {
+      "path": "antigravity-pet-assets/SOURCES.txt",
+      "bytes": 1241,
+      "sha256": "ac0e770701be5ff8dfe6a819280d470be083fffcf4c3409a2ecd3b91d21bafa9"
+    },
+    {
+      "path": "antigravity-pet-assets/asset-manifest.json",
+      "bytes": 4239,
+      "sha256": "f8aeaf5b189b102be83da3e73e29dea959ced65da9b5d2cd33abd35b69168618"
+    },
+    {
+      "path": "antigravity-pet-assets/official/png/antigravity-icon__full-color.png",
+      "bytes": 71914,
+      "sha256": "e0cd08ccd10cd8d08ccf0ba449823ee88495825c0841619618100d3ab089f51e"
+    },
+    {
+      "path": "antigravity-pet-assets/official/png/antigravity-icon__one-color.png",
+      "bytes": 8662,
+      "sha256": "00b50e4f0243cd07dcf536cf36bb2cf071c3e0445a99ca9afcb90142f870cc01"
+    },
+    {
+      "path": "antigravity-pet-assets/official/png/antigravity-icon__white.png",
+      "bytes": 7437,
+      "sha256": "b65fac00147e2402dcef1d7730ad0feec6611c6ed5c5cb2ead64ad7609190405"
+    },
+    {
+      "path": "antigravity-pet-assets/official/png/antigravity_product_lockup_full_color.png",
+      "bytes": 46280,
+      "sha256": "5fd950e8c08bc9690d7528ab34a3e9cdd4b71066e212b4e2d20f51d9a7982452"
+    },
+    {
+      "path": "antigravity-pet-assets/official/png/antigravity_product_lockup_full_color_reverse.png",
+      "bytes": 40885,
+      "sha256": "7474cb7e7261ca111458521b52d004ff5eb987fe7200c472cabdce4e381f47b9"
+    },
+    {
+      "path": "antigravity-pet-assets/official/png/antigravity_wordmark_horz__full-color-white-text.png",
+      "bytes": 86982,
+      "sha256": "559bcf5c40ac4dff70d072966e8a2b3315636632277c21af71fe918337d3f9a6"
+    },
+    {
+      "path": "antigravity-pet-assets/official/svg/antigravity-icon__full-color.svg",
+      "bytes": 5301,
+      "sha256": "d775965ea1f8060538c15f758a3e22487317211fcb6051333b5e023f35aa726f"
+    },
+    {
+      "path": "antigravity-pet-assets/official/svg/antigravity-icon__one-color.svg",
+      "bytes": 435,
+      "sha256": "5b5d0cfd07cb79ba5d299d80b754e7c91d782dc1199811688dec67a0a11ba240"
+    },
+    {
+      "path": "antigravity-pet-assets/official/svg/antigravity-icon__white.svg",
+      "bytes": 433,
+      "sha256": "5b8121138dcb017642ccf15d9f5cda738e61d8d70a12277c9cf5aeec3e575e81"
+    },
+    {
+      "path": "antigravity-pet-assets/official/svg/antigravity_product_lockup_full_color.svg",
+      "bytes": 17131,
+      "sha256": "9a627b86b25b4dc8396902dd14ccf1e2f9b0aa07b61fcb2576b9f4152cb61af8"
+    },
+    {
+      "path": "antigravity-pet-assets/official/svg/antigravity_product_lockup_full_color_reverse.svg",
+      "bytes": 17131,
+      "sha256": "c609d414d8ec4c909b59a87e85265d5ca615c4e96818dbf67565b07205b1b0da"
+    },
+    {
+      "path": "antigravity-pet-assets/official/svg/antigravity_wordmark_horz__full-color-white-text.svg",
+      "bytes": 9936,
+      "sha256": "d02112f6ea7f88b653fd9b78e5603786848dc385fdd41b7535340c31a710c8ea"
+    },
+    {
+      "path": "antigravity-pet-assets/preview.html",
+      "bytes": 18336,
+      "sha256": "23c7417f2656c89893a3713e3910410339d133d5ebfcf2c4180c79f36b82efd7"
+    },
+    {
+      "path": "antigravity-pet-assets/static/idle-128.png",
+      "bytes": 8445,
+      "sha256": "ba74907dc58c65f330b4474e935e19fa2c2dc811581d3ba731a113a00cbcec38"
+    },
+    {
+      "path": "antigravity-pet-assets/static/idle-256.png",
+      "bytes": 25577,
+      "sha256": "9e4c165dc8ee4ebb78dc010b8e76abe669b414383e5efc444f794b818006d363"
+    },
+    {
+      "path": "antigravity-pet-assets/static/idle-512.png",
+      "bytes": 87057,
+      "sha256": "21449e71fefc7b3bc87b3ec98fc81459397dfd48f14ab08ebea802c331b9a0f5"
+    },
+    {
+      "path": "antigravity-pet-assets/static/idle-64.png",
+      "bytes": 3191,
+      "sha256": "aea58db949d1bc4d72b728c440ce9ebb48a7b60155a41c379aa119d63eb77674"
+    },
+    {
+      "path": "antigravity-pet-assets/static/idle.png",
+      "bytes": 71914,
+      "sha256": "e0cd08ccd10cd8d08ccf0ba449823ee88495825c0841619618100d3ab089f51e"
+    },
+    {
+      "path": "antigravity-pet-assets/static/idle.svg",
+      "bytes": 5301,
+      "sha256": "d775965ea1f8060538c15f758a3e22487317211fcb6051333b5e023f35aa726f"
+    },
+    {
+      "path": "antigravity-pet-assets.zip",
+      "bytes": 753414,
+      "sha256": "b4792c88520426fb5c0d48c31289df715184980b6898e4ff7adc4caa45ddf69f"
+    },
+    {
+      "path": "antigravity-preview.html",
+      "bytes": 746185,
+      "sha256": "c655b5bc88d820e2ab7c0db9a5ab3a07e64dd54e57326f8c6fa44eaedc459003"
+    },
+    {
+      "path": "antigravity-preview.jpg",
+      "bytes": 121353,
+      "sha256": "c956e32a64fabadc7e4fc9edaa0775c6ff3c483244e384d56766368609191c1b"
+    }
+  ],
+  "build_scripts": [
+    "tools/build_preview.py",
+    "tools/package_pet_animations.py"
+  ],
+  "compatibility_links": "Old output entries are symlinks to the main checkout; there are no duplicate asset copies."
+}

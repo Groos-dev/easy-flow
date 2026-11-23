@@ -1,0 +1,22 @@
+Antigravity Pet 四状态动画
+
+预览：打开 index.html。便携单文件版本位于资源目录外的 antigravity-pet-animations.html。
+
+组件接入：加载 pet.css 与 pet.js，并传入容器和官方 SVG 路径。
+
+const pet = new AntigravityPet(document.querySelector('#pet'), {
+  imageSrc: './assets/antigravity.svg', size: 240, state: 'idle'
+});
+pet.setState('thinking');
+pet.setState('working');
+pet.setState('complete', {restart: true});
+pet.setState('idle');
+pet.setPaused(true);
+pet.setSpeed(1);
+pet.setFace(false);
+
+Logo 来源：https://antigravity.google/press
+SVG 原图未修改；表情、道具、动效为自定义衍生。
+本 HTML 演示状态切换，尚未连接实际 Antigravity 运行事件。
+完成的跳跃和彩屑只在进入或重播状态时播放，随后保持完成表情并轻浮。
+支持系统“减少动态效果”设置；后台标签页会暂停动画与流程。

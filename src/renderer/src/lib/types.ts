@@ -219,6 +219,7 @@ export interface LaunchResult {
   opened: boolean
   error?: string
   promptCopied?: boolean
+  worktreePath?: string
 }
 
 // 详情页浮窗里会随库变的那四块，打开详情页时随 context 取一次
@@ -263,7 +264,7 @@ export interface SessionStatus {
 export type { SessionAction } from '../../../shared/session-text.ts'
 import type { SessionAction } from '../../../shared/session-text.ts'
 
-// 一条 agent 会话的登记（claude code / codex / cursor / chengxiaobang）
+// 一条 agent 会话的登记（claude code / codex / cursor / chengxiaobang / antigravity）
 export interface Session {
   requirementId: string
   agent: string
