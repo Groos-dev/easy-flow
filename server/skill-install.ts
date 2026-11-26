@@ -133,11 +133,14 @@ function homeLink(name: string): string {
   return join(homedir(), '.agents', 'skills', name)
 }
 
-function agentDirs(): Array<{ id: AgentSkill['id']; label: string; dir: string; shared?: boolean }> {
+function agentDirs(): Array<{ id: AgentSkill['id']; label: string; dir: string; shared?: boolean; parent?: string }> {
   return [
     { id: 'claude', label: 'Claude Code', dir: join(homedir(), '.claude', 'skills') },
     { id: 'cursor', label: 'Cursor', dir: join(homedir(), '.cursor', 'skills') },
     { id: 'codex', label: 'Codex', dir: join(homedir(), '.codex', 'skills') },
+    // Antigravity 读用户级 ~/.gemini/config/skills；这层目录默认不建，
+    // 有 ~/.gemini/config（装过 Antigravity）就算可装，链接时顺手建出来
+    { id: 'antigravity', label: 'Antigravity', dir: join(homedir(), '.gemini', 'config', 'skills'), parent: join(homedir(), '.gemini', 'config') },
     // 程小帮直接读 ~/.agents/skills（CHENGXIAOBANG_AGENTS_DIR 的默认值），
     // 共享目录本身就是 home 链接，不用再套一层
     { id: 'chengxiaobang', get label() { return tr("Chengxiaobang") }, dir: join(homedir(), '.agents', 'skills'), shared: true },
@@ -283,9 +286,9 @@ export async function skillPlan(): Promise<SkillPlan> {
   const linkedEverywhere = (agentDir: string) =>
     SKILLS.every((name) => homeLinked(name) && linkedTo(join(agentDir, name), homeLink(name)))
 
-  const agents = agentDirs().map(({ shared, ...a }) => ({
+  const agents = agentDirs().map(({ shared, parent, ...a }) => ({
     ...a,
-    available: existsSync(a.dir),
+    available: existsSync(a.dir) || (!!parent && existsSync(parent)),
     // 共享目录的 agent 没有自己那层链接：home 链接对了就算装好
     linked: shared ? SKILLS.every((name) => homeLinked(name)) : linkedEverywhere(a.dir),
   }))
@@ -377,7 +380,7 @@ export async function installSkill(): Promise<InstallOutcome> {
     link(`skill ${name}`, home, source)
     for (const a of agentDirs()) {
       if (a.shared) continue
-      if (!existsSync(a.dir)) continue
+      if (!existsSync(a.dir) && !(a.parent && existsSync(a.parent))) continue
       link(`${a.label} / ${name}`, join(a.dir, name), home)
     }
   }

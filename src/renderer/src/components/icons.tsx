@@ -85,7 +85,8 @@ export function CheckIcon() {
 }
 
 /**
- * agent 的品牌 mark：Claude 的星芒、Codex（OpenAI）的结、Cursor 的立方箭头。
+ * agent 的品牌 mark：Claude 的星芒、Codex（OpenAI）的结、Cursor 的立方箭头；
+ * Antigravity uses its original official full-color SVG asset.
  * 路径取自 simple-icons 的官方 mark 矢量版（24×24 单路径、fill 着色）——
  * 装在各家应用里的图标是位图 app icon，缩到徽标这个尺寸会糊。
  */
@@ -107,6 +108,7 @@ const AGENT_MARKS: Record<string, { d: string; outline?: boolean }> = {
 
 // agent 图标。认不出的 agent 原样显示名字——空徽标比文字更难查
 export function AgentIcon({ agent, size = 12 }: { agent: string; size?: number }) {
+  if (agent === 'antigravity') return <img src="agents/antigravity.svg" width={size} height={size} alt="" aria-hidden="true" />
   const mark = AGENT_MARKS[agent]
   if (!mark) return <>{agent}</>
   return (

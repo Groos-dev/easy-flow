@@ -1,0 +1,56 @@
+{
+  "id": "antigravity-pet-motion",
+  "version": 1,
+  "type": "html-css-js-animation",
+  "source_artwork": "https://antigravity.google/press",
+  "official_artwork_file": "assets/antigravity.svg",
+  "custom_additions": [
+    "face expressions",
+    "animation",
+    "thought bubble",
+    "terminal prop",
+    "success check",
+    "confetti"
+  ],
+  "states": {
+    "idle": {
+      "behavior": "float, breathe, blink",
+      "loop": true
+    },
+    "thinking": {
+      "behavior": "head tilt, upward glance, bouncing thought dots",
+      "loop": true
+    },
+    "working": {
+      "behavior": "focused eyes, typing hands, animated terminal lines",
+      "loop": true
+    },
+    "complete": {
+      "behavior": "two jumps, smiling eyes, check mark, one-shot confetti; then gentle float",
+      "intro_ms": 1500,
+      "loop_after_intro": true
+    }
+  },
+  "entry_html": "index.html",
+  "component_files": [
+    "pet.css",
+    "pet.js",
+    "assets/antigravity.svg"
+  ],
+  "public_api": [
+    "new AntigravityPet(element, options)",
+    "setState(state, {restart})",
+    "setPaused(boolean)",
+    "setSpeed(0.25..3)",
+    "setSize(32..1024)",
+    "setFace(boolean)",
+    "restart()",
+    "destroy()"
+  ],
+  "notes": [
+    "Custom pet animation based on official logo; not an official Google pet.",
+    "Original logo SVG is unchanged.",
+    "Preview uses local simulated states and is not connected to an Antigravity agent.",
+    "No external runtime, font, or network request required for the portable HTML."
+  ]
+}

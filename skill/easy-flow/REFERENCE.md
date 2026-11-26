@@ -181,7 +181,7 @@ Example: `easy-flow req tag add req-236d2ccb70 board cards`.
 ## Sessions
 
 ```sh
-easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang> [--id <session-id>] [--title <title>] [--cwd <directory>] [--link <url>] [--json]
+easy-flow req session add <req-id> --agent <claude|codex|cursor|chengxiaobang|antigravity> [--id <session-id>] [--title <title>] [--cwd <directory>] [--link <url>] [--json]
 easy-flow req session ls [<req-id>] [--json]
 easy-flow req session rm <req-id> --agent <agent> --id <session-id> [--json]
 ```
@@ -203,6 +203,7 @@ If `--id` is omitted, the command reads the current agent's environment:
 | `codex` | `CODEX_THREAD_ID` | `codex://threads/<id>` |
 | `cursor` | `CURSOR_CONVERSATION_ID` | No session-level deep link |
 | `chengxiaobang` | `CHENGXIAOBANG_SESSION_ID` | `chengxiaobang://session/<id>` |
+| `antigravity` | `ANTIGRAVITY_CONVERSATION_ID` | No verified session-level deep link; focus the App and find the conversation/project manually. A missing workspace does not prevent App focus. |
 
 Missing environment IDs cause an error; check the agent or pass the actual ID.
 Do not invent one. Example:

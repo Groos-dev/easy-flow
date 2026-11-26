@@ -1,0 +1,117 @@
+{
+  "format": "project-static-assets-v1",
+  "id": "google-antigravity",
+  "name": "Google Antigravity",
+  "asset_type": "official-brand-icon",
+  "downloaded_on": "2026-11-22",
+  "source_page": "https://antigravity.google/press",
+  "source_archive": "https://antigravity.google/assets/image/brand/Google-Antigravity-Press-Kit.zip",
+  "source_archive_sha256": "3378d66703e1018cfac865fbe1b78e14b75843fc21038ba8aff3d8eb1c64e4c8",
+  "default_static_image": "static/idle.png",
+  "vector_image": "static/idle.svg",
+  "png_sizes": {
+    "64": "static/idle-64.png",
+    "128": "static/idle-128.png",
+    "256": "static/idle-256.png",
+    "512": "static/idle-512.png"
+  },
+  "animation_frames": 0,
+  "notes": [
+    "Original Google Press Kit images are retained unchanged in official/.",
+    "static/idle.png and idle.svg are exact copies of the official full-color icon.",
+    "Sized PNGs are resized from the official 540 x 540 PNG; artwork and transparency are retained.",
+    "This manifest describes local static assets; application integration is pending."
+  ],
+  "assets": [
+    {
+      "file": "official/png/antigravity-icon__full-color.png",
+      "sha256": "e0cd08ccd10cd8d08ccf0ba449823ee88495825c0841619618100d3ab089f51e",
+      "bytes": 71914
+    },
+    {
+      "file": "official/png/antigravity-icon__one-color.png",
+      "sha256": "00b50e4f0243cd07dcf536cf36bb2cf071c3e0445a99ca9afcb90142f870cc01",
+      "bytes": 8662
+    },
+    {
+      "file": "official/png/antigravity-icon__white.png",
+      "sha256": "b65fac00147e2402dcef1d7730ad0feec6611c6ed5c5cb2ead64ad7609190405",
+      "bytes": 7437
+    },
+    {
+      "file": "official/png/antigravity_product_lockup_full_color.png",
+      "sha256": "5fd950e8c08bc9690d7528ab34a3e9cdd4b71066e212b4e2d20f51d9a7982452",
+      "bytes": 46280
+    },
+    {
+      "file": "official/png/antigravity_product_lockup_full_color_reverse.png",
+      "sha256": "7474cb7e7261ca111458521b52d004ff5eb987fe7200c472cabdce4e381f47b9",
+      "bytes": 40885
+    },
+    {
+      "file": "official/png/antigravity_wordmark_horz__full-color-white-text.png",
+      "sha256": "559bcf5c40ac4dff70d072966e8a2b3315636632277c21af71fe918337d3f9a6",
+      "bytes": 86982
+    },
+    {
+      "file": "official/svg/antigravity-icon__full-color.svg",
+      "sha256": "d775965ea1f8060538c15f758a3e22487317211fcb6051333b5e023f35aa726f",
+      "bytes": 5301
+    },
+    {
+      "file": "official/svg/antigravity-icon__one-color.svg",
+      "sha256": "5b5d0cfd07cb79ba5d299d80b754e7c91d782dc1199811688dec67a0a11ba240",
+      "bytes": 435
+    },
+    {
+      "file": "official/svg/antigravity-icon__white.svg",
+      "sha256": "5b8121138dcb017642ccf15d9f5cda738e61d8d70a12277c9cf5aeec3e575e81",
+      "bytes": 433
+    },
+    {
+      "file": "official/svg/antigravity_product_lockup_full_color.svg",
+      "sha256": "9a627b86b25b4dc8396902dd14ccf1e2f9b0aa07b61fcb2576b9f4152cb61af8",
+      "bytes": 17131
+    },
+    {
+      "file": "official/svg/antigravity_product_lockup_full_color_reverse.svg",
+      "sha256": "c609d414d8ec4c909b59a87e85265d5ca615c4e96818dbf67565b07205b1b0da",
+      "bytes": 17131
+    },
+    {
+      "file": "official/svg/antigravity_wordmark_horz__full-color-white-text.svg",
+      "sha256": "d02112f6ea7f88b653fd9b78e5603786848dc385fdd41b7535340c31a710c8ea",
+      "bytes": 9936
+    },
+    {
+      "file": "static/idle-128.png",
+      "sha256": "ba74907dc58c65f330b4474e935e19fa2c2dc811581d3ba731a113a00cbcec38",
+      "bytes": 8445
+    },
+    {
+      "file": "static/idle-256.png",
+      "sha256": "9e4c165dc8ee4ebb78dc010b8e76abe669b414383e5efc444f794b818006d363",
+      "bytes": 25577
+    },
+    {
+      "file": "static/idle-512.png",
+      "sha256": "21449e71fefc7b3bc87b3ec98fc81459397dfd48f14ab08ebea802c331b9a0f5",
+      "bytes": 87057
+    },
+    {
+      "file": "static/idle-64.png",
+      "sha256": "aea58db949d1bc4d72b728c440ce9ebb48a7b60155a41c379aa119d63eb77674",
+      "bytes": 3191
+    },
+    {
+      "file": "static/idle.png",
+      "sha256": "e0cd08ccd10cd8d08ccf0ba449823ee88495825c0841619618100d3ab089f51e",
+      "bytes": 71914
+    },
+    {
+      "file": "static/idle.svg",
+      "sha256": "d775965ea1f8060538c15f758a3e22487317211fcb6051333b5e023f35aa726f",
+      "bytes": 5301
+    }
+  ]
+}

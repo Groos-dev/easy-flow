@@ -37,7 +37,7 @@ Do not translate existing data or change the application's language as a side ef
    Use `--parent <req-id>` instead of `--project` for a child requirement.
 4. Register the current session:
    `easy-flow req session add <req-id> --agent codex --title "<current work>"`.
-   Substitute the actual agent: `claude`, `codex`, `cursor`, or `chengxiaobang`.
+   Substitute the actual agent: `claude`, `codex`, `cursor`, `chengxiaobang`, or `antigravity`.
 5. Read the todo section. Confirm inferred ownership with
    `easy-flow todo set <todo-id> --req <req-id>` before treating it as assigned.
 

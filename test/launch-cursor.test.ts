@@ -49,6 +49,7 @@ describe('Cursor 启动', () => {
   test('provider 要求工作区，build 用所选目录名', async () => {
     assert.equal(cursorProvider.id, 'cursor')
     assert.equal(cursorProvider.requiresWorktree, true)
+    assert.equal(cursorProvider.copyPromptOnFailure, true)
     const url = await cursorProvider.build(input, 'prompt')
     assert.match(url, /workspace=demo\.feature-x/)
     assert.match(url, /text=prompt/)

@@ -26,6 +26,7 @@ let server: ReturnType<typeof createServer>
 let base: string
 let previousPath: string | undefined
 let previousOpenFail: string | undefined
+let previousCopyFail: string | undefined
 let builtInput: LaunchInput | undefined
 let builtClaudeInput: LaunchInput | undefined
 let builtPrompt = ''
@@ -87,8 +88,12 @@ describe('需求详情页启动会话', () => {
     const openShim = join(bin, 'open')
     writeFileSync(openShim, '#!/bin/sh\nif [ "$EASY_FLOW_TEST_OPEN_FAIL" = "1" ]; then echo "handler unavailable" >&2; exit 42; fi\nexit 0\n')
     chmodSync(openShim, 0o755)
+    const copyShim = join(bin, 'pbcopy')
+    writeFileSync(copyShim, '#!/bin/sh\nif [ "$EASY_FLOW_TEST_COPY_FAIL" = "1" ]; then exit 1; fi\n/bin/cat >/dev/null\n')
+    chmodSync(copyShim, 0o755)
     previousPath = process.env.PATH
     previousOpenFail = process.env.EASY_FLOW_TEST_OPEN_FAIL
+    previousCopyFail = process.env.EASY_FLOW_TEST_COPY_FAIL
     process.env.PATH = `${bin}:${previousPath ?? ''}`
 
     registerLaunchProvider({
@@ -124,6 +129,8 @@ describe('需求详情页启动会话', () => {
     else process.env.PATH = previousPath
     if (previousOpenFail === undefined) delete process.env.EASY_FLOW_TEST_OPEN_FAIL
     else process.env.EASY_FLOW_TEST_OPEN_FAIL = previousOpenFail
+    if (previousCopyFail === undefined) delete process.env.EASY_FLOW_TEST_COPY_FAIL
+    else process.env.EASY_FLOW_TEST_COPY_FAIL = previousCopyFail
     rmSync(testRoot, { recursive: true, force: true })
   })
 
@@ -134,6 +141,78 @@ describe('需求详情页启动会话', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     })).json() as Promise<any>
+
+  test('Antigravity launch includes the requested workspace and recovers from clipboard failure', async () => {
+    const body = { project: 'demo', slug: 'alpha', agent: 'antigravity', worktreeId: 'wt-alpha' }
+    delete process.env.EASY_FLOW_TEST_COPY_FAIL
+    const opened = await post('/api/launch', body)
+    assert.equal(opened.opened, true)
+    assert.equal(opened.promptCopied, true)
+    assert.equal(opened.worktreePath, worktreePath)
+    assert.ok(opened.prompt.includes(worktreePath))
+    process.env.EASY_FLOW_TEST_COPY_FAIL = '1'
+    try {
+      const recovered = await post('/api/launch', body)
+      assert.equal(recovered.opened, true)
+      assert.equal(recovered.promptCopied, false)
+      assert.ok(recovered.prompt.includes(worktreePath))
+    } finally {
+      delete process.env.EASY_FLOW_TEST_COPY_FAIL
+    }
+  })
+
+  test('Malformed hook bodies remain non-blocking observations', async () => {
+    for (const body of ['null', '[]', '123', '"text"', '{bad json']) {
+      const response = await fetch(`${base}/api/hook?agent=antigravity&event=Stop`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body,
+      })
+      assert.equal(response.status, 200)
+      assert.deepEqual(await response.json(), { ok: true })
+    }
+  })
+
+  test('Official Antigravity events reach the board state and tool activity through the HTTP endpoint', async () => {
+    const session = 'native-hook-contract'
+    app.db.addSession({ requirementId: 'req-alpha', agent: 'antigravity', session, title: 'Native hooks', cwd: worktreePath, link: '' })
+    const send = (event: string, extra = {}) => post(`/api/hook?agent=antigravity&event=${event}`, { conversationId: session, ...extra })
+    const read = async () => (await get('/api/sessions')).sessions.find((item: { agent: string; session: string }) => item.agent === 'antigravity' && item.session === session)
+    try {
+      await send('PreInvocation')
+      assert.equal((await read()).status.state, 'thinking')
+      await send('PreToolUse', { toolCall: { name: 'run_command', args: { CommandLine: 'npm test' } } })
+      assert.equal((await read()).status.state, 'working')
+      assert.match((await read()).action.text, /npm test/)
+      await send('Stop', { fullyIdle: false, terminationReason: 'model_stop' })
+      assert.equal((await read()).status.state, 'working')
+      await send('PreToolUse', { toolCall: { name: 'ask_question', args: { questions: [{ question: 'Continue?' }] } } })
+      assert.equal((await read()).status.state, 'blocked')
+      assert.equal((await read()).status.needsAction, 'Continue?')
+      await send('Stop', { fullyIdle: true, terminationReason: 'error', error: 'fixture failure' })
+      assert.equal((await read()).status.state, 'failed')
+      await send('Stop', { fullyIdle: true, terminationReason: 'model_stop', error: '' })
+      assert.equal((await read()).status.state, 'done')
+    } finally {
+      app.db.removeSession('antigravity', session)
+    }
+  })
+
+  test('App-only session reopen survives missing workspaces while Cursor keeps directory validation', async () => {
+    const missing = join(testRoot, 'removed-workspace')
+    for (const agent of ['antigravity', 'cursor'] as const) {
+      app.db.addSession({ requirementId: 'req-alpha', agent, session: 'removed-workspace', title: 'Historical session', cwd: missing, link: '' })
+    }
+    try {
+      const opened = await post('/api/sessions/open-workspace', { agent: 'antigravity', session: 'removed-workspace' })
+      assert.equal(opened.ok, true)
+      assert.equal(opened.manualWorkspaceSelection, true)
+      assert.equal(opened.workspaceExists, false)
+      const cursor = await post('/api/sessions/open-workspace', { agent: 'cursor', session: 'removed-workspace' })
+      assert.match(cursor.error, /Directory no longer exists|目录已不存在/)
+    } finally {
+      app.db.removeSession('antigravity', 'removed-workspace')
+      app.db.removeSession('cursor', 'removed-workspace')
+    }
+  })
 
   test('provider API 只暴露注册表中的 id、label 与能力位', async () => {
     const result = await get('/api/launch/providers')

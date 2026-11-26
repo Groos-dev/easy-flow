@@ -1,5 +1,7 @@
 import { useLanguageSync, useLanguage } from '../lib/language'
 import { t as tr } from "../../../shared/i18n.ts"
+import { workspaceOpenHint, workspaceOpenNotice } from '../../../shared/agents.ts'
+import type { AgentId } from '../../../shared/domain.ts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../lib/api'
@@ -23,7 +25,8 @@ const PRODUCT_ICONS: Record<string, string> = {
   claude: 'agents/claude.png',
   cursor: 'agents/cursor.png',
   chengxiaobang: 'agents/chengxiaobang.png',
-}
+  antigravity: 'agents/antigravity.png',
+} satisfies Record<AgentId, string>
 
 export default function MiniApp() {
   useLanguageSync()
@@ -35,6 +38,7 @@ export default function MiniApp() {
   const [expandedSessions, setExpandedSessions] = useState(false)
   const [expandedLinks, setExpandedLinks] = useState(false)
   const [error, setError] = useState('')
+  const [openNotice, setOpenNotice] = useState('')
   const [ready, setReady] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const pointer = useRef({ x: -1, y: -1 })
@@ -132,16 +136,21 @@ export default function MiniApp() {
   async function openSession(session: Session) {
     if (!miniSessionOpenable(session)) return
     setError('')
+    setOpenNotice('')
+    let keepPanel = false
     try {
       if (session.link) {
         if (window.easyFlow?.openExternal) await window.easyFlow.openExternal(session.link)
         else window.open(session.link, '_blank')
       } else {
-        await api.openSessionWorkspace(session.agent, session.session)
+        const opened = await api.openSessionWorkspace(session.agent, session.session)
+        const notice = workspaceOpenNotice(opened)
+        setOpenNotice(notice)
+        keepPanel = !!notice
       }
       // 已查看登记失败不阻断打开会话。
       void api.markSessionClicked(session.agent, session.session).catch(() => {})
-      window.easyFlow?.hidePanel?.()
+      if (!keepPanel) window.easyFlow?.hidePanel?.()
     } catch (e) {
       setError((e as Error).message)
     }
@@ -239,7 +248,8 @@ export default function MiniApp() {
       const parts = [AGENT_LABELS[session.agent] ?? session.agent, session.title || session.session]
       if (attention) parts.push(session.status.needsAction || PET_LABEL[session.status.state])
       if (off) parts.push(tr("No session link is available"))
-      else if (session.agent === 'cursor' && !session.link) parts.push(tr("Open workspace"))
+      // 能打开却没有链接，只剩打开工作区这一条路
+      else if (!session.link) parts.push(workspaceOpenHint(session))
       title = parts.join(' · ')
       const image = PRODUCT_ICONS[session.agent]
       content = <>
@@ -312,6 +322,7 @@ export default function MiniApp() {
       </div>
       <div className="mini-list" id="mini-results">
         {error && <div className="notice" role="alert">{error}</div>}
+        {openNotice && <div className="notice" role="status">{openNotice}</div>}
         {!error && !ready && <MiniSkeleton />}
         {!error && ready && blocks.length === 0 && <div className="mini-empty">{tr("No matching requirements")}</div>}
         {blocks.map((block) => {

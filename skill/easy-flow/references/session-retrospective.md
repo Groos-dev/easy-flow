@@ -16,6 +16,7 @@ schemas when client versions change. Treat every source as read-only.
 | Codex | Use `threads` in `~/.codex/state_5.sqlite` to locate `rollout_path` and `history_mode`. For migrated sessions, read `item_json` from `thread_history_1.sqlite` table `thread_items`, ordered by `rollout_ordinal`. |
 | Cursor | Combine JSONL with `Library/Application Support/Cursor/User/globalStorage/state.vscdb`. The `cursorDiskKV` session prefix for `bubbleId` contains messages and tools; composer headers and `createdAt` help recover order. |
 | Chengxiaobang | Read `messages` in `~/.chengxiaobang/data/chengxiaobang.sqlite` by `created_at` and stable row order. Combine `content` and `payload` to reconstruct messages, `toolCall`, and `toolResult`. |
+| Antigravity | Read `~/.gemini/antigravity/brain/<conversationId>/.system_generated/logs/transcript.jsonl` (Agent Manager; the IDE and CLI use `antigravity-ide` and `antigravity-cli`). The file is a rolling window rewritten at checkpoints; also read `transcript_full.jsonl` and use the larger one. Steps carry `type` such as `USER_INPUT` and `PLANNER_RESPONSE`. Not yet verified on this machine. |
 
 - Claude's `attachment.queued_command` also contains mid-session input. Values
   `human`/`humanTurn` in `origin.kind` identify human instructions;

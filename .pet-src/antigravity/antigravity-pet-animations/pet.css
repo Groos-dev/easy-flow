@@ -1,0 +1,76 @@
+/* Official logo artwork is unchanged. Faces, props and animation are custom. */
+.ag-pet{--pet-size:240px;--time-scale:1;position:relative;width:var(--pet-size);height:var(--pet-size);flex:none;isolation:isolate;pointer-events:none;user-select:none}
+.ag-pet *{box-sizing:border-box}
+.ag-body-motion{position:absolute;inset:0;transform-origin:50% 83%;will-change:transform}
+.ag-body{position:absolute;inset:0;transform-origin:50% 70%}
+.ag-logo,.ag-face{position:absolute;inset:0;display:block;width:100%;height:100%;overflow:visible}
+.ag-logo{object-fit:contain}
+.ag-face{z-index:1;transition:opacity .2s}
+.ag-pet[data-face="false"] .ag-face{opacity:0}
+.ag-eye{transform-box:fill-box;transform-origin:center;animation:ag-blink calc(5.8s * var(--time-scale)) linear infinite}
+.ag-eye-right{animation-delay:calc(.03s * var(--time-scale))}
+.ag-pupil{transition:transform .25s}
+.ag-happy-eye,.ag-brows,.ag-happy-mouth{opacity:0}
+.ag-mouth{fill:none;stroke:#1c315c;stroke-width:2.3;stroke-linecap:round}
+.ag-shadow{position:absolute;width:44%;height:5%;bottom:9%;left:28%;border-radius:50%;background:radial-gradient(ellipse,#31598e30,transparent 72%);transform-origin:center;animation:ag-shadow calc(3.6s * var(--time-scale)) ease-in-out infinite}
+.ag-thought{position:absolute;z-index:3;top:4%;right:0;width:32%;height:17%;opacity:0;transform-origin:10% 100%}
+.ag-thought-cloud{height:100%;display:flex;align-items:center;justify-content:center;gap:10%;background:#fff;border:1px solid #dce4f2;border-radius:999px;box-shadow:0 5px 15px #23486e0a}
+.ag-thought:before,.ag-thought:after{content:"";position:absolute;background:#fff;border:1px solid #dce4f2;border-radius:50%}
+.ag-thought:before{width:13%;height:25%;left:7%;bottom:-24%}.ag-thought:after{width:7%;height:13%;left:0;bottom:-43%}
+.ag-thought-dot{width:10%;aspect-ratio:1;border-radius:50%;background:#4285f4}
+.ag-thought-dot:nth-child(2){background:#fbbc04;animation-delay:calc(.18s * var(--time-scale))!important}
+.ag-thought-dot:nth-child(3){background:#34a853;animation-delay:calc(.36s * var(--time-scale))!important}
+.ag-terminal{position:absolute;z-index:4;left:20%;top:60%;width:60%;height:31%;opacity:0;transform:translateY(8%);border-radius:9%;border:1px solid #7799d0;background:linear-gradient(150deg,#243e69,#172c50);box-shadow:0 8px 18px #182f5b20;overflow:visible}
+.ag-terminal-header{height:25%;padding:7% 9% 0;display:flex;gap:5%;align-items:center}
+.ag-terminal-header i{width:4%;aspect-ratio:1;border-radius:50%;background:#97b0d1}.ag-terminal-header i:first-child{background:#fc7d76}.ag-terminal-header i:nth-child(2){background:#f9d166}.ag-terminal-header i:nth-child(3){background:#75d59a}
+.ag-code{position:absolute;left:12%;right:12%;top:37%;bottom:13%;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+.ag-code-line{height:13%;display:flex;gap:7%;transform-origin:left}
+.ag-code-line i{display:block;height:100%;width:38%;border-radius:999px;background:#8eb5ff}.ag-code-line i+ i{width:22%;background:#f8d77a}.ag-code-line:nth-child(2){width:70%;margin-left:12%}.ag-code-line:nth-child(2) i{background:#82dbc0}.ag-code-line:nth-child(3){width:85%}.ag-code-line:nth-child(3) i+ i{background:#d5a7ee}
+.ag-hand{position:absolute;z-index:5;width:14%;height:23%;top:61%;border-radius:45%;background:linear-gradient(140deg,#8eb7ff,#3186ff);box-shadow:0 1px 2px #142e4c30}.ag-hand-left{left:-8%;transform:rotate(-12deg)}.ag-hand-right{right:-8%;transform:rotate(12deg)}
+.ag-success{position:absolute;z-index:6;right:8%;top:18%;width:24%;aspect-ratio:1;opacity:0;transform:scale(.5);border-radius:50%;background:#eaf8ef;border:1px solid #b8e3c5;box-shadow:0 3px 10px #133c2810}
+.ag-success svg{width:100%;height:100%;padding:22%;overflow:visible}.ag-success path{fill:none;stroke:#249956;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:36;stroke-dashoffset:36}
+.ag-burst{position:absolute;z-index:2;inset:0;opacity:0}.ag-confetti{position:absolute;left:49%;top:42%;width:3%;height:5%;border-radius:30%;background:var(--color);opacity:0;transform:translate(0,0)}
+.ag-pet[data-state="idle"] .ag-body-motion{animation:ag-idle calc(3.6s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="idle"] .ag-body{animation:ag-breathe calc(3.6s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="thinking"] .ag-body-motion{animation:ag-think calc(2.8s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="thinking"] .ag-pupil{transform:translate(2px,-3px)}
+.ag-pet[data-state="thinking"] .ag-mouth-normal{d:path('M86 79 Q91 76 96 78')}
+.ag-pet[data-state="thinking"] .ag-thought{opacity:1;animation:ag-thought-float calc(2.8s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="thinking"] .ag-thought-dot{animation:ag-dot calc(1.3s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="working"] .ag-body-motion{animation:ag-work calc(.72s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="working"] .ag-eye{animation-name:ag-work-blink;animation-duration:calc(4.8s * var(--time-scale))}
+.ag-pet[data-state="working"] .ag-pupil{transform:translate(0,2px)}
+.ag-pet[data-state="working"] .ag-brows{opacity:1}
+.ag-pet[data-state="working"] .ag-terminal{opacity:1;transform:translateY(0)}
+.ag-pet[data-state="working"] .ag-code-line{animation:ag-code calc(1.8s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="working"] .ag-code-line:nth-child(2){animation-delay:calc(-.6s * var(--time-scale))}
+.ag-pet[data-state="working"] .ag-code-line:nth-child(3){animation-delay:calc(-1.2s * var(--time-scale))}
+.ag-pet[data-state="working"] .ag-hand{animation:ag-tap-left calc(.36s * var(--time-scale)) ease-in-out infinite alternate}
+.ag-pet[data-state="working"] .ag-hand-right{animation-name:ag-tap-right;animation-delay:calc(-.36s * var(--time-scale))}
+.ag-pet[data-state="complete"] .ag-body-motion{animation:ag-celebrate calc(1.5s * var(--time-scale)) ease-out both}
+.ag-pet[data-state="complete"] .ag-body{animation:ag-complete-float calc(3s * var(--time-scale)) calc(1.5s * var(--time-scale)) ease-in-out infinite}
+.ag-pet[data-state="complete"] .ag-eyes-normal,.ag-pet[data-state="complete"] .ag-mouth-normal{opacity:0}
+.ag-pet[data-state="complete"] .ag-happy-eye,.ag-pet[data-state="complete"] .ag-happy-mouth{opacity:1}
+.ag-pet[data-state="complete"] .ag-success{animation:ag-badge calc(.6s * var(--time-scale)) calc(.25s * var(--time-scale)) cubic-bezier(.2,1.6,.5,1) both}
+.ag-pet[data-state="complete"] .ag-success path{animation:ag-check calc(.4s * var(--time-scale)) calc(.65s * var(--time-scale)) ease-out both}
+.ag-pet[data-state="complete"] .ag-burst{opacity:1}
+.ag-pet[data-state="complete"] .ag-confetti{animation:ag-confetti calc(1.25s * var(--time-scale)) calc(.28s * var(--time-scale)) cubic-bezier(.15,.65,.4,1) both}
+.ag-pet[data-paused="true"],.ag-pet[data-paused="true"] *{animation-play-state:paused!important}
+@keyframes ag-idle{0%,100%{transform:translateY(2%) rotate(-1.5deg)}50%{transform:translateY(-2.5%) rotate(1.5deg)}}
+@keyframes ag-breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.018,.982)}}
+@keyframes ag-shadow{0%,100%{transform:scaleX(1);opacity:.8}50%{transform:scaleX(.82);opacity:.45}}
+@keyframes ag-blink{0%,41%,45%,100%{transform:scaleY(1)}43%{transform:scaleY(.08)}}
+@keyframes ag-work-blink{0%,42%,46%,100%{transform:scaleY(.84)}44%{transform:scaleY(.08)}}
+@keyframes ag-think{0%,100%{transform:translateY(-1%) rotate(-7deg)}50%{transform:translateY(-4%) rotate(-11deg)}}
+@keyframes ag-thought-float{0%,100%{transform:translateY(0) rotate(2deg)}50%{transform:translateY(-12%) rotate(-3deg)}}
+@keyframes ag-dot{0%,55%,100%{transform:translateY(0);opacity:.45}28%{transform:translateY(-55%);opacity:1}}
+@keyframes ag-work{0%,100%{transform:translateY(1%) rotate(-1deg)}50%{transform:translateY(-.8%) rotate(1deg)}}
+@keyframes ag-code{0%,100%{transform:scaleX(.68);opacity:.6}50%{transform:scaleX(1);opacity:1}}
+@keyframes ag-tap-left{from{transform:translateY(-15%) rotate(-15deg)}to{transform:translateY(12%) rotate(8deg)}}
+@keyframes ag-tap-right{from{transform:translateY(-15%) rotate(15deg)}to{transform:translateY(12%) rotate(-8deg)}}
+@keyframes ag-celebrate{0%{transform:translateY(0) scale(1)}12%{transform:translateY(4%) scale(1.12,.88)}33%{transform:translateY(-21%) scale(.94,1.08) rotate(-7deg)}52%{transform:translateY(0) scale(1.1,.9) rotate(2deg)}70%{transform:translateY(-8%) scale(.98,1.02) rotate(3deg)}88%{transform:translateY(1%) scale(1.025,.975)}100%{transform:translateY(0) scale(1)}}
+@keyframes ag-complete-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-2%)}}
+@keyframes ag-badge{from{opacity:0;transform:scale(.25) rotate(-25deg)}to{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes ag-check{to{stroke-dashoffset:0}}
+@keyframes ag-confetti{0%{opacity:0;transform:translate(0,0) rotate(0)}12%{opacity:1}75%{opacity:1}100%{opacity:0;transform:translate(calc(var(--dx) * var(--pet-size)),calc(var(--dy) * var(--pet-size))) rotate(var(--turn))}}
+@media(prefers-reduced-motion:reduce){.ag-pet,.ag-pet *{animation:none!important;transition:none!important}.ag-pet[data-state="thinking"] .ag-body-motion{transform:rotate(-8deg)}.ag-pet[data-state="complete"] .ag-success{opacity:1;transform:scale(1)}.ag-pet[data-state="complete"] .ag-success path{stroke-dashoffset:0}.ag-pet[data-state="complete"] .ag-burst{display:none}}

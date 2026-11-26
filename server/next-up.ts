@@ -2,6 +2,7 @@ import { PriorityLevel } from '../src/shared/domain.ts'
 import { NextUpLevel } from '../src/shared/domain.ts'
 import { RequirementStatus, SessionState } from '../src/shared/domain.ts'
 import { t as tr } from "../src/shared/i18n.ts"
+import { agentLabel } from '../src/shared/agents.ts'
 /**
  * 「下一步该动哪个」的排名。
  *
@@ -60,13 +61,6 @@ export const DEFAULT_NEXT_UP_CONFIG: NextUpConfig = {
 // 档位。数字越小越硬，排序从它开始
 const TIER = { blocked: 1, agentFinished: 2, reviewStale: 3, clarifyStale: 4 } as const
 
-const AGENT_LABELS: Record<string, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  cursor: 'Cursor',
-  get chengxiaobang() { return tr("Chengxiaobang") },
-}
-
 const DAY_MS = 86_400_000
 
 interface Candidate {
@@ -122,7 +116,7 @@ function candidateOf(
     const { session } = signal
     const blocked = signal.tier === TIER.blocked
     const failed = session.status.state === SessionState.Failed
-    const label = AGENT_LABELS[session.agent] ?? session.agent
+    const label = agentLabel(session.agent)
     return {
       priority,
       since: sinceOf(req, session),

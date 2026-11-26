@@ -4,6 +4,7 @@ import { useLanguage } from '../lib/language'
 import { t as tr } from "../../../shared/i18n.ts"
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { api } from '../lib/api'
+import { canOpenWorkspace, workspaceOpenHint, workspaceOpenNotice } from '../../../shared/agents.ts'
 import { isComposing, isEditableTarget, shortcut } from '../lib/keys'
 import { AGENT_LABELS } from '../lib/labels'
 import { linkLabel, PIPELINE_ICON, PIPELINE_LABEL, showsPipeline } from '../lib/links'
@@ -355,15 +356,18 @@ function SessionRow({ session }: { session: Session }) {
   useLanguage()
   const agent = AGENT_LABELS[session.agent] ?? session.agent
   const title = sessionTitle(session)
-  const canFocusWorkspace = session.agent === 'cursor' && !!session.cwd
+  const canFocusWorkspace = canOpenWorkspace(session)
   const [opening, setOpening] = useState(false)
   const [focusError, setFocusError] = useState('')
+  const [focusNotice, setFocusNotice] = useState('')
   const openWorkspace = () => {
     if (!canFocusWorkspace || opening) return
     setOpening(true)
     setFocusError('')
+    setFocusNotice('')
     void api
       .openSessionWorkspace(session.agent, session.session)
+      .then(result => setFocusNotice(workspaceOpenNotice(result)))
       .catch((error: Error) => setFocusError(error.message || tr("Could not open")))
       .finally(() => setOpening(false))
   }
@@ -377,6 +381,7 @@ function SessionRow({ session }: { session: Session }) {
         {title}
       </span>
       {focusError && <span className="sess-error">{focusError}</span>}
+      {focusNotice && <span className="sess-error" role="status">{focusNotice}</span>}
       {(session.link || canFocusWorkspace) && <span className="sess-go">↗</span>}
     </>
   )
@@ -394,7 +399,7 @@ function SessionRow({ session }: { session: Session }) {
         }}
         title={
           canFocusWorkspace
-            ? tr("Open this session's workspace in Cursor (does not navigate to the session): {0}", [session.session])
+            ? workspaceOpenHint(session)
             : tr("No session link is available. Find it in {0}: {1}", [agent, session.session])
         }
       >

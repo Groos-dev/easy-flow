@@ -5,13 +5,8 @@ import { t as tr } from "../../../shared/i18n.ts"
  * 分开写两份迟早漂移（agent 名认不出来、状态色对不齐）。
  */
 
-// agent 显示名。取值与 CLI 的 --agent 一致，认不出来的原样显示
-export const AGENT_LABELS: Record<string, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  cursor: 'Cursor',
-  get chengxiaobang() { return tr("Chengxiaobang") },
-}
+// agent 显示名与服务端共用一份，见 shared/agents.ts
+export { AGENT_LABELS, agentLabel } from '../../../shared/agents.ts'
 
 // 状态圆点的配色，与看板列的语义对齐
 export const STATUS_CLASS: Record<string, string> = {
@@ -25,11 +20,6 @@ export const STATUS_CLASS: Record<string, string> = {
 export const NEXT_UP_LEVEL_LABEL: Record<string, string> = {
   get now() { return tr("Needs attention now") },
   get soon() { return tr("Review when convenient") },
-}
-
-// Resolve known agent names from IDs at display time; server labels may be cached in another language.
-export function agentLabel(id: string, fallback = id): string {
-  return Object.hasOwn(AGENT_LABELS, id) ? AGENT_LABELS[id] : fallback
 }
 
 export function openTargetLabel(target: { id: string; label: string }): string {

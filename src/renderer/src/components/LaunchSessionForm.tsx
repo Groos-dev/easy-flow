@@ -220,6 +220,17 @@ export default function LaunchSessionForm({
       {feedback?.opened && result?.agent === 'cursor' && (
         <p className="launch-hint">{tr("Workspace opened in Cursor. Click Create Chat in the dialog; the prompt is already filled in.")}</p>
       )}
+      {feedback?.opened && result?.agent === 'antigravity' && (
+        <>
+          <p className="launch-hint">
+            {feedback.promptCopied
+              ? tr("Antigravity is open. Choose a project containing {0}, then paste the prompt into a new conversation.", [result.worktreePath ?? ''])
+              : tr("Antigravity is open. Choose a project containing {0}, then copy the prompt below into a new conversation.", [result.worktreePath ?? ''])}
+          </p>
+          <div className="launch-actions"><CopyButton text={feedback.prompt} label={tr("Prompt")} showLabel /></div>
+          {!feedback.promptCopied && <pre className="launch-prompt">{feedback.prompt}</pre>}
+        </>
+      )}
 
       {/* 打开成功不说话：agent 应用已经弹出来了，那就是回执。
           只有没打开成时才铺兜底——原因、重试、提示词、手动登记都在这儿 */}

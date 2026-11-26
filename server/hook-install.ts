@@ -11,7 +11,8 @@ import { t as tr } from "../src/shared/i18n.ts"
  * 认「装没装」一律读文件，不看状态文件：用户手工改过要如实反映。
  * 改配置前留一份 `.bak`；文件不是合法 JSON / hooks 字段形状不认识就整个拒改，别把没读懂的配置覆盖掉。
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import type { InstallOutcome } from './skill-install.ts'
@@ -143,6 +144,39 @@ function cursorBlock(event: string, port: number): Record<string, unknown> {
   }
 }
 
+/**
+ * Antigravity 的事件。报文里事件名在老版本里缺席，所以每个事件一条命令，事件名放进 URL。
+ * PreToolUse returns allow to delegate to the next hook/default approval policy
+ * (not force_allow). Other observer events return an empty object; Stop never
+ * returns continue, which would restart the agent loop.
+ */
+const ANTIGRAVITY_EVENTS = [
+  'SessionStart',
+  'PreInvocation',
+  'PostInvocation',
+  'PreToolUse',
+  'PostToolUse',
+  'Stop',
+] as const
+// 只有工具类事件要 matcher + 嵌套 hooks[]；其余事件直接列 handler
+const ANTIGRAVITY_TOOL_EVENTS = new Set(['PreToolUse', 'PostToolUse'])
+// 在 ~/.gemini/config/hooks.json 里占的分组名；分组是 Antigravity 设置页里能单独开关的单位
+const ANTIGRAVITY_GROUP = 'easy-flow'
+
+function antigravityHandler(event: string, port: number): Record<string, unknown> {
+  const response = event === 'PreToolUse' ? '{"decision":"allow"}' : '{}'
+  return {
+    type: 'command',
+    timeout: 3,
+    command: `curl -s -m 1 -X POST -H 'content-type: application/json' --data-binary @- '${endpoint(port, AgentId.Antigravity)}&event=${event}' >/dev/null 2>&1; printf '${response}'`,
+  }
+}
+
+function antigravityBlock(event: string, port: number): Record<string, unknown> {
+  const handler = antigravityHandler(event, port)
+  return ANTIGRAVITY_TOOL_EVENTS.has(event) ? { matcher: '*', hooks: [handler] } : handler
+}
+
 interface HookSpec {
   id: HookAgentId
   label: string
@@ -154,6 +188,8 @@ interface HookSpec {
   flat?: boolean
   // Cursor 的 hooks.json 需要 version: 1；文件已有就保留
   version?: number
+  // Antigravity 按顶层分组名组织：{ "<分组>": { enabled, <事件>: [...] } }，整个分组归我们
+  group?: string
 }
 
 function specs(home: string): HookSpec[] {
@@ -192,6 +228,15 @@ function specs(home: string): HookSpec[] {
       endpoint: (port) => endpoint(port, AgentId.Chengxiaobang),
       flat: true,
     },
+    {
+      id: AgentId.Antigravity,
+      label: 'Antigravity',
+      file: join(home, '.gemini', 'config', 'hooks.json'),
+      events: ANTIGRAVITY_EVENTS,
+      block: antigravityBlock,
+      endpoint: (port) => endpoint(port, AgentId.Antigravity),
+      group: ANTIGRAVITY_GROUP,
+    },
   ]
 }
 
@@ -221,8 +266,9 @@ function load(file: string): Loaded {
   let raw: string
   try {
     raw = readFileSync(file, 'utf8')
-  } catch {
-    return { kind: 'missing' }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'missing' }
+    return { kind: 'error', message: (error as Error).message }
   }
   let parsed: unknown
   try {
@@ -294,6 +340,112 @@ function applyFlat(
   return true
 }
 
+// 分组里任一事件挂着带 /api/hook 端点的命令，就认它是我们写的
+function isOurGroup(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const group = value as Record<string, unknown>
+  return ANTIGRAVITY_EVENTS.some(event => Array.isArray(group[event]) && (group[event] as unknown[]).some(isOurAntigravityBlock))
+}
+
+function isOurAntigravityBlock(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const entry = value as Record<string, unknown>
+  if (typeof entry.command === 'string') {
+    return [...entry.command.matchAll(/https?:\/\/[^\s'"]+/g)].some(([target]) => {
+      try {
+        const url = new URL(target)
+        return url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname)
+          && url.pathname === MARKER && url.searchParams.get('agent') === AgentId.Antigravity
+      } catch {
+        return false
+      }
+    })
+  }
+  return Array.isArray(entry.hooks) && entry.hooks.some(isOurAntigravityBlock)
+}
+
+// Only namespace provenance is retained here, never installed status. The hash
+// must match the preserved user residue, so a genuinely foreign collision is
+// still rejected. No unsupported metadata is added to Antigravity's schema.
+function groupOwnerFile(spec: HookSpec): string {
+  return `${spec.file}.easy-flow-owner.json`
+}
+
+function groupHash(group: unknown): string {
+  return createHash('sha256').update(JSON.stringify(group)).digest('hex')
+}
+
+function ownedResidue(spec: HookSpec, group: unknown): boolean {
+  try {
+    const proof = JSON.parse(readFileSync(groupOwnerFile(spec), 'utf8'))
+    return proof.file === spec.file && proof.group === spec.group && proof.hash === groupHash(group)
+  } catch {
+    return false
+  }
+}
+
+function preserveGroupOwner(spec: HookSpec, obj: Record<string, unknown>): void {
+  if (!spec.group) return
+  const group = obj[spec.group]
+  if (group === undefined) rmSync(groupOwnerFile(spec), { force: true })
+  else writeFileSync(groupOwnerFile(spec), JSON.stringify({ file: spec.file, group: spec.group, hash: groupHash(group) }) + '\n', 'utf8')
+}
+
+/**
+ * Preserve user-added metadata and commands even inside our named group. Only
+ * remove owned handlers; a matcher block may contain both owned and user hooks.
+ */
+function applyGroup(
+  obj: Record<string, unknown>,
+  spec: HookSpec & { group: string },
+  port: number,
+  mode: 'install' | 'uninstall',
+): boolean {
+  const current = obj[spec.group]
+  if (current !== undefined && !isOurGroup(current) && !ownedResidue(spec, current)) {
+    if (mode === 'uninstall') return false
+    throw new Error(tr("{0} already has a {1} entry that easy-flow did not write; no changes made", [spec.file, spec.group]))
+  }
+  if (current === undefined && mode === 'uninstall') return false
+  const next: Record<string, unknown> = current ? { ...(current as Record<string, unknown>) } : { enabled: true }
+  if (next.enabled !== undefined && typeof next.enabled !== 'boolean') {
+    throw new Error(tr("{0} has a non-boolean enabled field; no changes made", [spec.file]))
+  }
+  for (const event of spec.events) {
+    const value = next[event]
+    if (value === undefined) continue
+    if (!Array.isArray(value)) throw new Error(tr("{0} has a non-array hooks field; no changes made", [spec.file]))
+    const kept = value.flatMap((entry: unknown) => {
+      if (!entry || typeof entry !== 'object') return [entry]
+      const block = entry as Record<string, unknown>
+      if (typeof block.command === 'string' && isOurAntigravityBlock(block)) return []
+      if (!Array.isArray(block.hooks)) return [entry]
+      const hooks = block.hooks.filter((hook: unknown) => !isOurAntigravityBlock(hook))
+      return hooks.length === block.hooks.length ? [entry] : hooks.length ? [{ ...block, hooks }] : []
+    })
+    if (kept.length) next[event] = kept
+    else delete next[event]
+  }
+  if (mode === 'install') {
+    for (const event of spec.events) {
+      const kept = Array.isArray(next[event]) ? next[event] as unknown[] : []
+      next[event] = [...kept, spec.block(event, port)]
+    }
+  } else if (Object.keys(next).every(key => key === 'enabled')) {
+    delete obj[spec.group]
+    return true
+  }
+  obj[spec.group] = next
+  return JSON.stringify(current) !== JSON.stringify(next)
+}
+
+function countGroup(obj: Record<string, unknown>, group: string): number {
+  const value = obj[group]
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return 0
+  const entries = value as Record<string, unknown>
+  return ANTIGRAVITY_EVENTS.filter(event => Array.isArray(entries[event]) && (entries[event] as unknown[]).some(isOurAntigravityBlock)).length
+}
+
 /**
  * 就地改一份配置：先把任意事件下的自己那条全摘掉，装的时候再往目标事件追加。
  * 「先摘后加」一次覆盖两种情形——换端口要更新、重复点装不能出现第二条。
@@ -305,6 +457,7 @@ function apply(
   port: number,
   mode: 'install' | 'uninstall',
 ): boolean {
+  if (spec.group) return applyGroup(obj, { ...spec, group: spec.group }, port, mode)
   if (spec.flat) return applyFlat(obj, spec, port, mode)
   const table = tableOf(obj)
   let changed = false
@@ -336,6 +489,7 @@ function apply(
 }
 
 function countOurs(obj: Record<string, unknown>, spec: HookSpec): number {
+  if (spec.group) return countGroup(obj, spec.group)
   if (spec.flat) {
     const list = obj.hooks
     return Array.isArray(list) ? list.filter(isOurFlat).length : 0
@@ -362,6 +516,12 @@ export function hookPlan({ port, home = homedir() }: { port: number; home?: stri
       if (loaded.kind === 'missing') return { ...base, installed: false, events: 0, problem: '' }
       if (loaded.kind === 'error') return { ...base, installed: false, events: 0, problem: loaded.message }
       const events = countOurs(loaded.obj, spec)
+      if (spec.group && events > 0) {
+        const group = loaded.obj[spec.group] as Record<string, unknown>
+        const problem = group.enabled === false ? tr("Antigravity hooks are configured but the easy-flow group is disabled.")
+          : events !== spec.events.length ? tr("Antigravity hooks are incomplete: {0}/{1} events are configured.", [events, spec.events.length]) : ''
+        return { ...base, installed: !problem, events, problem }
+      }
       return { ...base, installed: events > 0, events, problem: '' }
     }),
   }
@@ -376,7 +536,7 @@ export function installHooks({ port, home = homedir() }: { port: number; home?: 
     if (loaded.kind === 'error') throw new Error(tr("Could not safely update {0}: {1}", [spec.file, loaded.message]))
     const obj = loaded.kind === 'ok' ? clone(loaded.obj) : {}
     const trailingNewline = loaded.kind === 'ok' ? loaded.trailingNewline : true
-    if (!spec.flat && obj.hooks !== undefined && !(typeof obj.hooks === 'object' && obj.hooks && !Array.isArray(obj.hooks))) {
+    if (!spec.flat && !spec.group && obj.hooks !== undefined && !(typeof obj.hooks === 'object' && obj.hooks && !Array.isArray(obj.hooks))) {
       throw new Error(tr("{0} has a non-object hooks field; no changes made", [spec.file]))
     }
     const before = loaded.kind === 'ok' ? render(loaded.obj, trailingNewline) : null
@@ -419,6 +579,7 @@ export function uninstallHooks({ home = homedir() }: { home?: string } = {}): In
 
     backup(spec.file)
     writeFileSync(spec.file, render(obj, loaded.trailingNewline), 'utf8')
+    preserveGroupOwner(spec, obj)
     removed = true
   }
   return { summary: removed ? tr("Uninstalled") : tr("Nothing to uninstall"), failed: [] }

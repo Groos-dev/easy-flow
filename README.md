@@ -85,7 +85,7 @@ templates follow the selected language; existing documents are preserved.
   需求没 id 时它为空，层级仍能从 slug 看出来
 - **状态**（看板列、优先级、链接、会话）只存在 `easy-flow.db` 里，永远不写进 md：
   agent 重写需求文档不会把状态弄丢，代价是换数据目录等于换状态
-- **会话**是 agent 登记在需求上的自己的会话（claude code / codex / cursor）：agent 开工时
+- **会话**是 agent 登记在需求上的自己的会话（claude code / codex / cursor / 程小帮 / antigravity）：agent 开工时
   `easy-flow req session add` 一条命令登记，详情页的「会话」块点一下即在 desktop 应用里打开。
   与状态同理只归库——会话会变、会过期，写进 md 只会被下次重写冲掉
 - **会话的实时状态**（正在跑 / 已完成待看 / 需要人介入 / 失败）不在库里，是每次读看板时从 agent

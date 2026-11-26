@@ -141,10 +141,10 @@ describe('hook 一键配置：只增不改', () => {
     rmSync(home, { recursive: true, force: true })
   })
 
-  test('未配置时四个 agent 都报未安装，地址带端口', () => {
+  test('未配置时五个 agent 都报未安装，地址带端口', () => {
     const plan = hookPlan({ port: 3210, home })
     assert.equal(plan.port, 3210)
-    assert.equal(plan.agents.length, 4)
+    assert.equal(plan.agents.length, 5)
     for (const a of plan.agents) {
       assert.equal(a.installed, false)
       assert.equal(a.events, 0)
@@ -389,7 +389,7 @@ describe('/api/hooks 路由', () => {
   test('GET 反映真文件，POST 装 / 卸走同一条路径', async () => {
     const empty = (await (await fetch(`${base}/api/hooks`)).json()) as any
     assert.equal(empty.port, 4321)
-    assert.equal(empty.agents.length, 4)
+    assert.equal(empty.agents.length, 5)
     assert.ok(empty.agents.every((a: any) => a.installed === false))
 
     const installed = (await (await post('/api/hooks/install')).json()) as any
@@ -398,7 +398,7 @@ describe('/api/hooks 路由', () => {
     assert.deepEqual(installed.failed, [])
     assert.deepEqual(
       installed.agents.map((a: any) => a.installed),
-      [true, true, true, true],
+      [true, true, true, true, true],
     )
     assert.match(installed.agents[0].url, /:4321\/api\/hook/)
 

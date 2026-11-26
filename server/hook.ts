@@ -1,5 +1,6 @@
 import { messageDetail } from '../src/shared/i18n.ts'
-import { SessionState } from '../src/shared/domain.ts'
+import { AgentId, SessionState } from '../src/shared/domain.ts'
+import { antigravityNeedsInput, antigravityToolCall } from './antigravity.ts'
 /**
  * agent 的 hook 事件 → 会话状态（**推送源**）。
  *
@@ -43,6 +44,13 @@ export interface HookPayload {
   status?: unknown
   reason?: unknown
   error_message?: unknown
+  // Antigravity 的字段是 camelCase：会话 id、事件名、工具调用、出错原因与 Stop 的终止原因
+  conversationId?: unknown
+  hookEventName?: unknown
+  toolCall?: unknown
+  error?: unknown
+  terminationReason?: unknown
+  fullyIdle?: unknown
   [key: string]: unknown
 }
 
@@ -75,12 +83,17 @@ export function normalizeHookEvent(payload: HookPayload, observedAt = Date.now()
       // 收到人话 / 工具跑完：模型在想下一步
       return of(SessionState.Thinking)
     case 'PreToolUse':
+    case 'BackgroundWork':
       // 要调工具了：这是「干活」
       return of(SessionState.Working)
     case 'PreCompact':
       return of(SessionState.Compacting)
     case 'PostCompact':
       // 压上下文：活儿还在跑，只是不在调工具
+      return of(SessionState.Thinking)
+    case 'PreInvocation':
+    case 'PostInvocation':
+      // Antigravity：每次调模型前后。还在这一轮里，模型在想
       return of(SessionState.Thinking)
     case 'PostToolUseFailure':
       // 工具报错：短暂出错。下一个事件（思考 / 干活 / 收尾）一到就翻过去
@@ -90,7 +103,7 @@ export function normalizeHookEvent(payload: HookPayload, observedAt = Date.now()
       return of(SessionState.Blocked)
     case 'PermissionRequest':
       // 卡住等人授权。事件里没有那句要人回答的话，原文留空
-      return of(SessionState.Blocked)
+      return { ...of(SessionState.Blocked), needsAction: str(payload.needsAction) }
     case 'Stop':
       return of(SessionState.Done)
     case 'StopFailure':
@@ -123,6 +136,38 @@ export function hookActionOf(payload: HookPayload, observedAt = Date.now()): Ses
   return actionOf(str(payload.tool_name), payload.tool_input, observedAt)
 }
 
+/**
+ * Antigravity 的报文 → 管道认的形状。
+ *
+ * 事件名在 hookEventName（老版本不带，由安装的命令放进 URL，见 index.ts）；会话 id 是 conversationId；
+ * 工具在 toolCall{name, args}，归一成 action.ts 认的工具名与参数。出错与终止原因折成已有事件：
+ * PostToolUse 带 error → PostToolUseFailure；Stop 带 error / ERROR → StopFailure，
+ * USER_CANCELED 与撞上限（MAX_*）→ Interrupt（停下等人接手）。
+ */
+export function normalizeAntigravityPayload(payload: HookPayload): HookPayload {
+  const event = str(payload.hook_event_name) || str(payload.hookEventName)
+  const call = payload.toolCall && typeof payload.toolCall === 'object' ? (payload.toolCall as Record<string, unknown>) : null
+  const tool = call ? antigravityToolCall(str(call.name), call.args) : null
+  const reason = str(payload.terminationReason).toUpperCase()
+  let name = event
+  const question = event === 'PreToolUse' && call ? antigravityNeedsInput(str(call.name), call.args) : null
+  if (question !== null) name = 'PermissionRequest'
+  if (event === 'PostToolUse' && str(payload.error)) name = 'PostToolUseFailure'
+  if (event === 'Stop') {
+    if (str(payload.error) || reason === 'ERROR') name = 'StopFailure'
+    else if (reason === 'USER_CANCELED' || reason === 'USER_CANCELLED' || reason.startsWith('MAX_')) name = 'Interrupt'
+    else if (payload.fullyIdle === false) name = 'BackgroundWork'
+  }
+  return {
+    ...payload,
+    hook_event_name: name,
+    // 登记的 id 是 ANTIGRAVITY_CONVERSATION_ID，也就是 conversationId；老报文里的 session_id 只作兜底
+    session_id: str(payload.conversationId) || str(payload.session_id),
+    ...(question !== null ? { needsAction: question } : {}),
+    ...(tool ? { tool_name: tool.tool, tool_input: tool.input } : {}),
+  }
+}
+
 export interface RecordOptions {
   // 来源 agent。claude 的原生 http hook 带不了额外字段，所以缺省就是 claude
   agent?: string
@@ -136,10 +181,11 @@ export interface RecordOptions {
  * 读侧与点击都靠 cliSessionId 翻到同一个格子上（见 threads.ts 的 hookKeyOf）。
  */
 export function recordHook(
-  payload: HookPayload,
+  raw: HookPayload,
   { agent = 'claude', at = Date.now() }: RecordOptions = {},
   store: SessionStateStore,
 ): SessionStatus | null {
+  const payload = agent === AgentId.Antigravity ? normalizeAntigravityPayload(raw) : raw
   const session = str(payload.session_id) || str(payload.conversation_id)
   const event = str(payload.hook_event_name)
   if (!session || !event) return null

@@ -37,6 +37,7 @@ import { codexUnread } from './codex-unread.ts'
 import { codexTitles } from './codex-titles.ts'
 import { chengxiaobangObservations, chengxiaobangTitles } from './chengxiaobang.ts'
 import { cursorObservations, cursorTitles } from './cursor.ts'
+import { antigravityMissing, antigravityObservations, antigravityTitles } from './antigravity.ts'
 import { changed, type SourceTable } from './source-file.ts'
 import { createLogger } from './log.ts'
 
@@ -57,6 +58,8 @@ export interface ThreadRoots {
   chengxiaobangHome: string
   // ~/.cursor
   cursorHome: string
+  // ~/.gemini（Antigravity 的 app_data_dir 都在它下面）；缺省取本机
+  antigravityHome?: string
 }
 
 export function defaultRoots(): ThreadRoots {
@@ -67,6 +70,7 @@ export function defaultRoots(): ThreadRoots {
     codexHome: join(home, '.codex'),
     chengxiaobangHome: join(home, '.chengxiaobang'),
     cursorHome: join(home, '.cursor'),
+    antigravityHome: join(home, '.gemini'),
   }
 }
 
@@ -106,6 +110,15 @@ export function pullStatuses(
         action: null,
       }
       putSettled(states, 'cursor', s.session, observation, false)
+    }
+  }
+
+  // Antigravity：hook 推送 + transcript 里的最后一步；读不到就退回 unknown，交给活跃超时兜底
+  const antigravity = sessions.filter((s) => s.agent === 'antigravity')
+  if (antigravity.length) {
+    const found = antigravityObservations(antigravityHomeOf(roots), antigravity.map((s) => s.session))
+    for (const s of antigravity) {
+      putSettled(states, 'antigravity', s.session, found.get(s.session) ?? antigravityMissing(), false)
     }
   }
 
@@ -190,6 +203,19 @@ export function pullTitles(
       if (title) titles.setSessionTitle('cursor', s.session, title)
     }
   }
+
+  const antigravity = sessions.filter((s) => s.agent === 'antigravity')
+  if (antigravity.length) {
+    const found = antigravityTitles(antigravityHomeOf(roots), antigravity.map((s) => s.session))
+    for (const s of antigravity) {
+      const title = found.get(s.session)
+      if (title) titles.setSessionTitle('antigravity', s.session, title)
+    }
+  }
+}
+
+function antigravityHomeOf(roots: ThreadRoots): string {
+  return roots.antigravityHome ?? join(homedir(), '.gemini')
 }
 
 /**
