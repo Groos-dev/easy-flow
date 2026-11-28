@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { AgentId, SESSION_STATES } from '../src/shared/domain.ts'
-import { agentLabel, workspaceOpenArgs, workspaceOpenHint } from '../src/shared/agents.ts'
+import { agentLabel, workspaceOpenArgs, workspaceOpenHint, workspaceOpenNotice } from '../src/shared/agents.ts'
 import { Language, setLanguage } from '../src/shared/i18n.ts'
 import { petArt, type IdleMood } from '../src/renderer/src/lib/pet-art.ts'
 import type { Pose } from '../src/renderer/src/lib/pets.ts'
@@ -45,14 +45,14 @@ test('The App handoff does not falsely claim automatic workspace selection', () 
   assert.deepEqual(workspaceOpenArgs('antigravity', '/repo/a b'), ['-a', 'Antigravity'])
   assert.deepEqual(workspaceOpenArgs('cursor', '/repo/a b'), ['-a', 'Cursor', '/repo/a b'])
   assert.deepEqual(workspaceOpenArgs('unknown', '/repo'), [])
-  assert.match(workspaceOpenHint({ agent: 'antigravity', session: 'conversation', cwd: '/repo/a b' }), /\/repo\/a b/)
+  assert.match(workspaceOpenHint({ agent: 'antigravity', session: 'conversation', cwd: '/repo/a b' }), /conversation/)
   const prompt = launchPrompt({ agent: 'antigravity', requirementId: 'req-x', worktreeId: 'wt-x', worktreePath: '/repo/a b', requirementWorktreePaths: ['/repo/a b'] })
   assert.match(prompt, /\/repo\/a b/)
   assert.match(prompt, /ANTIGRAVITY_CONVERSATION_ID/)
   assert.match(prompt, /--agent antigravity/)
 })
 
-test('A successful app focus keeps the prompt available when clipboard copying fails', () => {
+test('Prefill feedback asks the user to review and send in each language', () => {
   for (const lang of [Language.English, Language.Chinese]) {
     setLanguage(lang)
     const markup = renderToStaticMarkup(createElement(LaunchSessionForm, {
@@ -61,9 +61,15 @@ test('A successful app focus keeps the prompt available when clipboard copying f
       result: { agent: 'antigravity', url: '', opened: true, promptCopied: false, prompt: 'Recoverable handoff prompt', worktreePath: '/repo/a b' },
       onWorktreeChange: () => {}, onAgentChange: () => {}, onLaunch: () => {},
     }))
-    assert.match(markup, /Recoverable handoff prompt/)
     assert.match(markup, /\/repo\/a b/)
-    assert.match(markup, /<pre/)
+    assert.match(markup, lang === Language.English ? /check that the selected Antigravity project/ : /确认 Antigravity 当前项目的目录/)
+    assert.match(markup, lang === Language.English ? /View the full prompt/ : /看提示词原文/)
+    for (const navigation of ['debugUnavailable', 'notOpened'] as const) {
+      const notice = workspaceOpenNotice({ navigation, manualWorkspaceSelection: true, path: '/missing', workspaceExists: false })
+      assert.match(notice, /\/missing/)
+      assert.match(notice, lang === Language.English ? /unavailable/ : /不可用/)
+    }
+    assert.match(markup, lang === Language.English ? /Review the prefilled prompt/ : /确认预填的提示词/)
   }
   setLanguage(Language.Chinese)
 })

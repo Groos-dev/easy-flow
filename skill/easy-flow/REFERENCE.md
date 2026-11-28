@@ -203,7 +203,7 @@ If `--id` is omitted, the command reads the current agent's environment:
 | `codex` | `CODEX_THREAD_ID` | `codex://threads/<id>` |
 | `cursor` | `CURSOR_CONVERSATION_ID` | No session-level deep link |
 | `chengxiaobang` | `CHENGXIAOBANG_SESSION_ID` | `chengxiaobang://session/<id>` |
-| `antigravity` | `ANTIGRAVITY_CONVERSATION_ID` | No verified session-level deep link; focus the App and find the conversation/project manually. A missing workspace does not prevent App focus. |
+| `antigravity` | `ANTIGRAVITY_CONVERSATION_ID` | New conversations prefill the prompt and select the registered worktree via a matching single-folder Antigravity project. The first launch creates a folder-only project when needed. Requirements without a worktree omit the project parameter. A Pet opens its registered conversation in the local macOS App over CDP. To enable this for a run, quit Antigravity and start it with `open -a Antigravity --args --remote-debugging-address=127.0.0.1 --remote-debugging-port=19242`. Without CDP the App opens for manual selection. |
 
 Missing environment IDs cause an error; check the agent or pass the actual ID.
 Do not invent one. Example:

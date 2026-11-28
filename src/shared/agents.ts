@@ -46,13 +46,16 @@ export function workspaceOpenArgs(agent: string, path: string): string[] {
 
 export function workspaceOpenHint(session: { agent: string; cwd: string; session: string }): string {
   return session.agent === AgentId.Antigravity
-    ? session.cwd
-      ? tr("Open Antigravity to find the conversation manually; original workspace: {0}.", [session.cwd])
-      : tr("Open Antigravity and find this conversation manually.")
+    ? tr("Open conversation {0} in Antigravity.", [session.session])
     : tr("Open this session's workspace in {0} (does not navigate to the session): {1}", [workspaceAppOf(session.agent), session.session])
 }
 
-export function workspaceOpenNotice(result: { manualWorkspaceSelection?: boolean; workspaceExists?: boolean }): string {
-  return result.manualWorkspaceSelection && result.workspaceExists === false
-    ? tr("Antigravity is open. The original workspace is unavailable; find the conversation manually in the App.") : ''
+export function workspaceOpenNotice(result: { path?: string; navigation?: 'opened' | 'debugUnavailable' | 'notOpened'; manualWorkspaceSelection?: boolean; workspaceExists?: boolean }): string {
+  if (!result.manualWorkspaceSelection) return ''
+  const manual = result.workspaceExists === false && result.path
+    ? tr("The original workspace {0} is unavailable. Find the conversation manually in Antigravity.", [result.path])
+    : result.path ? tr("Open Antigravity to find the conversation manually; original workspace: {0}.", [result.path])
+      : tr("Antigravity is open. Select the conversation manually.")
+  if (result.navigation !== 'debugUnavailable') return manual
+  return manual + ' ' + tr("To jump to the conversation, quit Antigravity and launch it with {0}.", ['open -a Antigravity --args --remote-debugging-address=127.0.0.1 --remote-debugging-port=19242'])
 }

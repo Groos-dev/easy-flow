@@ -113,7 +113,7 @@ export const api = {
     request('/api/sessions/clicked', { method: 'POST', body: JSON.stringify({ agent, session }) }),
 
   // Cursor 没有会话级 deeplink：只把会话所在工作区窗口带到前台
-  openSessionWorkspace: (agent: string, session: string): Promise<{ ok: boolean; path: string; manualWorkspaceSelection?: boolean; workspaceExists?: boolean }> =>
+  openSessionWorkspace: (agent: string, session: string): Promise<{ ok: boolean; path: string; navigation?: 'opened' | 'debugUnavailable' | 'notOpened'; manualWorkspaceSelection?: boolean; workspaceExists?: boolean }> =>
     request('/api/sessions/open-workspace', { method: 'POST', body: JSON.stringify({ agent, session }) }),
 
   /**

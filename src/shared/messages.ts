@@ -1,5 +1,49 @@
 /* Complete bilingual message catalog. Keep interpolation placeholders identical. */
 export const messages = {
+  "Invalid workspace folder: {0}": {
+    "en": "Invalid workspace folder: {0}",
+    "zh": "工作区目录无效：{0}"
+  },
+  "Multiple Antigravity projects use {0}. Select the intended project in Antigravity.": {
+    "en": "Multiple Antigravity projects use {0}. Select the intended project in Antigravity.",
+    "zh": "有多个 Antigravity 项目使用 {0}，请在 Antigravity 中选择对应项目。"
+  },
+  "Antigravity project no longer matches {0}.": {
+    "en": "Antigravity project no longer matches {0}.",
+    "zh": "Antigravity 项目与所选目录 {0} 不一致。"
+  },
+  "Before sending, check that the selected Antigravity project uses {0}.": {
+    "en": "Before sending, check that the selected Antigravity project uses {0}.",
+    "zh": "发送前，确认 Antigravity 当前项目的目录为 {0}。"
+  },
+  "The original workspace {0} is unavailable. Find the conversation manually in Antigravity.": {
+    "en": "The original workspace {0} is unavailable. Find the conversation manually in Antigravity.",
+    "zh": "原工作区 {0} 已不可用，请在 Antigravity 中手动查找会话。"
+  },
+  "Antigravity is open for manual prompt entry.": {
+    "en": "Antigravity is open for manual prompt entry.",
+    "zh": "已打开 Antigravity，可手动填写提示词。"
+  },
+  "Before sending, choose the Antigravity project containing {0}.": {
+    "en": "Before sending, choose the Antigravity project containing {0}.",
+    "zh": "发送前，请在 Antigravity 中选择包含 {0} 的项目。"
+  },
+  "Antigravity is open. Select the conversation manually.": {
+    "en": "Antigravity is open. Select the conversation manually.",
+    "zh": "已打开 Antigravity，请手动选择对应会话。"
+  },
+  "To jump to the conversation, quit Antigravity and launch it with {0}.": {
+    "en": "To jump to the conversation, quit Antigravity and launch it with {0}.",
+    "zh": "要跳到指定会话，请先退出 Antigravity，再运行 {0} 启动。"
+  },
+  "Review the prefilled prompt in Antigravity and send it when ready.": {
+    "en": "Review the prefilled prompt in Antigravity and send it when ready.",
+    "zh": "在 Antigravity 中确认预填的提示词，然后发送。"
+  },
+  "Open conversation {0} in Antigravity.": {
+    "en": "Open conversation {0} in Antigravity.",
+    "zh": "在 Antigravity 中打开会话 {0}。"
+  },
   "{0} sessions need attention": {
     "en": "{0} sessions need attention",
     "zh": "{0} 个会话需要处理"
@@ -3384,14 +3428,6 @@ export const messages = {
     "en": "Open Antigravity to find the conversation manually; original workspace: {0}.",
     "zh": "打开 Antigravity 后手动查找对应对话；原工作区：{0}。"
   },
-  "Open Antigravity and find this conversation manually.": {
-    "en": "Open Antigravity and find this conversation manually.",
-    "zh": "打开 Antigravity 后手动查找对应对话。"
-  },
-  "Antigravity is open. The original workspace is unavailable; find the conversation manually in the App.": {
-    "en": "Antigravity is open. The original workspace is unavailable; find the conversation manually in the App.",
-    "zh": "已打开 Antigravity。原工作区已不可用，请在 App 中手动查找对应对话。"
-  },
   "This agent has no session deep link. {0}": {
     "en": "This agent has no session deep link. {0}",
     "zh": "这个 agent 没有会话级 deeplink。{0}"
@@ -3408,21 +3444,13 @@ export const messages = {
     "en": "Open Antigravity and select a project containing {0}; this does not navigate to the conversation.",
     "zh": "打开 Antigravity 后选择包含 {0} 的项目；这不会自动跳到对应对话。"
   },
-  "In Antigravity, choose a project containing {0}, then run commands from that directory.": {
-    "en": "In Antigravity, choose a project containing {0}, then run commands from that directory.",
-    "zh": "在 Antigravity 中选择包含 {0} 的项目，再从该目录执行命令。"
+  "Work in the selected Antigravity folder: {0}.": {
+    "en": "Work in the selected Antigravity folder: {0}.",
+    "zh": "在选定的 Antigravity 工作目录 {0} 中执行任务。"
   },
   "Use ANTIGRAVITY_CONVERSATION_ID to register this conversation when available; otherwise pass its exact ID with --id. Do not guess another conversation's ID.": {
     "en": "Use ANTIGRAVITY_CONVERSATION_ID to register this conversation when available; otherwise pass its exact ID with --id. Do not guess another conversation's ID.",
     "zh": "可用时使用 ANTIGRAVITY_CONVERSATION_ID 登记当前对话，否则通过 --id 传入准确的会话 ID。不要猜测或使用其他对话的 ID。"
-  },
-  "Antigravity is open. Choose a project containing {0}, then paste the prompt into a new conversation.": {
-    "en": "Antigravity is open. Choose a project containing {0}, then paste the prompt into a new conversation.",
-    "zh": "已打开 Antigravity。请选择包含 {0} 的项目，再新建对话并粘贴剪贴板中的提示词。"
-  },
-  "Antigravity is open. Choose a project containing {0}, then copy the prompt below into a new conversation.": {
-    "en": "Antigravity is open. Choose a project containing {0}, then copy the prompt below into a new conversation.",
-    "zh": "已打开 Antigravity。请选择包含 {0} 的项目，再复制下方提示词并粘贴到新对话。"
   },
   "No Antigravity transcript for this session": {
     "en": "No Antigravity transcript for this session",

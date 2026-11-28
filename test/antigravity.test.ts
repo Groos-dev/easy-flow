@@ -16,7 +16,7 @@ import { recordHook } from '../server/hook.ts'
 import { SessionStateStore, type SessionObservation } from '../server/session-state.ts'
 import { antigravityObservations, antigravityTitles, antigravityToolCall, observationOfSteps } from '../server/antigravity.ts'
 import { hookPlan, installHooks, uninstallHooks } from '../server/hook-install.ts'
-import { antigravityOpenArgs, antigravityProvider } from '../server/launch-antigravity.ts'
+import { antigravityProvider } from '../server/launch-antigravity.ts'
 import { agentLabel, canOpenWorkspace, workspaceAppOf } from '../src/shared/agents.ts'
 
 const TMP = join(tmpdir(), `easy-flow-antigravity-${process.pid}`)
@@ -212,19 +212,14 @@ describe('Antigravity hooks.json', () => {
 })
 
 describe('Antigravity 启动与展示', () => {
-  test('provider: keep the workspace in the handoff, copy the prompt and focus the App', async () => {
-    assert.equal(antigravityProvider.id, 'antigravity')
-    assert.equal(antigravityProvider.requiresWorktree, true)
-    assert.equal(antigravityProvider.copyPromptBeforeOpen, true)
-    assert.equal(typeof antigravityProvider.open, 'function')
-    assert.equal(await antigravityProvider.build({
-      agent: 'antigravity',
-      requirementId: 'req-demo',
-      worktreeId: 'wt-demo',
-      worktreePath: '/Users/groos/repo/demo.feature-x',
-      requirementWorktreePaths: ['/Users/groos/repo/demo.feature-x'],
-    }, 'prompt'), '')
-    assert.deepEqual(antigravityOpenArgs('/Users/groos/repo/demo.feature-x'), ['-a', 'Antigravity'])
+  test('provider round-trips a multiline prompt through the native open link', async () => {
+    const prompt = '确认 & review #1?\n+100% / "workspace"'
+    const url = new URL(await antigravityProvider.build({
+      agent: 'antigravity', requirementId: 'req-demo', worktreeId: '', worktreePath: '', requirementWorktreePaths: [],
+    }, prompt))
+    assert.equal(url.protocol, 'antigravity:')
+    assert.equal(url.host, 'open')
+    assert.deepEqual([...url.searchParams], [['prompt', prompt]])
   })
 
   test('显示名与打开工作区', () => {

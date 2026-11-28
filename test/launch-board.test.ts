@@ -10,6 +10,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { fileURLToPath } from 'node:url'
 import { createServer as createViteServer } from 'vite'
+import { antigravityLaunchUrl, antigravityProvider } from '../server/launch-antigravity.ts'
 import { createBoardApp } from '../server/index.ts'
 import { launchPrompt, launchProviders, registerLaunchProvider, type LaunchInput } from '../server/launch.ts'
 import { launchResultFeedback, launchWorktreeSelection } from '../src/renderer/src/lib/launch.ts'
@@ -86,7 +87,7 @@ describe('需求详情页启动会话', () => {
     const bin = join(testRoot, 'bin')
     mkdirSync(bin)
     const openShim = join(bin, 'open')
-    writeFileSync(openShim, '#!/bin/sh\nif [ "$EASY_FLOW_TEST_OPEN_FAIL" = "1" ]; then echo "handler unavailable" >&2; exit 42; fi\nexit 0\n')
+    writeFileSync(openShim, '#!/bin/sh\nif [ "$EASY_FLOW_TEST_OPEN_FAIL" = "1" ] && [ "$1" != "-a" ]; then echo "handler unavailable" >&2; exit 42; fi\nexit 0\n')
     chmodSync(openShim, 0o755)
     const copyShim = join(bin, 'pbcopy')
     writeFileSync(copyShim, '#!/bin/sh\nif [ "$EASY_FLOW_TEST_COPY_FAIL" = "1" ]; then exit 1; fi\n/bin/cat >/dev/null\n')
@@ -96,6 +97,10 @@ describe('需求详情页启动会话', () => {
     previousCopyFail = process.env.EASY_FLOW_TEST_COPY_FAIL
     process.env.PATH = `${bin}:${previousPath ?? ''}`
 
+    registerLaunchProvider({
+      ...antigravityProvider,
+      build: (input, prompt) => antigravityLaunchUrl(prompt, input.worktreePath, join(testRoot, 'antigravity-projects')),
+    })
     registerLaunchProvider({
       id: 'codex',
       label: '测试 Codex',
@@ -142,22 +147,27 @@ describe('需求详情页启动会话', () => {
       body: JSON.stringify(body),
     })).json() as Promise<any>
 
-  test('Antigravity launch includes the requested workspace and recovers from clipboard failure', async () => {
+  test('Antigravity prefill works with or without a workspace and keeps a failed handoff recoverable', async () => {
     const body = { project: 'demo', slug: 'alpha', agent: 'antigravity', worktreeId: 'wt-alpha' }
-    delete process.env.EASY_FLOW_TEST_COPY_FAIL
     const opened = await post('/api/launch', body)
     assert.equal(opened.opened, true)
-    assert.equal(opened.promptCopied, true)
-    assert.equal(opened.worktreePath, worktreePath)
+    assert.ok(new URL(opened.url).searchParams.get('project'))
+    assert.equal(opened.promptCopied, false)
+    assert.equal(new URL(opened.url).searchParams.get('prompt'), opened.prompt)
     assert.ok(opened.prompt.includes(worktreePath))
-    process.env.EASY_FLOW_TEST_COPY_FAIL = '1'
+    const noWorkspace = await post('/api/launch', { ...body, slug: 'gamma', worktreeId: '' })
+    assert.equal(noWorkspace.opened, true)
+    assert.equal(new URL(noWorkspace.url).searchParams.has('project'), false)
+    assert.match(noWorkspace.prompt, /req-gamma/)
+    process.env.EASY_FLOW_TEST_OPEN_FAIL = '1'
     try {
-      const recovered = await post('/api/launch', body)
-      assert.equal(recovered.opened, true)
-      assert.equal(recovered.promptCopied, false)
-      assert.ok(recovered.prompt.includes(worktreePath))
+      const failed = await post('/api/launch', body)
+      assert.equal(failed.opened, false)
+      assert.equal(failed.promptCopied, true)
+      assert.equal(failed.fallbackFocused, true)
+      assert.equal(failed.prompt, opened.prompt)
     } finally {
-      delete process.env.EASY_FLOW_TEST_COPY_FAIL
+      delete process.env.EASY_FLOW_TEST_OPEN_FAIL
     }
   })
 

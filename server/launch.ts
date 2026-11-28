@@ -33,10 +33,8 @@ export interface LaunchProvider {
   requiresWorktree?: boolean
   // 启动失败时把提示词放进剪贴板，让用户到新会话里粘贴
   copyPromptOnFailure?: boolean
-  // 应用没有能预填提示词的 deeplink：打开前先把提示词放进剪贴板
-  copyPromptBeforeOpen?: boolean
-  // 不走 URL，自己把应用打开（例如 open -a <应用> <工作区>）。有它时 build 的返回值只作回执
-  open?: (input: LaunchInput) => Promise<void>
+  // Focus the desktop app for manual prompt entry if the URL handler fails.
+  fallbackApp?: string
   // 打开 deeplink 前要先让应用准备好目标工作区；失败会直接走启动失败
   prepare?: (input: LaunchInput) => Promise<void> | void
   // 生成 deeplink。codex 要先备好 project，所以允许异步
@@ -84,7 +82,9 @@ export function launchPrompt(input: LaunchInput): string {
     lines.push(tr("Chengxiaobang session links do not change directories. First cd {0} before starting work.", [input.worktreePath]))
   }
   if (input.agent === AgentId.Antigravity && input.worktreePath) {
-    lines.push(tr("In Antigravity, choose a project containing {0}, then run commands from that directory.", [input.worktreePath]))
+    lines.push(tr("Work in the selected Antigravity folder: {0}.", [input.worktreePath]))
+  }
+  if (input.agent === AgentId.Antigravity) {
     lines.push(tr("Use ANTIGRAVITY_CONVERSATION_ID to register this conversation when available; otherwise pass its exact ID with --id. Do not guess another conversation's ID."))
   }
   lines.push(tr("After sending the first message and obtaining a session ID, {0}run {1}", [byWorktree ? tr("in this workspace, ") : '', register]))
