@@ -218,6 +218,7 @@ export interface LaunchResult {
   prompt: string
   opened: boolean
   error?: string
+  fallbackFocused?: boolean
   promptCopied?: boolean
   worktreePath?: string
 }

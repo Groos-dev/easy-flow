@@ -117,6 +117,8 @@ export default function LaunchSessionForm({
     if (ready) onLaunch()
   }
 
+  const projectHint = result?.agent === 'antigravity' && result.worktreePath
+    ? tr("Before sending, choose the Antigravity project containing {0}.", [result.worktreePath]) : ''
   if (loading) return <p className="launch-hint">{tr("Loading available agents…")}</p>
   if (providerError) {
     return (
@@ -223,12 +225,9 @@ export default function LaunchSessionForm({
       {feedback?.opened && result?.agent === 'antigravity' && (
         <>
           <p className="launch-hint">
-            {feedback.promptCopied
-              ? tr("Antigravity is open. Choose a project containing {0}, then paste the prompt into a new conversation.", [result.worktreePath ?? ''])
-              : tr("Antigravity is open. Choose a project containing {0}, then copy the prompt below into a new conversation.", [result.worktreePath ?? ''])}
+            {result.worktreePath && tr("Before sending, check that the selected Antigravity project uses {0}.", [result.worktreePath])} {tr("Review the prefilled prompt in Antigravity and send it when ready.")}
           </p>
           <div className="launch-actions"><CopyButton text={feedback.prompt} label={tr("Prompt")} showLabel /></div>
-          {!feedback.promptCopied && <pre className="launch-prompt">{feedback.prompt}</pre>}
         </>
       )}
 
@@ -240,6 +239,7 @@ export default function LaunchSessionForm({
             <span className="mark">!</span>
             {tr("Could not open automatically")} {agentName}：{feedback.error || tr("Unknown error")}
           </p>
+          {result?.fallbackFocused && <p className="launch-hint">{tr("Antigravity is open for manual prompt entry.")} {projectHint}</p>}
           {feedback.promptCopied && <p className="launch-hint">{tr("The prompt was copied to the clipboard. Paste it into a new session.")}</p>}
           <div className="launch-actions">
             <button
@@ -254,7 +254,11 @@ export default function LaunchSessionForm({
           </div>
           <p className="launch-hint">{tr("Manual steps: create a session in")} {agentName} {tr("and paste the prompt, or register the session yourself.")}</p>
           <code className="launch-manual">{feedback.manualCommand}</code>
-          {/* 能复制也得能看：剪贴板失败时眼里得有东西可抄 */}
+
+        </>
+      )}
+      {feedback && (!feedback.opened || result?.agent === 'antigravity') && (
+        <>
           <div className="launch-fold">
             <button
               type="button"

@@ -47,6 +47,7 @@ import './launch-codex.ts'
 import './launch-chengxiaobang.ts'
 import './launch-cursor.ts'
 import './launch-antigravity.ts'
+import { openAntigravityConversation } from './antigravity-navigation.ts'
 import {
   allowOrigin,
   json,
@@ -55,6 +56,14 @@ import {
   writeRequirementDoc,
 } from './http.ts'
 
+function openMac(args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFile('open', args, (error, _stdout, stderr) => {
+      if (error) reject(new Error(stderr.trim() || tr("Could not open")))
+      else resolve()
+    })
+  })
+}
 export const DEFAULT_PORT = 29170
 
 /**
@@ -530,13 +539,9 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, onLa
         const workspaceExists = !!found.cwd && existsSync(found.cwd)
         if (!manualWorkspaceSelection && !found.cwd) throw new Error(tr("Session has no cwd"))
         if (!manualWorkspaceSelection && !workspaceExists) throw new Error(tr("Directory no longer exists: {0}", [found.cwd]))
-        await new Promise<void>((resolve, reject) => {
-          execFile('open', workspaceOpenArgs(agent, found.cwd), (error, _stdout, stderr) => {
-            if (error) reject(new Error(stderr.trim() || error.message))
-            else resolve()
-          })
-        })
-        json(req, res, 200, { ok: true, path: found.cwd, manualWorkspaceSelection, workspaceExists })
+        await openMac(workspaceOpenArgs(agent, found.cwd))
+        const navigation = manualWorkspaceSelection ? await openAntigravityConversation(found.session) : undefined
+        json(req, res, 200, { ok: true, path: found.cwd, manualWorkspaceSelection: manualWorkspaceSelection && navigation !== 'opened', workspaceExists, navigation })
         return
       }
 
@@ -634,29 +639,22 @@ export function createBoardApp({ dataDir, port = DEFAULT_PORT, onAttention, onLa
         let targetUrl = ''
         let promptCopied = false
         try {
-          // 没有能预填提示词的 deeplink：先把提示词放进剪贴板，应用一打开就能粘贴
-          if (provider.copyPromptBeforeOpen) promptCopied = await copyPrompt(prompt)
           await provider.prepare?.(input)
           targetUrl = await provider.build(input, prompt)
-          if (provider.open) {
-            await provider.open(input)
-          } else {
-            await new Promise<void>((resolve, reject) => {
-              execFile('open', [targetUrl], (error, _stdout, stderr) => {
-                if (error) reject(new Error(stderr.trim() || error.message))
-                else resolve()
-              })
-            })
-          }
+          await openMac([targetUrl])
           json(req, res, 200, { agent, url: targetUrl, prompt, opened: true, promptCopied, worktreePath: input.worktreePath })
         } catch (error) {
           // 声明了兜底的 provider 启动失败时把提示词放进剪贴板，用户不至于手抄
-          if (provider.copyPromptOnFailure && !promptCopied) promptCopied = await copyPrompt(prompt)
+          if (provider.copyPromptOnFailure) promptCopied = await copyPrompt(prompt)
+          const fallbackFocused = provider.fallbackApp
+            ? await openMac(['-a', provider.fallbackApp]).then(() => true, () => false)
+            : undefined
           json(req, res, 200, {
             agent,
             url: targetUrl,
             prompt,
             opened: false,
+            fallbackFocused,
             promptCopied,
             worktreePath: input.worktreePath,
             error: (error as Error).message,

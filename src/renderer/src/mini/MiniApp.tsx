@@ -137,7 +137,6 @@ export default function MiniApp() {
     if (!miniSessionOpenable(session)) return
     setError('')
     setOpenNotice('')
-    let keepPanel = false
     try {
       if (session.link) {
         if (window.easyFlow?.openExternal) await window.easyFlow.openExternal(session.link)
@@ -146,11 +145,11 @@ export default function MiniApp() {
         const opened = await api.openSessionWorkspace(session.agent, session.session)
         const notice = workspaceOpenNotice(opened)
         setOpenNotice(notice)
-        keepPanel = !!notice
+        if (opened.manualWorkspaceSelection || notice) return
       }
       // 已查看登记失败不阻断打开会话。
       void api.markSessionClicked(session.agent, session.session).catch(() => {})
-      if (!keepPanel) window.easyFlow?.hidePanel?.()
+      window.easyFlow?.hidePanel?.()
     } catch (e) {
       setError((e as Error).message)
     }

@@ -281,17 +281,19 @@ function PetSlot({ item, compact }: { item: PetItem; compact: boolean }) {
     setOpenError('')
     setOpenNotice('')
     if (session.link) {
-      api.markSessionClicked(session.agent, session.session).catch(() => {})
+      const markOpened = () => { void api.markSessionClicked(session.agent, session.session).catch(() => {}) }
       if (window.easyFlow?.openExternal) {
-        void window.easyFlow.openExternal(session.link)
+        void window.easyFlow.openExternal(session.link).then(markOpened)
           .catch((error: Error) => setOpenError(error.message || tr("Could not open")))
-      } else window.open(session.link, '_blank')
+      } else if (window.open(session.link, '_blank')) markOpened()
+      else setOpenError(tr("Could not open"))
       return
     }
     void api
       .openSessionWorkspace(session.agent, session.session)
       .then(result => {
         setOpenNotice(workspaceOpenNotice(result))
+        if (result.manualWorkspaceSelection) return
         void api.markSessionClicked(session.agent, session.session).catch(() => {})
       })
       .catch((error: Error) => setOpenError(error.message || tr("Could not open")))
